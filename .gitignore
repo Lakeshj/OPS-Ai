@@ -1,0 +1,35 @@
+# Dependencies
+node_modules/
+backend/node_modules/
+
+# Next.js
+.next/
+out/
+tsconfig.tsbuildinfo
+
+# Env files
+.env
+.env.local
+.env*.local
+backend/.env
+
+# Debug
+npm-debug.log*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+
+# Build
+dist/
+build/
+
+# Runtime workspace documents, converted Markdown, and generated media
+backend/storage/
+
+# Local smoke / temp scripts
+backend/scripts/_smoke-*.js
