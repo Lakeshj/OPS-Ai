@@ -34,6 +34,17 @@ const {
 
 const router = express.Router();
 
+// Public ping — open http://host:PORT/api in a browser to confirm API is up
+router.get("/", (_req, res) => {
+  res.status(200).json({
+    ok: true,
+    message: "OpsAi API is working",
+    service: "opsai-backend",
+    time: new Date().toISOString(),
+    health: "/api/health",
+  });
+});
+
 // Public routes
 router.use("/health", healthRoutes);
 router.use("/auth", authRoutes);

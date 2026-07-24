@@ -15,7 +15,9 @@ OpsAI/
 # Frontend
 cd frontend
 npm install
-cp .env.example .env.local   # set NEXT_PUBLIC_API_URL=http://localhost:5013/api
+cp .env.example .env.local
+# NEXT_PUBLIC_API_URL=/api  (same origin)
+# BACKEND_INTERNAL_URL=http://127.0.0.1:5013
 npm run dev
 
 # Backend (other terminal)
@@ -24,6 +26,9 @@ npm install
 cp .env.example .env         # DB, JWT, AI keys, CORS
 npm run dev
 ```
+
+Open `http://localhost:3001/api` in the browser — Next proxies to Express and should return `{ ok: true, ... }`.
+Direct backend URL also works: `http://localhost:5013/api`.
 
 From repo root you can also use:
 

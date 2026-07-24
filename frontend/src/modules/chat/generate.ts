@@ -1,6 +1,5 @@
 const API_URL =
-  (process.env.NEXT_PUBLIC_API_URL || "http://localhost:5013/api") +
-  "/chat/generate";
+  (process.env.NEXT_PUBLIC_API_URL || "/api") + "/chat/generate";
 
 export interface GenerateResponseMeta {
   model?: string;
