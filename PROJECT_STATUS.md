@@ -6,8 +6,8 @@ Last updated: 22 Jul 2026
 
 Workspace AI chat for teams.
 
-- **Frontend:** Next.js (App Router)
-- **Backend:** Express + MySQL
+- **Frontend:** Next.js (App Router) — `frontend/`
+- **Backend:** Express + MySQL — `backend/`
 - **AI:** OpenAI (`gpt-4o-mini` default), prompt caching
 
 Roles: **Admin**, **Project Manager**, **Employee**.  

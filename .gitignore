@@ -1,8 +1,12 @@
 # Dependencies
 node_modules/
+frontend/node_modules/
 backend/node_modules/
 
 # Next.js
+frontend/.next/
+frontend/out/
+frontend/tsconfig.tsbuildinfo
 .next/
 out/
 tsconfig.tsbuildinfo
@@ -11,10 +15,15 @@ tsconfig.tsbuildinfo
 .env
 .env.local
 .env*.local
+frontend/.env
+frontend/.env.local
+frontend/.env*.local
 backend/.env
 
 # Debug
 npm-debug.log*
+frontend/npm-debug.log*
+backend/npm-debug.log*
 
 # OS
 .DS_Store
