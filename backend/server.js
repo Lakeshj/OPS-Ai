@@ -38,13 +38,13 @@ testConnection().then((connected) => {
   });
 });
 
-app.use("/api/auth/login", authRateLimiter);
-app.use("/api/auth/register", authRateLimiter);
-app.use("/api/auth/forgot-password", authRateLimiter);
-app.use("/api/auth/verify-reset-otp", authRateLimiter);
-app.use("/api/auth/reset-password", authRateLimiter);
-app.use("/api", apiRateLimiter);
-app.use("/api", apiRoutes);
+app.use("/auth/login", authRateLimiter);
+app.use("/auth/register", authRateLimiter);
+app.use("/auth/forgot-password", authRateLimiter);
+app.use("/auth/verify-reset-otp", authRateLimiter);
+app.use("/auth/reset-password", authRateLimiter);
+app.use("/", apiRateLimiter);
+app.use("/", apiRoutes);
 
 app.use(errorHandler);
 app.use(notFoundHandler);

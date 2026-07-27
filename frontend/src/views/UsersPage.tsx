@@ -31,6 +31,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Input } from "@/components/ui/input";
+import { PasswordInput } from "@/components/ui/password-input";
 import { Label } from "@/components/ui/label";
 import {
   Select,
@@ -229,9 +230,8 @@ const UsersPage = () => {
               </div>
               <div className="space-y-2">
                 <Label htmlFor="password">Password</Label>
-                <Input
+                <PasswordInput
                   id="password"
-                  type="password"
                   value={formValues.password}
                   onChange={(e) =>
                     setFormValues({ ...formValues, password: e.target.value })
@@ -379,9 +379,8 @@ const UsersPage = () => {
               <Label htmlFor="edit-password">
                 Password (leave empty to keep current)
               </Label>
-              <Input
+              <PasswordInput
                 id="edit-password"
-                type="password"
                 value={formValues.password}
                 onChange={(e) =>
                   setFormValues({ ...formValues, password: e.target.value })
