@@ -28,7 +28,8 @@ const listLogs = asyncHandler(async (req, res) => {
 const listUsage = asyncHandler(async (req, res) => {
   const limit = req.query.limit;
   const workspaceId = req.query.workspaceId || null;
-  res.json(await listAiUsageEvents({ limit, workspaceId }));
+  const userId = req.query.userId || null;
+  res.json(await listAiUsageEvents({ limit, workspaceId, userId }));
 });
 
 module.exports = { listModels, refreshModels, listLogs, listUsage };

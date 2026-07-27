@@ -42,4 +42,8 @@ export const keywordAssistantApiService = {
       return false;
     }
   },
+
+  evaluate: async (id: string): Promise<KeywordAssistant> => {
+    return apiClient.post<KeywordAssistant>(`/assistants/${id}/evaluate`);
+  },
 };

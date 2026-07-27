@@ -39,16 +39,37 @@ const formatMessage = (row) => ({
   createdAt: row.created_at,
 });
 
-const formatAssistant = (row) => ({
-  ...row,
-  taskType: row.task_type,
-  capabilityType: row.capability_type,
-  provider: row.provider || "openai",
-  model: row.model,
-  promptTemplate: row.prompt_template,
-  createdAt: row.created_at,
-  updatedAt: row.updated_at,
-});
+const formatAssistant = (row) => {
+  let qualityDetails = null;
+  if (row.quality_details != null) {
+    if (typeof row.quality_details === "object") {
+      qualityDetails = row.quality_details;
+    } else {
+      try {
+        qualityDetails = JSON.parse(row.quality_details);
+      } catch {
+        qualityDetails = null;
+      }
+    }
+  }
+
+  return {
+    ...row,
+    taskType: row.task_type,
+    capabilityType: row.capability_type,
+    provider: row.provider || "openai",
+    model: row.model,
+    promptTemplate: row.prompt_template,
+    qualityScore:
+      row.quality_score == null ? null : Number(row.quality_score),
+    qualityFeedback: row.quality_feedback || null,
+    qualityDetails,
+    qualityModel: row.quality_model || null,
+    qualityEvaluatedAt: row.quality_evaluated_at || null,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+};
 
 const formatDocument = (row) => ({
   id: row.id,

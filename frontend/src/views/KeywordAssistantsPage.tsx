@@ -51,6 +51,7 @@ import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { SystemPromptsPanel } from "@/components/SystemPromptsPanel";
 import { BotProviderModelFields } from "@/components/BotProviderModelFields";
+import { BotQualityDialog } from "@/components/BotQualityDialog";
 import { useAuth } from "@/contexts/AuthContext";
 import {
   inferProviderFromModel,
@@ -68,7 +69,48 @@ import {
   Copy,
   Bot,
   FileText,
+  Sparkles,
 } from "lucide-react";
+
+const scoreBadgeClass = (score: number | null | undefined) => {
+  if (score == null) return "bg-muted text-muted-foreground";
+  if (score >= 80) return "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400";
+  if (score >= 60) return "bg-amber-500/15 text-amber-700 dark:text-amber-400";
+  return "bg-rose-500/15 text-rose-700 dark:text-rose-400";
+};
+
+const QualityScoreTag = ({
+  score,
+  title,
+  onClick,
+}: {
+  score?: number | null;
+  title?: string;
+  onClick?: () => void;
+}) => {
+  if (score == null) {
+    return (
+      <Badge
+        variant="outline"
+        className={`text-xs text-muted-foreground ${onClick ? "cursor-pointer hover:bg-muted" : ""}`}
+        title={title}
+        onClick={onClick}
+      >
+        No score
+      </Badge>
+    );
+  }
+  return (
+    <Badge
+      variant="secondary"
+      className={`text-xs font-semibold tabular-nums ${scoreBadgeClass(score)} ${onClick ? "cursor-pointer hover:opacity-90" : ""}`}
+      title={title || "View category scores"}
+      onClick={onClick}
+    >
+      {Math.round(score)}/100
+    </Badge>
+  );
+};
 
 const KeywordAssistantsPage = () => {
   const { hasRole } = useAuth();
@@ -77,6 +119,10 @@ const KeywordAssistantsPage = () => {
   const [filteredAssistants, setFilteredAssistants] = useState<KeywordAssistant[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
+  const [evaluatingId, setEvaluatingId] = useState<string | null>(null);
+  const [qualityAssistant, setQualityAssistant] =
+    useState<KeywordAssistant | null>(null);
+  const [isQualityOpen, setIsQualityOpen] = useState(false);
   const [isCreateMode, setIsCreateMode] = useState(false);
   const [isEditMode, setIsEditMode] = useState(false);
   const [isDeleteMode, setIsDeleteMode] = useState(false);
@@ -168,6 +214,37 @@ const KeywordAssistantsPage = () => {
     }
   };
   
+  const openQualityDialog = (assistant: KeywordAssistant) => {
+    setQualityAssistant(assistant);
+    setIsQualityOpen(true);
+  };
+
+  const handleEvaluateQuality = async (assistant: KeywordAssistant) => {
+    if (!isAdmin) return;
+    setEvaluatingId(assistant.id);
+    try {
+      const updated = await keywordAssistantService.evaluate(assistant.id);
+      setAssistants((prev) =>
+        prev.map((row) => (row.id === updated.id ? updated : row))
+      );
+      setFilteredAssistants((prev) =>
+        prev.map((row) => (row.id === updated.id ? updated : row))
+      );
+      setQualityAssistant(updated);
+      toast.success(
+        updated.qualityScore != null
+          ? `Quality score: ${Math.round(updated.qualityScore)}/100`
+          : "Evaluation finished"
+      );
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Failed to evaluate bot"
+      );
+    } finally {
+      setEvaluatingId(null);
+    }
+  };
+
   const handleUpdateAssistant = async () => {
     if (!currentAssistant) return;
     
@@ -409,7 +486,18 @@ const KeywordAssistantsPage = () => {
                       <CardTitle className="truncate text-lg">
                         {assistant.name}
                       </CardTitle>
-                      <DropdownMenu>
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        <QualityScoreTag
+                          score={assistant.qualityScore}
+                          title={
+                            assistant.qualityFeedback ||
+                            (assistant.qualityEvaluatedAt
+                              ? `Evaluated ${new Date(assistant.qualityEvaluatedAt).toLocaleString()}`
+                              : "Click to view quality details")
+                          }
+                          onClick={() => openQualityDialog(assistant)}
+                        />
+                        <DropdownMenu>
                         <DropdownMenuTrigger asChild>
                           <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0">
                             <MoreHorizontal className="h-4 w-4" />
@@ -420,6 +508,21 @@ const KeywordAssistantsPage = () => {
                             <Edit className="mr-2 h-4 w-4" />
                             Edit
                           </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => openQualityDialog(assistant)}>
+                            <FileText className="mr-2 h-4 w-4" />
+                            View quality
+                          </DropdownMenuItem>
+                          {isAdmin ? (
+                            <DropdownMenuItem
+                              disabled={evaluatingId === assistant.id}
+                              onClick={() => void handleEvaluateQuality(assistant)}
+                            >
+                              <Sparkles className="mr-2 h-4 w-4" />
+                              {evaluatingId === assistant.id
+                                ? "Evaluating…"
+                                : "Evaluate quality"}
+                            </DropdownMenuItem>
+                          ) : null}
                           <DropdownMenuItem onClick={() => {
                             navigator.clipboard.writeText(assistant.promptTemplate);
                             toast.success("Prompt template copied to clipboard");
@@ -437,6 +540,7 @@ const KeywordAssistantsPage = () => {
                           </DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>
+                      </div>
                     </div>
                     <div className="flex flex-wrap items-center gap-2 pt-1">
                       <Badge variant="outline" className="bg-primary/5">
@@ -455,6 +559,11 @@ const KeywordAssistantsPage = () => {
                     <p className="text-sm text-muted-foreground mb-4">
                       {assistant.description}
                     </p>
+                    {assistant.qualityFeedback ? (
+                      <p className="mb-3 line-clamp-2 text-xs text-muted-foreground">
+                        {assistant.qualityFeedback}
+                      </p>
+                    ) : null}
                     <div className="bg-accent/50 rounded-md p-3 overflow-hidden">
                       <p className="text-sm font-mono truncate leading-relaxed">
                         {assistant.promptTemplate}
@@ -511,6 +620,7 @@ const KeywordAssistantsPage = () => {
                   <tr className="bg-muted/50">
                     <th className="text-left p-3 font-medium text-sm">Name</th>
                     <th className="text-left p-3 font-medium text-sm">Type</th>
+                    <th className="text-left p-3 font-medium text-sm">Quality</th>
                     <th className="text-left p-3 font-medium text-sm max-w-xs">Description</th>
                     <th className="text-left p-3 font-medium text-sm">Created</th>
                     <th className="p-3 font-medium text-sm">Actions</th>
@@ -525,12 +635,30 @@ const KeywordAssistantsPage = () => {
                           {assistant.taskType}
                         </Badge>
                       </td>
+                      <td className="p-3">
+                        <QualityScoreTag
+                          score={assistant.qualityScore}
+                          title={assistant.qualityFeedback || undefined}
+                          onClick={() => openQualityDialog(assistant)}
+                        />
+                      </td>
                       <td className="p-3 max-w-xs truncate">{assistant.description}</td>
                       <td className="p-3 text-sm text-muted-foreground">
                         {new Date(assistant.createdAt).toLocaleDateString()}
                       </td>
                       <td className="p-3">
                         <div className="flex justify-end gap-2">
+                          {isAdmin ? (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              title="Evaluate quality"
+                              disabled={evaluatingId === assistant.id}
+                              onClick={() => void handleEvaluateQuality(assistant)}
+                            >
+                              <Sparkles className="h-4 w-4" />
+                            </Button>
+                          ) : null}
                           <Button 
                             variant="ghost" 
                             size="icon"
@@ -1022,6 +1150,22 @@ const KeywordAssistantsPage = () => {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <BotQualityDialog
+        assistant={qualityAssistant}
+        open={isQualityOpen}
+        onOpenChange={(open) => {
+          setIsQualityOpen(open);
+          if (!open) setQualityAssistant(null);
+        }}
+        canEvaluate={isAdmin}
+        evaluating={
+          qualityAssistant != null && evaluatingId === qualityAssistant.id
+        }
+        onEvaluate={() => {
+          if (qualityAssistant) void handleEvaluateQuality(qualityAssistant);
+        }}
+      />
     </div>
   );
 };

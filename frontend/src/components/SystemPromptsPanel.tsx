@@ -5,14 +5,19 @@ import { Edit, FileText, PlusCircle, Trash, MoreHorizontal } from "lucide-react"
 import { toast } from "sonner";
 import { systemPromptsApiService } from "@/modules/systemPrompts/api";
 import {
-  SYSTEM_PROMPT_USE_CASES,
   getUseCaseLabel,
+  type SystemPromptUseCase,
 } from "@/modules/systemPrompts/useCases";
 import {
   SCORING_CATEGORY_CATALOG,
   DEFAULT_WORKSPACE_SUMMARY_CATEGORIES,
   getScoringCategoryLabel,
 } from "@/modules/systemPrompts/scoringCategories";
+import {
+  BOT_SCORING_CATEGORY_CATALOG,
+  DEFAULT_BOT_DESIGN_CATEGORIES,
+  getBotScoringCategoryLabel,
+} from "@/modules/systemPrompts/botScoringCategories";
 import { SystemPrompt } from "@/modules/shared/types";
 import { Button } from "@/components/ui/button";
 import {
@@ -49,11 +54,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 
-const CUSTOM_USE_CASE = "__custom__";
-
 const emptyForm = {
   useCaseKey: "workspace_summary",
-  customUseCaseKey: "",
   name: "",
   description: "",
   promptContent: "",
@@ -64,16 +66,18 @@ const emptyForm = {
   isActive: true,
 };
 
+const defaultsForUseCase = (key: string) =>
+  key === "bot_design"
+    ? [...DEFAULT_BOT_DESIGN_CATEGORIES]
+    : [...DEFAULT_WORKSPACE_SUMMARY_CATEGORIES];
+
 const formFromPrompt = (prompt: SystemPrompt) => {
+  const defaults = defaultsForUseCase(prompt.useCaseKey);
   const configured = Array.isArray(prompt.config?.scoringCategories)
     ? (prompt.config.scoringCategories as string[])
-    : [...DEFAULT_WORKSPACE_SUMMARY_CATEGORIES];
-  const known = SYSTEM_PROMPT_USE_CASES.some(
-    (item) => item.key === prompt.useCaseKey
-  );
+    : defaults;
   return {
-    useCaseKey: known ? prompt.useCaseKey : CUSTOM_USE_CASE,
-    customUseCaseKey: known ? "" : prompt.useCaseKey,
+    useCaseKey: prompt.useCaseKey,
     name: prompt.name,
     description: prompt.description || "",
     promptContent: prompt.promptContent,
@@ -85,36 +89,31 @@ const formFromPrompt = (prompt: SystemPrompt) => {
   };
 };
 
-const resolvedUseCaseKey = (form: typeof emptyForm) => {
-  if (form.useCaseKey === CUSTOM_USE_CASE) {
-    return form.customUseCaseKey.trim().toLowerCase().replace(/\s+/g, "_");
-  }
-  return form.useCaseKey;
-};
-
-const toPayload = (form: typeof emptyForm, includeUseCase: boolean) => {
-  const key = resolvedUseCaseKey(form);
-  const useCase = SYSTEM_PROMPT_USE_CASES.find((item) => item.key === key);
-  const config: Record<string, unknown> = {
-    model: form.model.trim() || "gpt-4o-mini",
-    temperature: Number(form.temperature) || 0.1,
-    maxTokens: Number(form.maxTokens) || 2000,
-    feature: key,
-    scoringCategories: form.scoringCategories,
-  };
-
+const toPayload = (
+  form: typeof emptyForm,
+  useCases: SystemPromptUseCase[]
+) => {
+  const key = form.useCaseKey;
+  const useCase = useCases.find((item) => item.key === key);
   return {
-    ...(includeUseCase ? { useCaseKey: key } : { useCaseKey: key }),
+    useCaseKey: key,
     name: form.name.trim() || useCase?.label || key,
     description: form.description.trim() || useCase?.description || "",
     promptContent: form.promptContent,
-    config,
+    config: {
+      model: form.model.trim() || "gpt-4o-mini",
+      temperature: Number(form.temperature) || 0.1,
+      maxTokens: Number(form.maxTokens) || 2000,
+      feature: key,
+      scoringCategories: form.scoringCategories,
+    },
     isActive: form.isActive,
   };
 };
 
 export function SystemPromptsPanel() {
   const [prompts, setPrompts] = useState<SystemPrompt[]>([]);
+  const [useCases, setUseCases] = useState<SystemPromptUseCase[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [isEditOpen, setIsEditOpen] = useState(false);
@@ -128,10 +127,25 @@ export function SystemPromptsPanel() {
     [prompts]
   );
 
+  const availableUseCases = useMemo(
+    () =>
+      useCases.filter(
+        (item) =>
+          !existingUseCaseKeys.has(item.key) ||
+          item.key === form.useCaseKey
+      ),
+    [useCases, existingUseCaseKeys, form.useCaseKey]
+  );
+
   const load = async () => {
     setIsLoading(true);
     try {
-      setPrompts(await systemPromptsApiService.getAll());
+      const [promptRows, useCaseRows] = await Promise.all([
+        systemPromptsApiService.getAll(),
+        systemPromptsApiService.listUseCases(),
+      ]);
+      setPrompts(promptRows);
+      setUseCases(useCaseRows);
     } catch (error) {
       toast.error(
         error instanceof Error
@@ -149,13 +163,16 @@ export function SystemPromptsPanel() {
 
   const openCreate = () => {
     setCurrent(null);
+    const firstFree =
+      useCases.find((item) => !existingUseCaseKeys.has(item.key)) ||
+      useCases[0];
+    const key = firstFree?.key || "workspace_summary";
     setForm({
       ...emptyForm,
-      useCaseKey: "workspace_summary",
-      name: "Workspace Knowledge Evaluator",
-      description:
-        SYSTEM_PROMPT_USE_CASES.find((item) => item.key === "workspace_summary")
-          ?.description || "",
+      useCaseKey: key,
+      name: firstFree?.label || "",
+      description: firstFree?.description || "",
+      scoringCategories: defaultsForUseCase(key),
     });
     setIsCreateOpen(true);
   };
@@ -176,24 +193,29 @@ export function SystemPromptsPanel() {
   };
 
   const saveCreate = async () => {
-    const key = resolvedUseCaseKey(form);
+    const key = form.useCaseKey;
     if (!key) {
-      toast.error("Select or enter a use case key");
+      toast.error("Select a use case");
       return;
     }
     if (existingUseCaseKeys.has(key)) {
       toast.error(`Use case "${key}" already has a system prompt`);
       return;
     }
-    if (form.scoringCategories.length === 0) {
+    if (
+      (key === "workspace_summary" || key === "bot_design") &&
+      form.scoringCategories.length === 0
+    ) {
       toast.error("Select at least one scoring category");
       return;
     }
     setIsSaving(true);
     try {
-      await systemPromptsApiService.create(toPayload(form, true));
+      await systemPromptsApiService.create(toPayload(form, useCases));
       toast.success(
-        "System prompt created. Regenerate workspace summaries to apply scoring."
+        key === "bot_design"
+          ? "Bot design validator saved. Run Evaluate on a bot to score it."
+          : "System prompt created."
       );
       setIsCreateOpen(false);
       await load();
@@ -210,15 +232,24 @@ export function SystemPromptsPanel() {
 
   const saveEdit = async () => {
     if (!current) return;
-    if (form.scoringCategories.length === 0) {
+    const key = form.useCaseKey;
+    if (
+      (key === "workspace_summary" || key === "bot_design") &&
+      form.scoringCategories.length === 0
+    ) {
       toast.error("Select at least one scoring category");
       return;
     }
     setIsSaving(true);
     try {
-      await systemPromptsApiService.update(current.id, toPayload(form, true));
+      await systemPromptsApiService.update(
+        current.id,
+        toPayload(form, useCases)
+      );
       toast.success(
-        "System prompt saved. Workspace summary scores are refreshing automatically…"
+        key === "bot_design"
+          ? "Bot design validator saved."
+          : "System prompt saved."
       );
       setIsEditOpen(false);
       await load();
@@ -253,10 +284,13 @@ export function SystemPromptsPanel() {
     }
   };
 
+  const activeUseCase = form.useCaseKey;
   const showScoring =
-    resolvedUseCaseKey(form) === "workspace_summary" ||
-    form.scoringCategories.length > 0 ||
-    form.useCaseKey === "workspace_summary";
+    activeUseCase === "workspace_summary" || activeUseCase === "bot_design";
+  const scoringCatalog =
+    activeUseCase === "bot_design"
+      ? BOT_SCORING_CATEGORY_CATALOG
+      : SCORING_CATEGORY_CATALOG;
 
   const formFields = (
     <>
@@ -265,26 +299,13 @@ export function SystemPromptsPanel() {
         <Select
           value={form.useCaseKey}
           onValueChange={(value) => {
-            if (value === CUSTOM_USE_CASE) {
-              setForm((prev) => ({
-                ...prev,
-                useCaseKey: CUSTOM_USE_CASE,
-              }));
-              return;
-            }
-            const meta = SYSTEM_PROMPT_USE_CASES.find(
-              (item) => item.key === value
-            );
+            const meta = useCases.find((item) => item.key === value);
             setForm((prev) => ({
               ...prev,
               useCaseKey: value,
-              customUseCaseKey: "",
               name: meta?.label || prev.name,
               description: meta?.description || prev.description,
-              scoringCategories:
-                value === "workspace_summary"
-                  ? [...DEFAULT_WORKSPACE_SUMMARY_CATEGORIES]
-                  : prev.scoringCategories,
+              scoringCategories: defaultsForUseCase(value),
             }));
           }}
         >
@@ -292,25 +313,24 @@ export function SystemPromptsPanel() {
             <SelectValue placeholder="Select use case" />
           </SelectTrigger>
           <SelectContent>
-            {SYSTEM_PROMPT_USE_CASES.map((item) => (
-              <SelectItem key={item.key} value={item.key}>
+            {(isCreateOpen ? availableUseCases : useCases).map((item) => (
+              <SelectItem
+                key={item.key}
+                value={item.key}
+                disabled={
+                  isCreateOpen &&
+                  existingUseCaseKeys.has(item.key) &&
+                  item.key !== form.useCaseKey
+                }
+              >
                 {item.label}
               </SelectItem>
             ))}
-            <SelectItem value={CUSTOM_USE_CASE}>Custom use case…</SelectItem>
           </SelectContent>
         </Select>
-        {form.useCaseKey === CUSTOM_USE_CASE && (
-          <Input
-            value={form.customUseCaseKey}
-            onChange={(event) =>
-              setForm({ ...form, customUseCaseKey: event.target.value })
-            }
-            placeholder="e.g. document_classification"
-          />
-        )}
         <p className="text-xs text-muted-foreground">
-          Change or customize the use case key anytime. One prompt per key.
+          Choose a registered use case. One system prompt per use case. List
+          comes from the backend.
         </p>
       </div>
 
@@ -360,7 +380,7 @@ export function SystemPromptsPanel() {
             Admin selects which scores are required for this system prompt.
           </p>
           <div className="grid gap-2 sm:grid-cols-2">
-            {SCORING_CATEGORY_CATALOG.map((item) => {
+            {scoringCatalog.map((item) => {
               const checked = form.scoringCategories.includes(item.key);
               return (
                 <label
@@ -443,7 +463,13 @@ export function SystemPromptsPanel() {
             drives summary scoring after regenerate.
           </p>
         </div>
-        <Button onClick={openCreate}>
+        <Button
+          onClick={openCreate}
+          disabled={
+            useCases.length > 0 &&
+            useCases.every((item) => existingUseCaseKeys.has(item.key))
+          }
+        >
           <PlusCircle className="mr-2 h-4 w-4" />
           Add system prompt
         </Button>
@@ -507,7 +533,7 @@ export function SystemPromptsPanel() {
                   </div>
                   <div className="flex flex-wrap gap-2 pt-2">
                     <Badge variant="secondary">
-                      {getUseCaseLabel(prompt.useCaseKey)}
+                      {getUseCaseLabel(prompt.useCaseKey, useCases)}
                     </Badge>
                     <Badge variant="outline">{prompt.useCaseKey}</Badge>
                     {prompt.config?.model ? (
@@ -525,7 +551,9 @@ export function SystemPromptsPanel() {
                     <div className="flex flex-wrap gap-1">
                       {categories.map((key) => (
                         <Badge key={key} variant="outline" className="text-xs">
-                          {getScoringCategoryLabel(key)}
+                          {prompt.useCaseKey === "bot_design"
+                            ? getBotScoringCategoryLabel(key)
+                            : getScoringCategoryLabel(key)}
                         </Badge>
                       ))}
                     </div>

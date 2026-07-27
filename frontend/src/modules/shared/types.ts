@@ -85,6 +85,11 @@ export interface KeywordAssistant {
   model: string;
   promptTemplate: string;
   description: string;
+  qualityScore?: number | null;
+  qualityFeedback?: string | null;
+  qualityDetails?: Record<string, unknown> | null;
+  qualityModel?: string | null;
+  qualityEvaluatedAt?: string | null;
   createdAt: string;
   updatedAt: string;
 }

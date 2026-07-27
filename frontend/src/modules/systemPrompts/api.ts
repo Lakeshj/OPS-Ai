@@ -1,5 +1,6 @@
 import { apiClient } from "@/modules/shared/apiClient";
 import { SystemPrompt } from "@/modules/shared/types";
+import type { SystemPromptUseCase } from "@/modules/systemPrompts/useCases";
 
 export type SystemPromptPayload = {
   useCaseKey?: string;
@@ -11,6 +12,9 @@ export type SystemPromptPayload = {
 };
 
 export const systemPromptsApiService = {
+  listUseCases: (): Promise<SystemPromptUseCase[]> =>
+    apiClient.get("/admin/system-prompts/use-cases"),
+
   getAll: (): Promise<SystemPrompt[]> =>
     apiClient.get("/admin/system-prompts"),
 

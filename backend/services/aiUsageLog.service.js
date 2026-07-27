@@ -1,15 +1,25 @@
 const { pool } = require("../config/database");
 const { inferProviderFromModel } = require("../utils/aiProviders");
 
-const listAiUsageEvents = async ({ limit = 150, workspaceId = null } = {}) => {
+const listAiUsageEvents = async ({
+  limit = 150,
+  workspaceId = null,
+  userId = null,
+} = {}) => {
   const safeLimit = Math.min(Math.max(Number(limit) || 150, 1), 500);
   const params = [];
-  let where = "";
+  const conditions = [];
 
   if (workspaceId) {
-    where = "WHERE u.workspace_id = ?";
+    conditions.push("u.workspace_id = ?");
     params.push(workspaceId);
   }
+  if (userId) {
+    conditions.push("u.user_id = ?");
+    params.push(userId);
+  }
+
+  const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
 
   const [rows] = await pool.execute(
     `

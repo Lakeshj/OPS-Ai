@@ -72,10 +72,15 @@ export const adminAiLogsApi = {
     const suffix = query.toString() ? `?${query.toString()}` : "";
     return apiClient.get<AiErrorLogRow[]>(`/admin/ai-logs/errors${suffix}`);
   },
-  listUsage: (params?: { limit?: number; workspaceId?: string }) => {
+  listUsage: (params?: {
+    limit?: number;
+    workspaceId?: string;
+    userId?: string;
+  }) => {
     const query = new URLSearchParams();
     if (params?.limit) query.set("limit", String(params.limit));
     if (params?.workspaceId) query.set("workspaceId", params.workspaceId);
+    if (params?.userId) query.set("userId", params.userId);
     const suffix = query.toString() ? `?${query.toString()}` : "";
     return apiClient.get<AiUsageLogRow[]>(`/admin/ai-logs/usage${suffix}`);
   },

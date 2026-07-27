@@ -1,6 +1,7 @@
 /**
- * Platform System Prompt use-case registry (suggested list).
- * Admins may also create custom use-case keys.
+ * Platform System Prompt use-case registry (source of truth).
+ * Frontend loads this via GET /admin/system-prompts/use-cases.
+ * Unknown keys are rejected — no free-form custom use cases.
  */
 
 const AppError = require("./AppError");
@@ -14,19 +15,13 @@ const SYSTEM_PROMPT_USE_CASES = {
     builtIn: true,
     feature: "workspace_summary",
   },
-  document_classification: {
-    key: "document_classification",
-    label: "Document Classification",
-    description: "Future: classify uploaded documents by type or purpose.",
-    builtIn: false,
-    feature: "documents",
-  },
-  content_moderation: {
-    key: "content_moderation",
-    label: "Content Moderation",
-    description: "Future: moderate generated or user content.",
-    builtIn: false,
-    feature: "moderation",
+  bot_design: {
+    key: "bot_design",
+    label: "AI Assistant Design Validator",
+    description:
+      "Scores bot design quality (prompt, role clarity, capability fit) on the Assistants page.",
+    builtIn: true,
+    feature: "bot_design",
   },
 };
 
@@ -56,22 +51,18 @@ const assertUseCaseKeyFormat = (key) => {
   return normalized;
 };
 
-/** Known registry entry or a valid custom key. */
+/** Known registry entry only — admin selects from dropdown; no free-form keys. */
 const resolveUseCase = (key) => {
   const normalized = assertUseCaseKeyFormat(key);
   const known = getUseCase(normalized);
-  return (
-    known || {
-      key: normalized,
-      label: normalized
-        .split("_")
-        .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-        .join(" "),
-      description: "",
-      builtIn: false,
-      feature: "custom",
-    }
-  );
+  if (!known) {
+    throw new AppError(
+      `Unknown use case "${normalized}". Pick one from the registered list.`,
+      400,
+      "VALIDATION_ERROR"
+    );
+  }
+  return known;
 };
 
 module.exports = {

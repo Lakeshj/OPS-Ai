@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { RefreshCw, ScrollText } from "lucide-react";
+import { RefreshCw, ScrollText, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -19,6 +19,13 @@ import {
   TabsTrigger,
 } from "@/components/ui/tabs";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   adminAiLogsApi,
   type AiErrorLogRow,
   type AiModelStatusRow,
@@ -28,6 +35,9 @@ import {
 const formatTokens = (value: number) =>
   value > 0 ? value.toLocaleString() : "—";
 
+type WorkspaceOption = { id: string; name: string };
+type UserOption = { id: string; name: string };
+
 const AiLogsPage = () => {
   const [models, setModels] = useState<AiModelStatusRow[]>([]);
   const [logs, setLogs] = useState<AiErrorLogRow[]>([]);
@@ -35,11 +45,53 @@ const AiLogsPage = () => {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
-  const usageSummary = useMemo(() => {
-    const totalTokens = usage.reduce((sum, row) => sum + row.totalTokens, 0);
-    const totalCached = usage.reduce((sum, row) => sum + row.cachedTokens, 0);
-    return { totalTokens, totalCached, count: usage.length };
+  // Filter state
+  const [filterWorkspace, setFilterWorkspace] = useState<string>("all");
+  const [filterUser, setFilterUser] = useState<string>("all");
+
+  // Derived options from loaded usage rows
+  const workspaceOptions = useMemo<WorkspaceOption[]>(() => {
+    const map = new Map<string, string>();
+    usage.forEach((row) => {
+      if (row.workspaceId)
+        map.set(row.workspaceId, row.workspaceName || row.workspaceId);
+    });
+    return Array.from(map.entries())
+      .map(([id, name]) => ({ id, name }))
+      .sort((a, b) => a.name.localeCompare(b.name));
   }, [usage]);
+
+  const userOptions = useMemo<UserOption[]>(() => {
+    const map = new Map<string, string>();
+    usage.forEach((row) => {
+      if (row.userId) map.set(row.userId, row.userName || row.userId);
+    });
+    return Array.from(map.entries())
+      .map(([id, name]) => ({ id, name }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [usage]);
+
+  // Filtered rows (client-side on loaded data)
+  const filteredUsage = useMemo(() => {
+    return usage.filter((row) => {
+      if (filterWorkspace !== "all" && row.workspaceId !== filterWorkspace)
+        return false;
+      if (filterUser !== "all" && row.userId !== filterUser) return false;
+      return true;
+    });
+  }, [usage, filterWorkspace, filterUser]);
+
+  const usageSummary = useMemo(() => {
+    const totalTokens = filteredUsage.reduce(
+      (sum, row) => sum + row.totalTokens,
+      0
+    );
+    const totalCached = filteredUsage.reduce(
+      (sum, row) => sum + row.cachedTokens,
+      0
+    );
+    return { totalTokens, totalCached, count: filteredUsage.length };
+  }, [filteredUsage]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -47,7 +99,7 @@ const AiLogsPage = () => {
       const [modelRows, errorRows, usageRows] = await Promise.all([
         adminAiLogsApi.listModels(),
         adminAiLogsApi.listErrors({ limit: 150 }),
-        adminAiLogsApi.listUsage({ limit: 150 }),
+        adminAiLogsApi.listUsage({ limit: 500 }),
       ]);
       setModels(modelRows);
       setLogs(errorRows);
@@ -127,11 +179,69 @@ const AiLogsPage = () => {
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              {!loading && usage.length > 0 ? (
+              {/* Filter bar */}
+              {!loading && usage.length > 0 && (
+                <div className="flex flex-wrap items-center gap-3">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm text-muted-foreground">Workspace</span>
+                    <Select value={filterWorkspace} onValueChange={setFilterWorkspace}>
+                      <SelectTrigger className="h-8 w-44 text-sm">
+                        <SelectValue placeholder="All workspaces" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All workspaces</SelectItem>
+                        {workspaceOptions.map((w) => (
+                          <SelectItem key={w.id} value={w.id}>
+                            {w.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm text-muted-foreground">User</span>
+                    <Select value={filterUser} onValueChange={setFilterUser}>
+                      <SelectTrigger className="h-8 w-40 text-sm">
+                        <SelectValue placeholder="All users" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All users</SelectItem>
+                        {userOptions.map((u) => (
+                          <SelectItem key={u.id} value={u.id}>
+                            {u.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {(filterWorkspace !== "all" || filterUser !== "all") && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-8 gap-1 text-xs"
+                      onClick={() => {
+                        setFilterWorkspace("all");
+                        setFilterUser("all");
+                      }}
+                    >
+                      <X className="h-3 w-3" />
+                      Clear filters
+                    </Button>
+                  )}
+                </div>
+              )}
+
+              {/* Summary counts */}
+              {!loading && filteredUsage.length > 0 ? (
                 <div className="flex flex-wrap gap-3 text-sm text-muted-foreground">
                   <span>
                     <strong className="text-foreground">{usageSummary.count}</strong>{" "}
-                    recent events
+                    {filterWorkspace !== "all" || filterUser !== "all"
+                      ? "filtered"
+                      : "recent"}{" "}
+                    events
                   </span>
                   <span>
                     <strong className="text-foreground">
@@ -150,9 +260,11 @@ const AiLogsPage = () => {
 
               {loading ? (
                 <p className="text-sm text-muted-foreground">Loading…</p>
-              ) : usage.length === 0 ? (
+              ) : filteredUsage.length === 0 ? (
                 <p className="text-sm text-muted-foreground">
-                  No usage logged yet. Send a chat message to record model + tokens.
+                  {usage.length === 0
+                    ? "No usage logged yet. Send a chat message to record model + tokens."
+                    : "No results match the current filters."}
                 </p>
               ) : (
                 <div className="overflow-x-auto rounded-md border">
@@ -164,6 +276,7 @@ const AiLogsPage = () => {
                         <th className="p-3 text-left font-medium">Model</th>
                         <th className="p-3 text-left font-medium">Bot</th>
                         <th className="p-3 text-left font-medium">Workspace</th>
+                        <th className="p-3 text-left font-medium">User</th>
                         <th className="p-3 text-right font-medium">In</th>
                         <th className="p-3 text-right font-medium">Cached</th>
                         <th className="p-3 text-right font-medium">Out</th>
@@ -172,7 +285,7 @@ const AiLogsPage = () => {
                       </tr>
                     </thead>
                     <tbody className="divide-y">
-                      {usage.map((row) => (
+                      {filteredUsage.map((row) => (
                         <tr key={row.id} className="align-top">
                           <td className="whitespace-nowrap p-3 text-muted-foreground">
                             {new Date(row.createdAt).toLocaleString()}
@@ -189,7 +302,10 @@ const AiLogsPage = () => {
                             )}
                           </td>
                           <td className="max-w-[10rem] truncate p-3 text-muted-foreground">
-                            {row.workspaceName || row.workspaceId}
+                            {row.workspaceName || row.workspaceId || "—"}
+                          </td>
+                          <td className="max-w-[8rem] truncate p-3 text-muted-foreground">
+                            {row.userName || "—"}
                           </td>
                           <td className="p-3 text-right tabular-nums">
                             {formatTokens(row.inputTokens)}

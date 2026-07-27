@@ -1,5 +1,6 @@
 const asyncHandler = require("../../utils/asyncHandler");
 const assistantsService = require("./assistants.service");
+const { evaluateBotDesign } = require("../../services/botQuality.service");
 
 const getAll = asyncHandler(async (req, res) => {
   res.json(await assistantsService.getAll());
@@ -23,4 +24,8 @@ const remove = asyncHandler(async (req, res) => {
   res.status(204).send();
 });
 
-module.exports = { getAll, getById, create, update, remove };
+const evaluate = asyncHandler(async (req, res) => {
+  res.json(await evaluateBotDesign(req.params.id));
+});
+
+module.exports = { getAll, getById, create, update, remove, evaluate };

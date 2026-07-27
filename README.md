@@ -40,6 +40,10 @@ npm run dev:api
 
 ## VPS / production (PM2)
 
+See **[DEPLOY_VPS.md](./DEPLOY_VPS.md)** for the `gitsource` / `source` / `deploy.sh` layout (same style as your other VPS sites).
+
+Quick version (flat clone):
+
 ```bash
 git clone <your-repo-url> OpsAI
 cd OpsAI

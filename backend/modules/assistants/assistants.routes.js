@@ -7,6 +7,7 @@ const {
   create,
   update,
   remove,
+  evaluate,
 } = require("./assistants.controller");
 const { validateCreateAssistant, validateUpdateAssistant } = require("./assistants.validation");
 
@@ -14,6 +15,11 @@ const router = express.Router();
 
 router.get("/", getAll);
 router.get("/:id", getById);
+router.post(
+  "/:id/evaluate",
+  requireRole("Admin"),
+  evaluate
+);
 router.post(
   "/",
   requireRole("Admin"),

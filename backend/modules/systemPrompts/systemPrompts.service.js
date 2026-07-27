@@ -10,6 +10,10 @@ const {
   normalizeScoringCategories,
   DEFAULT_WORKSPACE_SUMMARY_CATEGORIES,
 } = require("../../utils/scoringCategories");
+const {
+  normalizeBotScoringCategories,
+  DEFAULT_BOT_DESIGN_CATEGORIES,
+} = require("../../utils/botScoringCategories");
 
 const parseConfig = (value) => {
   if (value == null) return {};
@@ -40,9 +44,13 @@ const buildConfig = (useCaseKey, config = {}) => {
   if (!next.feature) {
     next.feature = getUseCase(useCaseKey)?.feature || useCaseKey;
   }
-  if (useCaseKey === "workspace_summary" || next.scoringCategories) {
+  if (useCaseKey === "workspace_summary") {
     next.scoringCategories = normalizeScoringCategories(
       next.scoringCategories || DEFAULT_WORKSPACE_SUMMARY_CATEGORIES
+    );
+  } else if (useCaseKey === "bot_design") {
+    next.scoringCategories = normalizeBotScoringCategories(
+      next.scoringCategories || DEFAULT_BOT_DESIGN_CATEGORIES
     );
   }
   if (next.maxTokens == null) next.maxTokens = 2000;
