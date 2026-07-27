@@ -42,3 +42,5 @@ backend/storage/
 
 # Local smoke / temp scripts
 backend/scripts/_smoke-*.js
+
+deploy.sh
