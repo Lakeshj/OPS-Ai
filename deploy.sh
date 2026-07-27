@@ -1,41 +1,56 @@
 #!/usr/bin/env bash
-set -euo pipefail
-
+#
+# Simple deploy for OpsAi ONLY — does not touch other projects.
 # Run from site root:
-#   /var/www/yourdomain.com/deploy.sh
-# Expected folders:
-#   backup/  gitsource/  source/  html/  ssl/
+#   cd /var/www/opsai.socialchamps.com
+#   bash deploy.sh
+#
+# Layout:
+#   gitsource/OPS-Ai/   ← git pull here (change GIT_REPO below if folder name differs)
+#   source/             ← live app (PM2 runs from here)
+#   backup/source/      ← backup before each deploy
+#
+# Manual steps (not automated):
+#   - Edit source/backend/.env and source/frontend/.env.local when needed
+#   - First-time PM2 start if process does not exist yet
 
-APP_ROOT="$(cd "$(dirname "$0")" && pwd)"
-GIT_ROOT="$APP_ROOT/gitsource"
-SOURCE_ROOT="$APP_ROOT/source"
-BACKUP_ROOT="$APP_ROOT/backup"
-BRANCH="${DEPLOY_BRANCH:-main}"
-NOW="$(date +%Y-%m-%d_%H-%M-%S)"
+set -e
 
-WEB_PM2_NAME="${WEB_PM2_NAME:-opsai-web}"
-API_PM2_NAME="${API_PM2_NAME:-opsai-api}"
+# ── Paths (OpsAi site only) ────────────────────────────────────────────────
+APP_ROOT="/var/www/opsai.socialchamps.com"
+GIT_REPO="$APP_ROOT/gitsource/OPS-Ai"   # or: gitsource/keyword-chat-forge
+SOURCE="$APP_ROOT/source"
+BACKUP="$APP_ROOT/backup/source"
+BRANCH="${BRANCH:-main}"
 
-if [[ ! -d "$GIT_ROOT/.git" ]]; then
-  echo "ERROR: $GIT_ROOT is not a git repo."
-  echo "Clone first: git clone <repo-url> \"$GIT_ROOT\""
+# PM2 process name(s) for THIS site only — change to match: pm2 list
+PM2_APP="${PM2_APP:-opsai.socialchamps.com}"
+# If you use separate web + api processes instead of one, set these and leave PM2_APP empty:
+PM2_WEB="${PM2_WEB:-}"
+PM2_API="${PM2_API:-}"
+
+# ── 1) Backup current source ───────────────────────────────────────────────
+echo "==> Backup source -> backup/source"
+mkdir -p "$BACKUP"
+rm -rf "${BACKUP:?}"/*
+cp -a "$SOURCE/." "$BACKUP/"
+
+# ── 2) Pull latest code in gitsource ───────────────────────────────────────
+echo "==> Git pull in $GIT_REPO"
+if [[ ! -d "$GIT_REPO/.git" ]]; then
+  echo "ERROR: $GIT_REPO is not a git repo."
+  echo "Clone first, e.g.:"
+  echo "  cd $APP_ROOT/gitsource && git clone <repo-url> OPS-Ai"
   exit 1
 fi
-
-echo "==> Backup current source"
-mkdir -p "$BACKUP_ROOT"
-if [[ -d "$SOURCE_ROOT/frontend" || -d "$SOURCE_ROOT/backend" ]]; then
-  cp -a "$SOURCE_ROOT" "$BACKUP_ROOT/source_$NOW"
-fi
-
-echo "==> Pull latest code in gitsource"
-cd "$GIT_ROOT"
+cd "$GIT_REPO"
 git fetch origin
 git checkout "$BRANCH"
-git pull --ff-only origin "$BRANCH"
+git pull origin "$BRANCH"
 
-echo "==> Sync gitsource -> source"
-mkdir -p "$SOURCE_ROOT"
+# ── 3) Copy gitsource -> source (keep .env + storage) ──────────────────────
+echo "==> Sync gitsource -> source (keeping .env and storage)"
+mkdir -p "$SOURCE"
 rsync -a --delete \
   --exclude=".git/" \
   --exclude="frontend/node_modules/" \
@@ -45,37 +60,42 @@ rsync -a --delete \
   --exclude="frontend/.env.local" \
   --exclude="backend/.env" \
   --exclude="backend/storage/" \
-  "$GIT_ROOT/" "$SOURCE_ROOT/"
+  "$GIT_REPO/" "$SOURCE/"
 
-echo "==> Build frontend"
-cd "$SOURCE_ROOT/frontend"
+# ── 4) Build frontend ──────────────────────────────────────────────────────
+echo "==> Frontend: npm install + build"
+cd "$SOURCE/frontend"
 npm install
 npm run build
 
-echo "==> Install backend + migrate"
-cd "$SOURCE_ROOT/backend"
+# ── 5) Backend install (+ optional migrate) ────────────────────────────────
+echo "==> Backend: npm install"
+cd "$SOURCE/backend"
 npm install
+
+echo "==> Backend: db migrate (skip errors if already applied)"
 npm run db:migrate || true
 
-echo "==> Restart PM2 apps"
-cd "$SOURCE_ROOT/frontend"
-if pm2 describe "$WEB_PM2_NAME" >/dev/null 2>&1; then
-  pm2 restart "$WEB_PM2_NAME" --update-env
+# ── 6) Restart THIS app only (PM2) ─────────────────────────────────────────
+echo "==> PM2 reload (OpsAi only)"
+if [[ -n "$PM2_APP" ]]; then
+  if pm2 describe "$PM2_APP" >/dev/null 2>&1; then
+    pm2 reload "$PM2_APP" --update-env
+  else
+    echo "WARN: PM2 app '$PM2_APP' not found. Start manually, e.g.:"
+    echo "  cd $SOURCE/frontend && pm2 start npm --name opsai-web -- start"
+    echo "  cd $SOURCE/backend && pm2 start server.js --name opsai-api"
+  fi
 else
-  pm2 start npm --name "$WEB_PM2_NAME" -- start
+  [[ -n "$PM2_WEB" ]] && pm2 reload "$PM2_WEB" --update-env
+  [[ -n "$PM2_API" ]] && pm2 reload "$PM2_API" --update-env
 fi
 
-cd "$SOURCE_ROOT/backend"
-if pm2 describe "$API_PM2_NAME" >/dev/null 2>&1; then
-  pm2 restart "$API_PM2_NAME" --update-env
-else
-  pm2 start server.js --name "$API_PM2_NAME"
+# ── 7) Nginx (optional) ────────────────────────────────────────────────────
+if command -v systemctl >/dev/null 2>&1; then
+  echo "==> Reload nginx"
+  sudo systemctl reload nginx || true
 fi
 
-pm2 save
-
-echo "==> Health checks"
-curl -fsS "http://127.0.0.1:5013/api" >/dev/null && echo "API OK"
-curl -fsS "http://127.0.0.1:3001/api" >/dev/null && echo "WEB PROXY OK"
-
-echo "==> Deploy complete ($NOW)"
+echo "==> Deploy complete"
+echo "    Check: pm2 logs $PM2_APP --lines 50"
