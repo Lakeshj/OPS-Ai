@@ -49,24 +49,7 @@ app.use("/api", apiRoutes);
 app.use(errorHandler);
 app.use(notFoundHandler);
 
-const startServer = () => {
-  if (config.isProduction) {
-    const options = {
-      key: fs.readFileSync(config.ssl.keyPath),
-      cert: fs.readFileSync(config.ssl.certPath),
-    };
-
-    const server = https.createServer(options, app);
-    server.listen(config.port, () => {
-      console.info(`https server is running on port ${config.port}`);
-    });
-    return server;
-  }
-
-  const server = app.listen(config.port, () => {
-    console.info(`Node app listening on port ${config.port}`);
-  });
-
+const attachServerErrorHandler = (server) => {
   server.on("error", (err) => {
     if (err.code === "EADDRINUSE") {
       console.error(
@@ -81,7 +64,60 @@ const startServer = () => {
   return server;
 };
 
-const server = startServer();
+const readSslCredentials = () => {
+  const keyPath = config.ssl.keyPath;
+  const certPath = config.ssl.certPath;
+
+  if (!keyPath || !certPath) {
+    throw new Error(
+      "SSL_KEY_PATH and SSL_CERT_PATH must be set in production"
+    );
+  }
+
+  if (!fs.existsSync(keyPath)) {
+    throw new Error(`SSL key file not found: ${keyPath}`);
+  }
+
+  if (!fs.existsSync(certPath)) {
+    throw new Error(`SSL cert file not found: ${certPath}`);
+  }
+
+  return {
+    key: fs.readFileSync(keyPath),
+    cert: fs.readFileSync(certPath),
+  };
+};
+
+const startServer = () => {
+  const isProduction = process.env.NODE_ENV === "production";
+
+  if (isProduction) {
+    const server = attachServerErrorHandler(
+      https.createServer(readSslCredentials(), app).listen(config.port, () => {
+        console.info(`HTTPS server listening on port ${config.port}`);
+      })
+    );
+    return server;
+  }
+
+  const server = attachServerErrorHandler(
+    app.listen(config.port, () => {
+      console.info(`HTTP server listening on port ${config.port}`);
+    })
+  );
+
+  return server;
+};
+
+let server;
+try {
+  server = startServer();
+} catch (error) {
+  console.error(
+    error instanceof Error ? error.message : "Failed to start server"
+  );
+  process.exit(1);
+}
 
 const shutdown = () => {
   server.close(() => {

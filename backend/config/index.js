@@ -45,8 +45,8 @@ const config = {
       1024,
   },
   ssl: {
-    keyPath: "/var/www/ops.socialchamps.com/ssl/socialchamps_com.key",
-    certPath: "/var/www/ops.socialchamps.com/ssl/socialchamps_com.crt",
+    keyPath: process.env.SSL_KEY_PATH || "",
+    certPath: process.env.SSL_CERT_PATH || "",
   },
   cors: {
     origin: process.env.CORS_ORIGIN || "http://localhost:3001",
