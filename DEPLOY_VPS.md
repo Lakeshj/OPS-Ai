@@ -149,12 +149,26 @@ sudo nginx -t && sudo systemctl reload nginx
 ### 8. Smoke test
 
 ```bash
-curl http://127.0.0.1:5013/api
-curl http://127.0.0.1:3001/api
+# Backend must answer on BOTH (prod mounts /api and /)
+curl -s http://127.0.0.1:5013/api
+curl -s http://127.0.0.1:5013/
+curl -s http://127.0.0.1:3001/api
 # or https://yourdomain.com/api
 ```
 
 Expect: `{ "ok": true, "message": "OpsAi API is working", ... }`
+
+**If Cloudflare shows 502 on login but the homepage loads:** Next is up, backend is not reachable from the rewrite.
+
+```bash
+pm2 status
+pm2 logs opsai-api --lines 80
+# BACKEND_INTERNAL_URL must be HTTP (not https) unless USE_NODE_HTTPS=true
+# Example: BACKEND_INTERNAL_URL=http://127.0.0.1:5013
+grep BACKEND_INTERNAL_URL /var/www/opsai.*/source/frontend/.env* 2>/dev/null
+grep USE_NODE_HTTPS /var/www/opsai.*/source/backend/.env 2>/dev/null
+pm2 restart opsai-api opsai-web
+```
 
 ---
 
