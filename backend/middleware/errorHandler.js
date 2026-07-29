@@ -17,10 +17,13 @@ const errorHandler = (err, req, res, next) => {
     });
   }
 
-  // OpenAI / fetch-style errors often expose status + message
+  // OpenAI / fetch-style errors often expose status + message.
+  // Do not return 502 here — Cloudflare replaces origin 502 with its own
+  // Bad Gateway HTML page, which breaks the SPA error toast.
   const upstreamStatus = Number(err.status || err.statusCode || 0);
   if (upstreamStatus >= 400 && upstreamStatus < 600 && err.message) {
-    return res.status(upstreamStatus >= 500 ? 502 : upstreamStatus).json({
+    const status = upstreamStatus >= 500 ? 500 : upstreamStatus;
+    return res.status(status).json({
       error: err.message,
       code: "UPSTREAM_ERROR",
     });

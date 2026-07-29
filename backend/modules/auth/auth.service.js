@@ -5,12 +5,19 @@ const jwt = require("jsonwebtoken");
 const { pool } = require("../../config/database");
 const config = require("../../config");
 const AppError = require("../../utils/AppError");
-const { formatUser } = require("../../utils/formatters");
+const { withOwnerCapabilities } = require("../../utils/platformOwner");
 const { sendPasswordResetOtp } = require("../../services/mailer.service");
+
+const toPublicUser = (user) => withOwnerCapabilities(user);
 
 const signToken = (user) =>
   jwt.sign(
-    { userId: user.id, email: user.email, role: user.role },
+    {
+      userId: user.id,
+      email: user.email,
+      role: user.role,
+      isDeveloper: Boolean(user.is_developer === true || user.is_developer === 1),
+    },
     config.jwt.secret,
     { algorithm: "HS256", expiresIn: config.jwt.expiresIn }
   );
@@ -38,12 +45,7 @@ const login = async ({ email, password }) => {
 
   return {
     token: signToken(user),
-    user: {
-      id: user.id,
-      name: user.name,
-      email: user.email,
-      role: user.role,
-    },
+    user: toPublicUser(user),
   };
 };
 
@@ -73,7 +75,7 @@ const register = async ({ name, email, password }) => {
 
   return {
     token: signToken(newUser[0]),
-    user: newUser[0],
+    user: toPublicUser(newUser[0]),
   };
 };
 
@@ -253,7 +255,7 @@ const resetPassword = async ({ resetToken, newPassword, confirmPassword }) => {
 
 const getMe = async (userId) => {
   const [users] = await pool.execute(
-    "SELECT id, name, email, role, created_at, updated_at FROM users WHERE id = ?",
+    "SELECT id, name, email, role, is_developer, created_at, updated_at FROM users WHERE id = ?",
     [userId]
   );
 
@@ -261,7 +263,7 @@ const getMe = async (userId) => {
     throw new AppError("User not found", 404, "NOT_FOUND");
   }
 
-  return formatUser(users[0]);
+  return toPublicUser(users[0]);
 };
 
 module.exports = {

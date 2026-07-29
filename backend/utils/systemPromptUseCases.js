@@ -65,6 +65,12 @@ const resolveUseCase = (key) => {
   return known;
 };
 
+/** Built-in prompts power product features — edit allowed, delete blocked. */
+const isBuiltInUseCase = (key) => {
+  const known = getUseCase(key);
+  return Boolean(known?.builtIn);
+};
+
 module.exports = {
   SYSTEM_PROMPT_USE_CASES,
   USE_CASE_KEYS,
@@ -72,6 +78,7 @@ module.exports = {
   normalizeUseCaseKey,
   assertUseCaseKeyFormat,
   resolveUseCase,
+  isBuiltInUseCase,
   // Back-compat alias
   assertValidUseCaseKey: resolveUseCase,
 };

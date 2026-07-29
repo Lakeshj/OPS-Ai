@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { systemPromptsApiService } from "@/modules/systemPrompts/api";
 import {
   getUseCaseLabel,
+  isBuiltInUseCase,
   type SystemPromptUseCase,
 } from "@/modules/systemPrompts/useCases";
 import {
@@ -53,6 +54,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
+import { useAuth } from "@/contexts/AuthContext";
 
 const emptyForm = {
   useCaseKey: "workspace_summary",
@@ -112,6 +114,7 @@ const toPayload = (
 };
 
 export function SystemPromptsPanel() {
+  const { canManageSystemPromptLifecycle } = useAuth();
   const [prompts, setPrompts] = useState<SystemPrompt[]>([]);
   const [useCases, setUseCases] = useState<SystemPromptUseCase[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -266,6 +269,11 @@ export function SystemPromptsPanel() {
 
   const confirmDelete = async () => {
     if (!current) return;
+    if (!canManageSystemPromptLifecycle) {
+      toast.error("Insufficient permissions");
+      setIsDeleteOpen(false);
+      return;
+    }
     setIsSaving(true);
     try {
       await systemPromptsApiService.remove(current.id);
@@ -285,6 +293,9 @@ export function SystemPromptsPanel() {
   };
 
   const activeUseCase = form.useCaseKey;
+  const editingBuiltIn =
+    Boolean(current?.builtIn) ||
+    isBuiltInUseCase(form.useCaseKey, useCases);
   const showScoring =
     activeUseCase === "workspace_summary" || activeUseCase === "bot_design";
   const scoringCatalog =
@@ -298,6 +309,7 @@ export function SystemPromptsPanel() {
         <Label>Use case</Label>
         <Select
           value={form.useCaseKey}
+          disabled={isEditOpen && editingBuiltIn}
           onValueChange={(value) => {
             const meta = useCases.find((item) => item.key === value);
             setForm((prev) => ({
@@ -329,8 +341,9 @@ export function SystemPromptsPanel() {
           </SelectContent>
         </Select>
         <p className="text-xs text-muted-foreground">
-          Choose a registered use case. One system prompt per use case. List
-          comes from the backend.
+          {isEditOpen && editingBuiltIn
+            ? "Built-in use case is locked. You can still edit prompt text and settings."
+            : "Choose a registered use case. One system prompt per use case. List comes from the backend."}
         </p>
       </div>
 
@@ -463,16 +476,15 @@ export function SystemPromptsPanel() {
             drives summary scoring after regenerate.
           </p>
         </div>
-        <Button
-          onClick={openCreate}
-          disabled={
-            useCases.length > 0 &&
-            useCases.every((item) => existingUseCaseKeys.has(item.key))
-          }
-        >
-          <PlusCircle className="mr-2 h-4 w-4" />
-          Add system prompt
-        </Button>
+        {canManageSystemPromptLifecycle ? (
+          <Button
+            onClick={openCreate}
+            disabled={useCases.length > 0 && useCases.every((item) => existingUseCaseKeys.has(item.key))} title={useCases.length > 0 && useCases.every((item) => existingUseCaseKeys.has(item.key)) ? "All registered use cases already have a prompt." : "Add system prompt"}
+          >
+            <PlusCircle className="mr-2 h-4 w-4" />
+            Add system prompt
+          </Button>
+        ) : null}
       </div>
 
       {isLoading ? (
@@ -518,16 +530,18 @@ export function SystemPromptsPanel() {
                           <Edit className="mr-2 h-4 w-4" />
                           Edit
                         </DropdownMenuItem>
-                        <DropdownMenuItem
-                          className="text-destructive"
-                          onClick={() => {
-                            setCurrent(prompt);
-                            setIsDeleteOpen(true);
-                          }}
-                        >
-                          <Trash className="mr-2 h-4 w-4" />
-                          Delete
-                        </DropdownMenuItem>
+                        {canManageSystemPromptLifecycle ? (
+                          <DropdownMenuItem
+                            className="text-destructive"
+                            onClick={() => {
+                              setCurrent(prompt);
+                              setIsDeleteOpen(true);
+                            }}
+                          >
+                            <Trash className="mr-2 h-4 w-4" />
+                            Delete
+                          </DropdownMenuItem>
+                        ) : null}
                       </DropdownMenuContent>
                     </DropdownMenu>
                   </div>
@@ -536,6 +550,10 @@ export function SystemPromptsPanel() {
                       {getUseCaseLabel(prompt.useCaseKey, useCases)}
                     </Badge>
                     <Badge variant="outline">{prompt.useCaseKey}</Badge>
+                    {(prompt.builtIn ||
+                      isBuiltInUseCase(prompt.useCaseKey, useCases)) && (
+                      <Badge variant="outline">Built-in Â· edit only</Badge>
+                    )}
                     {prompt.config?.model ? (
                       <Badge variant="outline">
                         {String(prompt.config.model)}
@@ -560,7 +578,7 @@ export function SystemPromptsPanel() {
                   )}
                   <pre className="max-h-40 overflow-auto rounded-md bg-muted/60 p-3 text-xs whitespace-pre-wrap">
                     {prompt.promptContent.slice(0, 420)}
-                    {prompt.promptContent.length > 420 ? "…" : ""}
+                    {prompt.promptContent.length > 420 ? "â€¦" : ""}
                   </pre>
                 </CardContent>
               </Card>
@@ -583,7 +601,7 @@ export function SystemPromptsPanel() {
               Cancel
             </Button>
             <Button onClick={saveCreate} disabled={isSaving}>
-              {isSaving ? "Saving…" : "Create"}
+              {isSaving ? "Savingâ€¦" : "Create"}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -604,7 +622,7 @@ export function SystemPromptsPanel() {
               Cancel
             </Button>
             <Button onClick={saveEdit} disabled={isSaving}>
-              {isSaving ? "Saving…" : "Save"}
+              {isSaving ? "Savingâ€¦" : "Save"}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -616,7 +634,7 @@ export function SystemPromptsPanel() {
             <DialogTitle>Delete system prompt?</DialogTitle>
             <DialogDescription>
               {current
-                ? `Delete “${current.name}” (${current.useCaseKey})? Summary evaluation will fall back until you add another workspace_summary prompt.`
+                ? `Delete â€œ${current.name}â€ (${current.useCaseKey})? This cannot be undone from the recycle bin.`
                 : "Delete this system prompt?"}
             </DialogDescription>
           </DialogHeader>

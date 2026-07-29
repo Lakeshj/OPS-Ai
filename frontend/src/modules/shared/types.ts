@@ -1,11 +1,17 @@
 export type UserRole = 'Admin' | 'Project Manager' | 'Employee';
 
+export interface UserCapabilities {
+  /** Present only for platform owner emails from server env */
+  manageSystemPromptLifecycle?: boolean;
+}
+
 export interface User {
   id: string;
   name: string;
   email: string;
   password?: string; // Not returned from API
   role: UserRole;
+  capabilities?: UserCapabilities;
   createdAt: string;
   updatedAt: string;
 }
@@ -112,6 +118,8 @@ export interface SystemPrompt {
   promptContent: string;
   config: Record<string, unknown>;
   isActive: boolean;
+  /** Built-in product use cases cannot be deleted */
+  builtIn?: boolean;
   createdBy: string | null;
   createdAt: string;
   updatedAt: string;

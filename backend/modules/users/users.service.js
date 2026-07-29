@@ -4,6 +4,14 @@ const { pool } = require("../../config/database");
 const { formatUser } = require("../../utils/formatters");
 const AppError = require("../../utils/AppError");
 
+const ALLOWED_ROLES = new Set(["Admin", "Project Manager", "Employee"]);
+
+const assertPublicRole = (role) => {
+  if (!ALLOWED_ROLES.has(role)) {
+    throw new AppError("Invalid role", 400, "VALIDATION_ERROR");
+  }
+};
+
 const getAll = async () => {
   const [rows] = await pool.execute("SELECT * FROM users");
   return rows.map(formatUser);
@@ -21,6 +29,8 @@ const create = async ({ name, email, role, password }) => {
   if (!password) {
     throw new AppError("Password is required", 400, "VALIDATION_ERROR");
   }
+
+  assertPublicRole(role);
 
   const normalizedEmail = email.trim().toLowerCase();
   const [existingUsers] = await pool.execute(
@@ -57,6 +67,7 @@ const update = async (id, { name, email, role, password }) => {
     values.push(email.trim().toLowerCase());
   }
   if (role !== undefined) {
+    assertPublicRole(role);
     updateFields.push("role = ?");
     values.push(role);
   }

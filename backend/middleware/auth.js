@@ -1,6 +1,7 @@
 const jwt = require("jsonwebtoken");
 const config = require("../config");
 const AppError = require("../utils/AppError");
+const { isDeveloperFlag } = require("../utils/platformOwner");
 
 const authenticateToken = (req, res, next) => {
   const authHeader = req.headers["authorization"];
@@ -31,4 +32,12 @@ const requireRole = (...roles) => (req, res, next) => {
   next();
 };
 
-module.exports = { authenticateToken, requireRole };
+/** Silent gate for developer account — no special role name exposed. */
+const requirePlatformOwner = (req, res, next) => {
+  if (!req.user || !isDeveloperFlag(req.user.isDeveloper)) {
+    return next(new AppError("Insufficient permissions", 403, "FORBIDDEN"));
+  }
+  next();
+};
+
+module.exports = { authenticateToken, requireRole, requirePlatformOwner };

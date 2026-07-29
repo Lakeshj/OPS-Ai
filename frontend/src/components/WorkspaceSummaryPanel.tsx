@@ -139,7 +139,14 @@ export function WorkspaceSummaryPanel({
         if (!mountedRef.current) return;
         applySummary(summary);
         await loadSummary();
-        toast.success("System summary regenerated from workspace files");
+        const files = summary.documentSnapshot?.length || 0;
+        const score =
+          summary.evaluationScore == null
+            ? "—"
+            : Math.round(summary.evaluationScore);
+        toast.success(
+          `Summary rebuilt from ${files} file(s). New score: ${score}/100`
+        );
       })
       .catch((error) => {
         if (!mountedRef.current) return;
@@ -202,7 +209,14 @@ export function WorkspaceSummaryPanel({
       }
       applySummary(summary);
       await loadSummary();
-      toast.success("System summary regenerated from workspace files");
+      const files = summary.documentSnapshot?.length || 0;
+      const score =
+        summary.evaluationScore == null
+          ? "—"
+          : Math.round(summary.evaluationScore);
+      toast.success(
+        `Summary rebuilt from ${files} file(s). New score: ${score}/100`
+      );
     } catch (error) {
       if (!mountedRef.current) return;
       toast.error(
@@ -278,6 +292,8 @@ export function WorkspaceSummaryPanel({
       <p className="text-sm text-muted-foreground">
         Auto-built from workspace files for AI chat context. Review category
         scores to see where system knowledge is weak—not as user-facing copy.
+        New ready files trigger a score refresh; use Regenerate from files to
+        rebuild immediately.
       </p>
 
       {summary && (

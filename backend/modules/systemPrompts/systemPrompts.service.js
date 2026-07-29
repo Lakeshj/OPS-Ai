@@ -5,6 +5,7 @@ const {
   resolveUseCase,
   getUseCase,
   SYSTEM_PROMPT_USE_CASES,
+  isBuiltInUseCase,
 } = require("../../utils/systemPromptUseCases");
 const {
   normalizeScoringCategories,
@@ -33,6 +34,7 @@ const formatPrompt = (row) => ({
   promptContent: row.prompt_content,
   config: parseConfig(row.config_json),
   isActive: Boolean(row.is_active),
+  builtIn: isBuiltInUseCase(row.use_case_key),
   createdBy: row.created_by,
   createdAt: row.created_at,
   updatedAt: row.updated_at,
@@ -215,6 +217,13 @@ const update = async (
     const useCase = resolveUseCase(useCaseKey);
     nextUseCaseKey = useCase.key;
     if (nextUseCaseKey !== current.useCaseKey) {
+      if (current.builtIn) {
+        throw new AppError(
+          `Cannot change use case for built-in system prompt "${current.useCaseKey}".`,
+          400,
+          "PROTECTED_SYSTEM_PROMPT"
+        );
+      }
       const conflict = await getByUseCase(nextUseCaseKey, {
         requireActive: false,
       });
@@ -295,6 +304,7 @@ const update = async (
 };
 
 const remove = async (id) => {
+  // Built-in prompts may be removed only by platform owner (route-gated).
   const [result] = await pool.execute(
     "DELETE FROM system_prompts WHERE id = ?",
     [id]

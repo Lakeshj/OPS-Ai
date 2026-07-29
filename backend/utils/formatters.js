@@ -1,5 +1,11 @@
 const formatUser = (user) => {
-  const { password: _password, created_at, updated_at, ...safeUser } = user;
+  const {
+    password: _password,
+    created_at,
+    updated_at,
+    is_developer: _isDeveloper,
+    ...safeUser
+  } = user;
   return {
     ...safeUser,
     createdAt: created_at,

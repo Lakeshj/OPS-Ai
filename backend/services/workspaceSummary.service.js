@@ -294,7 +294,7 @@ ${categoryLines}
 Only score these selected categories: ${scoringCategories.map((c) => c.label).join(", ")}.`;
 };
 
-const evaluateSummary = async (content, settings) => {
+const evaluateSummary = async (content, settings, priorReview = null) => {
   const evaluationModel =
     settings.evaluation_config?.model ||
     settings.evaluation_model ||
@@ -308,10 +308,30 @@ const evaluateSummary = async (content, settings) => {
     "You are the Workspace Knowledge Evaluator for OpsAi.";
   const evaluationPrompt = `${basePrompt}\n\n${buildEvaluationJsonContract(scoringCategories)}`;
 
+  const priorBlock = priorReview
+    ? [
+        "",
+        "Previous evaluation (use this to detect improvement or stagnation):",
+        `Prior overall score: ${priorReview.score ?? "n/a"}`,
+        priorReview.feedback ? `Prior feedback: ${priorReview.feedback}` : null,
+        priorReview.gaps?.length
+          ? `Prior gaps that should be fixed if sources now cover them:\n- ${priorReview.gaps.join("\n- ")}`
+          : null,
+        priorReview.recommendations?.length
+          ? `Prior recommendations:\n- ${priorReview.recommendations.join("\n- ")}`
+          : null,
+        "If the new summary clearly addresses prior gaps, raise category and overall scores accordingly.",
+        "If gaps remain unaddressed, keep those category scores low and say so in feedback.",
+        "Do not copy the prior score unless the knowledge quality is genuinely unchanged.",
+      ]
+        .filter(Boolean)
+        .join("\n")
+    : "";
+
   try {
     const completion = await openai.chat.completions.create(
       withGenerationOptions(evaluationModel, {
-        temperature: Number(settings.evaluation_config?.temperature ?? 0.1),
+        temperature: Number(settings.evaluation_config?.temperature ?? 0.2),
         maxTokens: Number(settings.evaluation_config?.maxTokens ?? 2000),
         response_format: { type: "json_object" },
         messages: [
@@ -321,7 +341,7 @@ const evaluateSummary = async (content, settings) => {
           },
           {
             role: "user",
-            content: `Evaluate this workspace knowledge summary and return JSON only.\n\n${content}`,
+            content: `Evaluate this workspace knowledge summary and return JSON only.${priorBlock}\n\n${content}`,
           },
         ],
       })
@@ -342,7 +362,7 @@ const evaluateSummary = async (content, settings) => {
     console.error("[workspace-summary] evaluation failed:", error.message);
     throw new AppError(
       error?.message || "Failed to evaluate workspace summary",
-      error?.status || error?.statusCode || 502,
+      500,
       "SUMMARY_EVALUATION_FAILED"
     );
   }
@@ -443,7 +463,43 @@ const condenseForFinalSummary = async (sections, model) => {
   return current;
 };
 
-const compileWorkspaceSummary = async (workspaceId, settings) => {
+const getPriorReview = async (workspaceId) => {
+  const current = await getSummaryRow(workspaceId);
+  if (!current) return null;
+
+  const details = parseJson(current.evaluation_details, {}) || {};
+  const gaps = Array.isArray(details.gaps)
+    ? details.gaps.map(String).filter(Boolean)
+    : [];
+  const recommendations = Array.isArray(details.recommendations)
+    ? details.recommendations.map(String).filter(Boolean)
+    : [];
+
+  if (
+    current.evaluation_score == null &&
+    gaps.length === 0 &&
+    recommendations.length === 0 &&
+    !current.evaluation_feedback
+  ) {
+    return null;
+  }
+
+  return {
+    score:
+      current.evaluation_score == null
+        ? null
+        : Number(current.evaluation_score),
+    feedback: current.evaluation_feedback || "",
+    gaps,
+    recommendations,
+  };
+};
+
+const compileWorkspaceSummary = async (
+  workspaceId,
+  settings,
+  priorReview = null
+) => {
   const documents = await getDocumentInputs(workspaceId);
   if (documents.length === 0) {
     return {
@@ -457,8 +513,22 @@ const compileWorkspaceSummary = async (workspaceId, settings) => {
   const model = settings.summary_model || "gpt-4o-mini";
   const extractPrompt =
     "Extract factual workspace knowledge for AI chat grounding. Preserve: business/company facts, products/services, customers/personas/ICP, brand voice and messaging, marketing strategy, workflows/processes/roles, constraints/guardrails, terminology, decisions, and known gaps. Do not add facts.";
-  const finalPrompt =
-    "Create one authoritative Markdown workspace summary for AI chat context. Structure with: business overview, offerings, customers/personas, brand & messaging, marketing context, how we work (processes/roles/tools), constraints/guardrails, key terminology, active decisions, and known gaps. Goal: a chat user should not need to re-explain what this workspace is. Resolve duplication but do not invent facts. Keep concise for repeated LLM context while retaining critical knowledge.";
+  const priorGapLines = [
+    ...(priorReview?.gaps || []),
+    ...(priorReview?.recommendations || []),
+  ].filter(Boolean);
+  const finalPrompt = [
+    "Create one authoritative Markdown workspace summary for AI chat context.",
+    "Structure with: business overview, offerings, customers/personas, brand & messaging, marketing context, how we work (processes/roles/tools), constraints/guardrails, key terminology, active decisions, and known gaps.",
+    "Goal: a chat user should not need to re-explain what this workspace is.",
+    "Resolve duplication but do not invent facts.",
+    "Keep concise for repeated LLM context while retaining critical knowledge.",
+    priorGapLines.length > 0
+      ? `Prior review found these knowledge gaps / recommendations — prioritize covering them if the source documents contain answers:\n- ${priorGapLines.join("\n- ")}`
+      : null,
+  ]
+    .filter(Boolean)
+    .join(" ");
 
   const documentSummaries = [];
   for (const document of documents) {
@@ -491,8 +561,11 @@ const compileWorkspaceSummary = async (workspaceId, settings) => {
 
   return {
     content:
-      finalContent || "# Workspace Summary\n\nSummary generation returned no content.",
+      finalContent ||
+      "# Workspace Summary\n\nSummary generation returned no content.",
     documentSnapshot: documents.map((document) => document.id),
+    documentCount: documents.length,
+    documentNames: documents.map((document) => document.name),
   };
 };
 
@@ -616,8 +689,21 @@ const saveSummary = async ({
 
 const regenerateSummary = async (workspaceId, updatedBy = null) => {
   const settings = await getSettings();
-  const compiled = await compileWorkspaceSummary(workspaceId, settings);
-  const evaluation = await evaluateSummary(compiled.content, settings);
+  const priorReview = await getPriorReview(workspaceId);
+  const compiled = await compileWorkspaceSummary(
+    workspaceId,
+    settings,
+    priorReview
+  );
+  const evaluation = await evaluateSummary(
+    compiled.content,
+    settings,
+    priorReview
+  );
+
+  console.info(
+    `[workspace-summary] regenerated ${workspaceId}: files=${compiled.documentCount || 0}, priorScore=${priorReview?.score ?? "n/a"}, newScore=${evaluation.score}`
+  );
 
   return saveSummary({
     workspaceId,

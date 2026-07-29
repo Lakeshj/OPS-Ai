@@ -24,6 +24,7 @@ interface AuthContextType {
   signOut: () => void;
   isAuthenticated: boolean;
   hasRole: (roles: UserRole | UserRole[]) => boolean;
+  canManageSystemPromptLifecycle: boolean;
 }
 
 interface AuthResponse {
@@ -132,6 +133,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     return user.role === roles;
   }, [user]);
 
+  const canManageSystemPromptLifecycle = Boolean(
+    user?.capabilities?.manageSystemPromptLifecycle
+  );
+
   const value = useMemo(
     () => ({
       user,
@@ -140,8 +145,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
       signOut,
       isAuthenticated: !!user,
       hasRole,
+      canManageSystemPromptLifecycle,
     }),
-    [user, isLoading, signIn, signOut, hasRole]
+    [user, isLoading, signIn, signOut, hasRole, canManageSystemPromptLifecycle]
   );
 
   return (

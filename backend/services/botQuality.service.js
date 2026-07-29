@@ -34,28 +34,70 @@ const extractJsonObject = (raw) => {
   }
 };
 
-const normalizeEvaluationDetails = (raw, categoryKeys) => {
+const normalizeEvaluationDetails = (raw, scoringCategories) => {
+  const categoryKeys = scoringCategories.map((item) => item.key);
   const details = raw && typeof raw === "object" ? raw : {};
-  const score = Number(details.score);
   const categories = {};
   const sourceCats =
     details.categories && typeof details.categories === "object"
       ? details.categories
       : {};
 
+  const parsedScores = [];
   for (const key of categoryKeys) {
     const item = sourceCats[key] || {};
+    const numeric = Number(item.score);
+    if (Number.isFinite(numeric)) {
+      parsedScores.push(numeric);
+    }
     categories[key] = {
-      score: Number.isFinite(Number(item.score))
-        ? Math.max(0, Math.min(100, Number(item.score)))
+      score: Number.isFinite(numeric)
+        ? Math.max(0, Math.min(100, numeric))
         : null,
       feedback: typeof item.feedback === "string" ? item.feedback : "",
-      label: typeof item.label === "string" ? item.label : key,
+      label:
+        typeof item.label === "string"
+          ? item.label
+          : scoringCategories.find((c) => c.key === key)?.label || key,
     };
   }
 
+  // Models sometimes return category scores on a 0–10 scale while overall is 0–100.
+  const maxCategory = parsedScores.length ? Math.max(...parsedScores) : null;
+  if (maxCategory != null && maxCategory > 0 && maxCategory <= 10) {
+    for (const key of categoryKeys) {
+      if (categories[key].score != null) {
+        categories[key].score = Math.max(
+          0,
+          Math.min(100, Math.round(categories[key].score * 10))
+        );
+      }
+    }
+  }
+
+  // Overall must match categories (weighted average) — never trust a mismatched LLM overall.
+  let totalWeight = 0;
+  let weighted = 0;
+  for (const cat of scoringCategories) {
+    const score = categories[cat.key]?.score;
+    if (score == null || !Number.isFinite(score)) continue;
+    const weight = Number(cat.weight) || 1;
+    weighted += score * weight;
+    totalWeight += weight;
+  }
+
+  const derivedOverall =
+    totalWeight > 0 ? Math.round(weighted / totalWeight) : null;
+  const llmOverall = Number(details.score);
+  const score =
+    derivedOverall != null
+      ? derivedOverall
+      : Number.isFinite(llmOverall)
+        ? Math.max(0, Math.min(100, llmOverall))
+        : null;
+
   return {
-    score: Number.isFinite(score) ? Math.max(0, Math.min(100, score)) : null,
+    score,
     feedback: typeof details.feedback === "string" ? details.feedback : "",
     categories,
     strengths: Array.isArray(details.strengths)
@@ -82,11 +124,15 @@ const buildEvaluationJsonContract = (scoringCategories) => {
     )
     .join(",\n");
 
+  const weightHint = scoringCategories
+    .map((item) => `${item.label} (${item.weight}%)`)
+    .join(", ");
+
   return `IMPORTANT: Respond with a single JSON object only (valid json). Do not use markdown tables.
 
 Required JSON shape:
 {
-  "score": <number 0-100 overall design quality>,
+  "score": <number 0-100 overall design quality — MUST equal the weighted average of category scores>,
   "feedback": "<short overall assessment>",
   "categories": {
 ${categoryLines}
@@ -98,6 +144,8 @@ ${categoryLines}
   "confidenceReason": "<why>"
 }
 
+Category score scale is ALWAYS 0-100 (not 0-10).
+Weights: ${weightHint}.
 Only score these selected categories: ${scoringCategories.map((c) => c.label).join(", ")}.`;
 };
 
@@ -191,7 +239,7 @@ const evaluateBotDesign = async (assistantId) => {
 
     const details = normalizeEvaluationDetails(
       extractJsonObject(completion.choices[0]?.message?.content || "{}"),
-      scoringCategories.map((item) => item.key)
+      scoringCategories
     );
 
     await pool.execute(
@@ -221,7 +269,7 @@ const evaluateBotDesign = async (assistantId) => {
     console.error("[bot-quality] evaluation failed:", error.message);
     throw new AppError(
       error?.message || "Failed to evaluate bot design",
-      error?.status || error?.statusCode || 502,
+      500,
       "BOT_EVALUATION_FAILED"
     );
   }

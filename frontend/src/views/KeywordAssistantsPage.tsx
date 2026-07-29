@@ -3,10 +3,10 @@ import { useState, useEffect } from "react";
 import { keywordAssistantService } from "@/lib/services";
 import {
   ASSISTANT_TEMPLATES,
-  ASSISTANT_CATEGORIES,
   getTemplateByName,
 } from "@/lib/keywordAssistantService";
 import { KeywordAssistant } from "@/lib/types";
+import { TaskTypeField } from "@/components/TaskTypeField";
 import {
   Card,
   CardContent,
@@ -79,6 +79,56 @@ const scoreBadgeClass = (score: number | null | undefined) => {
   return "bg-rose-500/15 text-rose-700 dark:text-rose-400";
 };
 
+/** Keep card badge aligned with popup: weighted category average when present. */
+const resolveDisplayQualityScore = (assistant: KeywordAssistant) => {
+  const categories = assistant.qualityDetails?.categories;
+  if (!categories || typeof categories !== "object") {
+    return assistant.qualityScore == null
+      ? null
+      : Number(assistant.qualityScore);
+  }
+
+  const weights: Record<string, number> = {
+    role_clarity: 20,
+    prompt_quality: 25,
+    capability_fit: 15,
+    instruction_strength: 15,
+    workspace_usefulness: 15,
+    safety_guardrails: 10,
+  };
+
+  let totalWeight = 0;
+  let weighted = 0;
+  let maxScore = 0;
+  const rows: { score: number; weight: number }[] = [];
+
+  for (const [key, value] of Object.entries(categories)) {
+    const score =
+      typeof value === "number"
+        ? value
+        : value && typeof value === "object"
+          ? Number((value as { score?: number }).score)
+          : NaN;
+    if (!Number.isFinite(score)) continue;
+    maxScore = Math.max(maxScore, score);
+    rows.push({ score, weight: weights[key] || 1 });
+  }
+
+  if (rows.length === 0) {
+    return assistant.qualityScore == null
+      ? null
+      : Number(assistant.qualityScore);
+  }
+
+  const scale = maxScore > 0 && maxScore <= 10 ? 10 : 1;
+  for (const row of rows) {
+    weighted += row.score * scale * row.weight;
+    totalWeight += row.weight;
+  }
+
+  return totalWeight > 0 ? Math.round(weighted / totalWeight) : null;
+};
+
 const QualityScoreTag = ({
   score,
   title,
@@ -113,7 +163,7 @@ const QualityScoreTag = ({
 };
 
 const KeywordAssistantsPage = () => {
-  const { hasRole } = useAuth();
+  const { hasRole, canManageSystemPromptLifecycle } = useAuth();
   const isAdmin = hasRole("Admin");
   const [assistants, setAssistants] = useState<KeywordAssistant[]>([]);
   const [filteredAssistants, setFilteredAssistants] = useState<KeywordAssistant[]>([]);
@@ -383,6 +433,13 @@ const KeywordAssistantsPage = () => {
 
   // Get unique task types for the filters
   const uniqueTaskTypes = ["all", ...new Set(assistants.map(a => a.taskType))];
+  const existingTaskTypes = Array.from(
+    new Set(
+      assistants
+        .map((assistant) => assistant.taskType)
+        .filter((taskType) => Boolean(taskType?.trim()))
+    )
+  );
 
   return (
     <div className="p-6 space-y-6 max-w-7xl mx-auto">
@@ -413,7 +470,7 @@ const KeywordAssistantsPage = () => {
           <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
             <p className="text-sm text-muted-foreground">
               Day-to-day AI assistants for employees. Each bot has its own prompt,
-              capability, and model — managed only in this tab.
+              capability, and model â€” managed only in this tab.
             </p>
             <div className="flex flex-col sm:flex-row gap-2">
               <div className="relative">
@@ -488,7 +545,7 @@ const KeywordAssistantsPage = () => {
                       </CardTitle>
                       <div className="flex items-center gap-1.5 shrink-0">
                         <QualityScoreTag
-                          score={assistant.qualityScore}
+                          score={resolveDisplayQualityScore(assistant)}
                           title={
                             assistant.qualityFeedback ||
                             (assistant.qualityEvaluatedAt
@@ -519,7 +576,7 @@ const KeywordAssistantsPage = () => {
                             >
                               <Sparkles className="mr-2 h-4 w-4" />
                               {evaluatingId === assistant.id
-                                ? "Evaluating…"
+                                ? "Evaluatingâ€¦"
                                 : "Evaluate quality"}
                             </DropdownMenuItem>
                           ) : null}
@@ -637,7 +694,7 @@ const KeywordAssistantsPage = () => {
                       </td>
                       <td className="p-3">
                         <QualityScoreTag
-                          score={assistant.qualityScore}
+                          score={resolveDisplayQualityScore(assistant)}
                           title={assistant.qualityFeedback || undefined}
                           onClick={() => openQualityDialog(assistant)}
                         />
@@ -734,26 +791,14 @@ const KeywordAssistantsPage = () => {
                 />
               </div>
               
-              <div className="space-y-2">
-                <Label htmlFor="task-type">Task Type/Function</Label>
-                <Select 
-                  defaultValue={formValues.taskType || ""}
-                  onValueChange={(value) => 
-                    setFormValues({ ...formValues, taskType: value })
-                  }
-                >
-                  <SelectTrigger id="task-type">
-                    <SelectValue placeholder="Select a category" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {ASSISTANT_CATEGORIES.map((category) => (
-                      <SelectItem key={category} value={category}>
-                        {category}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+              <TaskTypeField
+                id="task-type"
+                value={formValues.taskType}
+                extraOptions={existingTaskTypes}
+                onChange={(value) =>
+                  setFormValues({ ...formValues, taskType: value })
+                }
+              />
             </div>
 
             <BotProviderModelFields
@@ -884,26 +929,14 @@ const KeywordAssistantsPage = () => {
                 />
               </div>
               
-              <div className="space-y-2">
-                <Label htmlFor="edit-task-type">Task Type/Function</Label>
-                <Select 
-                  defaultValue={formValues.taskType || ""}
-                  onValueChange={(value) => 
-                    setFormValues({ ...formValues, taskType: value })
-                  }
-                >
-                  <SelectTrigger id="edit-task-type">
-                    <SelectValue placeholder="Select a category" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {ASSISTANT_CATEGORIES.map((category) => (
-                      <SelectItem key={category} value={category}>
-                        {category}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+              <TaskTypeField
+                id="edit-task-type"
+                value={formValues.taskType}
+                extraOptions={existingTaskTypes}
+                onChange={(value) =>
+                  setFormValues({ ...formValues, taskType: value })
+                }
+              />
             </div>
 
             <BotProviderModelFields

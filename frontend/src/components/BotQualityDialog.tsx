@@ -1,7 +1,10 @@
 "use client";
 
 import { KeywordAssistant } from "@/modules/shared/types";
-import { getBotScoringCategoryLabel } from "@/modules/systemPrompts/botScoringCategories";
+import {
+  BOT_SCORING_CATEGORY_CATALOG,
+  getBotScoringCategoryLabel,
+} from "@/modules/systemPrompts/botScoringCategories";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -58,6 +61,38 @@ const normalizeCategory = (
   };
 };
 
+/** Prefer weighted category average so Overall matches the popup breakdown. */
+const overallFromCategories = (
+  categoriesMap: Record<string, CategoryScore | number>
+) => {
+  let totalWeight = 0;
+  let weighted = 0;
+  let maxScore = 0;
+  const rows: { score: number; weight: number }[] = [];
+
+  for (const [key, value] of Object.entries(categoriesMap)) {
+    const data = normalizeCategory(value);
+    if (!data) continue;
+    const weight =
+      BOT_SCORING_CATEGORY_CATALOG.find((item) => item.key === key)?.weight ||
+      1;
+    rows.push({ score: data.score, weight });
+    maxScore = Math.max(maxScore, data.score);
+  }
+
+  if (rows.length === 0) return null;
+
+  // Legacy bad data: categories on 0–10 while overall was 0–100
+  const scale = maxScore > 0 && maxScore <= 10 ? 10 : 1;
+
+  for (const row of rows) {
+    weighted += row.score * scale * row.weight;
+    totalWeight += row.weight;
+  }
+
+  return totalWeight > 0 ? Math.round(weighted / totalWeight) : null;
+};
+
 interface BotQualityDialogProps {
   assistant: KeywordAssistant | null;
   open: boolean;
@@ -80,25 +115,42 @@ export function BotQualityDialog({
   const details = (assistant.qualityDetails || null) as QualityDetails | null;
   const categoriesMap = details?.categories || {};
   const categoryKeys =
-    Object.keys(categoriesMap).length > 0
-      ? Object.keys(categoriesMap)
-      : [];
+    Object.keys(categoriesMap).length > 0 ? Object.keys(categoriesMap) : [];
+
+  const maxRawCategory = categoryKeys.reduce((max, key) => {
+    const data = normalizeCategory(categoriesMap[key]);
+    return data ? Math.max(max, data.score) : max;
+  }, 0);
+  const categoryScale = maxRawCategory > 0 && maxRawCategory <= 10 ? 10 : 1;
 
   const categories = categoryKeys
-    .map((key) => ({
-      key,
-      label:
-        (typeof categoriesMap[key] === "object" &&
-          categoriesMap[key]?.label) ||
-        getBotScoringCategoryLabel(key),
-      data: normalizeCategory(categoriesMap[key]),
-    }))
-    .filter((row) => row.data != null);
+    .map((key) => {
+      const data = normalizeCategory(categoriesMap[key]);
+      if (!data) return null;
+      return {
+        key,
+        label:
+          (typeof categoriesMap[key] === "object" &&
+            categoriesMap[key]?.label) ||
+          getBotScoringCategoryLabel(key),
+        data: {
+          ...data,
+          score: Math.max(
+            0,
+            Math.min(100, Math.round(data.score * categoryScale))
+          ),
+        },
+      };
+    })
+    .filter((row): row is NonNullable<typeof row> => row != null);
 
+  const derivedOverall = overallFromCategories(categoriesMap);
   const overall =
-    assistant.qualityScore != null
-      ? Math.round(Number(assistant.qualityScore))
-      : null;
+    derivedOverall != null
+      ? derivedOverall
+      : assistant.qualityScore != null
+        ? Math.round(Number(assistant.qualityScore))
+        : null;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -116,7 +168,8 @@ export function BotQualityDialog({
               ? ` Last evaluated ${new Date(
                   assistant.qualityEvaluatedAt
                 ).toLocaleString()}.`
-              : " Not evaluated yet."}
+              : " Not evaluated yet."}{" "}
+            Overall is the weighted average of category scores.
           </DialogDescription>
         </DialogHeader>
 
@@ -138,20 +191,20 @@ export function BotQualityDialog({
                   >
                     <div className="mb-2 flex items-center justify-between gap-2">
                       <span className="text-sm font-medium">{label}</span>
-                      <Badge variant={scoreTone(data!.score)}>
-                        {data!.score}/100
+                      <Badge variant={scoreTone(data.score)}>
+                        {data.score}/100
                       </Badge>
                     </div>
                     <div className="mb-2 h-1.5 overflow-hidden rounded-full bg-muted">
                       <div
                         className={`h-full rounded-full ${scoreBarClass(
-                          data!.score
+                          data.score
                         )}`}
-                        style={{ width: `${data!.score}%` }}
+                        style={{ width: `${data.score}%` }}
                       />
                     </div>
                     <p className="break-words text-xs text-muted-foreground">
-                      {data!.feedback}
+                      {data.feedback}
                     </p>
                   </div>
                 ))}

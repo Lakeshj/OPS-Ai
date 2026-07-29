@@ -38,13 +38,15 @@ testConnection().then((connected) => {
   });
 });
 
-app.use("/auth/login", authRateLimiter);
-app.use("/auth/register", authRateLimiter);
-app.use("/auth/forgot-password", authRateLimiter);
-app.use("/auth/verify-reset-otp", authRateLimiter);
-app.use("/auth/reset-password", authRateLimiter);
-app.use("/", apiRateLimiter);
-app.use("/", apiRoutes);
+// Always mount under /api so Next rewrite (/api → backend /api) works in
+// local + production. Put TLS on nginx/Cloudflare; keep Node HTTP internally.
+app.use("/api/auth/login", authRateLimiter);
+app.use("/api/auth/register", authRateLimiter);
+app.use("/api/auth/forgot-password", authRateLimiter);
+app.use("/api/auth/verify-reset-otp", authRateLimiter);
+app.use("/api/auth/reset-password", authRateLimiter);
+app.use("/api", apiRateLimiter);
+app.use("/api", apiRoutes);
 
 app.use(errorHandler);
 app.use(notFoundHandler);
@@ -70,7 +72,7 @@ const readSslCredentials = () => {
 
   if (!keyPath || !certPath) {
     throw new Error(
-      "SSL_KEY_PATH and SSL_CERT_PATH must be set in production"
+      "SSL_KEY_PATH and SSL_CERT_PATH must be set when USE_NODE_HTTPS=true"
     );
   }
 
@@ -89,12 +91,14 @@ const readSslCredentials = () => {
 };
 
 const startServer = () => {
-  const isProduction = process.env.NODE_ENV === "production";
+  // Prefer nginx/Cloudflare TLS. Node HTTPS is optional and breaks the usual
+  // Next.js rewrite (http://127.0.0.1:5013) unless you also use HTTPS there.
+  const useNodeHttps = process.env.USE_NODE_HTTPS === "true";
 
-  if (isProduction) {
+  if (useNodeHttps) {
     const server = attachServerErrorHandler(
       https.createServer(readSslCredentials(), app).listen(config.port, () => {
-        console.info(`HTTPS server listening on port ${config.port}`);
+        console.info(`HTTPS server listening on port ${config.port} (mount: /api)`);
       })
     );
     return server;
@@ -102,7 +106,7 @@ const startServer = () => {
 
   const server = attachServerErrorHandler(
     app.listen(config.port, () => {
-      console.info(`HTTP server listening on port ${config.port}`);
+      console.info(`HTTP server listening on port ${config.port} (mount: /api)`);
     })
   );
 

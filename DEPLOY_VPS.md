@@ -112,8 +112,10 @@ server {
 
   client_max_body_size 50M;
 
-  # optional static:
-  # root /var/www/opsai.yourdomain.com/html;
+  # AI evaluate / summary can take >60s — avoid nginx 502
+  proxy_connect_timeout 75s;
+  proxy_send_timeout 180s;
+  proxy_read_timeout 180s;
 
   location / {
     proxy_pass http://127.0.0.1:3001;
@@ -127,6 +129,17 @@ server {
   }
 }
 ```
+
+**Important for Cloudflare 502 on Evaluate:**
+
+1. Backend must stay **HTTP** on `127.0.0.1:5013` (do **not** set `USE_NODE_HTTPS=true` unless you also change Next rewrite to HTTPS).
+2. TLS belongs on **nginx / Cloudflare**, not on Node for this setup.
+3. Raise nginx `proxy_read_timeout` (see above) — bot evaluate calls OpenAI and can exceed 60s.
+4. On VPS after a failed evaluate, check:
+   ```bash
+   pm2 logs opsai-api --lines 100
+   ```
+   Look for `[bot-quality] evaluation failed` or missing `OPENAI_API_KEY`.
 
 ```bash
 sudo nginx -t && sudo systemctl reload nginx

@@ -240,7 +240,12 @@ const convertDocumentById = async (documentId) => {
       document.workspace_id,
       document.uploaded_by
     );
-    // Summary refresh is manual via "Regenerate from files" in Workspace Edit.
+
+    // Refresh scored workspace summary so new/corrected files affect AI readiness.
+    const {
+      queueSummaryRegeneration,
+    } = require("./workspaceSummary.service");
+    queueSummaryRegeneration(document.workspace_id, document.uploaded_by);
 
     return {
       id: documentId,
