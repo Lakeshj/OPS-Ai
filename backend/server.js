@@ -38,15 +38,18 @@ testConnection().then((connected) => {
   });
 });
 
-// Always mount under /api so Next rewrite (/api → backend /api) works in
-// local + production. Put TLS on nginx/Cloudflare; keep Node HTTP internally.
-app.use("/api/auth/login", authRateLimiter);
-app.use("/api/auth/register", authRateLimiter);
-app.use("/api/auth/forgot-password", authRateLimiter);
-app.use("/api/auth/verify-reset-otp", authRateLimiter);
-app.use("/api/auth/reset-password", authRateLimiter);
-app.use("/api", apiRateLimiter);
-app.use("/api", apiRoutes);
+// Local (Next rewrite): browser → /api/... → backend /api/...
+// Production (nginx often strips /api): browser → /api/... → backend /...
+const isProduction = process.env.NODE_ENV === "production";
+const apiMount = isProduction ? "" : "/api";
+
+app.use(`${apiMount}/auth/login`, authRateLimiter);
+app.use(`${apiMount}/auth/register`, authRateLimiter);
+app.use(`${apiMount}/auth/forgot-password`, authRateLimiter);
+app.use(`${apiMount}/auth/verify-reset-otp`, authRateLimiter);
+app.use(`${apiMount}/auth/reset-password`, authRateLimiter);
+app.use(apiMount || "/", apiRateLimiter);
+app.use(apiMount || "/", apiRoutes);
 
 app.use(errorHandler);
 app.use(notFoundHandler);
@@ -94,11 +97,14 @@ const startServer = () => {
   // Prefer nginx/Cloudflare TLS. Node HTTPS is optional and breaks the usual
   // Next.js rewrite (http://127.0.0.1:5013) unless you also use HTTPS there.
   const useNodeHttps = process.env.USE_NODE_HTTPS === "true";
+  const mountLabel = apiMount || "/";
 
   if (useNodeHttps) {
     const server = attachServerErrorHandler(
       https.createServer(readSslCredentials(), app).listen(config.port, () => {
-        console.info(`HTTPS server listening on port ${config.port} (mount: /api)`);
+        console.info(
+          `HTTPS server listening on port ${config.port} (mount: ${mountLabel})`
+        );
       })
     );
     return server;
@@ -106,7 +112,9 @@ const startServer = () => {
 
   const server = attachServerErrorHandler(
     app.listen(config.port, () => {
-      console.info(`HTTP server listening on port ${config.port} (mount: /api)`);
+      console.info(
+        `HTTP server listening on port ${config.port} (mount: ${mountLabel})`
+      );
     })
   );
 
