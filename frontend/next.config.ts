@@ -2,19 +2,22 @@
 const nextConfig = {
   reactStrictMode: true,
   /**
-   * Same-origin API: browser calls /api/...
-   * Next proxies to backend /api/... (backend also serves bare / in production
-   * for nginx setups that strip the /api prefix).
+   * Browser calls /api/auth/login → Next strips /api → backend /auth/login
+   * Backend mounts all routes at / (no /api prefix).
    */
   async rewrites() {
     const backend = (
-      process.env.BACKEND_INTERNAL_URL || "http://127.0.0.1:5013"
+      process.env.BACKEND_INTERNAL_URL || "http://localhost:5013"
     ).replace(/\/$/, "");
 
     return [
       {
         source: "/api/:path*",
-        destination: `${backend}/api/:path*`,
+        destination: `${backend}/:path*`,
+      },
+      {
+        source: "/api",
+        destination: `${backend}/`,
       },
     ];
   },

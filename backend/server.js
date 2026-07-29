@@ -38,22 +38,13 @@ testConnection().then((connected) => {
   });
 });
 
-// Local: Next rewrite keeps /api → backend must serve /api/...
-// Prod: nginx may strip /api (hit /...) OR Next may proxy /api → /api/...
-// Mount both in production so either path works and Cloudflare doesn't 502.
-const isProduction = process.env.NODE_ENV === "production";
-const apiMounts = isProduction ? ["/api", ""] : ["/api"];
-
-for (const apiMount of apiMounts) {
-  const root = apiMount || "/";
-  app.use(`${apiMount}/auth/login`, authRateLimiter);
-  app.use(`${apiMount}/auth/register`, authRateLimiter);
-  app.use(`${apiMount}/auth/forgot-password`, authRateLimiter);
-  app.use(`${apiMount}/auth/verify-reset-otp`, authRateLimiter);
-  app.use(`${apiMount}/auth/reset-password`, authRateLimiter);
-  app.use(root, apiRateLimiter);
-  app.use(root, apiRoutes);
-}
+app.use("/auth/login", authRateLimiter);
+app.use("/auth/register", authRateLimiter);
+app.use("/auth/forgot-password", authRateLimiter);
+app.use("/auth/verify-reset-otp", authRateLimiter);
+app.use("/auth/reset-password", authRateLimiter);
+app.use("/", apiRateLimiter);
+app.use("/", apiRoutes);
 
 app.use(errorHandler);
 app.use(notFoundHandler);
@@ -98,17 +89,12 @@ const readSslCredentials = () => {
 };
 
 const startServer = () => {
-  // Prefer nginx/Cloudflare TLS. Node HTTPS is optional and breaks the usual
-  // Next.js rewrite (http://127.0.0.1:5013) unless you also use HTTPS there.
   const useNodeHttps = process.env.USE_NODE_HTTPS === "true";
-  const mountLabel = apiMounts.map((m) => m || "/").join(" + ");
 
   if (useNodeHttps) {
     const server = attachServerErrorHandler(
       https.createServer(readSslCredentials(), app).listen(config.port, () => {
-        console.info(
-          `HTTPS server listening on port ${config.port} (mount: ${mountLabel})`
-        );
+        console.info(`HTTPS server listening on port ${config.port}`);
       })
     );
     return server;
@@ -116,9 +102,7 @@ const startServer = () => {
 
   const server = attachServerErrorHandler(
     app.listen(config.port, () => {
-      console.info(
-        `HTTP server listening on port ${config.port} (mount: ${mountLabel})`
-      );
+      console.info(`HTTP server listening on port ${config.port}`);
     })
   );
 

@@ -64,7 +64,19 @@ cp source/backend/.env.example source/backend/.env
 nano source/backend/.env
 ```
 
-Set: `DB_*`, `JWT_SECRET`, `PORT=5013`, `CORS_ORIGIN=https://yourdomain.com`, AI keys.
+Set: `DB_*`, `JWT_SECRET`, `PORT` (e.g. `5013` or `5014` — whatever is free), AI keys.
+
+**CORS (production):** use the public HTTPS origin only — **no** `:3001` / `:3002` ports (Cloudflare/nginx terminate TLS on 443):
+
+```env
+CORS_ORIGIN=https://opsai.socialchamps.com
+```
+
+Wrong (causes CORS issues if anything hits the API cross-origin):
+
+```env
+CORS_ORIGIN=https://opsai.socialchamps.com:3001,https://opsai.socialchamps.com:3002
+```
 
 ```bash
 # Frontend
@@ -74,8 +86,11 @@ nano source/frontend/.env.local
 
 ```env
 NEXT_PUBLIC_API_URL=/api
-BACKEND_INTERNAL_URL=http://127.0.0.1:5013
+# MUST match backend PORT exactly (live API was on 5014)
+BACKEND_INTERNAL_URL=http://127.0.0.1:5014
 ```
+
+On a **dev machine with Cursor/VS Code Remote tunnels**, prefer `http://localhost:PORT` over `http://127.0.0.1:PORT` — IDE forwards can bind `127.0.0.1` and cause Next proxy timeouts / 500s.
 
 ### 5. MySQL (once)
 
@@ -97,18 +112,22 @@ Or manually:
 cd source/frontend && npm install && npm run build
 cd ../backend && npm install
 
-pm2 start npm --name opsai-web --cwd /var/www/opsai.yourdomain.com/source/frontend -- start
-pm2 start server.js --name opsai-api --cwd /var/www/opsai.yourdomain.com/source/backend
+pm2 start npm --name opsai-frontend --cwd /var/www/opsai.yourdomain.com/source/frontend -- start
+pm2 start server.js --name opsai-backend --cwd /var/www/opsai.yourdomain.com/source/backend
 pm2 save
 pm2 startup
 ```
 
-### 7. Nginx → frontend `:3001`
+Live names on opsai.socialchamps.com: **`opsai-frontend`** + **`opsai-backend`** (not opsai-web / opsai-api).
+
+### 7. Nginx → frontend `:3001` + API `:5013`
+
+**Important:** Proxy `/api` **directly to the backend**. Do not rely only on the Next.js rewrite for production — if `opsai-backend` is down or the rewrite URL is wrong, Cloudflare shows **502 on login** while the homepage still loads.
 
 ```nginx
 server {
   listen 80;
-  server_name yourdomain.com;
+  server_name opsai.socialchamps.com;
 
   client_max_body_size 50M;
 
@@ -117,6 +136,26 @@ server {
   proxy_send_timeout 180s;
   proxy_read_timeout 180s;
 
+  # API → Express (keeps /api/... path; backend serves /api in prod)
+  location /api/ {
+    proxy_pass http://127.0.0.1:5013;
+    proxy_http_version 1.1;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+  }
+
+  location /api {
+    proxy_pass http://127.0.0.1:5013;
+    proxy_http_version 1.1;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+  }
+
+  # App → Next.js
   location / {
     proxy_pass http://127.0.0.1:3001;
     proxy_http_version 1.1;
@@ -130,44 +169,54 @@ server {
 }
 ```
 
-**Important for Cloudflare 502 on Evaluate:**
-
-1. Backend must stay **HTTP** on `127.0.0.1:5013` (do **not** set `USE_NODE_HTTPS=true` unless you also change Next rewrite to HTTPS).
-2. TLS belongs on **nginx / Cloudflare**, not on Node for this setup.
-3. Raise nginx `proxy_read_timeout` (see above) — bot evaluate calls OpenAI and can exceed 60s.
-4. On VPS after a failed evaluate, check:
-   ```bash
-   pm2 logs opsai-api --lines 100
-   ```
-   Look for `[bot-quality] evaluation failed` or missing `OPENAI_API_KEY`.
-
 ```bash
 sudo nginx -t && sudo systemctl reload nginx
-# optional: sudo certbot --nginx -d yourdomain.com
 ```
 
-### 8. Smoke test
+**Important for Cloudflare 502:**
 
-```bash
-# Backend must answer on BOTH (prod mounts /api and /)
-curl -s http://127.0.0.1:5013/api
-curl -s http://127.0.0.1:5013/
-curl -s http://127.0.0.1:3001/api
-# or https://yourdomain.com/api
-```
+1. Backend must stay **HTTP** on `127.0.0.1:5013` (do **not** set `USE_NODE_HTTPS=true`).
+2. TLS belongs on **nginx / Cloudflare**, not on Node.
+3. `opsai-backend` must be **online** in `pm2 status` — homepage 200 + `/api` 502 almost always means Next is proxying the **wrong PORT** (e.g. 5013 vs real 5014).
+4. Git remote on the VPS must be the repo you push to (`lakesh` / `Lakeshj/OPS-Ai`). If VPS still pulls `gajanansapate17/OpsAI`, your API fixes never reach live.
 
-Expect: `{ "ok": true, "message": "OpsAi API is working", ... }`
-
-**If Cloudflare shows 502 on login but the homepage loads:** Next is up, backend is not reachable from the rewrite.
+### 8. Smoke test (run on the VPS)
 
 ```bash
 pm2 status
-pm2 logs opsai-api --lines 80
-# BACKEND_INTERNAL_URL must be HTTP (not https) unless USE_NODE_HTTPS=true
-# Example: BACKEND_INTERNAL_URL=http://127.0.0.1:5013
-grep BACKEND_INTERNAL_URL /var/www/opsai.*/source/frontend/.env* 2>/dev/null
-grep USE_NODE_HTTPS /var/www/opsai.*/source/backend/.env 2>/dev/null
-pm2 restart opsai-api opsai-web
+pm2 logs opsai-backend --lines 80 --nostream
+
+# Use the real PORT from backend .env (live was 5014)
+curl -s http://127.0.0.1:5014/api
+curl -s http://127.0.0.1:5014/api/health
+
+# After nginx /api location is added:
+curl -s http://127.0.0.1/api
+# or: curl -s https://opsai.socialchamps.com/api
+```
+
+**Fix loop when homepage works but login is 502:**
+
+```bash
+# 1) Is API listening? (match PORT in backend .env)
+ss -lntp | grep -E '5013|5014' || netstat -lntp | grep -E '5013|5014'
+
+# 2) Restart and check logs
+pm2 restart opsai-backend
+pm2 logs opsai-backend --lines 100 --nostream
+
+# 3) Frontend rewrite must use the SAME port
+grep -E 'PORT|USE_NODE_HTTPS|NODE_ENV|CORS_ORIGIN' source/backend/.env
+grep BACKEND_INTERNAL_URL source/frontend/.env.local
+# Expect e.g. PORT=5014 and BACKEND_INTERNAL_URL=http://127.0.0.1:5014
+# CORS_ORIGIN=https://opsai.socialchamps.com   (no :3001)
+
+# 4) Rebuild frontend after changing BACKEND_INTERNAL_URL, then restart both
+cd source/frontend && npm run build
+pm2 restart opsai-frontend opsai-backend
+
+# 5) Pull the branch you actually push to, then deploy
+cd gitsource && git remote -v && git pull && cd .. && ./deploy.sh
 ```
 
 ---
@@ -186,16 +235,18 @@ What it does:
 3. `rsync` → **`source`** (keeps `.env`, `node_modules`, `.next`, `storage`)
 4. `npm install` + `build` frontend
 5. backend migrate
-6. `pm2 restart` `opsai-web` + `opsai-api`
+6. `pm2 restart` `opsai-frontend` + `opsai-backend`
 
 ---
 
 ## Ports / PM2 names
 
-| App      | Port | PM2 name    | Runs from                          |
-|----------|------|-------------|------------------------------------|
-| Frontend | 3001 | `opsai-web` | `source/frontend`                  |
-| Backend  | 5013 | `opsai-api` | `source/backend`                   |
+| App      | Port (example) | PM2 name         | Runs from         |
+|----------|----------------|------------------|-------------------|
+| Frontend | 3001 / 3002    | `opsai-frontend` | `source/frontend` |
+| Backend  | 5013 / **5014**| `opsai-backend`  | `source/backend`  |
+
+`BACKEND_INTERNAL_URL` and nginx `proxy_pass` must use the **same** backend PORT as `.env`.
 
 ---
 
