@@ -182,8 +182,26 @@ const create = async (
   };
 };
 
+const clearLegacyEvaluationPrompt = async () => {
+  // Column is NOT NULL — empty string invalidates the silent fallback copy
+  await pool.execute(
+    `
+    UPDATE admin_ai_settings
+    SET
+      evaluation_prompt = '',
+      updated_at = CURRENT_TIMESTAMP
+    WHERE id = 1
+    `
+  );
+};
+
 const syncLegacySettings = async (updated) => {
   if (updated.useCaseKey !== "workspace_summary") return;
+
+  if (!updated.isActive) {
+    await clearLegacyEvaluationPrompt();
+    return;
+  }
 
   await pool.execute(
     `
@@ -305,12 +323,16 @@ const update = async (
 
 const remove = async (id) => {
   // Built-in prompts may be removed only by platform owner (route-gated).
+  const current = await getById(id);
   const [result] = await pool.execute(
     "DELETE FROM system_prompts WHERE id = ?",
     [id]
   );
   if (result.affectedRows === 0) {
     throw new AppError("System prompt not found", 404, "NOT_FOUND");
+  }
+  if (current.useCaseKey === "workspace_summary") {
+    await clearLegacyEvaluationPrompt();
   }
   return { message: "System prompt deleted" };
 };

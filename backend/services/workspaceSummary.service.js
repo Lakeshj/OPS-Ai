@@ -89,13 +89,26 @@ const getSettings = async () => {
       workspaceSummaryPrompt?.config?.model || legacy.summary_model,
     evaluation_model:
       workspaceSummaryPrompt?.config?.model || legacy.evaluation_model,
-    evaluation_prompt:
-      workspaceSummaryPrompt?.promptContent || legacy.evaluation_prompt,
+    // Only the active System Prompt — never fall back to legacy admin_ai_settings copy
+    evaluation_prompt: workspaceSummaryPrompt?.promptContent || null,
     evaluation_config: workspaceSummaryPrompt?.config || {},
     scoringCategoryKeys,
     scoringCategories: resolveScoringCategories(scoringCategoryKeys),
     systemPromptId: workspaceSummaryPrompt?.id || null,
   };
+};
+
+const assertActiveWorkspaceSummaryPrompt = (settings) => {
+  if (
+    !settings?.systemPromptId ||
+    !String(settings.evaluation_prompt || "").trim()
+  ) {
+    throw new AppError(
+      'Active system prompt missing for use case "workspace_summary"',
+      500,
+      "SYSTEM_PROMPT_MISSING"
+    );
+  }
 };
 
 const getSummaryRow = async (workspaceId) => {
@@ -295,6 +308,8 @@ Only score these selected categories: ${scoringCategories.map((c) => c.label).jo
 };
 
 const evaluateSummary = async (content, settings, priorReview = null) => {
+  assertActiveWorkspaceSummaryPrompt(settings);
+
   const evaluationModel =
     settings.evaluation_config?.model ||
     settings.evaluation_model ||
@@ -303,9 +318,7 @@ const evaluateSummary = async (content, settings, priorReview = null) => {
     settings.scoringCategories?.length > 0
       ? settings.scoringCategories
       : resolveScoringCategories(settings.scoringCategoryKeys);
-  const basePrompt =
-    settings.evaluation_prompt ||
-    "You are the Workspace Knowledge Evaluator for OpsAi.";
+  const basePrompt = String(settings.evaluation_prompt).trim();
   const evaluationPrompt = `${basePrompt}\n\n${buildEvaluationJsonContract(scoringCategories)}`;
 
   const priorBlock = priorReview
@@ -689,6 +702,8 @@ const saveSummary = async ({
 
 const regenerateSummary = async (workspaceId, updatedBy = null) => {
   const settings = await getSettings();
+  // Fail before spending tokens on generation if evaluator prompt is missing
+  assertActiveWorkspaceSummaryPrompt(settings);
   const priorReview = await getPriorReview(workspaceId);
   const compiled = await compileWorkspaceSummary(
     workspaceId,
