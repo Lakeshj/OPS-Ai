@@ -23,6 +23,7 @@ const {
 } = require("./middleware/security");
 
 const app = express();
+app.set("trust proxy", 1);
 
 app.use(helmetMiddleware);
 app.use(corsMiddleware);
@@ -30,6 +31,7 @@ app.use(express.json({ limit: "15mb" }));
 
 testConnection().then((connected) => {
   if (!connected) return;
+
   resumePendingDocumentConversions().catch((error) => {
     console.error(
       "[document-conversion] Failed to resume pending documents:",
@@ -43,34 +45,19 @@ app.use("/auth/register", authRateLimiter);
 app.use("/auth/forgot-password", authRateLimiter);
 app.use("/auth/verify-reset-otp", authRateLimiter);
 app.use("/auth/reset-password", authRateLimiter);
+
 app.use("/", apiRateLimiter);
 app.use("/", apiRoutes);
 
 app.use(errorHandler);
 app.use(notFoundHandler);
 
-const attachServerErrorHandler = (server) => {
-  server.on("error", (err) => {
-    if (err.code === "EADDRINUSE") {
-      console.error(
-        `Port ${config.port} is already in use. Stop the other backend process and try again.`
-      );
-      process.exit(1);
-    }
-
-    throw err;
-  });
-
-  return server;
-};
-
 const readSslCredentials = () => {
-  const keyPath = config.ssl.keyPath;
-  const certPath = config.ssl.certPath;
+  const { keyPath, certPath } = config.ssl;
 
   if (!keyPath || !certPath) {
     throw new Error(
-      "SSL_KEY_PATH and SSL_CERT_PATH must be set when USE_NODE_HTTPS=true"
+      "SSL_KEY_PATH and SSL_CERT_PATH must be configured."
     );
   }
 
@@ -79,7 +66,7 @@ const readSslCredentials = () => {
   }
 
   if (!fs.existsSync(certPath)) {
-    throw new Error(`SSL cert file not found: ${certPath}`);
+    throw new Error(`SSL certificate file not found: ${certPath}`);
   }
 
   return {
@@ -88,30 +75,55 @@ const readSslCredentials = () => {
   };
 };
 
-const startServer = () => {
-  const useNodeHttps = process.env.USE_NODE_HTTPS === "true";
+const attachServerErrorHandler = (server) => {
+  server.on("error", (err) => {
+    switch (err.code) {
+      case "EADDRINUSE":
+        console.error(
+          `❌ Port ${config.port} is already in use. Stop the existing process or choose another port.`
+        );
+        break;
 
-  if (useNodeHttps) {
-    const server = attachServerErrorHandler(
-      https.createServer(readSslCredentials(), app).listen(config.port, () => {
-        console.info(`HTTPS server listening on port ${config.port}`);
-      })
-    );
-    return server;
-  }
+      case "EACCES":
+        console.error(
+          `❌ Permission denied. Cannot bind to port ${config.port}.`
+        );
+        break;
 
-  const server = attachServerErrorHandler(
-    app.listen(config.port, () => {
-      console.info(`HTTP server listening on port ${config.port}`);
-    })
-  );
+      default:
+        console.error("❌ Server Error:", err);
+    }
+
+    process.exit(1);
+  });
 
   return server;
 };
 
+// Same file for local + prod:
+// - SSL paths set (prod) → HTTPS
+// - SSL paths empty (local) → HTTP, no certs needed
+const useHttps = Boolean(config.ssl.keyPath && config.ssl.certPath);
+
 let server;
 try {
-  server = startServer();
+  if (useHttps) {
+    const sslCredentials = readSslCredentials();
+    server = attachServerErrorHandler(
+      https.createServer(sslCredentials, app)
+    );
+    server.listen(config.port, () => {
+      console.info(
+        `✅ HTTPS server is running on https://localhost:${config.port}`
+      );
+    });
+  } else {
+    server = attachServerErrorHandler(app.listen(config.port, () => {
+      console.info(
+        `✅ HTTP server is running on http://localhost:${config.port} (no SSL_KEY_PATH/SSL_CERT_PATH — local mode)`
+      );
+    }));
+  }
 } catch (error) {
   console.error(
     error instanceof Error ? error.message : "Failed to start server"
@@ -120,16 +132,29 @@ try {
 }
 
 const shutdown = () => {
-  server.close(() => {
+  console.info("Gracefully shutting down server...");
+
+  server.close((err) => {
+    if (err) {
+      console.error("Error during shutdown:", err);
+      process.exit(1);
+    }
+
+    console.info("Server stopped.");
     process.exit(0);
   });
 };
 
-process.on("SIGTERM", shutdown);
 process.on("SIGINT", shutdown);
+process.on("SIGTERM", shutdown);
 
 process.on("unhandledRejection", (reason) => {
-  console.error("Unhandled rejection:", reason);
+  console.error("Unhandled Promise Rejection:", reason);
+});
+
+process.on("uncaughtException", (err) => {
+  console.error("Uncaught Exception:", err);
+  process.exit(1);
 });
 
 module.exports = app;
