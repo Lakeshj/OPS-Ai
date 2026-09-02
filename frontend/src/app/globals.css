@@ -149,3 +149,46 @@
     }
   }
 }
+
+/* React Flow dark-mode fixes (Controls / MiniMap were solid white) */
+.dark .react-flow__controls {
+  box-shadow: none;
+  border: 1px solid hsl(var(--border));
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.dark .react-flow__controls-button {
+  background: hsl(var(--card));
+  border-bottom: 1px solid hsl(var(--border));
+  fill: hsl(var(--foreground));
+  color: hsl(var(--foreground));
+}
+
+.dark .react-flow__controls-button:hover {
+  background: hsl(var(--muted));
+}
+
+.dark .react-flow__controls-button svg {
+  fill: currentColor;
+}
+
+.dark .react-flow__minimap {
+  background: hsl(var(--card)) !important;
+  border: 1px solid hsl(var(--border));
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.dark .react-flow__attribution {
+  background: transparent !important;
+  color: hsl(var(--muted-foreground));
+}
+
+.dark .react-flow__edge-path {
+  stroke: hsl(var(--muted-foreground));
+}
+
+.workflow-canvas-shell .react-flow {
+  background: hsl(var(--background));
+}

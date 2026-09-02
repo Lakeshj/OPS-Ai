@@ -84,6 +84,15 @@ const readTextFile = async (storageKey) => {
   return buffer.toString("utf8");
 };
 
+const readBinaryFile = async (storageKey) => {
+  const absolutePath = toAbsolutePath(storageKey);
+  const buffer = await fs.readFile(absolutePath);
+  if (String(storageKey).endsWith(".gz")) {
+    return gunzip(buffer);
+  }
+  return buffer;
+};
+
 const removeIfExists = async (storageKey) => {
   if (!storageKey) return;
   const absolutePath = toAbsolutePath(storageKey);
@@ -106,5 +115,6 @@ module.exports = {
   persistBuffer,
   persistText,
   readTextFile,
+  readBinaryFile,
   removeIfExists,
 };

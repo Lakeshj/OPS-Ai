@@ -14,6 +14,7 @@ const chatGenerateRoutes = require("../modules/chatGenerate/chatGenerate.routes"
 const workspaceSummaryRoutes = require("../modules/workspaceSummary/workspaceSummary.routes");
 const adminAiSettingsRoutes = require("../modules/adminAiSettings/adminAiSettings.routes");
 const systemPromptsRoutes = require("../modules/systemPrompts/systemPrompts.routes");
+const workflowsRoutes = require("../modules/workflows/workflows.routes");
 const {
   workspaceRouter: workspaceDocumentsRoutes,
   documentRouter: documentsRoutes,
@@ -80,6 +81,7 @@ router.use("/analytics", analyticsRoutes);
 router.use("/chat", chatGenerateRoutes);
 router.use("/admin/ai-settings", adminAiSettingsRoutes);
 router.use("/admin/system-prompts", systemPromptsRoutes);
+router.use("/workflows", workflowsRoutes);
 router.use("/admin/ai-logs", require("../modules/adminAiLogs/adminAiLogs.routes"));
 router.use(
   "/admin/generated-media",

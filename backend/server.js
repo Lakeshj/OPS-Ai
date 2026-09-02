@@ -21,6 +21,14 @@ const {
   authRateLimiter,
   apiRateLimiter,
 } = require("./middleware/security");
+const {
+  startWorkflowWorker,
+  stopWorkflowWorker,
+} = require("./services/workflowWorker.service");
+const {
+  startWorkflowScheduler,
+  stopWorkflowScheduler,
+} = require("./services/workflowScheduler.service");
 
 const app = express();
 app.set("trust proxy", 1);
@@ -116,12 +124,24 @@ try {
       console.info(
         `✅ HTTPS server is running on https://localhost:${config.port}`
       );
+      if (process.env.WORKFLOW_WORKER_EMBEDDED !== "false") {
+        startWorkflowWorker();
+      }
+      if (process.env.WORKFLOW_SCHEDULER_EMBEDDED !== "false") {
+        startWorkflowScheduler();
+      }
     });
   } else {
     server = attachServerErrorHandler(app.listen(config.port, () => {
       console.info(
         `✅ HTTP server is running on http://localhost:${config.port} (no SSL_KEY_PATH/SSL_CERT_PATH — local mode)`
       );
+      if (process.env.WORKFLOW_WORKER_EMBEDDED !== "false") {
+        startWorkflowWorker();
+      }
+      if (process.env.WORKFLOW_SCHEDULER_EMBEDDED !== "false") {
+        startWorkflowScheduler();
+      }
     }));
   }
 } catch (error) {
@@ -133,6 +153,8 @@ try {
 
 const shutdown = () => {
   console.info("Gracefully shutting down server...");
+  stopWorkflowWorker();
+  stopWorkflowScheduler();
 
   server.close((err) => {
     if (err) {

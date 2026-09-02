@@ -8,7 +8,10 @@
         "dev": "nodemon server.js",
         "db:migrate": "node scripts/migrate.js",
         "db:export-schema": "node scripts/export-schema-sql.js",
+        "worker:workflows": "node scripts/workflow-worker.js",
         "test:api": "node scripts/test-api.js",
+        "test:workflows": "node scripts/smoke-workflow-engine.js",
+        "workflows:verify": "node scripts/verify-workflow-run.js",
         "stage1:verify": "node scripts/verify-stage1.js"
     },
     "dependencies": {
@@ -24,6 +27,7 @@
         "mammoth": "^1.12.0",
         "multer": "^2.2.0",
         "mysql2": "^3.6.5",
+        "node-cron": "^3.0.3",
         "nodemailer": "^9.0.3",
         "openai": "^5.0.1",
         "pdf-parse": "^1.1.4",

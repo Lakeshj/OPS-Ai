@@ -33,6 +33,7 @@ const isWorkspaceMember = async (workspaceId, userId) => {
 };
 
 const assertWorkspaceAccess = async (authUser, workspaceId) => {
+  if (authUser?.role === "system") return;
   if (isPrivileged(authUser.role)) return;
 
   const member = await isWorkspaceMember(workspaceId, authUser.userId);

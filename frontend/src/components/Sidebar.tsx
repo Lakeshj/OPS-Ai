@@ -34,7 +34,11 @@ import {
 } from "@/components/ui/sidebar";
 import { Button } from "@/components/ui/button";
 
-const Sidebar: React.FC = () => {
+type SidebarProps = {
+  collapsible?: "offcanvas" | "icon" | "none";
+};
+
+const Sidebar: React.FC<SidebarProps> = ({ collapsible = "offcanvas" }) => {
   const { signOut, user, hasRole } = useAuth();
   const pathname = usePathname();
   const { state } = useSidebar();
@@ -117,7 +121,10 @@ const Sidebar: React.FC = () => {
   ];
 
   return (
-    <ShadcnSidebar className="app-main-sidebar border-r border-border bg-background dark:bg-gray-900">
+    <ShadcnSidebar
+      collapsible={collapsible}
+      className="app-main-sidebar border-r border-border bg-background dark:bg-gray-900"
+    >
       <SidebarHeader className="p-4 border-b border-border bg-card dark:bg-gray-800">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">

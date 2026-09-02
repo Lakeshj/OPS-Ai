@@ -224,17 +224,24 @@ const convertDocumentById = async (documentId) => {
     await replaceChunks(document.id, chunks);
 
     const tokenCount = estimateTokenCount(markdown);
+    const ext = String(document.file_extension || "")
+      .replace(/^\./, "")
+      .toLowerCase();
+    const keepOriginal = ["xlsx", "xls", "csv"].includes(ext);
+
     await setDocumentStatus(documentId, {
       status: "ready",
       errorMessage: null,
       markdownStorageKey,
       tokenCount,
       sizeBytes: markdownBytes,
-      clearOriginal: true,
+      clearOriginal: !keepOriginal,
     });
 
-    // Keep only readable Markdown permanently.
-    await removeIfExists(document.storage_key);
+    // Keep spreadsheet originals for workflow Spreadsheet nodes; drop other binaries.
+    if (!keepOriginal) {
+      await removeIfExists(document.storage_key);
+    }
 
     await rebuildWorkspaceStaticMemory(
       document.workspace_id,
@@ -280,16 +287,26 @@ const queueDocumentConversion = (documentId) => {
 };
 
 const resumePendingDocumentConversions = async () => {
-  // Free disk for documents already converted successfully.
+  // Free disk for non-spreadsheet documents already converted successfully.
+  // Keep xlsx/csv originals so workflow Spreadsheet nodes can still read them.
   const [readyWithOriginals] = await pool.execute(
     `
-    SELECT id, storage_key
+    SELECT id, storage_key, file_extension, original_name
     FROM workspace_documents
     WHERE status = 'ready' AND storage_key IS NOT NULL
     `
   );
 
+  let removed = 0;
   for (const row of readyWithOriginals) {
+    const ext = String(
+      row.file_extension || require("path").extname(row.original_name || "")
+    )
+      .replace(/^\./, "")
+      .toLowerCase();
+    if (["xlsx", "xls", "csv"].includes(ext)) {
+      continue;
+    }
     await removeIfExists(row.storage_key);
     await pool.execute(
       `
@@ -299,11 +316,12 @@ const resumePendingDocumentConversions = async () => {
       `,
       [row.id]
     );
+    removed += 1;
   }
 
-  if (readyWithOriginals.length > 0) {
+  if (removed > 0) {
     console.info(
-      `[document-conversion] Removed ${readyWithOriginals.length} original(s) after successful conversion`
+      `[document-conversion] Removed ${removed} original(s) after successful conversion`
     );
   }
 

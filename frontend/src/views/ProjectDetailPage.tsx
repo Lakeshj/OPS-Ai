@@ -62,11 +62,17 @@ import {
   Move,
   Check,
   X,
-  Sparkles
+  Sparkles,
+  Workflow,
+  Trash2
 } from "lucide-react";
 
 import Sidebar from "@/components/Sidebar";
 import { ChatInterface } from "@/components/ChatInterface";
+import { workflowsApi } from "@/modules/workflows/api";
+import type { Workflow as WorkflowItem } from "@/modules/workflows/types";
+
+type WorkspaceMode = "chat" | "workflow";
 
 const ProjectDetailPage = () => {
   const params = useParams();
@@ -75,12 +81,16 @@ const ProjectDetailPage = () => {
   const router = useRouter();
 
   const [workspace, setWorkspace] = useState<Workspace | null>(null);
+  const [workspaceMode, setWorkspaceMode] = useState<WorkspaceMode>("chat");
   const [folders, setFolders] = useState<ThreadFolder[]>([]);
   const [threads, setThreads] = useState<ChatThread[]>([]);
+  const [workflows, setWorkflows] = useState<WorkflowItem[]>([]);
   const [currentThread, setCurrentThread] = useState<ChatThread | null>(null);
+  const [selectedWorkflow, setSelectedWorkflow] = useState<WorkflowItem | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [isCreatingWorkflow, setIsCreatingWorkflow] = useState(false);
 
   const [keywordAssistants, setKeywordAssistants] = useState<KeywordAssistant[]>([]);
   const [selectedAssistant, setSelectedAssistant] = useState<KeywordAssistant | undefined>();
@@ -108,8 +118,11 @@ const ProjectDetailPage = () => {
     setWorkspace(null);
     setFolders([]);
     setThreads([]);
+    setWorkflows([]);
     setCurrentThread(null);
+    setSelectedWorkflow(null);
     setMessages([]);
+    setWorkspaceMode("chat");
   }, [projectId]);
 
   // Load workspace data
@@ -193,11 +206,63 @@ const ProjectDetailPage = () => {
         }
       } catch (error) {
         console.error("Failed to fetch threads:", error);
+        toast.error("Failed to load chat threads");
       }
     };
 
-    fetchThreadData();
-  }, [projectId, currentUser, isLoading, hasRole]);
+    void fetchThreadData();
+  }, [projectId, currentUser, hasRole, isLoading]);
+
+  // Load workflows for this workspace
+  useEffect(() => {
+    const fetchWorkflows = async () => {
+      if (!projectId || !currentUser || isLoading) return;
+      try {
+        const items = await workflowsApi.list(projectId);
+        setWorkflows(items);
+        setSelectedWorkflow((prev) => {
+          if (!prev) return items[0] || null;
+          return items.find((w) => w.id === prev.id) || items[0] || null;
+        });
+      } catch (error) {
+        console.error("Failed to fetch workflows:", error);
+      }
+    };
+    void fetchWorkflows();
+  }, [projectId, currentUser, isLoading]);
+
+  const handleCreateWorkflow = async () => {
+    if (!projectId) return;
+    setIsCreatingWorkflow(true);
+    try {
+      const created = await workflowsApi.create({
+        name: `Workflow ${new Date().toLocaleString()}`,
+        workspaceId: projectId,
+      });
+      setWorkflows((prev) => [created, ...prev]);
+      setSelectedWorkflow(created);
+      toast.success("Workflow created");
+      router.push(`/workflows/${created.id}`);
+    } catch (error) {
+      console.error(error);
+      toast.error("Failed to create workflow");
+    } finally {
+      setIsCreatingWorkflow(false);
+    }
+  };
+
+  const handleDeleteWorkflow = async (id: string) => {
+    if (!confirm("Delete this workflow?")) return;
+    try {
+      await workflowsApi.remove(id);
+      setWorkflows((prev) => prev.filter((w) => w.id !== id));
+      setSelectedWorkflow((prev) => (prev?.id === id ? null : prev));
+      toast.success("Workflow deleted");
+    } catch (error) {
+      console.error(error);
+      toast.error("Failed to delete workflow");
+    }
+  };
 
   // Load messages for current thread
   useEffect(() => {
@@ -486,6 +551,30 @@ const ProjectDetailPage = () => {
                   <h1 className="truncate text-lg font-semibold text-gray-900 dark:text-white">{workspace.name}</h1>
                 </div>
 
+                <div className="mb-3 grid grid-cols-2 gap-1 rounded-lg bg-gray-100 p-1 dark:bg-gray-700/60">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant={workspaceMode === "chat" ? "default" : "ghost"}
+                    className="h-8 text-xs"
+                    onClick={() => setWorkspaceMode("chat")}
+                  >
+                    <MessageCircle className="mr-1 h-3.5 w-3.5" />
+                    Chat
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant={workspaceMode === "workflow" ? "default" : "ghost"}
+                    className="h-8 text-xs"
+                    onClick={() => setWorkspaceMode("workflow")}
+                  >
+                    <Workflow className="mr-1 h-3.5 w-3.5" />
+                    Workflow
+                  </Button>
+                </div>
+
+                {workspaceMode === "chat" ? (
                 <div className="flex gap-2">
                   <Dialog open={isCreateFolderOpen} onOpenChange={setIsCreateFolderOpen}>
                     <DialogTrigger asChild>
@@ -549,10 +638,68 @@ const ProjectDetailPage = () => {
                     </DialogContent>
                   </Dialog>
                 </div>
+                ) : (
+                  <Button
+                    size="sm"
+                    className="w-full text-xs"
+                    onClick={handleCreateWorkflow}
+                    disabled={isCreatingWorkflow}
+                  >
+                    <Plus className="mr-1 h-3 w-3" />
+                    {isCreatingWorkflow ? "Creating..." : "New Workflow"}
+                  </Button>
+                )}
               </div>
 
-              {/* Thread list */}
+              {/* Thread / Workflow list */}
               <ScrollArea className="workspace-thread-list min-h-0 flex-1">
+                {workspaceMode === "workflow" ? (
+                  <div className="space-y-1 p-3">
+                    {workflows.map((wf) => (
+                      <div
+                        key={wf.id}
+                        className={cn(
+                          "group flex cursor-pointer items-center justify-between rounded-xl p-3 text-sm transition-all hover:bg-gray-50 dark:hover:bg-gray-700",
+                          selectedWorkflow?.id === wf.id
+                            ? "bg-gray-100 dark:bg-gray-700"
+                            : "bg-white dark:bg-gray-800"
+                        )}
+                        onClick={() => setSelectedWorkflow(wf)}
+                      >
+                        <div className="flex min-w-0 flex-1 items-center">
+                          <Workflow className="mr-3 h-4 w-4 shrink-0 text-gray-500 dark:text-gray-400" />
+                          <div className="min-w-0">
+                            <div className="truncate font-medium text-gray-700 dark:text-gray-200">
+                              {wf.name}
+                            </div>
+                            <div className="text-[11px] text-muted-foreground">
+                              {wf.definition?.nodes?.length || 0} nodes · {wf.status}
+                            </div>
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          className="flex h-6 w-6 items-center justify-center rounded-md opacity-0 hover:bg-gray-100 group-hover:opacity-100 dark:hover:bg-gray-600"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            void handleDeleteWorkflow(wf.id);
+                          }}
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    ))}
+                    {workflows.length === 0 && (
+                      <div className="p-6 text-center text-gray-500 dark:text-gray-400">
+                        <Workflow className="mx-auto mb-2 h-8 w-8 text-gray-400 dark:text-gray-500" />
+                        <p className="text-sm">No workflows yet</p>
+                        <p className="mt-1 text-xs text-gray-400 dark:text-gray-500">
+                          Create a workflow to open the visual builder
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                ) : (
                 <div className="p-3 space-y-1">
                   {/* Threads without folders */}
                   {threads.filter(thread => !thread.folderId).map((thread) => (
@@ -916,12 +1063,47 @@ const ProjectDetailPage = () => {
                     </div>
                   )}
                 </div>
+                )}
               </ScrollArea>
             </div>
 
-            {/* Main chat area */}
+            {/* Main chat / workflow area */}
             <div className="workspace-chat-pane flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-              {currentThread ? (
+              {workspaceMode === "workflow" ? (
+                selectedWorkflow ? (
+                  <div className="flex h-full flex-col items-center justify-center gap-4 bg-white p-6 text-center dark:bg-gray-900">
+                    <div className="flex h-16 w-16 items-center justify-center rounded-full bg-blue-50 dark:bg-blue-900/20">
+                      <Workflow className="h-8 w-8 text-blue-600 dark:text-blue-400" />
+                    </div>
+                    <div>
+                      <h3 className="mb-1 text-xl font-medium text-gray-800 dark:text-gray-100">
+                        {selectedWorkflow.name}
+                      </h3>
+                      <p className="text-sm text-muted-foreground">
+                        {selectedWorkflow.definition?.nodes?.length || 0} nodes ·{" "}
+                        {selectedWorkflow.status}
+                      </p>
+                    </div>
+                    <Button
+                      type="button"
+                      onClick={() => router.push(`/workflows/${selectedWorkflow.id}`)}
+                    >
+                      Open workflow builder
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="flex h-full flex-col items-center justify-center bg-white p-4 text-center dark:bg-gray-900">
+                    <Workflow className="mb-3 h-10 w-10 text-gray-400" />
+                    <h3 className="mb-2 text-xl font-medium text-gray-700 dark:text-gray-200">
+                      Select a workflow
+                    </h3>
+                    <p className="max-w-md text-gray-500 dark:text-gray-400">
+                      Choose a workflow from the sidebar or create a new one. Chat and
+                      Workflow stay separate under this workspace.
+                    </p>
+                  </div>
+                )
+              ) : currentThread ? (
                 <>
                   {/* Chat header */}
                   <div className="workspace-chat-header shrink-0 border-b border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-800">

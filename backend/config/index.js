@@ -3,9 +3,16 @@ require("dotenv").config({ path: path.join(__dirname, "../.env") });
 
 const env = process.env.NODE_ENV || "development";
 const jwtSecret = process.env.JWT_SECRET;
+const credentialsKey = process.env.WORKFLOW_CREDENTIALS_KEY;
 
 if (env === "production" && (!jwtSecret || jwtSecret === "your-secret-key")) {
   throw new Error("JWT_SECRET must be set to a strong value in production");
+}
+
+if (env === "production" && !credentialsKey) {
+  throw new Error(
+    "WORKFLOW_CREDENTIALS_KEY must be set in production (32+ random chars) to encrypt stored workflow credentials"
+  );
 }
 
 const config = {
@@ -28,6 +35,12 @@ const config = {
   openai: {
     apiKey: process.env.OPENAI_API_KEY,
     model: process.env.OPENAI_MODEL || "gpt-4o-mini",
+  },
+  workflows: {
+    // Encrypts workflow credentials at rest. Falls back to the JWT secret in
+    // development so local setups keep working without extra configuration.
+    credentialsKey:
+      credentialsKey || jwtSecret || "development-only-secret-change-me",
   },
   storage: {
     root: path.resolve(

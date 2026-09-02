@@ -49,4 +49,28 @@ const sendPasswordResetOtp = async (toEmail, otp) => {
   }
 };
 
-module.exports = { sendPasswordResetOtp, hasSmtpConfig };
+/**
+ * Generic transactional email for workflow nodes etc.
+ * @returns {{ sent: boolean, skipped?: boolean, messageId?: string }}
+ */
+const sendMail = async ({ to, subject, text, html }) => {
+  const transporter = getTransporter();
+  if (!transporter) {
+    console.warn(
+      `SMTP not configured. Would send to ${to}: ${subject}. Add SMTP_* vars to backend/.env.`
+    );
+    return { sent: false, skipped: true };
+  }
+
+  const info = await transporter.sendMail({
+    from: config.smtp.from,
+    to,
+    subject,
+    text: text || undefined,
+    html: html || undefined,
+  });
+
+  return { sent: true, messageId: info.messageId };
+};
+
+module.exports = { sendPasswordResetOtp, hasSmtpConfig, sendMail };

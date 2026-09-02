@@ -8,6 +8,7 @@ const ALLOWED_EXTENSIONS = new Set([
   "pdf",
   "docx",
   "xlsx",
+  "csv",
   "pptx",
   "txt",
   "md",
@@ -18,6 +19,8 @@ const ALLOWED_MIME_TYPES = new Set([
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
   "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
   "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+  "text/csv",
+  "application/csv",
   "text/plain",
   "text/markdown",
   "application/octet-stream",
@@ -63,7 +66,7 @@ const detectKindFromMagic = (buffer, extension) => {
     return null;
   }
 
-  if (["txt", "md"].includes(extension) && looksLikeUtf8Text(buffer)) {
+  if (["txt", "md", "csv"].includes(extension) && looksLikeUtf8Text(buffer)) {
     return extension;
   }
 
