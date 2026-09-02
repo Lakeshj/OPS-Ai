@@ -4145,6 +4145,1055 @@ check("TEST 6B-26 static HTTP/set ports unchanged", () => {
   assert.deepStrictEqual(MERGE_PORT_IDS, ["input1", "input2"]);
 });
 
+section("Part 7 schedule recurrence");
+
+const { DateTime } = require("luxon");
+const {
+  getNextScheduleOccurrence,
+  getNextScheduleOccurrences,
+  validateScheduleRule,
+  validateScheduleNodeData,
+  normalizeScheduleNodeData,
+  classifyScheduleStrategy,
+  ruleToCron,
+  ensureRecurrenceAnchors,
+  SCHEDULE_STRATEGIES,
+} = require("../utils/scheduleRecurrence");
+const {
+  registerWorkflow,
+  unregisterWorkflow,
+  getRegistrationCount,
+} = require("../services/workflowScheduler.service");
+
+const schedRule = (overrides = {}) => ({
+  id: "sch_test",
+  triggerInterval: "weeks",
+  weeksInterval: 1,
+  triggerAtDay: [1],
+  triggerAtHour: 9,
+  triggerAtMinute: 0,
+  ...overrides,
+});
+
+const afterAt = (iso, zone = "UTC") => DateTime.fromISO(iso, { zone });
+
+const nextIso = (rule, afterIso, options = {}) => {
+  const next = getNextScheduleOccurrence(rule, {
+    after: afterAt(afterIso, options.zone || "UTC"),
+    anchor: options.anchor,
+    defaultAnchor: options.anchor,
+  });
+  return next ? next.toISO() : null;
+};
+
+check("TEST 7-1 Every 15 minutes is clock-aligned", () => {
+  const rule = schedRule({
+    id: "m15",
+    triggerInterval: "minutes",
+    minutesInterval: 15,
+  });
+  const next = nextIso(rule, "2025-01-01T10:07:00.000Z");
+  assert.strictEqual(next, "2025-01-01T10:15:00.000Z");
+});
+
+check("TEST 7-2 Every 3 hours recurrence", () => {
+  const rule = schedRule({
+    id: "h3",
+    triggerInterval: "hours",
+    hoursInterval: 3,
+    triggerAtMinute: 7,
+  });
+  const next = nextIso(rule, "2025-01-01T10:20:00.000Z");
+  assert.strictEqual(next, "2025-01-01T12:07:00.000Z");
+});
+
+check("TEST 7-3 Daily 09:30", () => {
+  const rule = schedRule({
+    id: "d1",
+    triggerInterval: "days",
+    daysInterval: 1,
+    triggerAtHour: 9,
+    triggerAtMinute: 30,
+  });
+  const next = nextIso(rule, "2025-01-01T08:00:00.000Z");
+  assert.strictEqual(next, "2025-01-01T09:30:00.000Z");
+});
+
+check("TEST 7-4 Every 2 days preserves anchor phase", () => {
+  const anchor = "2025-01-01T09:00:00.000Z";
+  const rule = schedRule({
+    id: "d2",
+    triggerInterval: "days",
+    daysInterval: 2,
+    triggerAtHour: 9,
+    triggerAtMinute: 0,
+    recurrenceAnchor: anchor,
+  });
+  assert.strictEqual(
+    classifyScheduleStrategy(rule),
+    SCHEDULE_STRATEGIES.ANCHORED
+  );
+  const next = nextIso(rule, "2025-01-02T10:00:00.000Z", { anchor });
+  assert.strictEqual(next, "2025-01-03T09:00:00.000Z");
+});
+
+check("TEST 7-5 Weekly Monday 09:00", () => {
+  const rule = schedRule({
+    triggerAtDay: [1],
+    triggerAtHour: 9,
+    triggerAtMinute: 0,
+  });
+  const next = nextIso(rule, "2025-01-01T10:00:00.000Z");
+  assert.strictEqual(next, "2025-01-06T09:00:00.000Z");
+});
+
+check("TEST 7-6 Weekly Mon/Wed/Fri", () => {
+  const rule = schedRule({ triggerAtDay: [1, 3, 5] });
+  const next = nextIso(rule, "2025-01-01T10:00:00.000Z");
+  assert.strictEqual(next, "2025-01-03T09:00:00.000Z");
+  const second = getNextScheduleOccurrence(rule, {
+    after: afterAt("2025-01-01T09:30:00.000Z"),
+  });
+  assert.strictEqual(second.toISO(), "2025-01-03T09:00:00.000Z");
+});
+
+check("TEST 7-7 Every 2 weeks Monday", () => {
+  const anchor = "2025-01-06T09:00:00.000Z";
+  const rule = schedRule({
+    weeksInterval: 2,
+    triggerAtDay: [1],
+    recurrenceAnchor: anchor,
+  });
+  const next = nextIso(rule, "2025-01-07T10:00:00.000Z", { anchor });
+  assert.strictEqual(next, "2025-01-20T09:00:00.000Z");
+});
+
+check("TEST 7-8 Every 2 weeks Mon+Wed same active week", () => {
+  const anchor = "2025-01-06T09:00:00.000Z";
+  const rule = schedRule({
+    weeksInterval: 2,
+    triggerAtDay: [1, 3],
+    recurrenceAnchor: anchor,
+  });
+  const occ = getNextScheduleOccurrences(rule, {
+    count: 4,
+    after: afterAt("2025-01-06T08:00:00.000Z"),
+    anchor,
+  }).map((d) => d.toISODate());
+  assert.deepStrictEqual(occ, [
+    "2025-01-06",
+    "2025-01-08",
+    "2025-01-20",
+    "2025-01-22",
+  ]);
+});
+
+check("TEST 7-9 Every 3 weeks Tuesday/Thursday", () => {
+  const anchor = "2025-01-07T09:00:00.000Z";
+  const rule = schedRule({
+    weeksInterval: 3,
+    triggerAtDay: [2, 4],
+    recurrenceAnchor: anchor,
+  });
+  const next = nextIso(rule, "2025-01-08T10:00:00.000Z", { anchor });
+  assert.strictEqual(next, "2025-01-09T09:00:00.000Z");
+});
+
+check("TEST 7-10 Monthly day 15", () => {
+  const rule = schedRule({
+    triggerInterval: "months",
+    monthsInterval: 1,
+    triggerAtDayOfMonth: 15,
+    triggerAtHour: 9,
+    triggerAtMinute: 0,
+  });
+  const next = nextIso(rule, "2025-01-10T10:00:00.000Z");
+  assert.strictEqual(next, "2025-01-15T09:00:00.000Z");
+});
+
+check("TEST 7-11 Every 2 months day 15", () => {
+  const anchor = "2025-01-15T09:00:00.000Z";
+  const rule = schedRule({
+    triggerInterval: "months",
+    monthsInterval: 2,
+    triggerAtDayOfMonth: 15,
+    recurrenceAnchor: anchor,
+  });
+  const next = nextIso(rule, "2025-02-16T10:00:00.000Z", { anchor });
+  assert.strictEqual(next, "2025-03-15T09:00:00.000Z");
+});
+
+check("TEST 7-12 Every 3 months day 1", () => {
+  const anchor = "2025-01-01T18:00:00.000Z";
+  const rule = schedRule({
+    triggerInterval: "months",
+    monthsInterval: 3,
+    triggerAtDayOfMonth: 1,
+    triggerAtHour: 18,
+    triggerAtMinute: 0,
+    recurrenceAnchor: anchor,
+  });
+  const next = nextIso(rule, "2025-02-01T10:00:00.000Z", { anchor });
+  assert.strictEqual(next, "2025-04-01T18:00:00.000Z");
+});
+
+check("TEST 7-13 Day 31 skips months without day 31", () => {
+  const rule = schedRule({
+    triggerInterval: "months",
+    monthsInterval: 1,
+    triggerAtDayOfMonth: 31,
+  });
+  const occ = getNextScheduleOccurrences(rule, {
+    count: 3,
+    after: afterAt("2025-01-30T10:00:00.000Z"),
+  }).map((d) => d.toISODate());
+  assert.deepStrictEqual(occ, ["2025-01-31", "2025-03-31", "2025-05-31"]);
+});
+
+check("TEST 7-14 February 29 leap-year behavior", () => {
+  const rule = schedRule({
+    triggerInterval: "months",
+    monthsInterval: 1,
+    triggerAtDayOfMonth: 29,
+  });
+  const leap = nextIso(rule, "2024-01-31T10:00:00.000Z");
+  assert.strictEqual(leap, "2024-02-29T09:00:00.000Z");
+  const nonLeap = nextIso(rule, "2025-02-01T10:00:00.000Z");
+  assert.strictEqual(nonLeap, "2025-03-29T09:00:00.000Z");
+});
+
+check("TEST 7-15 Custom cron valid", () => {
+  const rule = schedRule({
+    triggerInterval: "cron",
+    cronExpression: "0 9 * * 1",
+  });
+  assert.strictEqual(validateScheduleRule(rule).length, 0);
+  const next = nextIso(rule, "2025-01-01T10:00:00.000Z");
+  assert.strictEqual(next, "2025-01-06T09:00:00.000Z");
+});
+
+check("TEST 7-16 Custom cron invalid rejected", () => {
+  const rule = schedRule({
+    triggerInterval: "cron",
+    cronExpression: "not a cron",
+  });
+  assert.ok(validateScheduleRule(rule).length > 0);
+});
+
+check("TEST 7-17 Invalid timezone rejected", () => {
+  const rule = schedRule({ timezone: "Not/A_Timezone" });
+  assert.ok(validateScheduleRule(rule).length > 0);
+});
+
+check("TEST 7-18 Timezone changes next occurrence", () => {
+  const rule = schedRule({
+    triggerInterval: "days",
+    daysInterval: 1,
+    triggerAtHour: 9,
+    triggerAtMinute: 0,
+    timezone: "America/New_York",
+  });
+  const utcRule = schedRule({
+    triggerInterval: "days",
+    daysInterval: 1,
+    triggerAtHour: 9,
+    triggerAtMinute: 0,
+    timezone: "UTC",
+  });
+  const utcNext = getNextScheduleOccurrence(utcRule, {
+    after: afterAt("2025-01-15T12:00:00.000Z", "UTC"),
+  });
+  const nyNext = getNextScheduleOccurrence(rule, {
+    after: afterAt("2025-01-15T12:00:00.000Z", "America/New_York"),
+  });
+  assert.notStrictEqual(utcNext.toMillis(), nyNext.toMillis());
+});
+
+check("TEST 7-19 DST spring-forward uses deterministic shifted time", () => {
+  const rule = schedRule({
+    triggerInterval: "days",
+    daysInterval: 1,
+    triggerAtHour: 2,
+    triggerAtMinute: 30,
+    timezone: "America/New_York",
+  });
+  const next = getNextScheduleOccurrence(rule, {
+    after: afterAt("2025-03-08T10:00:00.000-05:00", "America/New_York"),
+  });
+  assert.ok(next.isValid);
+  assert.strictEqual(next.toFormat("yyyy-MM-dd HH:mm"), "2025-03-09 03:30");
+});
+
+check("TEST 7-20 DST fall-back does not double-enqueue same occurrence key", () => {
+  const rule = schedRule({
+    triggerInterval: "days",
+    daysInterval: 1,
+    triggerAtHour: 1,
+    triggerAtMinute: 30,
+    timezone: "America/New_York",
+  });
+  const occ = getNextScheduleOccurrences(rule, {
+    count: 2,
+    after: afterAt("2025-11-01T10:00:00.000-04:00", "America/New_York"),
+  });
+  assert.strictEqual(occ.length, 2);
+  assert.notStrictEqual(occ[0].toISO(), occ[1].toISO());
+});
+
+check("TEST 7-21 Multiple rules independently generate occurrences", () => {
+  const daily = schedRule({
+    id: "daily",
+    triggerInterval: "days",
+    daysInterval: 1,
+    triggerAtHour: 9,
+  });
+  const weekly = schedRule({
+    id: "weekly",
+    triggerAtDay: [1],
+    triggerAtHour: 15,
+  });
+  const d = nextIso(daily, "2025-01-01T08:00:00.000Z");
+  const w = nextIso(weekly, "2025-01-01T08:00:00.000Z");
+  assert.strictEqual(d, "2025-01-01T09:00:00.000Z");
+  assert.strictEqual(w, "2025-01-06T15:00:00.000Z");
+});
+
+check("TEST 7-22 Every-2-weeks rule validates for activation", () => {
+  const rule = schedRule({ weeksInterval: 2 });
+  assert.strictEqual(validateScheduleRule(rule).length, 0);
+  assert.strictEqual(ruleToCron(rule), null);
+});
+
+check("TEST 7-23 Draft schedule is not production-registered", () => {
+  const wf = {
+    id: "wf-draft",
+    status: "draft",
+    definition_json: JSON.stringify({
+      nodes: [
+        {
+          id: "s1",
+          type: "schedule",
+          data: {
+            scheduleRules: [schedRule({ id: "r1" })],
+            timezone: "UTC",
+          },
+        },
+      ],
+    }),
+  };
+  registerWorkflow(wf);
+  assert.strictEqual(getRegistrationCount("wf-draft"), 0);
+  unregisterWorkflow("wf-draft");
+});
+
+check("TEST 7-24 Active schedule is registered", () => {
+  const wf = {
+    id: "wf-active",
+    status: "active",
+    definition_json: JSON.stringify({
+      nodes: [
+        {
+          id: "s1",
+          type: "schedule",
+          data: {
+            scheduleRules: [schedRule({ id: "r1" })],
+            timezone: "UTC",
+          },
+        },
+      ],
+    }),
+  };
+  registerWorkflow(wf);
+  assert.ok(getRegistrationCount("wf-active") >= 1);
+  unregisterWorkflow("wf-active");
+});
+
+check("TEST 7-25 Deactivate removes registration", () => {
+  const wf = {
+    id: "wf-off",
+    status: "active",
+    definition_json: JSON.stringify({
+      nodes: [
+        {
+          id: "s1",
+          type: "schedule",
+          data: { scheduleRules: [schedRule({ id: "r1" })], timezone: "UTC" },
+        },
+      ],
+    }),
+  };
+  registerWorkflow(wf);
+  unregisterWorkflow("wf-off");
+  assert.strictEqual(getRegistrationCount("wf-off"), 0);
+});
+
+check("TEST 7-26 Edit active schedule replaces registration count", () => {
+  const base = {
+    id: "wf-edit",
+    status: "active",
+    definition_json: JSON.stringify({
+      nodes: [
+        {
+          id: "s1",
+          type: "schedule",
+          data: {
+            scheduleRules: [schedRule({ id: "r1" })],
+            timezone: "UTC",
+          },
+        },
+      ],
+    }),
+  };
+  registerWorkflow(base);
+  const one = getRegistrationCount("wf-edit");
+  const updated = {
+    ...base,
+    definition_json: JSON.stringify({
+      nodes: [
+        {
+          id: "s1",
+          type: "schedule",
+          data: {
+            scheduleRules: [
+              schedRule({ id: "r1" }),
+              schedRule({ id: "r2", triggerAtHour: 12 }),
+            ],
+            timezone: "UTC",
+          },
+        },
+      ],
+    }),
+  };
+  registerWorkflow(updated);
+  const two = getRegistrationCount("wf-edit");
+  assert.strictEqual(two, one + 1);
+  unregisterWorkflow("wf-edit");
+});
+
+check("TEST 7-27 Backend restart re-registers active schedules", () => {
+  const wf = {
+    id: "wf-restart",
+    status: "active",
+    definition_json: JSON.stringify({
+      nodes: [
+        {
+          id: "s1",
+          type: "schedule",
+          data: { scheduleRules: [schedRule({ id: "r1" })], timezone: "UTC" },
+        },
+      ],
+    }),
+  };
+  registerWorkflow(wf);
+  unregisterWorkflow("wf-restart");
+  registerWorkflow(wf);
+  assert.ok(getRegistrationCount("wf-restart") >= 1);
+  unregisterWorkflow("wf-restart");
+});
+
+check("TEST 7-28 Every-2-week anchor survives restart calculations", () => {
+  const anchor = "2025-01-06T09:00:00.000Z";
+  const rule = schedRule({ weeksInterval: 2, recurrenceAnchor: anchor });
+  const before = nextIso(rule, "2025-01-10T10:00:00.000Z", { anchor });
+  const afterRestart = nextIso(rule, "2025-01-10T10:00:00.000Z", { anchor });
+  assert.strictEqual(before, afterRestart);
+});
+
+check("TEST 7-29 Every-3-month anchor survives restart calculations", () => {
+  const anchor = "2025-01-01T18:00:00.000Z";
+  const rule = schedRule({
+    triggerInterval: "months",
+    monthsInterval: 3,
+    triggerAtDayOfMonth: 1,
+    triggerAtHour: 18,
+    recurrenceAnchor: anchor,
+  });
+  const a = nextIso(rule, "2025-02-01T10:00:00.000Z", { anchor });
+  const b = nextIso(rule, "2025-02-01T10:00:00.000Z", { anchor });
+  assert.strictEqual(a, b);
+});
+
+check("TEST 7-30 Duplicate occurrence uses stable idempotency key", () => {
+  const { buildScheduleIdempotencyKey } = require("../utils/scheduleRecurrence");
+  const dt = DateTime.fromISO("2025-01-01T09:00:00.000Z", { zone: "UTC" });
+  const key = buildScheduleIdempotencyKey("wf1", "node1", "rule1", dt, "UTC");
+  assert.ok(key.startsWith("schedule:"));
+  assert.ok(key.includes("2025-01-01T09:00:00"));
+  assert.ok(key.includes("UTC"));
+});
+
+check("TEST 7-31 Downtime resumes at next future occurrence", () => {
+  const rule = schedRule({ triggerInterval: "days", daysInterval: 1 });
+  const next = getNextScheduleOccurrence(rule, {
+    after: afterAt("2025-01-01T08:00:00.000Z"),
+  });
+  assert.ok(next > afterAt("2025-01-01T08:00:00.000Z"));
+});
+
+check("TEST 7-32 Schedule production run path ignores editor session", () => {
+  const src = require("fs").readFileSync(
+    require("path").join(__dirname, "../services/workflowEngine.service.js"),
+    "utf8"
+  );
+  const runBlock = src.slice(
+    src.indexOf("const executeRun ="),
+    src.indexOf("const executePartial =")
+  );
+  assert.ok(runBlock.includes('input?.source === "schedule"'));
+  assert.ok(!runBlock.includes("editorSession"));
+});
+
+check("TEST 7-33 Schedule production run ignores pins", () => {
+  const src = require("fs").readFileSync(
+    require("path").join(__dirname, "../services/workflowEngine.service.js"),
+    "utf8"
+  );
+  assert.ok(src.includes("isProductionRun ? null : pinnedResult"));
+});
+
+check("TEST 7-34 Schedule trigger has no INPUT port", () => {
+  const contract = require("../config/nodeContract");
+  const schedule = contract.getEngineContract("schedule");
+  assert.strictEqual(schedule.isTrigger, true);
+  assert.strictEqual(schedule.mergeInputs, 0);
+});
+
+check("TEST 7-35 Legacy cron schedule still works", () => {
+  const data = normalizeScheduleNodeData({ cron: "0 9 * * 1" });
+  assert.ok(data.scheduleRules.length > 0);
+  assert.strictEqual(validateScheduleNodeData(data).length, 0);
+});
+
+check("TEST 7-36 Legacy scheduleRules normalize safely", () => {
+  const data = normalizeScheduleNodeData({
+    scheduleRules: [{ field: "weeks", every: 2, triggerAtDay: [1] }],
+  });
+  assert.strictEqual(data.scheduleRules[0].weeksInterval, 2);
+  assert.ok(data.scheduleRules[0].id);
+});
+
+check("TEST 7-37 No accepted rule resolves to silently unscheduled", () => {
+  const data = normalizeScheduleNodeData({
+    scheduleRules: [schedRule({ weeksInterval: 2, id: "anchored" })],
+  });
+  assert.strictEqual(validateScheduleNodeData(data).length, 0);
+  assert.strictEqual(classifyScheduleStrategy(data.scheduleRules[0]), "ANCHORED_RECURRENCE");
+});
+
+check("TEST 7-38 Next-five-occurrences preview is deterministic", () => {
+  const rule = schedRule({ triggerInterval: "days", daysInterval: 1 });
+  const a = getNextScheduleOccurrences(rule, {
+    count: 5,
+    after: afterAt("2025-01-01T08:00:00.000Z"),
+  }).map((d) => d.toISO());
+  const b = getNextScheduleOccurrences(rule, {
+    count: 5,
+    after: afterAt("2025-01-01T08:00:00.000Z"),
+  }).map((d) => d.toISO());
+  assert.deepStrictEqual(a, b);
+  assert.strictEqual(a.length, 5);
+});
+
+check("TEST 7-39 ensureRecurrenceAnchors preserves existing anchor", () => {
+  const anchor = "2024-06-01T09:00:00.000Z";
+  const data = ensureRecurrenceAnchors({
+    scheduleRules: [
+      schedRule({ weeksInterval: 2, recurrenceAnchor: anchor, id: "r1" }),
+    ],
+  });
+  assert.strictEqual(data.scheduleRules[0].recurrenceAnchor, anchor);
+});
+
+check("TEST 7-40 Manual and webhook triggers unchanged", async () => {
+  const manual = await handlers.trigger({ id: "t", data: {} }, ctx);
+  const webhook = await handlers.webhook({ id: "w", data: {} }, ctx);
+  assert.strictEqual(manual.output.kind, "manual");
+  assert.strictEqual(webhook.output.kind, "webhook");
+});
+
+section("Part 7B schedule runtime stabilization");
+
+const {
+  computeBoundedDelayMs,
+  buildLocalOccurrenceKey,
+  buildScheduleIdempotencyKey,
+  MAX_SCHEDULER_WAKE_MS,
+} = require("../utils/scheduleRecurrence");
+const {
+  getRegistrationKeys,
+  getAnchoredRegistrationState,
+} = require("../services/workflowScheduler.service");
+
+check("TEST 7B-1 distant occurrence uses bounded wake delay not one-shot overflow", () => {
+  const now = Date.parse("2025-01-01T00:00:00.000Z");
+  const target = now + 50 * 24 * 60 * 60 * 1000;
+  const delay = computeBoundedDelayMs(target, now);
+  assert.strictEqual(delay, MAX_SCHEDULER_WAKE_MS);
+  assert.ok(delay < 50 * 24 * 60 * 60 * 1000);
+});
+
+check("TEST 7B-2 every-2-days retains same local time across DST", () => {
+  const anchor = "2025-01-01T09:00:00.000-05:00";
+  const rule = schedRule({
+    triggerInterval: "days",
+    daysInterval: 2,
+    triggerAtHour: 9,
+    triggerAtMinute: 0,
+    recurrenceAnchor: anchor,
+    timezone: "America/New_York",
+  });
+  const occ = getNextScheduleOccurrence(rule, {
+    after: afterAt("2025-03-08T09:30:00.000-05:00", "America/New_York"),
+    anchor,
+  });
+  assert.strictEqual(occ.toFormat("HH:mm"), "09:00");
+});
+
+check("TEST 7B-3 every-2-weeks retains same local time across DST", () => {
+  const anchor = "2025-01-06T09:00:00.000-05:00";
+  const rule = schedRule({
+    weeksInterval: 2,
+    triggerAtDay: [1],
+    triggerAtHour: 9,
+    triggerAtMinute: 0,
+    recurrenceAnchor: anchor,
+    timezone: "America/New_York",
+  });
+  const occ = getNextScheduleOccurrence(rule, {
+    after: afterAt("2025-03-10T10:00:00.000-04:00", "America/New_York"),
+    anchor,
+  });
+  assert.strictEqual(occ.toFormat("HH:mm"), "09:00");
+  assert.strictEqual(occ.weekday, 1);
+});
+
+check("TEST 7B-4 every-3-months uses calendar-month arithmetic", () => {
+  const anchor = "2025-01-15T09:00:00.000Z";
+  const rule = schedRule({
+    triggerInterval: "months",
+    monthsInterval: 3,
+    triggerAtDayOfMonth: 15,
+    recurrenceAnchor: anchor,
+  });
+  const next = getNextScheduleOccurrence(rule, {
+    after: afterAt("2025-02-16T10:00:00.000Z"),
+    anchor,
+  });
+  assert.strictEqual(next.toISODate(), "2025-04-15");
+});
+
+check("TEST 7B-5 fall-back daily 01:30 generates one local occurrence", () => {
+  const rule = schedRule({
+    triggerInterval: "days",
+    daysInterval: 1,
+    triggerAtHour: 1,
+    triggerAtMinute: 30,
+    timezone: "America/New_York",
+  });
+  const occ = getNextScheduleOccurrences(rule, {
+    count: 5,
+    after: afterAt("2025-11-01T10:00:00.000-04:00", "America/New_York"),
+  });
+  const nov2 = occ.filter((d) => d.toFormat("yyyy-MM-dd") === "2025-11-02");
+  assert.strictEqual(nov2.length, 1);
+  assert.strictEqual(nov2[0].toFormat("HH:mm"), "01:30");
+});
+
+check("TEST 7B-6 fall-back local slot shares one idempotency key", () => {
+  const zone = "America/New_York";
+  const k1 = buildScheduleIdempotencyKey(
+    "wf",
+    "n",
+    "r",
+    DateTime.fromISO("2025-11-02T05:30:00.000Z", { zone }),
+    zone
+  );
+  const k2 = buildScheduleIdempotencyKey(
+    "wf",
+    "n",
+    "r",
+    DateTime.fromISO("2025-11-02T06:30:00.000Z", { zone }),
+    zone
+  );
+  assert.strictEqual(k1, k2);
+  assert.ok(k1.includes("2025-11-02T01:30:00"));
+});
+
+check("TEST 7B-7 spring-forward 02:30 follows shift-forward policy", () => {
+  const rule = schedRule({
+    triggerInterval: "days",
+    daysInterval: 1,
+    triggerAtHour: 2,
+    triggerAtMinute: 30,
+    timezone: "America/New_York",
+  });
+  const next = getNextScheduleOccurrence(rule, {
+    after: afterAt("2025-03-08T10:00:00.000-05:00", "America/New_York"),
+  });
+  assert.strictEqual(next.toFormat("yyyy-MM-dd HH:mm"), "2025-03-09 03:30");
+});
+
+check("TEST 7B-8 preview calculator matches scheduler occurrence source", () => {
+  const rule = schedRule({
+    triggerInterval: "days",
+    daysInterval: 1,
+    triggerAtHour: 9,
+    timezone: "America/New_York",
+  });
+  const preview = getNextScheduleOccurrences(rule, {
+    count: 3,
+    after: afterAt("2025-01-01T08:00:00.000Z"),
+  }).map((d) => buildLocalOccurrenceKey(d, "America/New_York"));
+  const scheduler = getNextScheduleOccurrences(rule, {
+    count: 3,
+    after: afterAt("2025-01-01T08:00:00.000Z"),
+  }).map((d) => buildLocalOccurrenceKey(d, "America/New_York"));
+  assert.deepStrictEqual(preview, scheduler);
+});
+
+check("TEST 7B-9 repeated refreshAll does not duplicate registrations", () => {
+  const wf = {
+    id: "wf-7b9",
+    status: "active",
+    definition_json: JSON.stringify({
+      nodes: [
+        {
+          id: "s1",
+          type: "schedule",
+          data: {
+            scheduleRules: [
+              schedRule({ id: "r1", weeksInterval: 2, recurrenceAnchor: "2025-01-06T09:00:00.000Z" }),
+            ],
+            timezone: "UTC",
+          },
+        },
+      ],
+    }),
+  };
+  registerWorkflow(wf);
+  const keys1 = getRegistrationKeys("wf-7b9");
+  registerWorkflow(wf);
+  const keys2 = getRegistrationKeys("wf-7b9");
+  assert.strictEqual(keys1.length, keys2.length);
+  assert.strictEqual(keys1.length, 1);
+  unregisterWorkflow("wf-7b9");
+});
+
+check("TEST 7B-10 editing active anchored schedule replaces old registration", () => {
+  const base = {
+    id: "wf-7b10",
+    status: "active",
+    definition_json: JSON.stringify({
+      nodes: [
+        {
+          id: "s1",
+          type: "schedule",
+          data: {
+            scheduleRules: [
+              schedRule({
+                id: "old_rule",
+                weeksInterval: 2,
+                recurrenceAnchor: "2025-01-06T09:00:00.000Z",
+              }),
+            ],
+            timezone: "UTC",
+          },
+        },
+      ],
+    }),
+  };
+  registerWorkflow(base);
+  assert.ok(getRegistrationKeys("wf-7b10").includes("wf-7b10:s1:old_rule"));
+  const updated = {
+    ...base,
+    definition_json: JSON.stringify({
+      nodes: [
+        {
+          id: "s1",
+          type: "schedule",
+          data: {
+            scheduleRules: [
+              schedRule({
+                id: "new_rule",
+                weeksInterval: 3,
+                triggerAtDay: [2],
+                triggerAtHour: 10,
+                recurrenceAnchor: "2025-01-07T10:00:00.000Z",
+              }),
+            ],
+            timezone: "UTC",
+          },
+        },
+      ],
+    }),
+  };
+  registerWorkflow(updated);
+  const keys = getRegistrationKeys("wf-7b10");
+  assert.strictEqual(keys.length, 1);
+  assert.ok(keys[0].includes("new_rule"));
+  assert.ok(!keys[0].includes("old_rule"));
+  unregisterWorkflow("wf-7b10");
+});
+
+check("TEST 7B-11 deactivation clears anchored timer state", () => {
+  const wf = {
+    id: "wf-7b11",
+    status: "active",
+    definition_json: JSON.stringify({
+      nodes: [
+        {
+          id: "s1",
+          type: "schedule",
+          data: {
+            scheduleRules: [
+              schedRule({
+                id: "r1",
+                monthsInterval: 3,
+                triggerInterval: "months",
+                recurrenceAnchor: "2025-01-15T09:00:00.000Z",
+              }),
+            ],
+            timezone: "UTC",
+          },
+        },
+      ],
+    }),
+  };
+  registerWorkflow(wf);
+  assert.ok(getAnchoredRegistrationState("wf-7b11", "s1", "r1")?.nextAt);
+  unregisterWorkflow("wf-7b11");
+  assert.strictEqual(getAnchoredRegistrationState("wf-7b11", "s1", "r1"), null);
+});
+
+check("TEST 7B-12 restart resumes next future occurrence with preserved anchor", () => {
+  const anchor = "2025-01-06T09:00:00.000Z";
+  const rule = schedRule({ weeksInterval: 2, recurrenceAnchor: anchor });
+  const before = nextIso(rule, "2025-01-10T10:00:00.000Z", { anchor });
+  unregisterWorkflow("wf-restart");
+  const afterRestart = nextIso(rule, "2025-01-10T10:00:00.000Z", { anchor });
+  assert.strictEqual(before, afterRestart);
+});
+
+check("TEST 7B-13 downtime does not backfill missed occurrence", () => {
+  const anchor = "2025-09-01T09:00:00.000Z";
+  const rule = schedRule({
+    weeksInterval: 2,
+    triggerAtDay: [1],
+    recurrenceAnchor: anchor,
+  });
+  const next = getNextScheduleOccurrence(rule, {
+    after: afterAt("2025-09-20T10:00:00.000Z"),
+    anchor,
+  });
+  assert.strictEqual(next.toISODate(), "2025-09-29");
+  assert.notStrictEqual(next.toISODate(), "2025-09-15");
+});
+
+section("Part 7C schedule idempotency precision + final freeze");
+
+const {
+  scheduleAnchoredRule,
+} = require("../services/workflowScheduler.service");
+
+const idemKeyAt = (iso, zone = "UTC") =>
+  buildScheduleIdempotencyKey(
+    "wf",
+    "node",
+    "rule",
+    DateTime.fromISO(iso, { zone }),
+    zone
+  );
+
+check("TEST 7C-1 every 10 seconds occurrences produce distinct keys", () => {
+  const zone = "UTC";
+  const k0 = idemKeyAt("2025-01-01T10:00:00.000Z", zone);
+  const k10 = idemKeyAt("2025-01-01T10:00:10.000Z", zone);
+  const k20 = idemKeyAt("2025-01-01T10:00:20.000Z", zone);
+  assert.notStrictEqual(k0, k10);
+  assert.notStrictEqual(k10, k20);
+  assert.notStrictEqual(k0, k20);
+});
+
+check("TEST 7C-2 every 30 seconds occurrences produce distinct keys", () => {
+  const zone = "UTC";
+  const k0 = idemKeyAt("2025-01-01T10:00:00.000Z", zone);
+  const k30 = idemKeyAt("2025-01-01T10:00:30.000Z", zone);
+  const k60 = idemKeyAt("2025-01-01T10:01:00.000Z", zone);
+  assert.notStrictEqual(k0, k30);
+  assert.notStrictEqual(k30, k60);
+});
+
+check("TEST 7C-3 same second occurrence retry shares one key", () => {
+  const zone = "UTC";
+  const dt = DateTime.fromISO("2025-01-01T10:00:10.000Z", { zone });
+  const k1 = buildScheduleIdempotencyKey("wf", "n", "r", dt, zone);
+  const k2 = buildScheduleIdempotencyKey("wf", "n", "r", dt, zone);
+  assert.strictEqual(k1, k2);
+});
+
+check("TEST 7C-4 DST fall-back repeated 01:30:00 shares local occurrence key", () => {
+  const zone = "America/New_York";
+  const k1 = buildScheduleIdempotencyKey(
+    "wf",
+    "n",
+    "r",
+    DateTime.fromISO("2025-11-02T05:30:00.000Z", { zone }),
+    zone
+  );
+  const k2 = buildScheduleIdempotencyKey(
+    "wf",
+    "n",
+    "r",
+    DateTime.fromISO("2025-11-02T06:30:00.000Z", { zone }),
+    zone
+  );
+  assert.strictEqual(k1, k2);
+  assert.ok(k1.includes("2025-11-02T01:30:00"));
+});
+
+check("TEST 7C-5 01:30:00 and 01:30:30 produce different keys", () => {
+  const zone = "America/New_York";
+  const k1 = idemKeyAt("2025-11-02T05:30:00.000Z", zone);
+  const k2 = idemKeyAt("2025-11-02T05:30:30.000Z", zone);
+  assert.notStrictEqual(k1, k2);
+});
+
+check("TEST 7C-6 timezone remains part of identity", () => {
+  const iso = "2025-01-01T15:00:00.000Z";
+  const utc = buildScheduleIdempotencyKey(
+    "wf",
+    "n",
+    "r",
+    DateTime.fromISO(iso, { zone: "UTC" }),
+    "UTC"
+  );
+  const ny = buildScheduleIdempotencyKey(
+    "wf",
+    "n",
+    "r",
+    DateTime.fromISO(iso, { zone: "America/New_York" }),
+    "America/New_York"
+  );
+  assert.notStrictEqual(utc, ny);
+  assert.ok(utc.endsWith(":UTC"));
+  assert.ok(ny.endsWith(":America/New_York"));
+});
+
+check("TEST 7C-7 minute schedule identities remain deterministic", () => {
+  const rule = schedRule({
+    triggerInterval: "minutes",
+    minutesInterval: 15,
+    triggerAtMinute: 0,
+  });
+  const occ = getNextScheduleOccurrences(rule, {
+    count: 3,
+    after: afterAt("2025-01-01T09:00:00.000Z"),
+  });
+  const keys = occ.map((d) => buildLocalOccurrenceKey(d, "UTC"));
+  assert.deepStrictEqual(keys, [
+    "2025-01-01T09:15:00",
+    "2025-01-01T09:30:00",
+    "2025-01-01T09:45:00",
+  ]);
+});
+
+check("TEST 7C-8 50-day-away occurrence initially returns 24h delay", () => {
+  const now = Date.parse("2025-01-01T00:00:00.000Z");
+  const target = now + 50 * 24 * 60 * 60 * 1000;
+  assert.strictEqual(computeBoundedDelayMs(target, now), MAX_SCHEDULER_WAKE_MS);
+});
+
+check("TEST 7C-9 6-hour-away occurrence returns 6h not 24h", () => {
+  const now = Date.parse("2025-01-01T00:00:00.000Z");
+  const sixHours = 6 * 60 * 60 * 1000;
+  const target = now + sixHours;
+  assert.strictEqual(computeBoundedDelayMs(target, now), sixHours);
+});
+
+check("TEST 7C-10 30-second-away occurrence returns approximately 30s", () => {
+  const now = Date.parse("2025-01-01T00:00:00.000Z");
+  const thirtySec = 30 * 1000;
+  const target = now + thirtySec;
+  assert.strictEqual(computeBoundedDelayMs(target, now), thirtySec);
+});
+
+check("TEST 7C-11 simulated bounded wakes converge to intended scheduled time", () => {
+  let nowMs = Date.parse("2025-01-01T00:00:00.000Z");
+  const sixHours = 6 * 60 * 60 * 1000;
+  const targetMs = nowMs + 50 * 24 * 60 * 60 * 1000 + sixHours;
+  const wakes = [];
+  while (nowMs < targetMs) {
+    const delay = computeBoundedDelayMs(targetMs, nowMs);
+    wakes.push(delay);
+    if (targetMs - nowMs > MAX_SCHEDULER_WAKE_MS) {
+      assert.strictEqual(delay, MAX_SCHEDULER_WAKE_MS);
+    } else {
+      assert.strictEqual(delay, targetMs - nowMs);
+    }
+    nowMs += delay;
+  }
+  assert.strictEqual(nowMs, targetMs);
+  assert.strictEqual(wakes[wakes.length - 1], sixHours);
+});
+
+check("TEST 7C-12 scheduler does not fire occurrence early", () => {
+  const zone = "UTC";
+  const clockNow = DateTime.fromISO("2025-04-14T18:00:00.000Z", { zone });
+  const anchor = "2025-01-15T06:00:00.000Z";
+  const rule = schedRule({
+    id: "r1",
+    triggerInterval: "months",
+    monthsInterval: 3,
+    triggerAtDayOfMonth: 15,
+    triggerAtHour: 6,
+    triggerAtMinute: 0,
+    recurrenceAnchor: anchor,
+  });
+  const regRef = scheduleAnchoredRule(
+    { id: "wf-7c12" },
+    { id: "s1", data: { timezone: zone } },
+    rule,
+    { settings: { timezone: zone } },
+    { clock: () => clockNow }
+  );
+  const twelveHours = 12 * 60 * 60 * 1000;
+  assert.strictEqual(regRef.pendingDelayMs, twelveHours);
+  assert.strictEqual(regRef.nextAt, "2025-04-15T06:00:00.000Z");
+  regRef.stop();
+});
+
+check("TEST 7C-13 refreshAll before due time does not duplicate intended occurrence", () => {
+  const wf = {
+    id: "wf-7c13",
+    status: "active",
+    definition_json: JSON.stringify({
+      nodes: [
+        {
+          id: "s1",
+          type: "schedule",
+          data: {
+            scheduleRules: [
+              schedRule({
+                id: "r1",
+                weeksInterval: 2,
+                recurrenceAnchor: "2025-01-06T09:00:00.000Z",
+              }),
+            ],
+            timezone: "UTC",
+          },
+        },
+      ],
+    }),
+  };
+  registerWorkflow(wf);
+  const state1 = getAnchoredRegistrationState("wf-7c13", "s1", "r1");
+  registerWorkflow(wf);
+  const state2 = getAnchoredRegistrationState("wf-7c13", "s1", "r1");
+  assert.strictEqual(getRegistrationKeys("wf-7c13").length, 1);
+  assert.strictEqual(state1.nextAt, state2.nextAt);
+  unregisterWorkflow("wf-7c13");
+});
+
 (async () => {
   for (const task of queue) await task();
   console.log(`\n${passed} checks passed`);

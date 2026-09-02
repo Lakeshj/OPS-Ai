@@ -16,6 +16,7 @@ const {
   getNodeInput,
   getEditorSession,
   previewExpression,
+  previewScheduleOccurrences,
   invalidateEditorSession,
   listCredentials,
   createCredential,
@@ -47,6 +48,7 @@ router.post("/:id/nodes/:nodeId/run-to", runToNode);
 router.post("/:id/nodes/:nodeId/execute-previous", executePrevious);
 router.get("/:id/nodes/:nodeId/input", getNodeInput);
 router.post("/:id/nodes/:nodeId/expression-preview", previewExpression);
+router.post("/:id/nodes/:nodeId/schedule-preview", previewScheduleOccurrences);
 router.post("/:id/webhook", webhookTrigger);
 router.get("/:id", getById);
 router.put("/:id", validate(validateUpdate), update);

@@ -50,6 +50,8 @@ export type ScheduleTriggerInterval =
 export type ScheduleIntervalField = ScheduleTriggerInterval;
 
 export interface ScheduleRule {
+  /** Stable identity for scheduler registration */
+  id?: string;
   /** n8n field name */
   triggerInterval?: ScheduleTriggerInterval;
   /** Legacy alias for triggerInterval */
@@ -72,6 +74,8 @@ export interface ScheduleRule {
   cronExpression?: string;
   /** Legacy alias */
   expression?: string;
+  /** ISO anchor for every-N-weeks/months/days recurrence phase */
+  recurrenceAnchor?: string;
 }
 
 /** n8n-aligned pairedItem — drives {{steps.*}} thread-walk */

@@ -138,6 +138,26 @@ export const workflowsApi = {
       `/workflows/${workflowId}/nodes/${nodeId}/expression-preview`,
       payload
     ),
+
+  previewScheduleOccurrences: (
+    workflowId: string,
+    nodeId: string,
+    payload: {
+      scheduleRules?: import("./types").ScheduleRule[];
+      timezone?: string;
+      cron?: string;
+      count?: number;
+      definition?: import("./types").WorkflowDefinition;
+    }
+  ) =>
+    apiClient.post<{
+      previews: Array<{
+        ruleId: string;
+        timezone: string;
+        occurrences: Array<{ iso: string; label: string }>;
+      }>;
+      count: number;
+    }>(`/workflows/${workflowId}/nodes/${nodeId}/schedule-preview`, payload),
 };
 
 /** Secrets are write-only: the API never returns a stored secret value. */

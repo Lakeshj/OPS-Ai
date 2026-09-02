@@ -1,4 +1,12 @@
 const { validateSwitchEdges } = require("../../services/workflowDynamicPorts.service");
+const {
+  validateScheduleNodeData,
+  ensureRecurrenceAnchors,
+  getNextScheduleOccurrences,
+  formatOccurrencePreview,
+  normalizeScheduleNodeData,
+  resolveTimezone,
+} = require("../../utils/scheduleRecurrence");
 const { pool } = require("../../config/database");
 const AppError = require("../../utils/AppError");
 const { assertWorkspaceAccess } = require("../../services/authorization.service");
@@ -145,6 +153,33 @@ const validateDefinition = (definition) => {
   }
 };
 
+const findScheduleNodesInDefinition = (definition) => {
+  const nodes = Array.isArray(definition?.nodes) ? definition.nodes : [];
+  return nodes.filter((n) => (n.type || n.data?.nodeType) === "schedule");
+};
+
+const validateSchedulesForActivation = (definition) => {
+  const errors = [];
+  for (const node of findScheduleNodesInDefinition(definition)) {
+    errors.push(...validateScheduleNodeData(node.data, definition));
+  }
+  if (errors.length > 0) {
+    throw new AppError(errors[0], 400, "VALIDATION_ERROR");
+  }
+};
+
+const prepareDefinitionForActivation = (definition, activationTime = new Date()) => {
+  const nodes = (definition.nodes || []).map((node) => {
+    const type = node.type || node.data?.nodeType;
+    if (type !== "schedule") return node;
+    return {
+      ...node,
+      data: ensureRecurrenceAnchors(node.data || {}, activationTime),
+    };
+  });
+  return { ...definition, nodes };
+};
+
 const listByWorkspace = async (workspaceId, authUser) => {
   await assertWorkspaceAccess(authUser, workspaceId);
   const [rows] = await pool.execute(
@@ -212,11 +247,21 @@ const update = async (id, payload, authUser) => {
   const description =
     payload.description !== undefined ? payload.description : existing.description;
   const status = payload.status ?? existing.status;
-  const definition =
+  let definition =
     payload.definition !== undefined ? payload.definition : existing.definition;
 
   if (payload.definition !== undefined) {
     validateDefinition(definition);
+  }
+
+  const activating =
+    status === "active" &&
+    (existing.status !== "active" || payload.definition !== undefined);
+  if (status === "active") {
+    validateSchedulesForActivation(definition);
+    if (activating) {
+      definition = prepareDefinitionForActivation(definition);
+    }
   }
 
   await pool.execute(
@@ -247,6 +292,12 @@ const update = async (id, payload, authUser) => {
 
 const remove = async (id, authUser) => {
   await getById(id, authUser);
+  try {
+    const { unregisterWorkflow } = require("../../services/workflowScheduler.service");
+    unregisterWorkflow(id);
+  } catch {
+    // scheduler optional
+  }
   await pool.execute(`DELETE FROM workflows WHERE id = ?`, [id]);
   return { success: true };
 };
@@ -610,6 +661,52 @@ const previewExpression = async (workflowId, nodeId, body, authUser) => {
   }
 };
 
+const previewScheduleOccurrences = async (workflowId, body, authUser) => {
+  const workflow = await getById(workflowId, authUser);
+  const definition = body?.definition || workflow.definition;
+  const nodeId = body?.nodeId;
+  let data;
+  if (body?.scheduleRules) {
+    data = normalizeScheduleNodeData({
+      scheduleRules: body.scheduleRules,
+      timezone: body.timezone,
+      cron: body.cron,
+    });
+  } else {
+    const node = (definition?.nodes || []).find((n) => n.id === nodeId);
+    if (!node) {
+      throw new AppError("Schedule node not found", 404, "NOT_FOUND");
+    }
+    data = normalizeScheduleNodeData(node.data || {});
+  }
+
+  const errors = validateScheduleNodeData(data, definition);
+  if (errors.length > 0) {
+    throw new AppError(errors[0], 400, "VALIDATION_ERROR");
+  }
+
+  const count = Math.min(Number(body?.count) || 5, 10);
+  const previews = (data.scheduleRules || []).map((rule) => {
+    const zone = resolveTimezone(rule, data, definition);
+    const occurrences = getNextScheduleOccurrences(rule, {
+      count,
+      nodeData: data,
+      definition,
+      anchor: rule.recurrenceAnchor,
+    });
+    return {
+      ruleId: rule.id,
+      timezone: zone,
+      occurrences: occurrences.map((dt) => ({
+        iso: dt.toISO(),
+        label: formatOccurrencePreview(dt, zone),
+      })),
+    };
+  });
+
+  return { previews, count };
+};
+
 module.exports = {
   listAll,
   listByWorkspace,
@@ -626,6 +723,7 @@ module.exports = {
   getNodeInput,
   getEditorSession,
   previewExpression,
+  previewScheduleOccurrences,
   invalidateEditorSession,
   emptyDefinition,
 };

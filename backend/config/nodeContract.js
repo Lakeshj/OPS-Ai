@@ -78,13 +78,10 @@ const normalizeScheduleRule = (rule) => {
 
 /** Intervals that cannot be expressed as simple cron — use anchor-date math */
 const requiresAnchorScheduling = (rule) => {
-  const r = normalizeScheduleRule(rule);
-  const n =
-    r.weeksInterval ??
-    r.monthsInterval ??
-    r.daysInterval ??
-    (r.triggerInterval === "seconds" ? r.secondsInterval : null);
-  return n != null && Number(n) > 1;
+  const {
+    requiresAnchorScheduling: requiresAnchor,
+  } = require("../utils/scheduleRecurrence");
+  return requiresAnchor(rule);
 };
 
 module.exports = {

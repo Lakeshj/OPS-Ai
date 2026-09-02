@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -12,6 +12,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import type { ScheduleIntervalField, ScheduleRule } from "@/modules/workflows/types";
+import { workflowsApi } from "@/modules/workflows/api";
 import { Plus, Trash2 } from "lucide-react";
 
 const INTERVALS: { value: ScheduleIntervalField; label: string }[] = [
@@ -60,6 +61,8 @@ type Props = {
   rules: ScheduleRule[];
   timezone: string;
   legacyCron?: string;
+  workflowId?: string;
+  nodeId?: string;
   onChange: (rules: ScheduleRule[]) => void;
   onTimezoneChange: (tz: string) => void;
 };
@@ -68,15 +71,55 @@ export function ScheduleRulesEditor({
   rules,
   timezone,
   legacyCron,
+  workflowId,
+  nodeId,
   onChange,
   onTimezoneChange,
 }: Props) {
-  const effectiveRules =
-    rules.length > 0
-      ? rules
-      : legacyCron
-        ? [{ field: "cron" as const, expression: legacyCron }]
-        : [defaultRule()];
+  const [previewLines, setPreviewLines] = useState<string[]>([]);
+  const [previewError, setPreviewError] = useState<string | null>(null);
+
+  const effectiveRules = useMemo(
+    () =>
+      rules.length > 0
+        ? rules
+        : legacyCron
+          ? [{ field: "cron" as const, expression: legacyCron }]
+          : [defaultRule()],
+    [rules, legacyCron]
+  );
+
+  const rulesKey = useMemo(() => JSON.stringify(effectiveRules), [effectiveRules]);
+
+  useEffect(() => {
+    if (!workflowId || !nodeId) {
+      setPreviewLines([]);
+      setPreviewError(null);
+      return;
+    }
+    const timer = setTimeout(() => {
+      workflowsApi
+        .previewScheduleOccurrences(workflowId, nodeId, {
+          scheduleRules: effectiveRules,
+          timezone,
+          count: 5,
+        })
+        .then((res) => {
+          const lines = res.previews.flatMap((p) =>
+            p.occurrences.map((o) => o.label)
+          );
+          setPreviewLines(lines.slice(0, 5));
+          setPreviewError(null);
+        })
+        .catch((err) => {
+          setPreviewLines([]);
+          setPreviewError(
+            err instanceof Error ? err.message : "Could not preview schedule"
+          );
+        });
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [workflowId, nodeId, timezone, rulesKey, effectiveRules]);
 
   const updateRule = (index: number, patch: Partial<ScheduleRule>) => {
     const next = effectiveRules.map((r, i) =>
@@ -288,6 +331,21 @@ export function ScheduleRulesEditor({
         <Plus className="h-3 w-3" />
         Add rule
       </Button>
+
+      {(previewLines.length > 0 || previewError) && (
+        <div className="rounded border bg-muted/30 p-2 text-[10px]">
+          <p className="mb-1 font-medium text-muted-foreground">Next runs</p>
+          {previewError ? (
+            <p className="text-destructive">{previewError}</p>
+          ) : (
+            <ul className="space-y-0.5 text-foreground">
+              {previewLines.map((line) => (
+                <li key={line}>{line}</li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
     </div>
   );
 }

@@ -149,6 +149,16 @@ const previewExpression = asyncHandler(async (req, res) => {
   );
 });
 
+const previewScheduleOccurrences = asyncHandler(async (req, res) => {
+  res.json(
+    await workflowsService.previewScheduleOccurrences(
+      req.params.id,
+      { ...req.body, nodeId: req.params.nodeId },
+      req.user
+    )
+  );
+});
+
 const invalidateEditorSession = asyncHandler(async (req, res) => {
   res.json(
     await workflowsService.invalidateEditorSession(
@@ -175,6 +185,7 @@ module.exports = {
   getNodeInput,
   getEditorSession,
   previewExpression,
+  previewScheduleOccurrences,
   invalidateEditorSession,
   listCredentials,
   createCredential,

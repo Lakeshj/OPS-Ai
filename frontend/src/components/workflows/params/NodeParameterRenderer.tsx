@@ -74,6 +74,8 @@ function renderSpecial(
           rules={values.scheduleRules || []}
           timezone={String(values.timezone || "UTC")}
           legacyCron={String(values.cron || "")}
+          workflowId={context.workflowId}
+          nodeId={context.nodeId || undefined}
           onChange={(scheduleRules) => onChange({ ...values, scheduleRules })}
           onTimezoneChange={(timezone) => onChange({ ...values, timezone })}
         />
