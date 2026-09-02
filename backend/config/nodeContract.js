@@ -32,6 +32,7 @@ const NODE_ENGINE_CONTRACTS = {
   removeDuplicates: { cardinality: "N-to-leqN", pairedItemPolicy: "identityBySurvival", mergeInputs: 1, isStateful: true },
   aggregate: { cardinality: "N-to-1", pairedItemPolicy: "fanIn", mergeInputs: 1 },
   merge: { cardinality: "N-to-N", pairedItemPolicy: "multiPort", mergeInputs: 2, blocking: true },
+  switch: { cardinality: "N-split-branches", pairedItemPolicy: "routing", mergeInputs: 1, dynamicOutputs: true },
   code: { cardinality: "arbitrary", pairedItemPolicy: "manual", mergeInputs: 1 },
   condition: { cardinality: "N-split-branches", pairedItemPolicy: "routing", mergeInputs: 1, outputs: ["true", "false"] },
   document: { cardinality: "N-to-N", pairedItemPolicy: "identity1to1", mergeInputs: 1 },

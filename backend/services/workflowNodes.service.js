@@ -12,6 +12,17 @@ const {
   parseStepsKey,
 } = require("./workflowExpression.service");
 const {
+  MERGE_PORT_IDS,
+  PORT_STATES,
+  normalizeMergeMode,
+} = require("./workflowMultiInput.service");
+const { cloneJsonData, cloneItem, normalizeNodeOutput } = require("./workflowProvenance.service");
+const {
+  normalizeSwitchRules,
+  getSwitchOutputPortIds,
+  SWITCH_FALLBACK_HANDLE,
+} = require("./workflowDynamicPorts.service");
+const {
   getSecretForWorkspace,
 } = require("../modules/workflows/credentials.service");
 const ExcelJS = require("exceljs");
@@ -1381,28 +1392,282 @@ const handlers = {
   },
 
   merge: async (node, context) => {
-    const mode = node.data?.mode || "append";
-    const items = context.inputItems;
+    const mode = normalizeMergeMode(node.data?.mode);
+    const portInputs = context.portInputs;
 
-    if (mode === "combine") {
-      const combined = items.reduce(
+    const getPortItems = (portId) => {
+      const port = portInputs?.[portId];
+      if (!port || port.state === PORT_STATES.SKIPPED) return [];
+      return port.items || [];
+    };
+
+    const payloadOf = (item) => {
+      if (item && typeof item === "object" && item.json && !Array.isArray(item.json)) {
+        return item.json;
+      }
+      return item && typeof item === "object" ? item : {};
+    };
+
+    const binaryOf = (item) =>
+      item && typeof item === "object" && item.binary ? item.binary : undefined;
+
+    const wrapOutput = (items, resolved) => ({
+      resolved,
+      items,
+      output: {
+        count: items.length,
+        items,
+        text: itemsToText(items),
+      },
+    });
+
+    // Legacy flat combine (no port separation) — backward compatible.
+    if (!portInputs && mode === "combine") {
+      const flat = context.inputItems || [];
+      const combined = flat.reduce(
         (acc, item) =>
           item && typeof item === "object" && !Array.isArray(item)
-            ? { ...acc, ...item }
+            ? { ...acc, ...payloadOf(item) }
             : acc,
         {}
       );
-      return {
-        resolved: { mode, itemsIn: items.length },
-        items: [combined],
-        output: { count: 1, items: [combined], text: itemsToText([combined]) },
-      };
+      return wrapOutput([combined], { mode, itemsIn: flat.length, legacy: true });
     }
 
+    if (!portInputs) {
+      const flat = context.inputItems || [];
+      return wrapOutput(flat, { mode, itemsIn: flat.length });
+    }
+
+    const input1Items = getPortItems("input1");
+    const input2Items = getPortItems("input2");
+
+    if (mode === "append") {
+      const items = [];
+      for (const portId of MERGE_PORT_IDS) {
+        const port = portInputs[portId];
+        if (!port || port.state === PORT_STATES.SKIPPED) continue;
+        for (let i = 0; i < port.items.length; i += 1) {
+          const src = port.items[i];
+          const item = { json: cloneJsonData(payloadOf(src)) };
+          if (binaryOf(src)) item.binary = binaryOf(src);
+          item.pairedItem = { item: i, input: port.inputIndex };
+          items.push(item);
+        }
+      }
+      return wrapOutput(items, {
+        mode,
+        input1Count: input1Items.length,
+        input2Count: input2Items.length,
+      });
+    }
+
+    if (mode === "combineByPosition") {
+      const count = Math.min(input1Items.length, input2Items.length);
+      const items = [];
+      for (let i = 0; i < count; i += 1) {
+        const j1 = payloadOf(input1Items[i]);
+        const j2 = payloadOf(input2Items[i]);
+        const merged = { ...cloneJsonData(j1), ...cloneJsonData(j2) };
+        const item = {
+          json: merged,
+          pairedItem: [
+            { item: i, input: 0 },
+            { item: i, input: 1 },
+          ],
+        };
+        const b1 = binaryOf(input1Items[i]);
+        const b2 = binaryOf(input2Items[i]);
+        if (b1 || b2) item.binary = { ...(b1 || {}), ...(b2 || {}) };
+        items.push(item);
+      }
+      return wrapOutput(items, {
+        mode,
+        matchedPositions: count,
+        input1Count: input1Items.length,
+        input2Count: input2Items.length,
+      });
+    }
+
+    if (mode === "combineByKey") {
+      const fields = node.data?.matchFields || {};
+      const field1 = String(fields.field1 || fields.input1Field || "").trim();
+      const field2 = String(fields.field2 || fields.input2Field || "").trim();
+      const joinMode = node.data?.joinMode || "keepMatches";
+
+      const keyOf = (obj, field) => {
+        if (!field) return undefined;
+        return field
+          .split(".")
+          .reduce((cur, key) => (cur == null ? undefined : cur[key]), obj);
+      };
+
+      const index2 = new Map();
+      for (let i = 0; i < input2Items.length; i += 1) {
+        const k = keyOf(payloadOf(input2Items[i]), field2);
+        if (k === undefined || index2.has(k)) continue;
+        index2.set(k, i);
+      }
+
+      const items = [];
+      const matched2 = new Set();
+
+      for (let i = 0; i < input1Items.length; i += 1) {
+        const j1 = payloadOf(input1Items[i]);
+        const k1 = keyOf(j1, field1);
+        const j = k1 !== undefined ? index2.get(k1) : undefined;
+        const hasMatch = j !== undefined;
+
+        if (joinMode === "keepMatches" && !hasMatch) continue;
+        if (joinMode === "keepNonMatches" && hasMatch) continue;
+
+        let merged;
+        let pairedItem;
+        if (hasMatch) {
+          matched2.add(j);
+          const j2 = payloadOf(input2Items[j]);
+          merged = { ...cloneJsonData(j1), ...cloneJsonData(j2) };
+          pairedItem = [
+            { item: i, input: 0 },
+            { item: j, input: 1 },
+          ];
+        } else if (joinMode === "enrichInput1" || joinMode === "keepNonMatches") {
+          merged = cloneJsonData(j1);
+          pairedItem = { item: i, input: 0 };
+        } else {
+          continue;
+        }
+
+        const item = { json: merged, pairedItem };
+        const b1 = binaryOf(input1Items[i]);
+        const b2 = hasMatch ? binaryOf(input2Items[j]) : undefined;
+        if (b1 || b2) item.binary = { ...(b1 || {}), ...(b2 || {}) };
+        items.push(item);
+      }
+
+      if (joinMode === "keepNonMatches") {
+        for (let j = 0; j < input2Items.length; j += 1) {
+          if (matched2.has(j)) continue;
+          const j2 = payloadOf(input2Items[j]);
+          const item = {
+            json: cloneJsonData(j2),
+            pairedItem: { item: j, input: 1 },
+          };
+          const b2 = binaryOf(input2Items[j]);
+          if (b2) item.binary = b2;
+          items.push(item);
+        }
+      }
+
+      return wrapOutput(items, {
+        mode,
+        joinMode,
+        field1,
+        field2,
+        input1Count: input1Items.length,
+        input2Count: input2Items.length,
+      });
+    }
+
+    if (mode === "combine") {
+      const fold = (portItems) =>
+        portItems.reduce(
+          (acc, item) => ({ ...acc, ...cloneJsonData(payloadOf(item)) }),
+          {}
+        );
+      const combined = { ...fold(input1Items), ...fold(input2Items) };
+      return wrapOutput([combined], {
+        mode,
+        input1Count: input1Items.length,
+        input2Count: input2Items.length,
+      });
+    }
+
+    return wrapOutput([], { mode, input1Count: 0, input2Count: 0 });
+  },
+
+  switch: async (node, context) => {
+    const data = normalizeSwitchRules(node.data || {}, { nodeId: node.id });
+    const rules = Array.isArray(data.rules) ? data.rules : [];
+    const routingMode = data.routingMode || "firstMatch";
+    const enableFallback = data.enableFallback !== false;
+    const inputItems = Array.isArray(context.inputItems) ? context.inputItems : [];
+
+    const outputsByPort = {};
+    for (const rule of rules) {
+      outputsByPort[rule.id] = [];
+    }
+    if (enableFallback) {
+      outputsByPort[SWITCH_FALLBACK_HANDLE] = [];
+    }
+
+    for (let inputIndex = 0; inputIndex < inputItems.length; inputIndex += 1) {
+      const sourceItem = inputItems[inputIndex];
+      const itemPayload = getItemPayload(sourceItem);
+      const scope = {
+        input: context.input,
+        steps: context.steps,
+        item: itemPayload,
+        items: inputItems,
+        graph: context.graph,
+        currentNodeId: node.id,
+        currentItemIndex: inputIndex,
+        currentItem: sourceItem,
+      };
+
+      const matchedPorts = [];
+      for (const rule of rules) {
+        const left = resolveExpression(String(rule.left ?? "{{item}}"), scope);
+        const right =
+          rule.right != null && String(rule.right).length > 0
+            ? resolveExpression(String(rule.right), scope)
+            : "";
+        let pass;
+        try {
+          pass = compareValues(left, rule.operator || "equals", right);
+        } catch (err) {
+          throw failWith(
+            err instanceof Error ? err.message : String(err),
+            { ruleId: rule.id, left, operator: rule.operator, right }
+          );
+        }
+        if (pass) {
+          matchedPorts.push(rule.id);
+          if (routingMode === "firstMatch") break;
+        }
+      }
+
+      if (matchedPorts.length === 0 && enableFallback) {
+        matchedPorts.push(SWITCH_FALLBACK_HANDLE);
+      }
+
+      for (const portId of matchedPorts) {
+        if (!outputsByPort[portId]) continue;
+        const cloned = cloneItem(sourceItem);
+        outputsByPort[portId].push(cloned);
+      }
+    }
+
+    const activeHandles = getSwitchOutputPortIds(data);
+    const portCounts = Object.fromEntries(
+      Object.entries(outputsByPort).map(([portId, items]) => [portId, items.length])
+    );
+
     return {
-      resolved: { mode: "append", itemsIn: items.length },
-      items,
-      output: { count: items.length, items, text: itemsToText(items) },
+      resolved: {
+        routingMode,
+        ruleCount: rules.length,
+        itemsIn: inputItems.length,
+        portCounts,
+      },
+      outputsByPort,
+      activeHandles,
+      items: [],
+      output: {
+        routed: true,
+        routingMode,
+        portCounts,
+      },
     };
   },
 

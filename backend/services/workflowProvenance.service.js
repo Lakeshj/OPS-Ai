@@ -229,13 +229,22 @@ const applyManual = (inputItems, outputItems, options = {}) => {
   });
 };
 
-/** multiPort — basic merge provenance (Part 5 will extend) */
+/** multiPort — merge provenance with per-port input index */
 const applyMultiPort = (inputItems, outputItems, options = {}) => {
-  const mode = options.mergeMode || "append";
-  if (mode === "combine") {
-    return applyFanIn(inputItems, outputItems);
+  const outputs = outputItems.map((out) => cloneItem(out));
+
+  if (outputs.every((out) => isValidPairedItem(out.pairedItem))) {
+    return outputs;
   }
-  return applyIdentityBySurvival(inputItems, outputItems);
+
+  const mode = String(options.mergeMode || "append");
+  if (mode === "combine" && !options.portInputs) {
+    return applyFanIn(inputItems, outputs);
+  }
+
+  return outputs.map((out, i) =>
+    i < inputItems.length ? linkAt(out, i, inputItems[i]) : cloneItem(out)
+  );
 };
 
 /** Triggers / terminals — no provenance links */
@@ -402,6 +411,7 @@ const normalizeNodeOutput = (node, inputItems, rawItems, extraOptions = {}) => {
     ...extraOptions,
     nodeData: node.data || {},
     mergeMode: node.data?.mode,
+    portInputs: extraOptions.portInputs,
     codeMode: node.data?.mode === "each" ? "each" : "all",
     resultMetadata: {
       inputCount: Array.isArray(inputItems) ? inputItems.length : 0,

@@ -8,6 +8,7 @@ import {
   Controls,
   MiniMap,
   addEdge,
+  reconnectEdge,
   useEdgesState,
   useNodesState,
   type Connection,
@@ -31,7 +32,9 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { CircleDot, LayoutGrid, Plus, Settings2 } from "lucide-react";
 import type {
+  EditorInvalidationEvent,
   WorkflowDefinition,
+  WorkflowEditorSession,
   WorkflowNodeData,
   WorkflowNodeType,
   WorkflowRun,
@@ -41,6 +44,14 @@ import {
   getNodeConfigIssues,
   nodeHasMissingConfig,
 } from "@/modules/workflows/nodeValidation";
+import { getNodeContract } from "@/modules/workflows/nodeRegistry";
+import {
+  isValidSwitchSourceHandle,
+  normalizeDefinitionSwitchNodes,
+  normalizeSwitchRules,
+  pruneInvalidSwitchEdges,
+  prunePinnedPortOutputs,
+} from "@/modules/workflows/dynamicPorts";
 import {
   resolveEngineType,
   type LibraryNode,
@@ -54,7 +65,12 @@ import {
   writeClipboard,
 } from "@/modules/workflows/workflowClipboard";
 import { workflowsApi } from "@/modules/workflows/api";
-import type { WorkflowEditorSession } from "@/modules/workflows/types";
+
+const UI_ONLY_DATA_KEYS = new Set(["label", "runStatus", "runPreview", "cacheDirty"]);
+
+function isExecutionAffectingPatch(patch: WorkflowNodeData): boolean {
+  return Object.keys(patch).some((key) => !UI_ONLY_DATA_KEYS.has(key));
+}
 
 type RightPanel = "library" | null;
 
@@ -74,6 +90,7 @@ const nodeTypes = {
   merge: WorkflowNode,
   code: WorkflowNode,
   condition: WorkflowNode,
+  switch: WorkflowNode,
   set: WorkflowNode,
   document: WorkflowNode,
   spreadsheet: WorkflowNode,
@@ -90,6 +107,7 @@ const edgeTypes = {
 const defaultEdgeOptions = {
   type: "workflow",
   animated: false,
+  reconnectable: true,
 };
 
 const START_TYPES = new Set(["trigger", "schedule", "webhook"]);
@@ -117,9 +135,44 @@ const isValidWorkflowConnection = (
     (e) =>
       e.source === connection.source &&
       e.target === connection.target &&
-      (e.sourceHandle || null) === (connection.sourceHandle || null)
+      (e.sourceHandle || null) === (connection.sourceHandle || null) &&
+      (e.targetHandle || null) === (connection.targetHandle || null)
   );
   if (duplicate) return false;
+
+  const sourceType = String(sourceNode.type);
+  if (sourceType === "switch") {
+    const sourceData = normalizeSwitchRules(
+      (sourceNode.data || {}) as WorkflowNodeData,
+      sourceNode.id
+    );
+    if (
+      connection.sourceHandle &&
+      !isValidSwitchSourceHandle(
+        connection.sourceHandle,
+        sourceData,
+        sourceNode.id
+      )
+    ) {
+      return false;
+    }
+    if (!connection.sourceHandle) return false;
+  }
+
+  if (connection.targetHandle) {
+    const contract = getNodeContract(
+      targetType as import("@/modules/workflows/types").WorkflowNodeType
+    );
+    const portDef = contract.inputs.find((p) => p.id === connection.targetHandle);
+    if (portDef?.maxConnections === 1) {
+      const portTaken = edges.some(
+        (e) =>
+          e.target === connection.target &&
+          (e.targetHandle || null) === (connection.targetHandle || null)
+      );
+      if (portTaken) return false;
+    }
+  }
 
   return true;
 };
@@ -265,6 +318,21 @@ const defaultDataForType = (type: WorkflowNodeType): WorkflowNodeData => {
         left: "{{input}}",
         operator: "contains",
         right: "",
+      };
+    case "switch":
+      return {
+        label: "Switch",
+        nodeType: "switch",
+        routingMode: "firstMatch",
+        enableFallback: true,
+        rules: [
+          {
+            left: "{{item}}",
+            operator: "equals",
+            right: "",
+            label: "Rule 1",
+          },
+        ],
       };
     case "set":
       return {
@@ -485,13 +553,16 @@ const toFlowNodes = (
   return (definition.nodes || []).map((n) => {
     const step = stepByNode.get(n.id);
     const preview = step?.output != null ? formatStepOutput(step.output) : "";
+    const rawData = (n.data || {}) as WorkflowNodeData;
+    const normalizedData =
+      n.type === "switch" ? normalizeSwitchRules(rawData, n.id) : rawData;
     return {
       id: n.id,
       type: n.type,
       position: n.position,
       data: {
-        ...(n.data || {}),
-        label: n.data?.label || n.type,
+        ...normalizedData,
+        label: normalizedData.label || n.type,
         runStatus: step?.status,
         runPreview: preview ? preview.slice(0, 120) : undefined,
       },
@@ -690,44 +761,29 @@ function WorkflowCanvasInner({
     history.push(nodes, edges);
   }, [history, nodes, edges]);
 
-  const invalidateDownstreamBadges = useCallback(
-    (nodeId: string) => {
-      const downstream = new Set<string>();
-      const stack = [nodeId];
-      while (stack.length > 0) {
-        const id = stack.pop()!;
-        for (const e of edges) {
-          if (e.source === id && !downstream.has(e.target)) {
-            downstream.add(e.target);
-            stack.push(e.target);
-          }
-        }
-      }
+  const applyEditorSession = useCallback(
+    (session: WorkflowEditorSession) => {
+      setEditorSession(session);
       setNodes((prev) =>
-        prev.map((n) =>
-          downstream.has(n.id) || n.id === nodeId
-            ? {
-                ...n,
-                data: {
-                  ...n.data,
-                  runStatus: undefined,
-                  runPreview: undefined,
-                },
-              }
-            : n
-        )
+        prev.map((n) => ({
+          ...n,
+          data: {
+            ...n.data,
+            cacheDirty: Boolean(session.dirtyNodes?.[n.id]?.dirty),
+          },
+        }))
       );
     },
-    [edges, setNodes]
+    [setNodes]
   );
 
   useEffect(() => {
     if (!workflowId) return;
     workflowsApi
       .getEditorSession(workflowId)
-      .then(setEditorSession)
+      .then(applyEditorSession)
       .catch(() => setEditorSession(null));
-  }, [workflowId]);
+  }, [workflowId, applyEditorSession]);
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
@@ -809,37 +865,6 @@ function WorkflowCanvasInner({
    * Pinning freezes a node's last output so re-running does not re-hit a slow
    * or paid call. The pin lives in node data, so it saves with the workflow.
    */
-  const togglePin = useCallback(
-    (nodeId: string) => {
-      const step = latestRun?.steps?.find((s) => s.nodeId === nodeId);
-      let pinnedNow = false;
-      setNodes((prev) =>
-        prev.map((n) => {
-          if (n.id !== nodeId) return n;
-          const data = n.data as WorkflowNodeData;
-          if (data.pinned) {
-            const { pinned: _p, pinnedOutput: _o, ...rest } = data;
-            return { ...n, data: rest };
-          }
-          pinnedNow = true;
-          return {
-            ...n,
-            data: { ...data, pinned: true, pinnedOutput: step?.output ?? null },
-          };
-        })
-      );
-      if (pinnedNow && !step) {
-        toast.message("Pinned with an empty output — run the node once first");
-      } else {
-        toast.success(
-          pinnedNow
-            ? "Output pinned — Save to keep it"
-            : "Pin removed — Save to keep it"
-        );
-      }
-    },
-    [latestRun, setNodes]
-  );
 
   const onConnect = useCallback(
     (connection: Connection) => {
@@ -880,9 +905,10 @@ function WorkflowCanvasInner({
   const buildDefinition = useCallback((): WorkflowDefinition => {
     const withAi = autoWireAiPrompt(nodes, edges);
     const wired = autoWireResultMapFrom(withAi, edges);
+    const normalizedNodes = normalizeDefinitionSwitchNodes(wired);
     return {
       version: 1,
-      nodes: wired.map((n) => {
+      nodes: normalizedNodes.map((n) => {
         const data = { ...(n.data || {}) } as WorkflowNodeData & {
           runStatus?: unknown;
           runPreview?: unknown;
@@ -905,6 +931,120 @@ function WorkflowCanvasInner({
       })),
     };
   }, [nodes, edges]);
+
+  const invalidateEditorCache = useCallback(
+    async (event: EditorInvalidationEvent) => {
+      if (!workflowId) return;
+      try {
+        const res = await workflowsApi.invalidateEditorSession(workflowId, {
+          definition: buildDefinition(),
+          event,
+        });
+        applyEditorSession(res.session);
+      } catch {
+        // Session invalidation is best-effort; partial runs still reconcile server-side.
+      }
+    },
+    [workflowId, buildDefinition, applyEditorSession]
+  );
+
+  const onReconnect = useCallback(
+    (oldEdge: Edge, newConnection: Connection) => {
+      if (!newConnection.source || !newConnection.target) return;
+      const edgesWithoutOld = edges.filter((e) => e.id !== oldEdge.id);
+      if (
+        !isValidWorkflowConnection(newConnection, nodes, edgesWithoutOld)
+      ) {
+        toast.error("Invalid connection");
+        return;
+      }
+      pushHistory();
+      setEdges((eds) => reconnectEdge(oldEdge, newConnection, eds));
+      void invalidateEditorCache({
+        type: "edge_reconnect",
+        edgeId: oldEdge.id,
+        previous: {
+          source: oldEdge.source,
+          target: oldEdge.target,
+          sourceHandle: oldEdge.sourceHandle ?? null,
+          targetHandle: oldEdge.targetHandle ?? null,
+        },
+        current: {
+          source: newConnection.source,
+          target: newConnection.target,
+          sourceHandle: newConnection.sourceHandle ?? null,
+          targetHandle: newConnection.targetHandle ?? null,
+        },
+      });
+    },
+    [nodes, edges, pushHistory, setEdges, invalidateEditorCache]
+  );
+
+  const togglePin = useCallback(
+    (nodeId: string) => {
+      const step = latestRun?.steps?.find((s) => s.nodeId === nodeId);
+      const sessionResult = editorSession?.nodeResults?.[nodeId];
+      const node = nodes.find((n) => n.id === nodeId);
+      const wasPinned = Boolean((node?.data as WorkflowNodeData)?.pinned);
+      const nodeType = String(
+        node?.type || (node?.data as WorkflowNodeData)?.nodeType
+      );
+      const portOutputs = sessionResult?.portOutputs;
+      let pinnedNow = false;
+      setNodes((prev) =>
+        prev.map((n) => {
+          if (n.id !== nodeId) return n;
+          const data = n.data as WorkflowNodeData;
+          if (data.pinned) {
+            const {
+              pinned: _p,
+              pinnedOutput: _o,
+              pinnedItems: _i,
+              pinnedPortOutputs: _pp,
+              ...rest
+            } = data;
+            return { ...n, data: rest };
+          }
+          pinnedNow = true;
+          if (nodeType === "switch" && portOutputs) {
+            return {
+              ...n,
+              data: {
+                ...data,
+                pinned: true,
+                pinnedOutput:
+                  sessionResult?.output ?? step?.output ?? { pinned: true },
+                pinnedPortOutputs: portOutputs,
+              },
+            };
+          }
+          return {
+            ...n,
+            data: { ...data, pinned: true, pinnedOutput: step?.output ?? null },
+          };
+        })
+      );
+      void invalidateEditorCache({
+        type: "pin",
+        nodeId,
+        unpinned: wasPinned,
+      });
+      if (pinnedNow && !step && !sessionResult) {
+        toast.message("Pinned with an empty output — run the node once first");
+      } else if (pinnedNow && nodeType === "switch" && !portOutputs) {
+        toast.message(
+          "Run this Switch step first to pin per-rule outputs"
+        );
+      } else {
+        toast.success(
+          pinnedNow
+            ? "Output pinned — Save to keep it"
+            : "Pin removed — Save to keep it"
+        );
+      }
+    },
+    [latestRun, setNodes, nodes, invalidateEditorCache, editorSession]
+  );
 
   const parseRunInput = useCallback((): Record<string, unknown> => {
     const raw = runInput.trim();
@@ -939,7 +1079,7 @@ function WorkflowCanvasInner({
           definition: def,
           input: parseRunInput(),
         });
-        setEditorSession(res.session);
+        applyEditorSession(res.session);
         const result = res.results[nodeId];
         setNodes((prev) =>
           prev.map((n) => {
@@ -994,9 +1134,9 @@ function WorkflowCanvasInner({
             : n
         )
       );
-      invalidateDownstreamBadges(nodeId);
+      invalidateEditorCache({ type: "disabled", nodeId });
     },
-    [pushHistory, setNodes, invalidateDownstreamBadges]
+    [pushHistory, setNodes, invalidateEditorCache]
   );
 
   const duplicateSelection = useCallback(() => {
@@ -1051,12 +1191,19 @@ function WorkflowCanvasInner({
 
   const deleteEdge = useCallback(
     (edgeId: string) => {
+      const edge = edges.find((e) => e.id === edgeId);
       pushHistory();
       setEdges((prev) => prev.filter((e) => e.id !== edgeId));
       setSelectedEdgeId(null);
+      if (edge?.target) {
+        void invalidateEditorCache({
+          type: "edge",
+          targetNodeId: edge.target,
+        });
+      }
       toast.success("Connection removed");
     },
-    [pushHistory, setEdges]
+    [pushHistory, setEdges, edges, invalidateEditorCache]
   );
 
   const insertNodeOnEdge = useCallback(
@@ -1074,7 +1221,10 @@ function WorkflowCanvasInner({
         x: (source.position.x + target.position.x) / 2,
         y: (source.position.y + target.position.y) / 2,
       };
-      const data = dataFromLibraryNode(libraryNode);
+      const data =
+        engineType === "switch"
+          ? normalizeSwitchRules(dataFromLibraryNode(libraryNode), id)
+          : dataFromLibraryNode(libraryNode);
 
       setNodes((prev) => [...prev, { id, type: engineType, position, data }]);
       setEdges((prev) => [
@@ -1100,9 +1250,14 @@ function WorkflowCanvasInner({
       toast.message(
         "Step inserted — downstream now receives this node's output unless you reference upstream explicitly."
       );
+      void invalidateEditorCache({
+        type: "insert_node",
+        newNodeId: id,
+        downstreamTargets: [edge.target],
+      });
       openNodeDialog();
     },
-    [edges, nodes, pushHistory, setNodes, setEdges, setSelected, openNodeDialog]
+    [edges, nodes, pushHistory, setNodes, setEdges, setSelected, openNodeDialog, invalidateEditorCache]
   );
 
   const appendNodeAfter = useCallback(
@@ -1116,7 +1271,10 @@ function WorkflowCanvasInner({
         x: source.position.x + 280,
         y: source.position.y,
       };
-      const data = dataFromLibraryNode(libraryNode);
+      const data =
+        engineType === "switch"
+          ? normalizeSwitchRules(dataFromLibraryNode(libraryNode), id)
+          : dataFromLibraryNode(libraryNode);
       setNodes((prev) => [...prev, { id, type: engineType, position, data }]);
       setEdges((prev) => [
         ...prev,
@@ -1264,8 +1422,9 @@ function WorkflowCanvasInner({
     setEdges((prev) => prev.filter((e) => e.source !== id && e.target !== id));
     setSelected(null);
     setLocalError(null);
+    void invalidateEditorCache({ type: "delete", nodeId: id });
     toast.success(`Deleted “${String(node.data?.label || node.type)}”`);
-  }, [selectedId, nodes, setNodes, setEdges, setSelected, pushHistory]);
+  }, [selectedId, nodes, setNodes, setEdges, setSelected, pushHistory, invalidateEditorCache]);
 
   const canvasActions = useMemo(
     () => ({
@@ -1477,10 +1636,40 @@ function WorkflowCanvasInner({
 
   const updateSelectedData = (patch: WorkflowNodeData) => {
     if (!selectedId) return;
-    invalidateDownstreamBadges(selectedId);
-    setNodes((prev) =>
-      prev.map((n) =>
-        n.id === selectedId ? { ...n, data: { ...n.data, ...patch } } : n
+    const prev = (selectedNode?.data || {}) as WorkflowNodeData;
+    const selectedType = String(selectedNode?.type || prev.nodeType || "");
+    let nextPatch = patch;
+
+    if (selectedType === "switch") {
+      const merged = prunePinnedPortOutputs(
+        normalizeSwitchRules({ ...prev, ...patch }, selectedId),
+        selectedId
+      );
+      nextPatch = merged;
+      const pruned = pruneInvalidSwitchEdges(edges, selectedId, merged);
+      if (pruned.length !== edges.length) {
+        setEdges(pruned);
+      }
+    }
+
+    if (isExecutionAffectingPatch(nextPatch)) {
+      if (
+        prev.pinned &&
+        patch.pinnedOutput !== undefined &&
+        patch.pinnedOutput !== prev.pinnedOutput
+      ) {
+        void invalidateEditorCache({
+          type: "pin",
+          nodeId: selectedId,
+          pinContentChanged: true,
+        });
+      } else {
+        void invalidateEditorCache({ type: "params", nodeId: selectedId });
+      }
+    }
+    setNodes((prevNodes) =>
+      prevNodes.map((n) =>
+        n.id === selectedId ? { ...n, data: { ...n.data, ...nextPatch } } : n
       )
     );
   };
@@ -1746,6 +1935,9 @@ function WorkflowCanvasInner({
               onNodesChange(changes);
             }}
             onEdgesChange={onEdgesChange}
+            onReconnect={onReconnect}
+            edgesReconnectable
+            reconnectRadius={24}
             onConnect={(c) => {
               if (!isValidWorkflowConnection(c, nodes, edges)) {
                 toast.error("Invalid connection");
@@ -1753,6 +1945,12 @@ function WorkflowCanvasInner({
               }
               pushHistory();
               onConnect(c);
+              if (c.target) {
+                void invalidateEditorCache({
+                  type: "edge",
+                  targetNodeId: c.target,
+                });
+              }
             }}
             onSelectionChange={onSelectionChange}
             onEdgeClick={(_e, edge) => {

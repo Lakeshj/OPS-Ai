@@ -14,6 +14,7 @@ export type WorkflowNodeType =
   | "bot"
   | "http"
   | "condition"
+  | "switch"
   | "set"
   | "splitOut"
   | "filter"
@@ -90,16 +91,66 @@ export interface WorkflowEditorNodeResult {
   status: "succeeded" | "failed" | "skipped" | "running";
   output?: unknown;
   items?: WorkflowItem[];
+  portOutputs?: Record<string, WorkflowItem[]>;
   error?: string | null;
   executionTimeMs?: number;
+  cacheState?: "clean" | "dirty" | "pinned";
+  executionSignature?: string;
+  cached?: boolean;
+}
+
+export interface WorkflowEditorDirtyNode {
+  dirty: boolean;
+  reason?: string;
+  since?: string;
 }
 
 export interface WorkflowEditorSession {
   workflowId: string;
   input: Record<string, unknown>;
   nodeResults: Record<string, WorkflowEditorNodeResult>;
+  dirtyNodes?: Record<string, WorkflowEditorDirtyNode>;
   updatedAt: string;
 }
+
+export type EditorInvalidationEvent =
+  | { type: "params" | "disabled"; nodeId: string }
+  | {
+      type: "pin";
+      nodeId: string;
+      unpinned?: boolean;
+      pinContentChanged?: boolean;
+    }
+  | {
+      type: "edge";
+      targetNodeId: string;
+      previousTarget?: string;
+      sourceNodeId?: string;
+      sourceHandle?: string | null;
+      targetHandle?: string | null;
+    }
+  | {
+      type: "edge_reconnect";
+      edgeId: string;
+      previous: {
+        source: string;
+        target: string;
+        sourceHandle?: string | null;
+        targetHandle?: string | null;
+      };
+      current: {
+        source: string;
+        target: string;
+        sourceHandle?: string | null;
+        targetHandle?: string | null;
+      };
+    }
+  | { type: "delete"; nodeId: string }
+  | {
+      type: "insert_node";
+      newNodeId: string;
+      downstreamTargets: string[];
+    };
 
 export type WorkflowCredentialType =
   | "bearer"
@@ -212,6 +263,17 @@ export interface WorkflowNodeData {
   left?: string;
   right?: string;
   operator?: WorkflowOperator;
+  /** Switch */
+  rules?: Array<{
+    id?: string;
+    left?: string;
+    operator?: WorkflowOperator;
+    right?: string;
+    label?: string;
+  }>;
+  routingMode?: "firstMatch" | "allMatches";
+  enableFallback?: boolean;
+  pinnedPortOutputs?: Record<string, WorkflowItem[]>;
   /** Result */
   mapFrom?: string;
   /** Schedule */
@@ -256,6 +318,8 @@ export interface WorkflowNodeData {
   pinned?: boolean;
   pinnedOutput?: unknown;
   pinnedItems?: unknown[];
+  /** Editor cache validity — set from editor session dirtyNodes */
+  cacheDirty?: boolean;
   /** Failure handling */
   onError?: "stop" | "continue" | "route";
   retries?: number;

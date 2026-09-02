@@ -47,6 +47,18 @@ export const workflowsApi = {
       `/workflows/${workflowId}/editor-session`
     ),
 
+  invalidateEditorSession: (
+    workflowId: string,
+    payload: {
+      definition?: import("./types").WorkflowDefinition;
+      event: import("./types").EditorInvalidationEvent;
+    }
+  ) =>
+    apiClient.post<{
+      session: import("./types").WorkflowEditorSession;
+      affected: string[];
+    }>(`/workflows/${workflowId}/editor-session/invalidate`, payload),
+
   executeNodeStep: (
     workflowId: string,
     nodeId: string,
@@ -81,6 +93,19 @@ export const workflowsApi = {
       nodeId: string;
       incoming: Record<string, unknown>;
       items: unknown[];
+      portInputs?: Record<
+        string,
+        {
+          portId: string;
+          label: string;
+          state: string;
+          items?: unknown[];
+          sourceNodeId?: string | null;
+        }
+      >;
+      stale?: boolean;
+      staleNodeIds?: string[];
+      nodeCacheStatus?: Record<string, string>;
     }>(`/workflows/${workflowId}/nodes/${nodeId}/input`),
 
   executePrevious: (

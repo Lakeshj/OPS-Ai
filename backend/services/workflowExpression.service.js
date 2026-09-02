@@ -3,6 +3,11 @@
  * Resolves {{steps.<nodeId>.*}} through pairedItem provenance chains.
  */
 
+const {
+  getIncomingEdgeForInputIndex,
+  normalizeMergeIncomingEdges,
+} = require("./workflowMultiInput.service");
+
 const getItemPayload = (item) => {
   if (item == null) return item;
   if (typeof item !== "object" || Array.isArray(item)) return item;
@@ -61,6 +66,21 @@ const getPairedInputPort = (pairedItem) => {
     return pairedItem.input;
   }
   return undefined;
+};
+
+const getPredecessorForPort = (graph, nodeId, portIndex) => {
+  const edge = getIncomingEdgeForInputIndex(graph, nodeId, portIndex);
+  return edge?.source || null;
+};
+
+const resolveIncomingPredecessor = (graph, nodeId, pairedItem) => {
+  const incoming = normalizeMergeIncomingEdges(graph, nodeId);
+  if (incoming.length === 0) return null;
+  if (incoming.length === 1) return incoming[0].source;
+
+  const port = getPairedInputPort(pairedItem);
+  if (!Number.isInteger(port) || port < 0) return null;
+  return getPredecessorForPort(graph, nodeId, port);
 };
 
 /** True when targetNodeId is upstream of nodeId in the execution graph. */
@@ -183,25 +203,128 @@ const resolveReferencedItem = ({
   let nodeId = currentNodeId;
   let current = item;
 
-  // Expression item context is usually an upstream output feeding the current node.
-  const currentIncoming = graph.incoming.get(nodeId) || [];
-  if (currentIncoming.length === 1) {
-    nodeId = currentIncoming[0].source;
-  } else if (currentIncoming.length > 1) {
-    const port = getPairedInputPort(current.pairedItem);
-    if (!Number.isInteger(port) || port < 0 || port >= currentIncoming.length) {
+  const resolvePredecessor = (fromNodeId, pairedRef) => {
+    const incoming = normalizeMergeIncomingEdges(graph, fromNodeId);
+    if (incoming.length === 0) return null;
+    if (incoming.length === 1) return incoming[0].source;
+    const port = getPairedInputPort(pairedRef);
+    if (!Number.isInteger(port) || port < 0) return null;
+    return getPredecessorForPort(graph, fromNodeId, port);
+  };
+
+  const pi0 = current?.pairedItem;
+  if (Array.isArray(pi0)) {
+    const producerNodeId = (() => {
+      const incoming = normalizeMergeIncomingEdges(graph, nodeId);
+      if (incoming.length === 1) return incoming[0].source;
+      return nodeId;
+    })();
+
+    const contributors = pi0
+      .map((ref) => ({
+        ref,
+        pred: resolvePredecessor(producerNodeId, ref),
+      }))
+      .filter((c) => c.pred);
+
+    const directMatches = contributors.filter((c) => c.pred === targetNodeId);
+    if (directMatches.length > 1) {
       return { status: "error", reason: REASONS.PROVENANCE_AMBIGUOUS };
     }
-    nodeId = currentIncoming[port].source;
-  }
+    const direct = directMatches[0];
+    if (direct) {
+      const predItems = getTargetItems(context, direct.pred);
+      const resolved = predItems?.[direct.ref.item];
+      if (resolved) {
+        return { status: "resolved", item: resolved, mode: "thread" };
+      }
+    }
 
-  if (nodeId === targetNodeId) {
-    return { status: "resolved", item: current, mode: "thread" };
+    const upstreamMatches = contributors.filter((c) =>
+      isUpstreamNode(graph, targetNodeId, c.pred)
+    );
+    if (upstreamMatches.length > 1) {
+      return { status: "error", reason: REASONS.PROVENANCE_AMBIGUOUS };
+    }
+    if (upstreamMatches.length === 1) {
+      const { ref, pred } = upstreamMatches[0];
+      const predItems = getTargetItems(context, pred);
+      const resolved = predItems?.[ref.item];
+      if (!resolved) {
+        return { status: "error", reason: REASONS.ITEM_INDEX_OUT_OF_RANGE };
+      }
+      current = resolved;
+      nodeId = pred;
+      if (nodeId === targetNodeId) {
+        return { status: "resolved", item: current, mode: "thread" };
+      }
+    } else {
+      return { status: "error", reason: REASONS.PROVENANCE_AMBIGUOUS };
+    }
+  } else {
+    const currentIncoming = normalizeMergeIncomingEdges(graph, nodeId);
+    if (currentIncoming.length === 1) {
+      nodeId = currentIncoming[0].source;
+    } else if (currentIncoming.length > 1) {
+      const port = getPairedInputPort(current.pairedItem);
+      if (!Number.isInteger(port) || port < 0) {
+        return { status: "error", reason: REASONS.PROVENANCE_AMBIGUOUS };
+      }
+      const pred = getPredecessorForPort(graph, nodeId, port);
+      if (!pred) {
+        return { status: "error", reason: REASONS.PROVENANCE_AMBIGUOUS };
+      }
+      nodeId = pred;
+    }
+
+    if (nodeId === targetNodeId) {
+      return { status: "resolved", item: current, mode: "thread" };
+    }
   }
 
   for (let hop = 0; hop < 128; hop += 1) {
     const pi = current?.pairedItem;
     if (Array.isArray(pi)) {
+      const contributors = pi
+        .map((ref) => ({
+          ref,
+          pred: resolvePredecessor(nodeId, ref),
+        }))
+        .filter((c) => c.pred);
+
+      const directMatches = contributors.filter((c) => c.pred === targetNodeId);
+    if (directMatches.length > 1) {
+      return { status: "error", reason: REASONS.PROVENANCE_AMBIGUOUS };
+    }
+    const direct = directMatches[0];
+      if (direct) {
+        const predItems = getTargetItems(context, direct.pred);
+        const resolved = predItems?.[direct.ref.item];
+        if (resolved) {
+          return { status: "resolved", item: resolved, mode: "thread" };
+        }
+      }
+
+      const upstreamMatches = contributors.filter((c) =>
+        isUpstreamNode(graph, targetNodeId, c.pred)
+      );
+      if (upstreamMatches.length > 1) {
+        return { status: "error", reason: REASONS.PROVENANCE_AMBIGUOUS };
+      }
+      if (upstreamMatches.length === 1) {
+        const { ref, pred } = upstreamMatches[0];
+        const predItems = getTargetItems(context, pred);
+        const resolved = predItems?.[ref.item];
+        if (!resolved) {
+          return { status: "error", reason: REASONS.ITEM_INDEX_OUT_OF_RANGE };
+        }
+        current = resolved;
+        nodeId = pred;
+        if (nodeId === targetNodeId) {
+          return { status: "resolved", item: current, mode: "thread" };
+        }
+        continue;
+      }
       return { status: "error", reason: REASONS.PROVENANCE_AMBIGUOUS };
     }
 
@@ -214,20 +337,9 @@ const resolveReferencedItem = ({
       return { status: "error", reason: REASONS.PROVENANCE_MISSING };
     }
 
-    const incoming = graph.incoming.get(nodeId) || [];
-    if (incoming.length === 0) {
+    const predecessorNodeId = resolvePredecessor(nodeId, pi);
+    if (!predecessorNodeId) {
       return { status: "error", reason: REASONS.TARGET_NOT_IN_PATH };
-    }
-
-    let predecessorNodeId;
-    if (incoming.length === 1) {
-      predecessorNodeId = incoming[0].source;
-    } else {
-      const port = getPairedInputPort(pi);
-      if (!Number.isInteger(port) || port < 0 || port >= incoming.length) {
-        return { status: "error", reason: REASONS.PROVENANCE_AMBIGUOUS };
-      }
-      predecessorNodeId = incoming[port].source;
     }
 
     const predecessorItems = getTargetItems(context, predecessorNodeId);

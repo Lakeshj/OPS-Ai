@@ -75,3 +75,12 @@ export {
   PAIRED_ITEM_LINKERS,
   EXPRESSION_ERRORS,
 };
+export {
+  resolveNodeOutputPorts,
+  normalizeSwitchRules,
+  getSwitchOutputPortIds,
+  isValidSwitchSourceHandle,
+  pruneInvalidSwitchEdges,
+  duplicateSwitchNodeData,
+  SWITCH_FALLBACK_HANDLE,
+} from "./dynamicPorts";

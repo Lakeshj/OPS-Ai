@@ -6,7 +6,8 @@ export type ExpressionPreviewStatus =
   | "AMBIGUOUS"
   | "BROKEN_REFERENCE"
   | "UPSTREAM_NOT_EXECUTED"
-  | "INVALID_EXPRESSION";
+  | "INVALID_EXPRESSION"
+  | "STALE_CACHE";
 
 export type ExpressionPreviewResponse = {
   status: ExpressionPreviewStatus;
@@ -45,6 +46,8 @@ export function previewStatusMessage(res: ExpressionPreviewResponse): string {
       return REASON_MESSAGES.PROVENANCE_AMBIGUOUS;
     case "INVALID_EXPRESSION":
       return "Invalid expression syntax.";
+    case "STALE_CACHE":
+      return "Referenced step has changed. Run it again to preview the current value.";
     default:
       return "";
   }

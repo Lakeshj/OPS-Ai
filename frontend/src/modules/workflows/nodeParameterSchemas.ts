@@ -243,6 +243,64 @@ export const NODE_PARAMETER_SCHEMAS: Record<WorkflowNodeType, ParamDescriptor[]>
       },
     ],
 
+    switch: [
+      {
+        name: "routingMode",
+        displayName: "Routing",
+        type: "options",
+        default: "firstMatch",
+        options: [
+          { name: "First matching rule", value: "firstMatch" },
+          { name: "All matching rules", value: "allMatches" },
+        ],
+      },
+      {
+        name: "rules",
+        displayName: "Rules",
+        type: "fixedCollection",
+        default: [],
+        fields: [
+          {
+            name: "label",
+            displayName: "Label",
+            type: "string",
+            placeholder: "Rule 1",
+          },
+          {
+            name: "left",
+            displayName: "Value",
+            type: "string",
+            expression: true,
+            default: "{{item}}",
+          },
+          {
+            name: "operator",
+            displayName: "Operator",
+            type: "options",
+            default: "equals",
+            options: operatorOptions,
+          },
+          {
+            name: "right",
+            displayName: "Compare to",
+            type: "string",
+            expression: true,
+            displayOptions: {
+              hide: {
+                operator: ["is_empty", "is_not_empty", "truthy"],
+              },
+            },
+          },
+        ],
+      },
+      {
+        name: "enableFallback",
+        displayName: "Enable fallback output",
+        type: "boolean",
+        default: true,
+      },
+    ],
+
     set: [
       {
         name: "mappings",
@@ -384,8 +442,10 @@ export const NODE_PARAMETER_SCHEMAS: Record<WorkflowNodeType, ParamDescriptor[]>
         type: "options",
         default: "append",
         options: [
-          { name: "Append — all items from both branches", value: "append" },
-          { name: "Combine — merge fields into one item", value: "combine" },
+          { name: "Append — all items from both inputs", value: "append" },
+          { name: "Combine by Position", value: "combineByPosition" },
+          { name: "Combine by Key", value: "combineByKey" },
+          { name: "Combine — merge fields into one item (legacy)", value: "combine" },
         ],
       },
     ],

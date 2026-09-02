@@ -28,7 +28,12 @@ import type {
   WorkflowNodeType,
   WorkflowStatus,
 } from "@/modules/workflows/types";
-import { hasInputPanel, isTriggerNode, getStaticOutputSchema } from "@/modules/workflows/nodeRegistry";
+import { resolveNodeOutputPorts } from "@/modules/workflows/dynamicPorts";
+import {
+  hasInputPanel,
+  isTriggerNode,
+  getStaticOutputSchema,
+} from "@/modules/workflows/nodeRegistry";
 import { workflowsApi } from "@/modules/workflows/api";
 import type { WorkflowDefinition } from "@/modules/workflows/types";
 import { toast } from "sonner";
@@ -95,6 +100,9 @@ export function WorkflowNodeDialog({
   const [inputPreview, setInputPreview] = useState<{
     incoming?: Record<string, unknown>;
     items?: WorkflowItem[];
+    portInputs?: Record<string, import("./NodeInputPanel").PortInputPreview>;
+    stale?: boolean;
+    staleNodeIds?: string[];
   }>({});
 
   const nodeResult: WorkflowEditorNodeResult | null = useMemo(() => {
@@ -169,6 +177,12 @@ export function WorkflowNodeDialog({
           setInputPreview({
             incoming: res.incoming,
             items: res.items as WorkflowItem[],
+            portInputs: res.portInputs as Record<
+              string,
+              import("./NodeInputPanel").PortInputPreview
+            >,
+            stale: res.stale,
+            staleNodeIds: res.staleNodeIds,
           });
         }
       })
@@ -227,6 +241,12 @@ export function WorkflowNodeDialog({
     ? getStaticOutputSchema(selectedType)
     : undefined;
 
+  const switchPortLabels = useMemo(() => {
+    if (selectedType !== "switch" || !selectedData) return undefined;
+    const ports = resolveNodeOutputPorts("switch", selectedData, selectedId || undefined);
+    return Object.fromEntries(ports.map((p) => [p.id, p.label || p.id]));
+  }, [selectedType, selectedData, selectedId]);
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
@@ -257,11 +277,14 @@ export function WorkflowNodeDialog({
                       <NodeInputPanel
                         items={inputPreview.items}
                         incoming={inputPreview.incoming}
+                        portInputs={inputPreview.portInputs}
                         runInputData={parseRunInput(runInput)}
                         loading={executing}
                         onExecutePrevious={() => void runPartial("upstream")}
                         selectedItemIndex={selectedInputItemIndex}
                         onSelectedItemIndexChange={setSelectedInputItemIndex}
+                        stale={inputPreview.stale}
+                        staleNodeIds={inputPreview.staleNodeIds}
                       />
                     </div>
                   </ResizablePanel>
@@ -382,6 +405,12 @@ export function WorkflowNodeDialog({
                   <NodeOutputPanel
                     result={nodeResult}
                     items={nodeResult?.items as WorkflowItem[] | undefined}
+                    portOutputs={
+                      nodeResult?.portOutputs as
+                        | Record<string, WorkflowItem[]>
+                        | undefined
+                    }
+                    portLabels={switchPortLabels}
                     loading={executing}
                     pinned={Boolean(selectedData.pinned)}
                     isTrigger={isTrigger}

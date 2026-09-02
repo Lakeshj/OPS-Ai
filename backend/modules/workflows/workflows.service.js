@@ -1,4 +1,4 @@
-const { v4: uuidv4 } = require("uuid");
+const { validateSwitchEdges } = require("../../services/workflowDynamicPorts.service");
 const { pool } = require("../../config/database");
 const AppError = require("../../utils/AppError");
 const { assertWorkspaceAccess } = require("../../services/authorization.service");
@@ -138,6 +138,10 @@ const validateDefinition = (definition) => {
         "VALIDATION_ERROR"
       );
     }
+  }
+  const switchErrors = validateSwitchEdges(definition);
+  if (switchErrors.length > 0) {
+    throw new AppError(switchErrors[0], 400, "VALIDATION_ERROR");
   }
 };
 
@@ -349,6 +353,10 @@ const {
   REASONS,
 } = require("../../services/workflowExpression.service");
 const editorSession = require("../../services/workflowEditorSession.service");
+const {
+  propagateDownstreamDirty,
+  markNodesDirty,
+} = require("../../services/workflowGraphInvalidation.service");
 
 const executeNodeStep = async (workflowId, nodeId, body, authUser) => {
   const workflow = await getById(workflowId, authUser);
@@ -357,23 +365,31 @@ const executeNodeStep = async (workflowId, nodeId, body, authUser) => {
   const userId = authUser.userId;
 
   editorSession.setSessionInput(workflowId, userId, input);
-  const session = editorSession.getSession(workflowId, userId);
+  const session = editorSession.prepareSessionForDefinition(
+    workflowId,
+    userId,
+    definition
+  );
 
   const partial = await executePartial({
     definition,
     input,
     targetNodeId: nodeId,
     mode: "step",
-    sessionNodeResults: session.nodeResults,
+    session,
   });
 
   for (const [id, result] of Object.entries(partial.results)) {
-    editorSession.setNodeResult(workflowId, userId, id, result);
+    if (!result.cached) {
+      editorSession.setNodeResult(workflowId, userId, id, result, definition);
+    }
   }
 
   const graph = buildGraph(definition);
-  const downstream = editorSession.getDownstreamIds(graph, nodeId);
-  editorSession.invalidateFrom(workflowId, userId, downstream);
+  const updatedSession = editorSession.getSession(workflowId, userId);
+  propagateDownstreamDirty(updatedSession, graph, nodeId, "re_executed", {
+    stopAtPinned: false,
+  });
 
   return {
     ...partial,
@@ -390,23 +406,31 @@ const runToNode = async (workflowId, nodeId, body, authUser) => {
   const userId = authUser.userId;
 
   editorSession.setSessionInput(workflowId, userId, input);
-  const session = editorSession.getSession(workflowId, userId);
+  const session = editorSession.prepareSessionForDefinition(
+    workflowId,
+    userId,
+    definition
+  );
 
   const partial = await executePartial({
     definition,
     input,
     targetNodeId: nodeId,
     mode: "run-to",
-    sessionNodeResults: session.nodeResults,
+    session,
   });
 
   for (const [id, result] of Object.entries(partial.results)) {
-    editorSession.setNodeResult(workflowId, userId, id, result);
+    if (!result.cached) {
+      editorSession.setNodeResult(workflowId, userId, id, result, definition);
+    }
   }
 
   const graph = buildGraph(definition);
-  const downstream = editorSession.getDownstreamIds(graph, nodeId);
-  editorSession.invalidateFrom(workflowId, userId, downstream);
+  const updatedSession = editorSession.getSession(workflowId, userId);
+  propagateDownstreamDirty(updatedSession, graph, nodeId, "re_executed", {
+    stopAtPinned: false,
+  });
 
   return {
     ...partial,
@@ -423,23 +447,28 @@ const executePrevious = async (workflowId, nodeId, body, authUser) => {
   const userId = authUser.userId;
 
   editorSession.setSessionInput(workflowId, userId, input);
-  const session = editorSession.getSession(workflowId, userId);
+  const session = editorSession.prepareSessionForDefinition(
+    workflowId,
+    userId,
+    definition
+  );
 
   const partial = await executePartial({
     definition,
     input,
     targetNodeId: nodeId,
     mode: "upstream",
-    sessionNodeResults: session.nodeResults,
+    session,
   });
 
   for (const [id, result] of Object.entries(partial.results)) {
-    editorSession.setNodeResult(workflowId, userId, id, result);
+    if (!result.cached) {
+      editorSession.setNodeResult(workflowId, userId, id, result, definition);
+    }
   }
 
-  const graph = buildGraph(definition);
-  const downstream = editorSession.getDownstreamIds(graph, nodeId);
-  editorSession.invalidateFrom(workflowId, userId, [nodeId, ...downstream]);
+  const updatedSession = editorSession.getSession(workflowId, userId);
+  markNodesDirty(updatedSession, [nodeId], "upstream_executed");
 
   return {
     ...partial,
@@ -452,14 +481,26 @@ const executePrevious = async (workflowId, nodeId, body, authUser) => {
 const getNodeInput = async (workflowId, nodeId, authUser, definitionOverride) => {
   await getById(workflowId, authUser);
   const userId = authUser.userId;
-  const session = editorSession.getSession(workflowId, userId);
   const workflow = await getById(workflowId, authUser);
   const definition = definitionOverride || workflow.definition;
-  return getNodeInputPreview(
+  const session = editorSession.prepareSessionForDefinition(
+    workflowId,
+    userId,
+    definition
+  );
+  return getNodeInputPreview(definition, session, nodeId, session.input || {});
+};
+
+const invalidateEditorSession = async (workflowId, body, authUser) => {
+  await getById(workflowId, authUser);
+  const workflow = await getById(workflowId, authUser);
+  const definition = body?.definition || workflow.definition;
+  const userId = authUser.userId;
+  return editorSession.invalidateEditorSession(
+    workflowId,
+    userId,
     definition,
-    session.nodeResults,
-    nodeId,
-    session.input || {}
+    body?.event
   );
 };
 
@@ -488,13 +529,17 @@ const previewExpression = async (workflowId, nodeId, body, authUser) => {
       ? Number(body.itemIndex)
       : 0;
   const userId = authUser.userId;
-  const session = editorSession.getSession(workflowId, userId);
+  const session = editorSession.prepareSessionForDefinition(
+    workflowId,
+    userId,
+    definition
+  );
   const runInput = body?.input ?? session.input ?? {};
 
-  const { context, itemIndex: safeIndex, pinnedNodeIds } =
+  const { context, itemIndex: safeIndex, pinnedNodeIds, staleNodeIds } =
     buildExpressionPreviewContext(
       definition,
-      session.nodeResults,
+      session,
       nodeId,
       itemIndex,
       runInput
@@ -503,6 +548,23 @@ const previewExpression = async (workflowId, nodeId, body, authUser) => {
   const usesPinned = [...pinnedNodeIds].some((id) =>
     expression.includes(`steps.${id}`)
   );
+
+  const referencedStepIds = [
+    ...expression.matchAll(/steps\.([A-Za-z][\w-]*)/g),
+  ].map((match) => match[1]);
+  const staleReference = referencedStepIds.find(
+    (id) => staleNodeIds.includes(id) && !pinnedNodeIds.has(id)
+  );
+  if (staleReference) {
+    return {
+      status: "STALE_CACHE",
+      message:
+        "Referenced step has changed. Run it again to preview the current value.",
+      targetNodeId: staleReference,
+      itemIndex: safeIndex,
+      usesPinnedData: usesPinned,
+    };
+  }
 
   if (!expression.includes("{{")) {
     return {
@@ -564,5 +626,6 @@ module.exports = {
   getNodeInput,
   getEditorSession,
   previewExpression,
+  invalidateEditorSession,
   emptyDefinition,
 };

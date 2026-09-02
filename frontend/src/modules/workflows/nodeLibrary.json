@@ -237,11 +237,11 @@
       "name": "Switch",
       "category": "Logic",
       "type": "Logic",
-      "description": "Route to multiple branches by value",
+      "description": "Route items to matching rule outputs",
       "icon": "switch",
       "provider": null,
-      "available": false,
-      "engineType": null
+      "available": true,
+      "engineType": "switch"
     },
     {
       "id": "merge",

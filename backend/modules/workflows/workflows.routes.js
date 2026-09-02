@@ -16,6 +16,7 @@ const {
   getNodeInput,
   getEditorSession,
   previewExpression,
+  invalidateEditorSession,
   listCredentials,
   createCredential,
   removeCredential,
@@ -40,6 +41,7 @@ router.get("/:id/runs", listRuns);
 router.get("/:id/runs/:runId", getRun);
 router.post("/:id/runs", startRun);
 router.get("/:id/editor-session", getEditorSession);
+router.post("/:id/editor-session/invalidate", invalidateEditorSession);
 router.post("/:id/nodes/:nodeId/execute", executeNodeStep);
 router.post("/:id/nodes/:nodeId/run-to", runToNode);
 router.post("/:id/nodes/:nodeId/execute-previous", executePrevious);

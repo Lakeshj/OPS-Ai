@@ -7,6 +7,39 @@ const {
   cloneItem,
   attachCanonicalItemsToOutput,
 } = require("./workflowProvenance.service");
+const {
+  getNodeCacheStatus,
+  isCacheUsableForExecution,
+  reconcileSessionWithDefinition,
+  propagateDownstreamDirty,
+} = require("./workflowGraphInvalidation.service");
+const {
+  isMultiInputNode,
+  prepareNodeExecutionInputs,
+  buildPortInputPreview,
+  getRequiredMergePorts,
+  areRequiredPortsSettled,
+  hasPortError,
+  collectPortInputs,
+  PORT_STATES,
+  MERGE_PORT_IDS,
+} = require("./workflowMultiInput.service");
+const {
+  getSwitchOutputPortIds,
+} = require("./workflowDynamicPorts.service");
+
+const normalizeEditorSession = (sessionOrLegacy) => {
+  if (sessionOrLegacy?.nodeResults) {
+    return {
+      nodeResults: sessionOrLegacy.nodeResults,
+      dirtyNodes: sessionOrLegacy.dirtyNodes || {},
+    };
+  }
+  return {
+    nodeResults: sessionOrLegacy || {},
+    dirtyNodes: {},
+  };
+};
 
 const parseJson = (value, fallback = null) => {
   if (value == null) return fallback;
@@ -134,12 +167,46 @@ const errorPolicy = (node) => {
  */
 const pinnedResult = (node) => {
   const data = node.data || {};
-  if (!data.pinned || data.pinnedOutput === undefined) return null;
+  if (!data.pinned) return null;
+  const nodeType = node.type || node.data?.nodeType;
+  if (nodeType === "switch" && data.pinnedPortOutputs) {
+    return {
+      output: data.pinnedOutput ?? { pinned: true },
+      resolved: { pinned: true },
+      portOutputs: data.pinnedPortOutputs,
+      items: Object.values(data.pinnedPortOutputs).flat(),
+    };
+  }
+  if (data.pinnedOutput === undefined) return null;
   return {
     output: data.pinnedOutput,
     resolved: { pinned: true },
     items: Array.isArray(data.pinnedItems) ? data.pinnedItems : undefined,
   };
+};
+
+const nodeTypeOf = (node) => node?.type || node?.data?.nodeType || "noop";
+
+const getUpstreamItemsForEdge = (edge, context) => {
+  const portOutputs = context.portOutputs?.[edge.source];
+  if (portOutputs && edge.sourceHandle) {
+    const portItems = portOutputs[String(edge.sourceHandle)];
+    return Array.isArray(portItems) ? portItems.map((item) => cloneItem(item)) : [];
+  }
+  const upstream = context.items?.[edge.source];
+  if (!Array.isArray(upstream)) return [];
+  return upstream.map((item) => cloneItem(item));
+};
+
+const applyPortOutputsToContext = (nodeId, portOutputs, context) => {
+  if (!portOutputs || typeof portOutputs !== "object") return;
+  if (!context.portOutputs) context.portOutputs = {};
+  context.portOutputs[nodeId] = portOutputs;
+  const flat = [];
+  for (const items of Object.values(portOutputs)) {
+    if (Array.isArray(items)) flat.push(...items);
+  }
+  context.items[nodeId] = flat;
 };
 
 /** Outputs of the upstream nodes that fed this one — "what entered this node". */
@@ -153,32 +220,49 @@ const buildIncomingSnapshot = (graph, nodeId, context) => {
   return snapshot;
 };
 
-/** Flattened items from every upstream node; cloned to avoid cross-branch mutation. */
+/** Items from upstream nodes connected to this node (respects sourceHandle routing). */
 const collectIncomingItems = (graph, nodeId, context) => {
   const edges = graph.incoming.get(nodeId) || [];
   const items = [];
   for (const edge of edges) {
-    const upstream = context.items[edge.source];
-    if (Array.isArray(upstream)) {
-      for (const item of upstream) items.push(cloneItem(item));
-    }
+    items.push(...getUpstreamItemsForEdge(edge, context));
   }
   return items;
+};
+
+const finalizeSwitchOutputs = (node, inputItems, result) => {
+  const rawByPort = result.outputsByPort || {};
+  const portOutputs = {};
+  for (const [portId, rawItems] of Object.entries(rawByPort)) {
+    portOutputs[portId] = normalizeNodeOutput(
+      node,
+      inputItems,
+      Array.isArray(rawItems) ? rawItems : [],
+      { routingPort: portId }
+    );
+  }
+  const flat = Object.values(portOutputs).flat();
+  result.items = flat;
+  result.output = attachCanonicalItemsToOutput(result.output ?? {}, flat);
+  result.portOutputs = portOutputs;
+  return { portOutputs, items: flat };
 };
 
 /**
  * Derive raw items from handler result, apply provenance policy, sync output.items.
  */
-const finalizeNodeItems = (node, inputItems, result) => {
+const finalizeNodeItems = (node, inputItems, result, extraOptions = {}) => {
   const rawItems = Array.isArray(result.items)
     ? result.items
     : deriveItems(result.output);
   const items = normalizeNodeOutput(node, inputItems, rawItems, {
+    ...extraOptions,
     resultMetadata: {
       fanOut:
         (node.type || node.data?.nodeType) === "http" &&
         inputItems.length === 1 &&
         rawItems.length > 1,
+      ...(extraOptions.resultMetadata || {}),
     },
   });
 
@@ -235,14 +319,31 @@ const createScheduler = (graph) => {
     );
   };
 
-  const settleOutgoing = (node, nextHandle, skipAll = false) => {
+  const settleOutgoing = (node, nextHandle, skipAll = false, activeHandles = null) => {
     const outgoing = graph.outgoing.get(node.id) || [];
-    const active = new Set(
-      skipAll ? [] : pickActiveEdges(graph, node.id, nextHandle).map(edgeKey)
-    );
+    let activeKeys;
+    if (skipAll) {
+      activeKeys = new Set();
+    } else if (Array.isArray(activeHandles) && activeHandles.length > 0) {
+      activeKeys = new Set(
+        outgoing
+          .filter((e) => activeHandles.includes(String(e.sourceHandle || "")))
+          .map(edgeKey)
+      );
+    } else if (nextHandle) {
+      activeKeys = new Set(
+        pickActiveEdges(graph, node.id, nextHandle).map(edgeKey)
+      );
+    } else {
+      activeKeys = new Set(
+        outgoing
+          .filter((e) => !e.sourceHandle || e.sourceHandle === "default")
+          .map(edgeKey)
+      );
+    }
     for (const edge of outgoing) {
       const key = edgeKey(edge);
-      edgeState.set(key, active.has(key) ? "active" : "skipped");
+      edgeState.set(key, activeKeys.has(key) ? "active" : "skipped");
     }
     return outgoing.filter(
       (e) => backEdges.has(edgeKey(e)) && edgeState.get(edgeKey(e)) === "active"
@@ -280,6 +381,7 @@ const createScheduler = (graph) => {
 
   return {
     backEdges,
+    edgeState,
     next() {
       for (const node of graph.nodes) {
         if (nodeState.has(node.id)) continue;
@@ -292,9 +394,11 @@ const createScheduler = (graph) => {
       }
       return null;
     },
-    complete(node, nextHandle) {
+    complete(node, nextHandle, options = {}) {
       nodeState.set(node.id, "done");
-      for (const back of settleOutgoing(node, nextHandle)) reopenCycle(back);
+      const activeHandles = options.activeHandles || null;
+      for (const back of settleOutgoing(node, nextHandle, false, activeHandles))
+        reopenCycle(back);
     },
     skip(node) {
       nodeState.set(node.id, "skipped");
@@ -384,8 +488,22 @@ const executeRun = async (runId) => {
         );
 
         context.inputItems = collectIncomingItems(graph, node.id, context);
+        prepareNodeExecutionInputs(graph, node.id, context, {
+          edgeState: scheduler.edgeState,
+        });
         context.currentNodeId = node.id;
         context.graph = graph;
+
+        if (
+          nodeType === "merge" &&
+          context.portInputs &&
+          hasPortError(
+            context.portInputs,
+            getRequiredMergePorts(graph, node.id)
+          )
+        ) {
+          throw new Error("Merge cannot run: a required input port has an error");
+        }
 
         const policy = errorPolicy(node);
         const pinned = isProductionRun ? null : pinnedResult(node);
@@ -432,7 +550,17 @@ const executeRun = async (runId) => {
         }
 
         if (!failure) {
-          let items = finalizeNodeItems(node, context.inputItems, result);
+          let items;
+          if (nodeType === "switch" && result.outputsByPort) {
+            const finalized = finalizeSwitchOutputs(node, context.inputItems, result);
+            items = finalized.items;
+            applyPortOutputsToContext(node.id, finalized.portOutputs, context);
+          } else {
+            items = finalizeNodeItems(node, context.inputItems, result, {
+              portInputs: context.portInputs,
+            });
+            context.items[node.id] = items;
+          }
           const output = result.output ?? null;
           if (node.data?.alwaysOutputData && items.length === 0) {
             items = [{ json: {} }];
@@ -440,7 +568,6 @@ const executeRun = async (runId) => {
             result.items = items;
           }
           context.steps[node.id] = output;
-          context.items[node.id] = items;
 
           await updateStep(stepId, {
             status: "succeeded",
@@ -458,7 +585,9 @@ const executeRun = async (runId) => {
             finalOutput = output;
           }
 
-          scheduler.complete(node, result.nextHandle);
+          scheduler.complete(node, result.nextHandle, {
+            activeHandles: result.activeHandles,
+          });
           continue;
         }
 
@@ -540,9 +669,15 @@ const executePartial = async ({
   input = {},
   targetNodeId,
   mode = "step",
-  sessionNodeResults = {},
+  session = {},
+  sessionNodeResults,
   useProductionPins = false,
 }) => {
+  const editorSession = normalizeEditorSession(
+    sessionNodeResults != null ? { nodeResults: sessionNodeResults, dirtyNodes: session.dirtyNodes } : session
+  );
+  reconcileSessionWithDefinition(editorSession, definition);
+
   const graph = buildGraph(definition);
   const target = graph.byId.get(targetNodeId);
   if (!target) throw new Error(`Node not found: ${targetNodeId}`);
@@ -556,23 +691,28 @@ const executePartial = async ({
     for (const e of graph.incoming.get(id) || []) stack.push(e.source);
   }
 
+  const nodeNeedsExecution = (nodeId) => {
+    const node = graph.byId.get(nodeId);
+    if (!node) return false;
+    const status = getNodeCacheStatus(editorSession, nodeId, node, graph);
+    if (status === "pinned" || status === "clean") return false;
+    return true;
+  };
+
   const nodesToRun = new Set();
   if (mode === "run-to") {
     nodesToRun.add(targetNodeId);
-    for (const id of ancestors) nodesToRun.add(id);
+    for (const id of ancestors) {
+      if (nodeNeedsExecution(id)) nodesToRun.add(id);
+    }
   } else if (mode === "upstream") {
     for (const id of ancestors) {
-      if (sessionNodeResults[id]?.output === undefined) {
-        nodesToRun.add(id);
-      }
+      if (nodeNeedsExecution(id)) nodesToRun.add(id);
     }
   } else {
-    // step: run target; upstream only when uncached
     nodesToRun.add(targetNodeId);
     for (const id of ancestors) {
-      if (sessionNodeResults[id]?.output === undefined) {
-        nodesToRun.add(id);
-      }
+      if (nodeNeedsExecution(id)) nodesToRun.add(id);
     }
   }
 
@@ -598,12 +738,25 @@ const executePartial = async ({
     useProductionPins,
   };
 
-  // Seed cache from editor session
-  for (const [nodeId, cached] of Object.entries(sessionNodeResults)) {
-    if (cached?.output !== undefined) {
-      context.steps[nodeId] = cached.output;
+  for (const node of definition?.nodes || []) {
+    const pinned = useProductionPins ? null : pinnedResult(node);
+    if (!pinned) continue;
+    if (pinned.output !== undefined) context.steps[node.id] = pinned.output;
+    if (pinned.portOutputs) {
+      applyPortOutputsToContext(node.id, pinned.portOutputs, context);
+    } else if (Array.isArray(pinned.items)) {
+      context.items[node.id] = pinned.items;
     }
-    if (Array.isArray(cached?.items)) {
+  }
+
+  for (const [nodeId, cached] of Object.entries(editorSession.nodeResults)) {
+    const node = graph.byId.get(nodeId);
+    const status = getNodeCacheStatus(editorSession, nodeId, node, graph);
+    if (!isCacheUsableForExecution(status)) continue;
+    if (cached?.output !== undefined) context.steps[nodeId] = cached.output;
+    if (cached?.portOutputs) {
+      applyPortOutputsToContext(nodeId, cached.portOutputs, context);
+    } else if (Array.isArray(cached?.items)) {
       context.items[nodeId] = cached.items;
     }
   }
@@ -613,30 +766,55 @@ const executePartial = async ({
 
   for (const node of topo) {
     if (!node) continue;
-    const nodeType = node.type || node.data?.nodeType || "unknown";
     const nodeStart = Date.now();
 
+    const status = getNodeCacheStatus(editorSession, node.id, node, graph);
     const hasCached =
-      sessionNodeResults[node.id]?.output !== undefined &&
-      !nodesToRun.has(node.id);
+      isCacheUsableForExecution(status) && !nodesToRun.has(node.id);
     if (hasCached) {
+      const cached = editorSession.nodeResults[node.id];
+      if (cached?.portOutputs) {
+        applyPortOutputsToContext(node.id, cached.portOutputs, context);
+      } else if (Array.isArray(cached?.items)) {
+        context.items[node.id] = cached.items;
+      }
       results[node.id] = {
         nodeId: node.id,
         status: "succeeded",
-        output: sessionNodeResults[node.id].output,
-        items: sessionNodeResults[node.id].items,
+        output: cached.output,
+        items: cached.items,
+        portOutputs: cached.portOutputs,
         executionTimeMs: 0,
         cached: true,
+        cacheState: status === "pinned" ? "pinned" : "clean",
       };
       continue;
     }
 
     context.inputItems = collectIncomingItems(graph, node.id, context);
+    prepareNodeExecutionInputs(graph, node.id, context);
     context.currentNodeId = node.id;
     context.graph = graph;
     const pinned = useProductionPins ? null : pinnedResult(node);
     let result;
     let failure = null;
+
+    const nodeType = node.type || node.data?.nodeType || "unknown";
+    if (
+      nodeType === "merge" &&
+      context.portInputs &&
+      hasPortError(context.portInputs, getRequiredMergePorts(graph, node.id))
+    ) {
+      results[node.id] = {
+        nodeId: node.id,
+        status: "failed",
+        error: "Merge cannot run: a required input port has an error",
+        executionTimeMs: Date.now() - nodeStart,
+        cacheState: "dirty",
+      };
+      if (mode === "step" && node.id === targetNodeId) break;
+      throw new Error("Merge cannot run: a required input port has an error");
+    }
 
     if (!pinned && node.data?.disabled) {
       const incomingItems = context.inputItems;
@@ -656,6 +834,9 @@ const executePartial = async ({
       };
     } else if (pinned) {
       result = pinned;
+      if (pinned.portOutputs) {
+        applyPortOutputsToContext(node.id, pinned.portOutputs, context);
+      }
     } else {
       const savedItems = context.inputItems;
       if (node.data?.executeOnce && savedItems.length > 1) {
@@ -675,27 +856,41 @@ const executePartial = async ({
         status: "failed",
         error: failure instanceof Error ? failure.message : String(failure),
         executionTimeMs: Date.now() - nodeStart,
+        cacheState: "dirty",
       };
       if (mode === "step" && node.id === targetNodeId) break;
       throw failure;
     }
 
     const output = result.output ?? null;
-    let items = finalizeNodeItems(node, context.inputItems, result);
+    let items;
+    let portOutputs;
+    if (nodeType === "switch" && result.outputsByPort) {
+      const finalized = finalizeSwitchOutputs(node, context.inputItems, result);
+      items = finalized.items;
+      portOutputs = finalized.portOutputs;
+      applyPortOutputsToContext(node.id, portOutputs, context);
+    } else {
+      items = finalizeNodeItems(node, context.inputItems, result, {
+        portInputs: context.portInputs,
+      });
+      context.items[node.id] = items;
+    }
     if (node.data?.alwaysOutputData && items.length === 0) {
       items = [{ json: {} }];
       result.output = attachCanonicalItemsToOutput(output, items);
       result.items = items;
     }
     context.steps[node.id] = output;
-    context.items[node.id] = items;
 
     results[node.id] = {
       nodeId: node.id,
       status: "succeeded",
       output,
       items,
+      portOutputs,
       executionTimeMs: Date.now() - nodeStart,
+      cacheState: pinned ? "pinned" : "clean",
     };
 
     if (mode === "step" && node.id === targetNodeId) break;
@@ -708,21 +903,63 @@ const executePartial = async ({
     input,
     durationMs: Date.now() - startMs,
     inputItems: collectIncomingItems(graph, targetNodeId, context),
+    editorSession,
   };
 };
 
-const getNodeInputPreview = (definition, sessionNodeResults, nodeId, runInput = {}) => {
+const getNodeInputPreview = (
+  definition,
+  sessionOrResults,
+  nodeId,
+  runInput = {}
+) => {
+  const editorSession = normalizeEditorSession(sessionOrResults);
+  reconcileSessionWithDefinition(editorSession, definition);
   const graph = buildGraph(definition);
   const context = { steps: {}, items: {} };
-  for (const [id, cached] of Object.entries(sessionNodeResults || {})) {
+
+  for (const node of definition?.nodes || []) {
+    const pinned = pinnedResult(node);
+    if (!pinned) continue;
+    if (pinned.output !== undefined) context.steps[node.id] = pinned.output;
+    if (pinned.portOutputs) {
+      applyPortOutputsToContext(node.id, pinned.portOutputs, context);
+    } else if (Array.isArray(pinned.items)) {
+      context.items[node.id] = pinned.items;
+    }
+  }
+
+  const staleNodeIds = [];
+  const nodeCacheStatus = {};
+
+  for (const [id, cached] of Object.entries(editorSession.nodeResults || {})) {
+    const node = graph.byId.get(id);
+    const status = getNodeCacheStatus(editorSession, id, node, graph);
+    nodeCacheStatus[id] = status;
+    if (!isCacheUsableForExecution(status)) {
+      if (status === "dirty" || status === "error") staleNodeIds.push(id);
+      continue;
+    }
     if (cached?.output !== undefined) context.steps[id] = cached.output;
-    if (Array.isArray(cached?.items)) context.items[id] = cached.items;
+    if (cached?.portOutputs) {
+      applyPortOutputsToContext(id, cached.portOutputs, context);
+    } else if (Array.isArray(cached?.items)) {
+      context.items[id] = cached.items;
+    }
+  }
+
+  for (const node of definition?.nodes || []) {
+    if (nodeCacheStatus[node.id]) continue;
+    const status = getNodeCacheStatus(editorSession, node.id, node, graph);
+    nodeCacheStatus[node.id] = status;
   }
 
   const incoming = buildIncomingSnapshot(graph, nodeId, context);
+  const node = graph.byId.get(nodeId);
+  const portPreview = buildPortInputPreview(graph, nodeId, context);
   let items = collectIncomingItems(graph, nodeId, context);
 
-  if (items.length === 0 && Object.keys(incoming).length > 0) {
+  if (items.length === 0 && Object.keys(incoming).length > 0 && !portPreview) {
     for (const output of Object.values(incoming)) {
       items.push(...deriveItems(output));
     }
@@ -739,18 +976,28 @@ const getNodeInputPreview = (definition, sessionNodeResults, nodeId, runInput = 
     items = [{ triggered: true, kind: "manual", input: runInput }];
   }
 
+  const upstreamIds = upstreamEdges.map((e) => e.source);
+  const relevantStale = staleNodeIds.filter((id) => upstreamIds.includes(id));
+
   return {
     nodeId,
     incoming,
     items,
+    portInputs: portPreview,
+    stale: relevantStale.length > 0,
+    staleNodeIds: relevantStale,
+    nodeCacheStatus,
   };
 };
 
 /** Seed editor-session + pinned node data for read-only expression preview. */
-const seedEditorExpressionData = (definition, sessionNodeResults = {}) => {
+const seedEditorExpressionData = (definition, sessionOrResults = {}) => {
+  const editorSession = normalizeEditorSession(sessionOrResults);
+  const graph = buildGraph(definition);
   const steps = {};
   const items = {};
   const pinnedNodeIds = new Set();
+  const staleNodeIds = [];
 
   for (const node of definition?.nodes || []) {
     const pinned = pinnedResult(node);
@@ -760,12 +1007,18 @@ const seedEditorExpressionData = (definition, sessionNodeResults = {}) => {
     if (Array.isArray(pinned.items)) items[node.id] = pinned.items;
   }
 
-  for (const [id, cached] of Object.entries(sessionNodeResults || {})) {
+  for (const [id, cached] of Object.entries(editorSession.nodeResults)) {
+    const node = graph.byId.get(id);
+    const status = getNodeCacheStatus(editorSession, id, node, graph);
+    if (!isCacheUsableForExecution(status)) {
+      if (status === "dirty" || status === "error") staleNodeIds.push(id);
+      continue;
+    }
     if (cached?.output !== undefined) steps[id] = cached.output;
     if (Array.isArray(cached?.items)) items[id] = cached.items;
   }
 
-  return { steps, items, pinnedNodeIds };
+  return { steps, items, pinnedNodeIds, staleNodeIds };
 };
 
 /**
@@ -773,19 +1026,19 @@ const seedEditorExpressionData = (definition, sessionNodeResults = {}) => {
  */
 const buildExpressionPreviewContext = (
   definition,
-  sessionNodeResults,
+  sessionOrResults,
   nodeId,
   itemIndex = 0,
   runInput = {}
 ) => {
   const graph = buildGraph(definition);
-  const { steps, items, pinnedNodeIds } = seedEditorExpressionData(
+  const { steps, items, pinnedNodeIds, staleNodeIds } = seedEditorExpressionData(
     definition,
-    sessionNodeResults
+    sessionOrResults
   );
   const inputPreview = getNodeInputPreview(
     definition,
-    sessionNodeResults,
+    sessionOrResults,
     nodeId,
     runInput
   );
@@ -807,6 +1060,7 @@ const buildExpressionPreviewContext = (
     },
     itemIndex: safeIndex,
     pinnedNodeIds,
+    staleNodeIds,
   };
 };
 

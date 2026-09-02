@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { ItemDataViewer } from "./ItemDataViewer";
 import type {
@@ -8,10 +8,15 @@ import type {
   WorkflowItem,
 } from "@/modules/workflows/types";
 import { Zap } from "lucide-react";
+import { cn } from "@/lib/utils";
+
+type PortOutputPreview = Record<string, WorkflowItem[]>;
 
 type Props = {
   result?: WorkflowEditorNodeResult | null;
   items?: WorkflowItem[];
+  portOutputs?: PortOutputPreview;
+  portLabels?: Record<string, string>;
   onExecuteStep?: () => void;
   onTestTrigger?: () => void;
   onPin?: () => void;
@@ -25,6 +30,8 @@ type Props = {
 export function NodeOutputPanel({
   result,
   items,
+  portOutputs,
+  portLabels,
   onExecuteStep,
   onTestTrigger,
   onPin,
@@ -33,9 +40,24 @@ export function NodeOutputPanel({
   isTrigger,
   staticSchema,
 }: Props) {
+  const portIds = useMemo(
+    () => (portOutputs ? Object.keys(portOutputs).sort() : []),
+    [portOutputs]
+  );
+  const [activePortId, setActivePortId] = useState(portIds[0] || "");
+  const effectivePortId =
+    activePortId && portOutputs?.[activePortId] !== undefined
+      ? activePortId
+      : portIds[0] || "";
+
+  const displayItems = portOutputs
+    ? portOutputs[effectivePortId]
+    : (items ?? (result?.items as WorkflowItem[] | undefined));
+
   const hasOutput =
     result?.output != null ||
-    (items && items.length > 0) ||
+    (displayItems && displayItems.length > 0) ||
+    (portOutputs && portIds.length > 0) ||
     (result?.items && result.items.length > 0);
 
   return (
@@ -113,9 +135,37 @@ export function NodeOutputPanel({
         </div>
       ) : (
         <>
+          {portIds.length > 0 && (
+            <div className="flex flex-wrap gap-1">
+              {portIds.map((portId) => {
+                const count = portOutputs?.[portId]?.length ?? 0;
+                return (
+                  <button
+                    key={portId}
+                    type="button"
+                    className={cn(
+                      "rounded border px-2 py-0.5 text-[10px]",
+                      effectivePortId === portId
+                        ? "border-primary bg-primary/10 text-foreground"
+                        : "border-border text-muted-foreground hover:bg-muted/50"
+                    )}
+                    onClick={() => setActivePortId(portId)}
+                  >
+                    {portLabels?.[portId] || portId}
+                    <span className="ml-1 opacity-70">({count})</span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
           <ItemDataViewer
-            items={result?.items as WorkflowItem[] | undefined}
-            data={result?.output}
+            items={displayItems as WorkflowItem[] | undefined}
+            data={!portOutputs ? result?.output : undefined}
+            emptyMessage={
+              portOutputs
+                ? "0 items — executed"
+                : "No output data"
+            }
           />
           {onPin && (
             <Button

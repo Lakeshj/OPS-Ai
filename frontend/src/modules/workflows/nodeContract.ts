@@ -20,6 +20,7 @@ export type PortKind =
   | "error"
   | "true"
   | "false"
+  | "fallback"
   | "ai_languageModel"
   | "ai_memory"
   | "ai_tool";
@@ -192,6 +193,8 @@ export interface NodeContract {
   outputSchema?: Record<string, string>;
   dirtyTriggers: DirtyTrigger[];
   edgeCases: string[];
+  /** Dynamic output ports resolved from node data (e.g. Switch rules). */
+  dynamicOutputs?: { resolver: "switchOutputs" };
   /** Optional panel-level renderer (triggers, complex pickers) */
   parametersPanel?: "standard" | "trigger" | "bot" | "placeholder";
   /** When parametersPanel is placeholder — drives inspector copy */
@@ -933,6 +936,29 @@ export const NODE_CONTRACTS: Record<WorkflowNodeType, NodeContract> = {
     edgeCases: [
       "Routes — does NOT drop (contrast filter)",
       "Branch skip: unreached branch downstream sees 'no data', not 'dirty'",
+    ],
+  },
+
+  switch: {
+    type: "switch",
+    version: 1,
+    category: "Logic",
+    label: "Switch",
+    inputs: [mainIn()],
+    outputs: [],
+    dynamicOutputs: { resolver: "switchOutputs" },
+    cardinality: "N-split-branches",
+    pairedItemPolicy: "routing",
+    pairedItemNotes:
+      "Each routed item keeps original input index on its branch output",
+    settings: SETTINGS_LOGIC,
+    capabilities: ["execute_step", "disable", "pin", "always_output", "notes"],
+    params: [],
+    dirtyTriggers: ["params", "edges", "pin", "disabled"],
+    edgeCases: [
+      "Per-item routing with stable rule IDs as output handles",
+      "All configured outputs settle after execution (empty or with items)",
+      "Skipped Switch propagates skipped to every dynamic output",
     ],
   },
 

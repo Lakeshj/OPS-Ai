@@ -5,6 +5,8 @@ import { Handle, NodeToolbar, Position, type NodeProps } from "@xyflow/react";
 import { AlertCircle, Check, Pin, Plus, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { nodeHasMissingConfig } from "@/modules/workflows/nodeValidation";
+import { getNodeContract } from "@/modules/workflows/nodeRegistry";
+import { resolveNodeOutputPorts } from "@/modules/workflows/dynamicPorts";
 import type { WorkflowNodeData } from "@/modules/workflows/types";
 import { WorkflowNodeToolbar } from "./WorkflowNodeToolbar";
 import { WorkflowNodeContextMenu } from "./WorkflowNodeContextMenu";
@@ -30,6 +32,7 @@ const typeStyles: Record<string, string> = {
   removeDuplicates: "border-slate-500/60",
   aggregate: "border-purple-500/60",
   merge: "border-green-600/60",
+  switch: "border-indigo-600/60",
   code: "border-zinc-500/60",
   document: "border-indigo-500/60",
   spreadsheet: "border-lime-600/60",
@@ -52,10 +55,22 @@ const START_TYPES = new Set(["trigger", "schedule", "webhook"]);
 function StatusBadge({
   runStatus,
   missingConfig,
+  cacheDirty,
 }: {
   runStatus: string;
   missingConfig: boolean;
+  cacheDirty?: boolean;
 }) {
+  if (cacheDirty && runStatus === "succeeded") {
+    return (
+      <span
+        className="flex h-5 w-5 items-center justify-center rounded-full bg-amber-500 text-white"
+        title="Needs re-run"
+      >
+        <AlertCircle className="h-3 w-3" />
+      </span>
+    );
+  }
   if (runStatus === "succeeded") {
     return (
       <span
@@ -113,6 +128,22 @@ function WorkflowNodeComponent({ id, data, type, selected }: NodeProps) {
   const actions = canvas?.getNodeActions(id) ?? {};
   const hasOutput = nodeType !== "result";
   const showToolbar = hovered && !selected;
+  const contract = getNodeContract(
+    nodeType as import("@/modules/workflows/types").WorkflowNodeType
+  );
+  const mainInputPorts = contract.inputs.filter(
+    (p) => p.direction === "in" && p.kind === "main"
+  );
+  const outputPorts = resolveNodeOutputPorts(
+    nodeType as import("@/modules/workflows/types").WorkflowNodeType,
+    nodeData,
+    id
+  );
+  const mainOutputPorts = outputPorts.filter(
+    (p) =>
+      p.direction === "out" &&
+      (p.kind === "main" || p.kind === "true" || p.kind === "false" || p.kind === "fallback")
+  );
 
   const nodeBody = (
     <div
@@ -136,13 +167,29 @@ function WorkflowNodeComponent({ id, data, type, selected }: NodeProps) {
         visible={showToolbar}
         actions={actions}
       />
-      {!START_TYPES.has(nodeType) && (
-        <Handle
-          type="target"
-          position={Position.Left}
-          className="!h-3 !w-3 !border-2 !bg-background !border-muted-foreground"
-        />
-      )}
+      {!START_TYPES.has(nodeType) &&
+        (mainInputPorts.length > 1 ? (
+          <>
+            {mainInputPorts.map((port, index) => (
+              <Handle
+                key={port.id}
+                type="target"
+                position={Position.Left}
+                id={port.id}
+                style={{
+                  top: `${((index + 1) / (mainInputPorts.length + 1)) * 100}%`,
+                }}
+                className="!h-3 !w-3 !border-2 !bg-background !border-muted-foreground"
+              />
+            ))}
+          </>
+        ) : (
+          <Handle
+            type="target"
+            position={Position.Left}
+            className="!h-3 !w-3 !border-2 !bg-background !border-muted-foreground"
+          />
+        ))}
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-1 text-[10px] uppercase tracking-wide text-muted-foreground">
           {nodeType}
@@ -153,7 +200,11 @@ function WorkflowNodeComponent({ id, data, type, selected }: NodeProps) {
             <Pin className="h-3 w-3 text-primary" aria-label="Output pinned" />
           )}
         </div>
-        <StatusBadge runStatus={runStatus} missingConfig={missingConfig} />
+        <StatusBadge
+          runStatus={runStatus}
+          missingConfig={missingConfig}
+          cacheDirty={nodeData.cacheDirty}
+        />
       </div>
       <div className="font-medium text-foreground">{label}</div>
       {nodeData.notesInFlow && nodeData.notes && (
@@ -169,6 +220,13 @@ function WorkflowNodeComponent({ id, data, type, selected }: NodeProps) {
       {isPlaceholder && !preview && (
         <div className="mt-1 text-[10px] text-muted-foreground">
           Placeholder · not executable yet
+        </div>
+      )}
+      {mainInputPorts.length > 1 && (
+        <div className="mt-1 flex flex-col gap-0.5 text-[9px] text-muted-foreground">
+          {mainInputPorts.map((port) => (
+            <span key={port.id}>{port.label || port.id}</span>
+          ))}
         </div>
       )}
       {missingConfig && !preview && !isPlaceholder && (
@@ -196,6 +254,28 @@ function WorkflowNodeComponent({ id, data, type, selected }: NodeProps) {
           <div className="mt-1 flex justify-between text-[10px] text-muted-foreground">
             <span>true</span>
             <span>false</span>
+          </div>
+        </>
+      ) : hasOutput && mainOutputPorts.length > 1 ? (
+        <>
+          {mainOutputPorts.map((port, index) => (
+            <Handle
+              key={port.id}
+              type="source"
+              position={Position.Right}
+              id={port.id}
+              style={{
+                top: `${((index + 1) / (mainOutputPorts.length + 1)) * 100}%`,
+              }}
+              className="!h-3 !w-3 !border-2 !bg-background !border-muted-foreground"
+            />
+          ))}
+          <div className="mt-1 flex flex-col gap-0.5 text-[9px] text-muted-foreground">
+            {mainOutputPorts.map((port) => (
+              <span key={port.id} className="truncate">
+                {port.label || port.id}
+              </span>
+            ))}
           </div>
         </>
       ) : hasOutput ? (

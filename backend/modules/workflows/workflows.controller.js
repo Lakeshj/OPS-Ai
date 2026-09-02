@@ -149,6 +149,16 @@ const previewExpression = asyncHandler(async (req, res) => {
   );
 });
 
+const invalidateEditorSession = asyncHandler(async (req, res) => {
+  res.json(
+    await workflowsService.invalidateEditorSession(
+      req.params.id,
+      req.body,
+      req.user
+    )
+  );
+});
+
 module.exports = {
   list,
   getById,
@@ -165,6 +175,7 @@ module.exports = {
   getNodeInput,
   getEditorSession,
   previewExpression,
+  invalidateEditorSession,
   listCredentials,
   createCredential,
   removeCredential,

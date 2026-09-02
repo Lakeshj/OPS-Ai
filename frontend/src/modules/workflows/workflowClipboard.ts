@@ -1,5 +1,9 @@
 import type { Edge, Node } from "@xyflow/react";
-import type { WorkflowDefinition } from "./types";
+import type { WorkflowDefinition, WorkflowNodeData } from "./types";
+import {
+  duplicateSwitchNodeData,
+  normalizeSwitchRules,
+} from "./dynamicPorts";
 
 export type WorkflowSnapshot = {
   nodes: Node[];
@@ -7,6 +11,34 @@ export type WorkflowSnapshot = {
 };
 
 const CLIPBOARD_MIME = "application/x-opsai-workflow-nodes";
+
+const isSwitchNode = (n: Node) =>
+  n.type === "switch" || (n.data as WorkflowNodeData)?.nodeType === "switch";
+
+const preparePastedSwitchNode = (
+  node: Node,
+  newNodeId: string
+): { node: Node; ruleIdMap: Map<string, string> } => {
+  const normalized = normalizeSwitchRules(
+    (node.data || {}) as WorkflowNodeData,
+    node.id
+  );
+  const duplicated = duplicateSwitchNodeData(normalized);
+  const oldRules = (normalized.rules || []) as { id: string }[];
+  const newRules = (duplicated.rules || []) as { id: string }[];
+  const ruleIdMap = new Map<string, string>();
+  oldRules.forEach((rule, index) => {
+    if (newRules[index]?.id) ruleIdMap.set(rule.id, newRules[index].id);
+  });
+  return {
+    node: {
+      ...node,
+      id: newNodeId,
+      data: duplicated,
+    },
+    ruleIdMap,
+  };
+};
 
 export const serializeSelection = (
   nodes: Node[],
@@ -26,34 +58,67 @@ export const pasteSnapshot = (
   offset = { x: 40, y: 40 }
 ): WorkflowSnapshot => {
   const idMap = new Map<string, string>();
+  const ruleIdMaps = new Map<string, Map<string, string>>();
   const ts = Date.now();
   snapshot.nodes.forEach((n, i) => {
     idMap.set(n.id, `${n.type || "node"}-${ts}-${i}`);
   });
 
-  const nodes = snapshot.nodes.map((n) => ({
-    ...n,
-    id: idMap.get(n.id)!,
-    position: {
-      x: n.position.x + offset.x,
-      y: n.position.y + offset.y,
-    },
-    selected: true,
-    data: {
-      ...n.data,
-      runStatus: undefined,
-      runPreview: undefined,
-      pinned: undefined,
-      pinnedOutput: undefined,
-      pinnedItems: undefined,
-    },
-  }));
+  const nodes = snapshot.nodes.map((n) => {
+    const newId = idMap.get(n.id)!;
+    if (isSwitchNode(n)) {
+      const { node, ruleIdMap } = preparePastedSwitchNode(n, newId);
+      ruleIdMaps.set(n.id, ruleIdMap);
+      return {
+        ...node,
+        position: {
+          x: n.position.x + offset.x,
+          y: n.position.y + offset.y,
+        },
+        selected: true,
+        data: {
+          ...node.data,
+          runStatus: undefined,
+          runPreview: undefined,
+        },
+      };
+    }
+    return {
+      ...n,
+      id: newId,
+      position: {
+        x: n.position.x + offset.x,
+        y: n.position.y + offset.y,
+      },
+      selected: true,
+      data: {
+        ...n.data,
+        runStatus: undefined,
+        runPreview: undefined,
+        pinned: undefined,
+        pinnedOutput: undefined,
+        pinnedItems: undefined,
+        pinnedPortOutputs: undefined,
+      },
+    };
+  });
+
+  const remapSourceHandle = (
+    sourceNodeId: string,
+    handle: string | null | undefined
+  ) => {
+    if (!handle) return handle;
+    const ruleMap = ruleIdMaps.get(sourceNodeId);
+    if (!ruleMap) return handle;
+    return ruleMap.get(handle) || handle;
+  };
 
   const edges = snapshot.edges.map((e, i) => ({
     ...e,
     id: `e-paste-${ts}-${i}`,
     source: idMap.get(e.source)!,
     target: idMap.get(e.target)!,
+    sourceHandle: remapSourceHandle(e.source, e.sourceHandle) ?? undefined,
   }));
 
   return { nodes, edges };
