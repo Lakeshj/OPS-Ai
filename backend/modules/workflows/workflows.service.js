@@ -1,3 +1,4 @@
+const { v4: uuidv4 } = require("uuid");
 const { validateSwitchEdges } = require("../../services/workflowDynamicPorts.service");
 const {
   validateScheduleNodeData,
@@ -88,40 +89,8 @@ const formatStep = (row) => ({
 
 const emptyDefinition = () => ({
   version: 1,
-  nodes: [
-    {
-      id: "trigger-1",
-      type: "trigger",
-      position: { x: 40, y: 200 },
-      data: { label: "Manual Trigger", nodeType: "trigger" },
-    },
-    {
-      id: "ai-1",
-      type: "ai",
-      position: { x: 300, y: 200 },
-      data: {
-        label: "AI",
-        nodeType: "ai",
-        provider: "openai",
-        systemPrompt: "",
-        prompt: "{{input}}",
-      },
-    },
-    {
-      id: "result-1",
-      type: "result",
-      position: { x: 560, y: 200 },
-      data: {
-        label: "Result",
-        nodeType: "result",
-        mapFrom: "{{steps.ai-1.text}}",
-      },
-    },
-  ],
-  edges: [
-    { id: "e-trigger-ai", source: "trigger-1", target: "ai-1" },
-    { id: "e-ai-result", source: "ai-1", target: "result-1" },
-  ],
+  nodes: [],
+  edges: [],
 });
 
 const validateDefinition = (definition) => {

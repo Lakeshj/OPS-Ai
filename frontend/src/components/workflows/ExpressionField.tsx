@@ -246,59 +246,61 @@ export function ExpressionField({
   }, [hasExpression, previewStatus, preview]);
 
   return (
-    <div className={cn("relative space-y-1", className)}>
-      <Field
-        ref={inputRef as never}
-        value={value}
-        onChange={(e) => {
-          onChange(e.target.value);
-          updateSuggestions(e.target.selectionStart ?? e.target.value.length);
-        }}
-        onKeyDown={onKeyDown}
-        onKeyUp={handleCursorActivity}
-        onClick={handleCursorActivity}
-        onFocus={handleCursorActivity}
-        placeholder={placeholder}
-        className={cn(
-          "font-mono text-xs",
-          hasExpression && "ring-1 ring-primary/20",
-          multiline && "min-h-[72px]"
-        )}
-        rows={multiline ? 3 : undefined}
-        data-parameter={parameterName}
-      />
+    <div className={cn("space-y-1.5", className)}>
+      <div className="relative">
+        <Field
+          ref={inputRef as never}
+          value={value}
+          onChange={(e) => {
+            onChange(e.target.value);
+            updateSuggestions(e.target.selectionStart ?? e.target.value.length);
+          }}
+          onKeyDown={onKeyDown}
+          onKeyUp={handleCursorActivity}
+          onClick={handleCursorActivity}
+          onFocus={handleCursorActivity}
+          placeholder={placeholder}
+          className={cn(
+            "font-mono text-xs",
+            hasExpression && "ring-1 ring-primary/20",
+            multiline && "min-h-[72px]"
+          )}
+          rows={multiline ? 3 : undefined}
+          data-parameter={parameterName}
+        />
 
-      {suggestionOpen && suggestions.length > 0 && (
-        <div
-          ref={listRef}
-          className="absolute left-0 right-0 top-full z-50 mt-0.5 max-h-48 overflow-auto rounded-md border bg-popover py-1 shadow-md"
-          role="listbox"
-        >
-          {suggestions.map((s, i) => (
-            <button
-              key={`${s.kind}-${s.insert}-${i}`}
-              type="button"
-              role="option"
-              aria-selected={i === activeSuggestion}
-              className={cn(
-                "flex w-full flex-col px-2 py-1.5 text-left text-[11px]",
-                i === activeSuggestion && "bg-muted"
-              )}
-              onMouseDown={(e) => {
-                e.preventDefault();
-                selectSuggestion(s);
-              }}
-            >
-              <span className="font-mono font-medium">{s.label}</span>
-              {s.description && (
-                <span className="text-[10px] text-muted-foreground">
-                  {s.description}
-                </span>
-              )}
-            </button>
-          ))}
-        </div>
-      )}
+        {suggestionOpen && suggestions.length > 0 && (
+          <div
+            ref={listRef}
+            className="absolute left-0 right-0 top-full z-50 mt-0.5 max-h-48 overflow-auto rounded-md border bg-popover py-1 shadow-md"
+            role="listbox"
+          >
+            {suggestions.map((s, i) => (
+              <button
+                key={`${s.kind}-${s.insert}-${i}`}
+                type="button"
+                role="option"
+                aria-selected={i === activeSuggestion}
+                className={cn(
+                  "flex w-full flex-col px-2 py-1.5 text-left text-[11px]",
+                  i === activeSuggestion && "bg-muted"
+                )}
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  selectSuggestion(s);
+                }}
+              >
+                <span className="font-mono font-medium">{s.label}</span>
+                {s.description && (
+                  <span className="text-[10px] text-muted-foreground">
+                    {s.description}
+                  </span>
+                )}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
 
       {hasExpression && (
         <div className="rounded border border-dashed bg-muted/20 px-2 py-1.5 text-[10px]">

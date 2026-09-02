@@ -715,9 +715,7 @@ function WorkflowCanvasInner({
   const [edges, setEdges, onEdgesChange] = useEdgesState(toFlowEdges(definition));
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const selectedIdRef = useRef<string | null>(null);
-  const [runInput, setRunInput] = useState(
-    "Summarize the top 5 rows and highlight anything unusual"
-  );
+  const [runInput, setRunInput] = useState("");
   const [publishing, setPublishing] = useState(false);
   const hasManualTrigger = useMemo(
     () => nodes.some((n) => n.type === "trigger"),
@@ -1014,13 +1012,23 @@ function WorkflowCanvasInner({
                 pinned: true,
                 pinnedOutput:
                   sessionResult?.output ?? step?.output ?? { pinned: true },
+                pinnedItems: Array.isArray(sessionResult?.items)
+                  ? sessionResult.items
+                  : undefined,
                 pinnedPortOutputs: portOutputs,
               },
             };
           }
           return {
             ...n,
-            data: { ...data, pinned: true, pinnedOutput: step?.output ?? null },
+            data: {
+              ...data,
+              pinned: true,
+              pinnedOutput: sessionResult?.output ?? step?.output ?? null,
+              pinnedItems: Array.isArray(sessionResult?.items)
+                ? sessionResult.items
+                : undefined,
+            },
           };
         })
       );

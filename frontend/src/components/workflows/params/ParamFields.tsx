@@ -15,6 +15,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import type { ParamDescriptor } from "@/modules/workflows/nodeContract";
+import { isParamVisible } from "@/modules/workflows/paramDisplayOptions";
 import { ExpressionField, type ExpressionFieldContext } from "../ExpressionField";
 import type { WorkflowNodeData, WorkflowSetMapping } from "@/modules/workflows/types";
 
@@ -188,119 +189,6 @@ type FixedCollectionProps = {
   previewContext?: FieldPreviewContext;
 };
 
-export function FixedCollectionParamField({
-  param,
-  value,
-  onChange,
-  previewContext,
-}: FixedCollectionProps) {
-  const items = Array.isArray(value) ? (value as WorkflowSetMapping[]) : [];
-  const fields = param.fields || [];
-
-  const updateItem = (index: number, patch: Record<string, unknown>) => {
-    const next = items.map((row, i) =>
-      i === index ? { ...row, ...patch } : row
-    );
-    onChange(next);
-  };
-
-  const addItem = () => {
-    const blank: Record<string, string> = {};
-    for (const f of fields) blank[f.name] = "";
-    onChange([...items, blank]);
-  };
-
-  const removeItem = (index: number) => {
-    onChange(items.filter((_, i) => i !== index));
-  };
-
-  return (
-    <div className="space-y-2">
-      <Label className="text-xs">{param.displayName}</Label>
-      {items.map((row, index) => (
-        <div key={index} className="space-y-2 rounded border p-2">
-          <div className="flex items-center justify-between">
-            <span className="text-[10px] font-medium text-muted-foreground">
-              {index + 1}
-            </span>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              className="h-6 w-6"
-              onClick={() => removeItem(index)}
-            >
-              <Trash2 className="h-3 w-3" />
-            </Button>
-          </div>
-          {fields.map((field) => (
-            <StringParamField
-              key={field.name}
-              param={field}
-              value={(row as unknown as Record<string, unknown>)[field.name]}
-              onChange={(v) => updateItem(index, { [field.name]: v })}
-              previewContext={previewContext}
-            />
-          ))}
-        </div>
-      ))}
-      <Button
-        type="button"
-        variant="outline"
-        size="sm"
-        className="h-8 gap-1 text-xs"
-        onClick={addItem}
-      >
-        <Plus className="h-3 w-3" />
-        Add
-      </Button>
-    </div>
-  );
-}
-
-export function MultiOptionsParamField({ param, value, onChange }: ScalarFieldProps) {
-  const options = param.options || [];
-  const defaultArr = Array.isArray(param.default) ? param.default : [];
-  const selected = Array.isArray(value)
-    ? value
-    : value == null || value === ""
-      ? defaultArr
-      : [value];
-
-  const isSelected = (optValue: string | number | boolean) =>
-    selected.some((v) => String(v) === String(optValue));
-
-  const toggle = (optValue: string | number | boolean) => {
-    const next = isSelected(optValue)
-      ? selected.filter((v) => String(v) !== String(optValue))
-      : [...selected, optValue];
-    onChange(next);
-  };
-
-  return (
-    <div className="space-y-2">
-      <Label className="text-xs">{param.displayName}</Label>
-      <div className="space-y-1.5 rounded-md border p-2">
-        {options.map((opt) => (
-          <label
-            key={String(opt.value)}
-            className="flex cursor-pointer items-center gap-2 text-xs"
-          >
-            <Checkbox
-              checked={isSelected(opt.value)}
-              onCheckedChange={() => toggle(opt.value)}
-            />
-            {opt.name}
-          </label>
-        ))}
-      </div>
-      {param.description && (
-        <p className="text-[11px] text-muted-foreground">{param.description}</p>
-      )}
-    </div>
-  );
-}
-
 function renderCollectionSubField(
   field: ParamDescriptor,
   fieldValue: unknown,
@@ -367,6 +255,134 @@ function renderCollectionSubField(
         />
       );
   }
+}
+
+export function FixedCollectionParamField({
+  param,
+  value,
+  onChange,
+  previewContext,
+}: FixedCollectionProps) {
+  const items = Array.isArray(value) ? (value as WorkflowSetMapping[]) : [];
+  const fields = param.fields || [];
+
+  const updateItem = (index: number, patch: Record<string, unknown>) => {
+    const next = items.map((row, i) =>
+      i === index ? { ...row, ...patch } : row
+    );
+    onChange(next);
+  };
+
+  const addItem = () => {
+    const blank: Record<string, unknown> = {};
+    for (const f of fields) {
+      blank[f.name] =
+        f.default !== undefined
+          ? f.default
+          : f.type === "boolean"
+            ? false
+            : f.type === "options" && f.options?.[0]
+              ? f.options[0].value
+              : "";
+    }
+    onChange([...items, blank]);
+  };
+
+  const removeItem = (index: number) => {
+    onChange(items.filter((_, i) => i !== index));
+  };
+
+  return (
+    <div className="space-y-2">
+      <Label className="text-xs">{param.displayName}</Label>
+      {items.map((row, index) => {
+        const rowValues = row as unknown as Record<string, unknown>;
+        return (
+          <div key={index} className="space-y-3 rounded border p-2">
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-medium text-muted-foreground">
+                {index + 1}
+              </span>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="h-6 w-6"
+                onClick={() => removeItem(index)}
+              >
+                <Trash2 className="h-3 w-3" />
+              </Button>
+            </div>
+            {fields
+              .filter((field) => isParamVisible(field, rowValues))
+              .map((field) => (
+                <React.Fragment key={field.name}>
+                  {renderCollectionSubField(
+                    field,
+                    rowValues[field.name],
+                    (v) => updateItem(index, { [field.name]: v }),
+                    previewContext
+                  )}
+                </React.Fragment>
+              ))}
+          </div>
+        );
+      })}
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        className="h-8 gap-1 text-xs"
+        onClick={addItem}
+      >
+        <Plus className="h-3 w-3" />
+        Add
+      </Button>
+    </div>
+  );
+}
+
+export function MultiOptionsParamField({ param, value, onChange }: ScalarFieldProps) {
+  const options = param.options || [];
+  const defaultArr = Array.isArray(param.default) ? param.default : [];
+  const selected = Array.isArray(value)
+    ? value
+    : value == null || value === ""
+      ? defaultArr
+      : [value];
+
+  const isSelected = (optValue: string | number | boolean) =>
+    selected.some((v) => String(v) === String(optValue));
+
+  const toggle = (optValue: string | number | boolean) => {
+    const next = isSelected(optValue)
+      ? selected.filter((v) => String(v) !== String(optValue))
+      : [...selected, optValue];
+    onChange(next);
+  };
+
+  return (
+    <div className="space-y-2">
+      <Label className="text-xs">{param.displayName}</Label>
+      <div className="space-y-1.5 rounded-md border p-2">
+        {options.map((opt) => (
+          <label
+            key={String(opt.value)}
+            className="flex cursor-pointer items-center gap-2 text-xs"
+          >
+            <Checkbox
+              checked={isSelected(opt.value)}
+              onCheckedChange={() => toggle(opt.value)}
+            />
+            {opt.name}
+          </label>
+        ))}
+      </div>
+      {param.description && (
+        <p className="text-[11px] text-muted-foreground">{param.description}</p>
+      )}
+    </div>
+  );
 }
 
 export function CollectionParamField({

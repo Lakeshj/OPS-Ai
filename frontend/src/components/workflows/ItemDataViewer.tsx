@@ -16,6 +16,8 @@ type Props = {
   className?: string;
   selectedItemIndex?: number;
   onSelectedItemIndexChange?: (index: number) => void;
+  /** When true, only render canonical items — never handler summary metadata rows. */
+  canonicalItemsOnly?: boolean;
 };
 
 type SpreadsheetPayload = {
@@ -169,14 +171,23 @@ function incomingSnapshotToItems(data: unknown): WorkflowItem[] | null {
   return rows.length > 0 ? rows : null;
 }
 
-function normalizeItems(items?: unknown[], data?: unknown): WorkflowItem[] {
+function normalizeItems(
+  items?: unknown[],
+  data?: unknown,
+  options?: { canonicalItemsOnly?: boolean }
+): WorkflowItem[] {
+  if (options?.canonicalItemsOnly) {
+    if (!Array.isArray(items)) return [];
+    return items.map((item) => toWorkflowItem(item));
+  }
+
   if (isSpreadsheetPayload(data)) {
     return spreadsheetToItems(data);
   }
 
-  if (Array.isArray(items) && items.length > 0) {
+  if (Array.isArray(items)) {
+    if (items.length === 0) return [];
     if (isSpreadsheetPayload(data)) return spreadsheetToItems(data);
-    // Never merge node-keyed incoming snapshots (e.g. { "trigger-1": {...} })
     const envelope =
       data &&
       typeof data === "object" &&
@@ -519,10 +530,14 @@ export function ItemDataViewer({
   className,
   selectedItemIndex = 0,
   onSelectedItemIndexChange,
+  canonicalItemsOnly = false,
 }: Props) {
   const [mode, setMode] = useState<ViewMode>("table");
   const [query, setQuery] = useState("");
-  const rows = useMemo(() => normalizeItems(items, data), [items, data]);
+  const rows = useMemo(
+    () => normalizeItems(items, data, { canonicalItemsOnly }),
+    [items, data, canonicalItemsOnly]
+  );
 
   if (rows.length === 0) {
     return (

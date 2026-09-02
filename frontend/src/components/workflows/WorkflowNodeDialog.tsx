@@ -376,10 +376,15 @@ export function WorkflowNodeDialog({
                     </TabsContent>
                   </Tabs>
 
-                  <div className="mt-4 shrink-0 rounded-md border bg-muted/30 p-3">
+                  <div className="mt-6 shrink-0 rounded-md border bg-muted/30 p-3">
                     {!isTrigger ? (
                       <>
                         <Label className="text-xs">Run input</Label>
+                        <p className="mt-0.5 text-[10px] text-muted-foreground">
+                          Optional context for{" "}
+                          <code className="rounded bg-muted px-1">{"{{input}}"}</code>{" "}
+                          when running this step from the inspector.
+                        </p>
                         <Textarea
                           value={runInput}
                           onChange={(e) => onRunInputChange(e.target.value)}
@@ -404,12 +409,7 @@ export function WorkflowNodeDialog({
                 <div className="flex h-full min-h-0 flex-col overflow-y-auto p-4">
                   <NodeOutputPanel
                     result={nodeResult}
-                    items={nodeResult?.items as WorkflowItem[] | undefined}
-                    portOutputs={
-                      nodeResult?.portOutputs as
-                        | Record<string, WorkflowItem[]>
-                        | undefined
-                    }
+                    hasDynamicPorts={selectedType === "switch"}
                     portLabels={switchPortLabels}
                     loading={executing}
                     pinned={Boolean(selectedData.pinned)}

@@ -1,12 +1,16 @@
 "use client";
 
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { ItemDataViewer } from "./ItemDataViewer";
 import type {
   WorkflowEditorNodeResult,
   WorkflowItem,
 } from "@/modules/workflows/types";
+import {
+  formatOutputMetadataSummary,
+  selectNodeOutputData,
+} from "@/modules/workflows/nodeOutputData";
 import { Zap } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -17,6 +21,7 @@ type Props = {
   items?: WorkflowItem[];
   portOutputs?: PortOutputPreview;
   portLabels?: Record<string, string>;
+  hasDynamicPorts?: boolean;
   onExecuteStep?: () => void;
   onTestTrigger?: () => void;
   onPin?: () => void;
@@ -29,9 +34,9 @@ type Props = {
 
 export function NodeOutputPanel({
   result,
-  items,
-  portOutputs,
+  portOutputs: portOutputsProp,
   portLabels,
+  hasDynamicPorts = false,
   onExecuteStep,
   onTestTrigger,
   onPin,
@@ -40,25 +45,61 @@ export function NodeOutputPanel({
   isTrigger,
   staticSchema,
 }: Props) {
-  const portIds = useMemo(
-    () => (portOutputs ? Object.keys(portOutputs).sort() : []),
-    [portOutputs]
+  const selection = useMemo(
+    () =>
+      selectNodeOutputData(
+        result
+          ? {
+              ...result,
+              portOutputs: portOutputsProp ?? result.portOutputs,
+            }
+          : null,
+        { hasDynamicPorts }
+      ),
+    [result, portOutputsProp, hasDynamicPorts]
   );
-  const [activePortId, setActivePortId] = useState(portIds[0] || "");
-  const effectivePortId =
-    activePortId && portOutputs?.[activePortId] !== undefined
-      ? activePortId
-      : portIds[0] || "";
 
-  const displayItems = portOutputs
-    ? portOutputs[effectivePortId]
-    : (items ?? (result?.items as WorkflowItem[] | undefined));
+  const portIds = useMemo(() => {
+    if (selection.kind === "portOutputs") {
+      return Object.keys(selection.portOutputs).sort();
+    }
+    return [];
+  }, [selection]);
+
+  const [activePortId, setActivePortId] = useState(portIds[0] || "");
+  useEffect(() => {
+    if (portIds.length > 0 && !portIds.includes(activePortId)) {
+      setActivePortId(portIds[0]);
+    }
+  }, [portIds, activePortId]);
+
+  const effectivePortId =
+    activePortId && portIds.includes(activePortId) ? activePortId : portIds[0] || "";
+
+  const displayItems =
+    selection.kind === "portOutputs"
+      ? selection.portOutputs[effectivePortId]
+      : selection.kind === "items"
+        ? selection.items
+        : undefined;
+
+  const metadataSummary =
+    selection.kind === "portOutputs" || selection.kind === "items"
+      ? formatOutputMetadataSummary(selection.metadata)
+      : null;
 
   const hasOutput =
-    result?.output != null ||
-    (displayItems && displayItems.length > 0) ||
-    (portOutputs && portIds.length > 0) ||
-    (result?.items && result.items.length > 0);
+    selection.kind === "portOutputs" ||
+    selection.kind === "items" ||
+    selection.kind === "legacy" ||
+    selection.kind === "skipped";
+
+  const emptyMessage =
+    selection.kind === "skipped"
+      ? "Skipped — branch not taken"
+      : selection.kind === "items" && selection.executed
+        ? "0 items — executed"
+        : "No output data";
 
   return (
     <div className="flex min-h-0 flex-col gap-2">
@@ -138,7 +179,10 @@ export function NodeOutputPanel({
           {portIds.length > 0 && (
             <div className="flex flex-wrap gap-1">
               {portIds.map((portId) => {
-                const count = portOutputs?.[portId]?.length ?? 0;
+                const count =
+                  selection.kind === "portOutputs"
+                    ? selection.portOutputs[portId]?.length ?? 0
+                    : 0;
                 return (
                   <button
                     key={portId}
@@ -159,14 +203,13 @@ export function NodeOutputPanel({
             </div>
           )}
           <ItemDataViewer
-            items={displayItems as WorkflowItem[] | undefined}
-            data={!portOutputs ? result?.output : undefined}
-            emptyMessage={
-              portOutputs
-                ? "0 items — executed"
-                : "No output data"
-            }
+            items={displayItems}
+            emptyMessage={emptyMessage}
+            canonicalItemsOnly
           />
+          {metadataSummary && (
+            <p className="text-[10px] text-muted-foreground">{metadataSummary}</p>
+          )}
           {onPin && (
             <Button
               type="button"

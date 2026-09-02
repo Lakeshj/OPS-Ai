@@ -14,6 +14,7 @@ const {
   findBackEdges,
   createScheduler,
   finalizeNodeItems,
+  finalizeSwitchOutputs,
   executePartial,
   buildExpressionPreviewContext,
 } = require("../services/workflowEngine.service");
@@ -5192,6 +5193,154 @@ check("TEST 7C-13 refreshAll before due time does not duplicate intended occurre
   assert.strictEqual(getRegistrationKeys("wf-7c13").length, 1);
   assert.strictEqual(state1.nextAt, state2.nextAt);
   unregisterWorkflow("wf-7c13");
+});
+
+section("Part 7D output inspector QA");
+
+const QA_CUSTOMERS = [
+  { id: "C001", name: "Charlie", score: 80, active: true },
+  { id: "C002", name: "Alice", score: 95, active: true },
+  { id: "C003", name: "Bob", score: 88, active: true },
+  { id: "C004", name: "David", score: 50, active: false },
+];
+
+const qaTriggerItems = () => [{ json: { customers: QA_CUSTOMERS } }];
+
+const qaSplitItems = async () => {
+  const split = await handlers.splitOut(
+    { id: "so", data: { fieldName: "customers" } },
+    { ...ctx, inputItems: qaTriggerItems() }
+  );
+  return finalize("splitOut", {}, qaTriggerItems(), split).items;
+};
+
+check("TEST 7D-1 QA split out yields four customer rows", async () => {
+  const items = await qaSplitItems();
+  assert.strictEqual(items.length, 4);
+  assert.deepStrictEqual(
+    items.map((i) => i.json.name),
+    ["Charlie", "Alice", "Bob", "David"]
+  );
+});
+
+check("TEST 7D-2 QA filter active=true yields three rows", async () => {
+  const splitItems = await qaSplitItems();
+  const filter = await handlers.filter(
+    {
+      id: "f",
+      data: { fieldName: "active", operator: "truthy" },
+    },
+    { ...ctx, inputItems: splitItems }
+  );
+  const { items } = finalize("filter", {}, splitItems, filter);
+  assert.strictEqual(items.length, 3);
+  assert.deepStrictEqual(
+    items.map((i) => i.json.name).sort(),
+    ["Alice", "Bob", "Charlie"]
+  );
+  assert.strictEqual(filter.output.count, 3);
+  assert.strictEqual(filter.output.droppedCount, 1);
+});
+
+check("TEST 7D-3 QA sort name ascending", async () => {
+  const splitItems = await qaSplitItems();
+  const filter = await handlers.filter(
+    {
+      id: "f",
+      data: { fieldName: "active", operator: "truthy" },
+    },
+    { ...ctx, inputItems: splitItems }
+  );
+  const filterItems = finalize("filter", {}, splitItems, filter).items;
+  const sort = await handlers.sort(
+    { id: "s", data: { fieldName: "name", direction: "asc" } },
+    { ...ctx, inputItems: filterItems }
+  );
+  const { items } = finalize("sort", {}, filterItems, sort);
+  assert.strictEqual(items.length, 3);
+  assert.deepStrictEqual(
+    items.map((i) => i.json.name),
+    ["Alice", "Bob", "Charlie"]
+  );
+});
+
+check("TEST 7D-4 QA switch routes High/Medium/Fallback ports", async () => {
+  const splitItems = await qaSplitItems();
+  const filter = await handlers.filter(
+    {
+      id: "f",
+      data: { fieldName: "active", operator: "truthy" },
+    },
+    { ...ctx, inputItems: splitItems }
+  );
+  const filterItems = finalize("filter", {}, splitItems, filter).items;
+  const sort = await handlers.sort(
+    { id: "s", data: { fieldName: "name", direction: "asc" } },
+    { ...ctx, inputItems: filterItems }
+  );
+  const sortedItems = finalize("sort", {}, filterItems, sort).items;
+  const ruleHigh = "rule_high";
+  const ruleMed = "rule_med";
+  const sw = await handlers.switch(
+    {
+      id: "sw",
+      data: {
+        routingMode: "firstMatch",
+        enableFallback: true,
+        rules: [
+          {
+            id: ruleHigh,
+            label: "High",
+            left: "{{item.score}}",
+            operator: "gte",
+            right: "90",
+          },
+          {
+            id: ruleMed,
+            label: "Medium",
+            left: "{{item.score}}",
+            operator: "gte",
+            right: "70",
+          },
+        ],
+      },
+    },
+    { ...ctx, inputItems: sortedItems }
+  );
+  const node = provenanceNode("switch", {
+    routingMode: "firstMatch",
+    enableFallback: true,
+    rules: sw.resolved?.rules || [],
+  });
+  const finalized = finalizeSwitchOutputs(node, sortedItems, sw);
+  assert.strictEqual(finalized.portOutputs[ruleHigh].length, 1);
+  assert.strictEqual(finalized.portOutputs[ruleHigh][0].json.name, "Alice");
+  assert.strictEqual(finalized.portOutputs[ruleMed].length, 2);
+  assert.deepStrictEqual(
+    finalized.portOutputs[ruleMed].map((i) => i.json.name),
+    ["Bob", "Charlie"]
+  );
+  assert.strictEqual(finalized.portOutputs[SWITCH_FALLBACK_HANDLE].length, 0);
+});
+
+check("TEST 7D-5 editor session persists portOutputs for Switch", () => {
+  const editorSessionMod = require("../services/workflowEditorSession.service");
+  const portOutputs = { rule_a: [{ json: { name: "Alice" } }] };
+  editorSessionMod.setNodeResult(
+    "wf-7d5",
+    "user-1",
+    "sw1",
+    {
+      status: "succeeded",
+      output: { routed: true, routingMode: "firstMatch" },
+      items: [{ json: { name: "Alice" } }],
+      portOutputs,
+    },
+    null
+  );
+  const stored = editorSessionMod.getNodeResult("wf-7d5", "user-1", "sw1");
+  assert.ok(stored.portOutputs);
+  assert.strictEqual(stored.portOutputs.rule_a.length, 1);
 });
 
 (async () => {

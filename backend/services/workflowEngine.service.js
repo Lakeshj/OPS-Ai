@@ -1074,4 +1074,5 @@ module.exports = {
   findBackEdges,
   createScheduler,
   finalizeNodeItems,
+  finalizeSwitchOutputs,
 };

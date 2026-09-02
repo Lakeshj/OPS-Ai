@@ -55,6 +55,7 @@ const setNodeResult = (workflowId, userId, nodeId, result, definition) => {
     status: result.status || "succeeded",
     output: result.output,
     items: result.items,
+    portOutputs: result.portOutputs,
     error: result.error || null,
     executionTimeMs: result.executionTimeMs,
     cacheState: result.status === "failed" ? "dirty" : "clean",
