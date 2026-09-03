@@ -15,3 +15,9 @@ When editing anything under `frontend/src/components/workflows/`, `frontend/src/
 4. After backend engine changes: `cd backend && npm run test:workflows`. After frontend: `cd frontend && npx tsc --noEmit`.
 5. Changes must be **incremental** and **regression-tested** — extend existing components; do not redesign the product to resemble n8n.
 <!-- END:workflow-builder-rules -->
+
+<!-- BEGIN:database-migration-rules -->
+# Database schema (local → live)
+
+Any new table, column, index, or ENUM change **must** be added as the next file under `backend/migrations/` and applied with `cd backend && npm run db:migrate`. Do not edit already-applied migrations. Do not change live MySQL only in a GUI. After deploy, live must run migrate (see `docs/database-migrations.md`, root `deploy.sh`, backend `prestart`).
+<!-- END:database-migration-rules -->

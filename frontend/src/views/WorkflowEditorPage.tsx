@@ -87,6 +87,13 @@ export default function WorkflowEditorPage({
       ) {
         return run;
       }
+      if (run.status === "waiting" && i === 0) {
+        toast.message(
+          run.resumeAt
+            ? `Waiting until ${new Date(run.resumeAt).toLocaleString()}`
+            : "Workflow is waiting"
+        );
+      }
       await new Promise((r) => setTimeout(r, 1500));
     }
     return latestRun;

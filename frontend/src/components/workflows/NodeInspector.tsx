@@ -145,7 +145,7 @@ export function NodeInspector({
   }
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-4">
       {configIssues.length > 0 && (
         <div className="rounded-md border border-amber-500/40 bg-amber-500/10 px-2.5 py-2 text-xs text-amber-900 dark:text-amber-100">
           <div className="mb-1 font-semibold">

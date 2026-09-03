@@ -225,11 +225,21 @@ export function WorkflowResultsPanel({
                     ? "rounded-full bg-emerald-500/15 px-2 py-0.5 text-emerald-700 dark:text-emerald-300"
                     : latestRun.status === "failed"
                       ? "rounded-full bg-destructive/15 px-2 py-0.5 text-destructive"
-                      : "rounded-full bg-muted px-2 py-0.5 text-muted-foreground"
+                      : latestRun.status === "waiting"
+                        ? "rounded-full bg-amber-500/15 px-2 py-0.5 text-amber-800 dark:text-amber-200"
+                        : "rounded-full bg-muted px-2 py-0.5 text-muted-foreground"
                 }
               >
                 {latestRun.status}
               </span>
+              {latestRun.status === "waiting" && latestRun.resumeAt && (
+                <span className="text-xs text-muted-foreground">
+                  until {new Date(latestRun.resumeAt).toLocaleString()}
+                  {latestRun.waitingNodeId
+                    ? ` · ${latestRun.waitingNodeId}`
+                    : ""}
+                </span>
+              )}
             </div>
 
             {latestRun.error && (

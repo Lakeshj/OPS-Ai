@@ -10,6 +10,7 @@ const {
   webhookTrigger,
   listRuns,
   getRun,
+  cancelRun,
   executeNodeStep,
   runToNode,
   executePrevious,
@@ -40,6 +41,7 @@ router.get("/", list);
 router.post("/", validate(validateCreate), create);
 router.get("/:id/runs", listRuns);
 router.get("/:id/runs/:runId", getRun);
+router.post("/:id/runs/:runId/cancel", cancelRun);
 router.post("/:id/runs", startRun);
 router.get("/:id/editor-session", getEditorSession);
 router.post("/:id/editor-session/invalidate", invalidateEditorSession);

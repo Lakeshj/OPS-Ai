@@ -293,111 +293,118 @@ export function WorkflowNodeDialog({
               ) : null}
 
               <ResizablePanel defaultSize={showInputPanel ? 48 : 58} minSize={28}>
-                <div className="flex h-full min-h-0 flex-col overflow-y-auto border-r p-4">
-                  <div className="mb-3 flex flex-wrap gap-2">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      className="h-7 text-xs"
-                      onClick={onClear}
-                    >
-                      Clear
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      className="h-7 border-destructive/40 text-xs text-destructive"
-                      onClick={() => {
-                        onDelete();
-                        onOpenChange(false);
-                      }}
-                    >
-                      Delete
-                    </Button>
-                    <Button
-                      type="button"
-                      size="sm"
-                      className="ml-auto h-7 text-xs"
-                      disabled={executing}
-                      onClick={() => void runPartial("step")}
-                    >
-                      Run step
-                    </Button>
+                <div className="flex h-full min-h-0 flex-col border-r">
+                  <div className="shrink-0 border-b px-4 py-3">
+                    <div className="flex flex-wrap gap-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="h-7 text-xs"
+                        onClick={onClear}
+                      >
+                        Clear
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="h-7 border-destructive/40 text-xs text-destructive"
+                        onClick={() => {
+                          onDelete();
+                          onOpenChange(false);
+                        }}
+                      >
+                        Delete
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        className="ml-auto h-7 text-xs"
+                        disabled={executing}
+                        onClick={() => void runPartial("step")}
+                      >
+                        Run step
+                      </Button>
+                    </div>
                   </div>
 
-                  <Tabs
-                    value={configTab}
-                    onValueChange={(v) =>
-                      setConfigTab(v as "parameters" | "settings")
-                    }
-                    className="min-h-0 flex-1"
-                  >
-                    <TabsList className="mb-3 h-8">
-                      <TabsTrigger value="parameters" className="text-xs">
-                        Parameters
-                      </TabsTrigger>
-                      <TabsTrigger value="settings" className="text-xs">
-                        Settings
-                      </TabsTrigger>
-                    </TabsList>
-                    <TabsContent value="parameters" className="mt-0">
-                      <NodeInspector
-                        nodeId={selectedId}
-                        nodeType={selectedType}
-                        data={selectedData}
-                        onChange={onChange}
-                        workspaceId={workspaceId}
-                        workflowId={workflowId}
-                        workflowStatus={workflowStatus}
-                        configTab="parameters"
-                        previewContext={previewContext}
-                        runInput={runInput}
-                        onRunInputChange={onRunInputChange}
-                        onTestTrigger={
-                          isTrigger ? () => void runPartial("step") : undefined
-                        }
-                        onExecuteWorkflow={onExecuteWorkflow}
-                        executing={executing}
-                      />
-                    </TabsContent>
-                    <TabsContent value="settings" className="mt-0">
-                      <NodeInspector
-                        nodeId={selectedId}
-                        nodeType={selectedType}
-                        data={selectedData}
-                        onChange={onChange}
-                        workspaceId={workspaceId}
-                        workflowId={workflowId}
-                        configTab="settings"
-                        previewContext={previewContext}
-                      />
-                    </TabsContent>
-                  </Tabs>
+                  <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3">
+                    <Tabs
+                      value={configTab}
+                      onValueChange={(v) =>
+                        setConfigTab(v as "parameters" | "settings")
+                      }
+                    >
+                      <TabsList className="mb-3 h-8">
+                        <TabsTrigger value="parameters" className="text-xs">
+                          Parameters
+                        </TabsTrigger>
+                        <TabsTrigger value="settings" className="text-xs">
+                          Settings
+                        </TabsTrigger>
+                      </TabsList>
+                      <TabsContent value="parameters" className="mt-0 space-y-0">
+                        <NodeInspector
+                          nodeId={selectedId}
+                          nodeType={selectedType}
+                          data={selectedData}
+                          onChange={onChange}
+                          workspaceId={workspaceId}
+                          workflowId={workflowId}
+                          workflowStatus={workflowStatus}
+                          configTab="parameters"
+                          previewContext={previewContext}
+                          runInput={runInput}
+                          onRunInputChange={onRunInputChange}
+                          onTestTrigger={
+                            isTrigger ? () => void runPartial("step") : undefined
+                          }
+                          onExecuteWorkflow={onExecuteWorkflow}
+                          executing={executing}
+                        />
+                      </TabsContent>
+                      <TabsContent value="settings" className="mt-0">
+                        <NodeInspector
+                          nodeId={selectedId}
+                          nodeType={selectedType}
+                          data={selectedData}
+                          onChange={onChange}
+                          workspaceId={workspaceId}
+                          workflowId={workflowId}
+                          configTab="settings"
+                          previewContext={previewContext}
+                        />
+                      </TabsContent>
+                    </Tabs>
 
-                  <div className="mt-6 shrink-0 rounded-md border bg-muted/30 p-3">
-                    {!isTrigger ? (
-                      <>
+                    {!isTrigger && configTab === "parameters" && (
+                      <div className="mt-8 border-t border-border/60 pt-4">
                         <Label className="text-xs">Run input</Label>
-                        <p className="mt-0.5 text-[10px] text-muted-foreground">
+                        <p className="mt-1 text-[10px] leading-relaxed text-muted-foreground">
                           Optional context for{" "}
-                          <code className="rounded bg-muted px-1">{"{{input}}"}</code>{" "}
+                          <code className="rounded bg-muted px-1">
+                            {"{{input}}"}
+                          </code>{" "}
                           when running this step from the inspector.
                         </p>
                         <Textarea
                           value={runInput}
                           onChange={(e) => onRunInputChange(e.target.value)}
                           rows={2}
-                          className="mt-1.5 bg-background text-xs"
+                          className="mt-2 bg-background text-xs"
                           placeholder='e.g. "Summarize top rows" or {"message":"..."}'
                         />
-                      </>
-                    ) : (
-                      <p className="text-xs text-muted-foreground">
-                        Triggers have no upstream input. Use Test trigger in the OUTPUT
-                        panel, or execute the workflow from the canvas.
-                      </p>
+                      </div>
+                    )}
+
+                    {isTrigger && configTab === "parameters" && (
+                      <div className="mt-6 border-t border-border/60 pt-4">
+                        <p className="text-xs text-muted-foreground">
+                          Triggers have no upstream input. Use Test trigger in the
+                          OUTPUT panel, or execute the workflow from the canvas.
+                        </p>
+                      </div>
                     )}
                   </div>
                 </div>

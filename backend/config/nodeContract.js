@@ -39,6 +39,7 @@ const NODE_ENGINE_CONTRACTS = {
   spreadsheet: { cardinality: "1-to-N", pairedItemPolicy: "fanOut", mergeInputs: 1 },
   email: { cardinality: "N-to-N", pairedItemPolicy: "identity1to1", mergeInputs: 1, isSideEffecting: true },
   http: { cardinality: "N-to-N", pairedItemPolicy: "identity1to1", mergeInputs: 1, isSideEffecting: true },
+  wait: { cardinality: "N-to-N", pairedItemPolicy: "identity1to1", mergeInputs: 1 },
   result: { cardinality: "N-to-0", pairedItemPolicy: "none", isTerminal: true, mergeInputs: 1 },
   noop: { cardinality: "N-to-N", pairedItemPolicy: "identity1to1", mergeInputs: 1 },
   integration: { cardinality: "N-to-N", pairedItemPolicy: "identity1to1", mergeInputs: 1 },

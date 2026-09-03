@@ -62,6 +62,12 @@ npm install
 
    Migrations are idempotent and recorded in the `schema_migrations` table.
 
+   **Local → live parity:** any new table, column, index, or ENUM change must be a
+   new file under `migrations/` (never edit an already-applied migration). After
+   you push, run `npm run db:migrate` on live (or use root `deploy.sh` /
+   `npm start`, which migrate automatically). Full rules:
+   [docs/database-migrations.md](../docs/database-migrations.md).
+
 4. Configure Database Connection via `.env` in the backend directory.
 
 5. Start the server:
@@ -70,14 +76,25 @@ npm install
 npm start
 ```
 
-Or for development with auto-restart:
+(`npm start` runs `db:migrate` first via `prestart`, then `node server.js`.)
+
+Or for development with auto-restart (does **not** auto-migrate on each reload):
 
 ```bash
+npm run db:migrate   # after adding a new migrations/*.sql file
 npm run dev
 ```
 
 The server will run on the port from `.env` (default `5013`).
 
+## Schema change workflow
+
+1. Add `migrations/0NN_description.sql` (next number after the latest file)
+2. `npm run db:migrate` locally
+3. Commit the SQL with the feature
+4. On live after deploy: `npm run db:migrate` (required if PM2 starts `server.js` directly without `prestart`)
+
+Do not rely on manually altering production MySQL outside migrations.
 ## API Endpoints
 
 All public paths are unchanged from before (mounted under `/api`).

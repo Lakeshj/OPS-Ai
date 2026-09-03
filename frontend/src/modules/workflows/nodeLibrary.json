@@ -138,11 +138,11 @@
       "name": "Wait",
       "category": "Core",
       "type": "Core",
-      "description": "Pause the workflow for a duration or until a condition",
+      "description": "Pause the workflow for a duration or until a date/time",
       "icon": "pause",
       "provider": null,
       "available": true,
-      "engineType": "noop"
+      "engineType": "wait"
     },
     {
       "id": "no-operation",

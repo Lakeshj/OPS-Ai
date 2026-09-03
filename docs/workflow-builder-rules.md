@@ -26,6 +26,7 @@ n8n may be used **only** as a functional/behavioral engineering reference — ex
 - Reuse existing components where they remain functionally correct
 - Keep existing API contracts unless a breaking change is justified and documented
 - Keep existing database schema unless migration is genuinely required
+- When a schema change **is** required: add the next `backend/migrations/NNN_*.sql`, run `npm run db:migrate` locally, commit the file, and ensure live runs migrate after deploy (`docs/database-migrations.md`)
 - Keep existing working behavior unless fixing a verified bug or completing a scoped feature
 - Use OpsAi expression syntax only:
   - `{{input}}`

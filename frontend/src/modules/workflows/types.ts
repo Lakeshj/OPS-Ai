@@ -2,6 +2,7 @@ export type WorkflowStatus = "draft" | "active" | "archived";
 export type WorkflowRunStatus =
   | "queued"
   | "running"
+  | "waiting"
   | "succeeded"
   | "failed"
   | "cancelled";
@@ -28,6 +29,7 @@ export type WorkflowNodeType =
   | "spreadsheet"
   | "email"
   | "result"
+  | "wait"
   | "noop"
   | "integration";
 
@@ -392,6 +394,9 @@ export interface WorkflowRun {
   input?: unknown;
   output?: unknown;
   error?: string | null;
+  waitingNodeId?: string | null;
+  resumeAt?: string | null;
+  hasDefinitionSnapshot?: boolean;
   startedAt?: string | null;
   finishedAt?: string | null;
   createdBy: string;

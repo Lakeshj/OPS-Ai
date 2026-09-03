@@ -1723,6 +1723,64 @@ const handlers = {
     },
   }),
 
+  wait: async (node, context) => {
+    const data = node.data || {};
+    const inputItems = Array.isArray(context.inputItems) ? context.inputItems : [];
+    const now = context.now instanceof Date ? context.now : new Date();
+
+    // Completing a previously suspended Wait on resume.
+    if (context.resumingWaitNodeId === node.id) {
+      return {
+        items: inputItems,
+        output: {
+          waited: true,
+          resumedAt: now.toISOString(),
+          resumeAt: context.waitResumeAt
+            ? new Date(context.waitResumeAt).toISOString()
+            : undefined,
+        },
+        resolved: { resumed: true, itemsOut: inputItems.length },
+      };
+    }
+
+    const { computeWaitResumeAt: computeResume } = require("./workflowWait.service");
+    const resumeAt = computeResume(data, now);
+
+    // Editor partial runs never create durable suspensions.
+    if (context.editorMode) {
+      return {
+        items: inputItems,
+        output: {
+          waited: false,
+          editorPreview: true,
+          wouldResumeAt: resumeAt.toISOString(),
+          message:
+            "Wait requires a full workflow execution to suspend. This preview does not sleep.",
+        },
+        resolved: {
+          editorPreview: true,
+          wouldResumeAt: resumeAt.toISOString(),
+          itemsOut: inputItems.length,
+        },
+      };
+    }
+
+    return {
+      suspend: true,
+      resumeAt: resumeAt.toISOString(),
+      items: inputItems,
+      output: {
+        waiting: true,
+        resumeAt: resumeAt.toISOString(),
+      },
+      resolved: {
+        waiting: true,
+        resumeAt: resumeAt.toISOString(),
+        itemsIn: inputItems.length,
+      },
+    };
+  },
+
   integration: async (node) => {
     const name = node.data?.label || node.data?.libraryId || "Integration";
     throw new Error(

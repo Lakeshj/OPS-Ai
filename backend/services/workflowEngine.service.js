@@ -27,6 +27,14 @@ const {
 const {
   getSwitchOutputPortIds,
 } = require("./workflowDynamicPorts.service");
+const {
+  buildExecutionSnapshot,
+  suspendRunAtWait,
+  claimDueWaitForRun,
+  getRecoverableWaitForRun,
+  updateWaitProgressSnapshot,
+  markWaitResumed,
+} = require("./workflowWait.service");
 
 const normalizeEditorSession = (sessionOrLegacy) => {
   if (sessionOrLegacy?.nodeResults) {
@@ -292,12 +300,18 @@ const updateStep = async (stepId, fields) => {
  * branch that was not taken propagates "skipped" downstream instead of
  * stalling the nodes behind it.
  */
-const createScheduler = (graph) => {
+const createScheduler = (graph, restored = null) => {
   const startIds = new Set(findStartNodes(graph).map((n) => n.id));
   const backEdges = findBackEdges(graph);
-  const edgeState = new Map();
-  const nodeState = new Map();
-  const loopCounts = new Map();
+  const edgeState = new Map(
+    Array.isArray(restored?.edgeState) ? restored.edgeState : []
+  );
+  const nodeState = new Map(
+    Array.isArray(restored?.nodeState) ? restored.nodeState : []
+  );
+  const loopCounts = new Map(
+    Array.isArray(restored?.loopCounts) ? restored.loopCounts : []
+  );
 
   const staticIncoming = (nodeId) =>
     (graph.incoming.get(nodeId) || []).filter((e) => !backEdges.has(edgeKey(e)));
@@ -382,6 +396,8 @@ const createScheduler = (graph) => {
   return {
     backEdges,
     edgeState,
+    nodeState,
+    loopCounts,
     next() {
       for (const node of graph.nodes) {
         if (nodeState.has(node.id)) continue;
@@ -408,9 +424,14 @@ const createScheduler = (graph) => {
   };
 };
 
-const executeRun = async (runId) => {
+const executeRun = async (runId, options = {}) => {
+  const claimToken =
+    options.claimToken ||
+    `worker-${process.pid}-${Date.now()}-${Math.random().toString(16).slice(2, 8)}`;
+  const now = options.now instanceof Date ? options.now : new Date();
+
   const [runRows] = await pool.execute(
-    `SELECT r.*, w.definition_json, w.workspace_id, w.id AS workflow_id
+    `SELECT r.*, w.definition_json AS live_definition_json, w.workspace_id, w.id AS workflow_id
      FROM workflow_runs r
      INNER JOIN workflows w ON w.id = r.workflow_id
      WHERE r.id = ?`,
@@ -421,35 +442,173 @@ const executeRun = async (runId) => {
   }
 
   const run = runRows[0];
-  const definition = parseJson(run.definition_json, { version: 1, nodes: [], edges: [] });
+
+  // Prefer immutable snapshot taken at enqueue; fall back to live only for legacy rows.
+  const definition = parseJson(
+    run.definition_snapshot_json || run.live_definition_json,
+    { version: 1, nodes: [], edges: [] }
+  );
   const input = parseJson(run.input_json, {});
   const graph = buildGraph(definition);
   const isProductionRun =
     input?.source === "schedule" || input?.source === "webhook";
 
-  await pool.execute(
-    `UPDATE workflow_runs
-     SET status = 'running', started_at = COALESCE(started_at, CURRENT_TIMESTAMP), error = NULL
-     WHERE id = ?`,
-    [runId]
-  );
+  let scheduler;
+  let context;
+  let runErrors = [];
+  let finalOutput = null;
+  let resumeWait = null;
 
-  const context = {
-    input,
-    steps: {},
-    items: {},
-    inputItems: [],
-    runId,
-    workspaceId: run.workspace_id,
-    workflowId: run.workflow_id,
+  const applyWaitResumeFromSnapshot = async (waitRow, { executeWaitNode }) => {
+    const snap = waitRow.snapshot || {};
+    scheduler = createScheduler(graph, snap.scheduler || null);
+    context = {
+      input: snap.context?.input || input,
+      steps: { ...(snap.context?.steps || {}) },
+      items: { ...(snap.context?.items || {}) },
+      portOutputs: { ...(snap.context?.portOutputs || {}) },
+      inputItems: [],
+      runId,
+      workspaceId: run.workspace_id,
+      workflowId: run.workflow_id,
+      editorMode: false,
+      useProductionPins: isProductionRun,
+      resumingWaitNodeId: snap.waitNodeId,
+      waitResumeAt: waitRow.resume_at,
+      now,
+    };
+    finalOutput = snap.finalOutput ?? null;
+    runErrors = Array.isArray(snap.runErrors) ? [...snap.runErrors] : [];
+
+    const waitNode = graph.byId.get(snap.waitNodeId);
+    if (!waitNode) {
+      throw new Error(
+        `Wait resume failed: node ${snap.waitNodeId} missing from definition snapshot`
+      );
+    }
+
+    if (executeWaitNode) {
+      const waitInputItems = Array.isArray(snap.waitInputItems)
+        ? snap.waitInputItems
+        : [];
+      context.inputItems = waitInputItems;
+      context.currentNodeId = waitNode.id;
+      context.graph = graph;
+
+      const waitResult = await executeNode(waitNode, {
+        ...context,
+        resumingWaitNodeId: waitNode.id,
+      });
+      const waitItems = finalizeNodeItems(waitNode, waitInputItems, waitResult);
+      context.items[waitNode.id] = waitItems;
+      context.steps[waitNode.id] = waitResult.output ?? null;
+
+      await markWaitResumed(
+        waitRow.id,
+        snap.waitStepId || waitRow.step_id,
+        waitResult.output
+      );
+
+      scheduler.complete(waitNode, waitResult.nextHandle, {
+        activeHandles: waitResult.activeHandles,
+      });
+
+      // Persist post-Wait progress so crash mid-downstream can restore
+      // without cold-starting the graph or replaying upstream.
+      const progressSnap = buildExecutionSnapshot({
+        waitNodeId: waitNode.id,
+        waitStepId: snap.waitStepId || waitRow.step_id,
+        waitInputItems,
+        context,
+        scheduler,
+        finalOutput,
+        runErrors,
+        waitCompleted: true,
+      });
+      await updateWaitProgressSnapshot(waitRow.id, progressSnap);
+    }
+    // else: waitCompleted progress restore — scheduler already includes Wait done
   };
 
-  const scheduler = createScheduler(graph);
-  const runErrors = [];
-  let finalOutput = null;
+  if (run.status === "waiting") {
+    resumeWait = await claimDueWaitForRun(runId, claimToken, now);
+    if (!resumeWait) {
+      // Not due yet, another worker claimed it, or cancel won the race.
+      return { status: "waiting", deferred: true };
+    }
+    await applyWaitResumeFromSnapshot(resumeWait, { executeWaitNode: true });
+  } else if (run.status === "cancelled") {
+    return { status: "cancelled" };
+  } else if (run.status === "running") {
+    // Crash recovery: claimed wait (before markWaitResumed) or progress snapshot.
+    const recoverable = await getRecoverableWaitForRun(runId);
+    if (recoverable?.recoveryMode === "claimed") {
+      await applyWaitResumeFromSnapshot(recoverable, { executeWaitNode: true });
+    } else if (recoverable?.recoveryMode === "progress") {
+      await applyWaitResumeFromSnapshot(recoverable, { executeWaitNode: false });
+    } else {
+      await pool.execute(
+        `UPDATE workflow_runs
+         SET status = 'running', started_at = COALESCE(started_at, CURRENT_TIMESTAMP), error = NULL,
+             waiting_node_id = NULL, resume_at = NULL
+         WHERE id = ? AND status IN ('queued', 'running')`,
+        [runId]
+      );
+
+      context = {
+        input,
+        steps: {},
+        items: {},
+        portOutputs: {},
+        inputItems: [],
+        runId,
+        workspaceId: run.workspace_id,
+        workflowId: run.workflow_id,
+        editorMode: false,
+        useProductionPins: isProductionRun,
+        now,
+      };
+      scheduler = createScheduler(graph);
+    }
+  } else if (run.status === "queued") {
+    await pool.execute(
+      `UPDATE workflow_runs
+       SET status = 'running', started_at = COALESCE(started_at, CURRENT_TIMESTAMP), error = NULL,
+           waiting_node_id = NULL, resume_at = NULL
+       WHERE id = ? AND status = 'queued'`,
+      [runId]
+    );
+
+    context = {
+      input,
+      steps: {},
+      items: {},
+      portOutputs: {},
+      inputItems: [],
+      runId,
+      workspaceId: run.workspace_id,
+      workflowId: run.workflow_id,
+      editorMode: false,
+      useProductionPins: isProductionRun,
+      now,
+    };
+    scheduler = createScheduler(graph);
+  } else {
+    // Terminal run — do not re-execute.
+    return { status: run.status };
+  }
 
   try {
     for (;;) {
+      // Cancel/resume race: stop before further side effects if cancelled.
+      const [liveRows] = await pool.execute(
+        `SELECT status FROM workflow_runs WHERE id = ?`,
+        [runId]
+      );
+      if (liveRows[0]?.status === "cancelled") {
+        return { status: "cancelled" };
+      }
+
       const next = scheduler.next();
       if (!next) break;
       const { node, action } = next;
@@ -511,7 +670,6 @@ const executeRun = async (runId) => {
         let failure = null;
         let attempts = 0;
 
-        // Disabled nodes passthrough input unchanged (output 0 only).
         if (!pinned && node.data?.disabled) {
           const incomingItems = context.inputItems;
           const passthrough =
@@ -547,6 +705,34 @@ const executeRun = async (runId) => {
             }
           }
           context.inputItems = savedItems;
+        }
+
+        // Durable Wait suspension — persist and release worker.
+        if (!failure && result?.suspend) {
+          const resumeAt = new Date(result.resumeAt);
+          const snapshot = buildExecutionSnapshot({
+            waitNodeId: node.id,
+            waitStepId: stepId,
+            waitInputItems: context.inputItems,
+            context,
+            scheduler,
+            finalOutput,
+            runErrors,
+          });
+          await suspendRunAtWait({
+            runId,
+            workflowId: run.workflow_id,
+            nodeId: node.id,
+            stepId,
+            resumeAt,
+            snapshot,
+            jobId: options.jobId || null,
+          });
+          return {
+            status: "waiting",
+            resumeAt: resumeAt.toISOString(),
+            waitingNodeId: node.id,
+          };
         }
 
         if (!failure) {
@@ -606,7 +792,6 @@ const executeRun = async (runId) => {
 
         if (policy.onError === "stop") throw failure;
 
-        // continue / route: expose the failure downstream instead of aborting.
         const errorOutput = { error: message, failed: true, nodeId: node.id };
         context.steps[node.id] = errorOutput;
         context.items[node.id] = [errorOutput];
@@ -616,8 +801,6 @@ const executeRun = async (runId) => {
       }
     }
 
-    // Nodes set to continue/route on failure keep the run alive, but the
-    // failures are still surfaced rather than silently swallowed.
     const warning =
       runErrors.length > 0
         ? runErrors.map((e) => `${e.nodeId}: ${e.error}`).join("\n")
@@ -628,8 +811,10 @@ const executeRun = async (runId) => {
        SET status = 'succeeded',
            output_json = ?,
            finished_at = CURRENT_TIMESTAMP,
-           error = ?
-       WHERE id = ?`,
+           error = ?,
+           waiting_node_id = NULL,
+           resume_at = NULL
+       WHERE id = ? AND status = 'running'`,
       [
         JSON.stringify(
           finalOutput ?? {
@@ -643,6 +828,14 @@ const executeRun = async (runId) => {
       ]
     );
 
+    const [finalRows] = await pool.execute(
+      `SELECT status FROM workflow_runs WHERE id = ?`,
+      [runId]
+    );
+    if (finalRows[0]?.status === "cancelled") {
+      return { status: "cancelled" };
+    }
+
     return {
       status: "succeeded",
       output: finalOutput ?? { steps: { ...context.steps } },
@@ -652,8 +845,9 @@ const executeRun = async (runId) => {
     const message = err instanceof Error ? err.message : String(err);
     await pool.execute(
       `UPDATE workflow_runs
-       SET status = 'failed', error = ?, finished_at = CURRENT_TIMESTAMP
-       WHERE id = ?`,
+       SET status = 'failed', error = ?, finished_at = CURRENT_TIMESTAMP,
+           waiting_node_id = NULL, resume_at = NULL
+       WHERE id = ? AND status = 'running'`,
       [message, runId]
     );
     throw err;

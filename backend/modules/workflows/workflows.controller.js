@@ -82,6 +82,10 @@ const getRun = asyncHandler(async (req, res) => {
   res.json(await workflowsService.getRunById(req.params.runId, req.user));
 });
 
+const cancelRun = asyncHandler(async (req, res) => {
+  res.json(await workflowsService.cancelRun(req.params.runId, req.user));
+});
+
 const executeNodeStep = asyncHandler(async (req, res) => {
   res.json(
     await workflowsService.executeNodeStep(
@@ -179,6 +183,7 @@ module.exports = {
   webhookTrigger,
   listRuns,
   getRun,
+  cancelRun,
   executeNodeStep,
   runToNode,
   executePrevious,

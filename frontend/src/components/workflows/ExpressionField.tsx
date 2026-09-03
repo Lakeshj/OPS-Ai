@@ -246,8 +246,8 @@ export function ExpressionField({
   }, [hasExpression, previewStatus, preview]);
 
   return (
-    <div className={cn("space-y-1.5", className)}>
-      <div className="relative">
+    <div className={cn("flex flex-col gap-2", className)}>
+      <div className="relative isolate">
         <Field
           ref={inputRef as never}
           value={value}
@@ -303,9 +303,9 @@ export function ExpressionField({
       </div>
 
       {hasExpression && (
-        <div className="rounded border border-dashed bg-muted/20 px-2 py-1.5 text-[10px]">
-          <div className="mb-0.5 flex items-center gap-2 text-muted-foreground">
-            <span>Preview</span>
+        <div className="mt-1 rounded border border-dashed bg-muted/20 px-2 py-2 text-[10px]">
+          <div className="mb-1 flex items-center gap-2 text-muted-foreground">
+            <span className="font-medium">Preview</span>
             {preview?.usesPinnedData && (
               <span className="text-[9px] italic">uses pinned data</span>
             )}

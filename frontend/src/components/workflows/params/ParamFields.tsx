@@ -38,7 +38,7 @@ export function StringParamField({
   const useExpression = param.expression && previewContext;
 
   return (
-    <div className="space-y-1">
+    <div className="flex flex-col gap-1.5">
       <Label className="text-xs">{param.displayName}</Label>
       {useExpression ? (
         <ExpressionField
@@ -293,12 +293,12 @@ export function FixedCollectionParamField({
   };
 
   return (
-    <div className="space-y-2">
+    <div className="flex flex-col gap-2">
       <Label className="text-xs">{param.displayName}</Label>
       {items.map((row, index) => {
         const rowValues = row as unknown as Record<string, unknown>;
         return (
-          <div key={index} className="space-y-3 rounded border p-2">
+          <div key={index} className="flex flex-col gap-3 rounded border p-3">
             <div className="flex items-center justify-between">
               <span className="text-[10px] font-medium text-muted-foreground">
                 {index + 1}
@@ -496,35 +496,43 @@ export function QueryParamsField({
     <div className="space-y-2">
       <Label className="text-xs">Query parameters</Label>
       {items.map((param, index) => (
-        <div key={index} className="flex gap-1.5">
-          <Input
-            className="flex-1 text-xs"
-            placeholder="key"
-            value={param.key}
-            onChange={(e) => {
-              const next = items.map((p, i) =>
-                i === index ? { ...p, key: e.target.value } : p
-              );
-              onChange(next);
-            }}
-          />
-          {previewContext ? (
-            <div className="flex-1">
-              <ExpressionField
-                value={param.value}
-                onChange={(v) => {
-                  const next = items.map((p, i) =>
-                    i === index ? { ...p, value: v } : p
-                  );
-                  onChange(next);
-                }}
-                parameterName="queryParam"
-                expressionContext={previewContext}
-              />
-            </div>
-          ) : (
+        <div key={index} className="flex flex-col gap-2 rounded border p-2">
+          <div className="flex gap-1.5">
             <Input
               className="flex-1 text-xs"
+              placeholder="key"
+              value={param.key}
+              onChange={(e) => {
+                const next = items.map((p, i) =>
+                  i === index ? { ...p, key: e.target.value } : p
+                );
+                onChange(next);
+              }}
+            />
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              onClick={() => onChange(items.filter((_, i) => i !== index))}
+            >
+              <X className="h-4 w-4" />
+            </Button>
+          </div>
+          {previewContext ? (
+            <ExpressionField
+              value={param.value}
+              onChange={(v) => {
+                const next = items.map((p, i) =>
+                  i === index ? { ...p, value: v } : p
+                );
+                onChange(next);
+              }}
+              parameterName="queryParam"
+              expressionContext={previewContext}
+            />
+          ) : (
+            <Input
+              className="text-xs"
               placeholder="value"
               value={param.value}
               onChange={(e) => {
@@ -535,14 +543,6 @@ export function QueryParamsField({
               }}
             />
           )}
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            onClick={() => onChange(items.filter((_, i) => i !== index))}
-          >
-            <X className="h-4 w-4" />
-          </Button>
         </div>
       ))}
       <Button

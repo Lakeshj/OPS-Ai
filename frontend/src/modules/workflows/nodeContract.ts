@@ -1116,6 +1116,35 @@ export const NODE_CONTRACTS: Record<WorkflowNodeType, NodeContract> = {
     ],
   },
 
+  // ---- FLOW CONTROL ----
+  wait: {
+    type: "wait",
+    version: 1,
+    category: "Core",
+    label: "Wait",
+    inputs: [mainIn()],
+    outputs: [mainOut],
+    cardinality: "N-to-N",
+    pairedItemPolicy: "identity1to1",
+    pairedItemNotes: "Passthrough — Wait does not transform business data",
+    settings: {
+      disabled: true,
+      onError: false,
+      retries: false,
+      timeoutMs: false,
+      alwaysOutputData: false,
+      executeOnce: false,
+      notes: true,
+    },
+    capabilities: ["execute_step", "disable", "pin", "notes"],
+    params: [],
+    dirtyTriggers: ["params", "edges", "pin", "disabled"],
+    edgeCases: [
+      "Production: suspends run until resumeAt; survives backend restart",
+      "Editor Run Step: preview only — does not create durable waiting run",
+    ],
+  },
+
   // ---- PLACEHOLDERS ----
   noop: {
     type: "noop",

@@ -42,6 +42,8 @@ npm run dev:api
 
 See **[DEPLOY_VPS.md](./DEPLOY_VPS.md)** for the `gitsource` / `source` / `deploy.sh` layout (same style as your other VPS sites).
 
+**Database schema:** any new table/column/ENUM must be a file in `backend/migrations/` and applied with `cd backend && npm run db:migrate` on local **and** live. See [docs/database-migrations.md](./docs/database-migrations.md).
+
 Quick version (flat clone):
 
 ```bash

@@ -218,7 +218,7 @@ export function NodeParameterRenderer({
   };
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-4">
       {visible.map((param) => {
         if (param.customRenderer) {
           const special = renderSpecial(param, values, onChange, context);

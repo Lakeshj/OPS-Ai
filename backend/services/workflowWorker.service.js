@@ -2,17 +2,51 @@ const os = require("os");
 const { v4: uuidv4 } = require("uuid");
 const { pool } = require("../config/database");
 const { executeRun } = require("./workflowEngine.service");
+const {
+  reclaimStaleClaimedWaits,
+  WAIT_CLAIM_LEASE_MS,
+} = require("./workflowWait.service");
 
 const WORKER_ID =
   process.env.WORKFLOW_WORKER_ID ||
   `${os.hostname()}-${process.pid}-${uuidv4().slice(0, 8)}`;
 const POLL_MS = Number(process.env.WORKFLOW_WORKER_POLL_MS) || 1500;
 const MAX_ATTEMPTS = Number(process.env.WORKFLOW_JOB_MAX_ATTEMPTS) || 3;
+const JOB_LOCK_LEASE_MS =
+  Number(process.env.WORKFLOW_JOB_LOCK_LEASE_MS) || WAIT_CLAIM_LEASE_MS;
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 let loopPromise = null;
 let stopping = false;
+
+/**
+ * Reclaim jobs stuck in locked after a worker crash.
+ * Without this, claimed waits with locked jobs hang forever.
+ */
+const reclaimStaleLockedJobs = async (
+  leaseMs = JOB_LOCK_LEASE_MS,
+  now = new Date()
+) => {
+  const cutoff = new Date(now.getTime() - leaseMs);
+  const [result] = await pool.execute(
+    `UPDATE workflow_jobs
+     SET status = 'queued',
+         locked_at = NULL,
+         locked_by = NULL,
+         available_at = LEAST(available_at, CURRENT_TIMESTAMP)
+     WHERE status = 'locked'
+       AND locked_at IS NOT NULL
+       AND locked_at < ?`,
+    [cutoff]
+  );
+  return result.affectedRows || 0;
+};
+
+const reclaimStaleWork = async (now = new Date()) => {
+  await reclaimStaleLockedJobs(JOB_LOCK_LEASE_MS, now);
+  await reclaimStaleClaimedWaits(WAIT_CLAIM_LEASE_MS, now);
+};
 
 const claimNextJob = async () => {
   const connection = await pool.getConnection();
@@ -88,13 +122,46 @@ const markJobFailedOrRetry = async (job, errorMessage) => {
   );
 };
 
-const processOnce = async () => {
+const processOnce = async (options = {}) => {
+  await reclaimStaleWork(options.now instanceof Date ? options.now : new Date());
+
   const job = await claimNextJob();
   if (!job) return false;
 
   console.info(`[workflow-worker] claimed job ${job.id} run=${job.run_id}`);
   try {
-    await executeRun(job.run_id);
+    const result = await executeRun(job.run_id, {
+      jobId: job.id,
+      claimToken: `${WORKER_ID}-${job.id}-${job.attempts}`,
+      now: options.now,
+    });
+    if (result?.status === "waiting") {
+      if (result.deferred) {
+        // Unlock without burning attempt budget on not-due wakes.
+        await pool.execute(
+          `UPDATE workflow_jobs
+           SET status = 'queued',
+               locked_at = NULL,
+               locked_by = NULL,
+               attempts = GREATEST(0, attempts - 1),
+               available_at = GREATEST(
+                 available_at,
+                 DATE_ADD(CURRENT_TIMESTAMP, INTERVAL 1 SECOND)
+               )
+           WHERE id = ?`,
+          [job.id]
+        );
+      }
+      console.info(
+        `[workflow-worker] run ${job.run_id} waiting until ${result.resumeAt || "?"}`
+      );
+      return true;
+    }
+    if (result?.status === "cancelled") {
+      await markJobDone(job.id);
+      console.info(`[workflow-worker] run ${job.run_id} cancelled`);
+      return true;
+    }
     await markJobDone(job.id);
     console.info(`[workflow-worker] run ${job.run_id} succeeded`);
   } catch (err) {
@@ -138,5 +205,10 @@ module.exports = {
   startWorkflowWorker,
   stopWorkflowWorker,
   processOnce,
+  claimNextJob,
+  markJobDone,
+  reclaimStaleLockedJobs,
+  reclaimStaleWork,
+  JOB_LOCK_LEASE_MS,
   WORKER_ID,
 };

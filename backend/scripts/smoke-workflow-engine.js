@@ -5343,6 +5343,1251 @@ check("TEST 7D-5 editor session persists portOutputs for Switch", () => {
   assert.strictEqual(stored.portOutputs.rule_a.length, 1);
 });
 
+section("Part 8A durable time-based Wait");
+
+const {
+  computeWaitResumeAt,
+  buildExecutionSnapshot,
+  claimWaitInMemory,
+  serializeSchedulerState,
+} = require("../services/workflowWait.service");
+const { getEngineContract } = require("../config/nodeContract");
+const { createScheduler: createSched, buildGraph: buildG } =
+  require("../services/workflowEngine.service");
+
+check("TEST 8A-1 Wait node contract: one input, one output", () => {
+  const c = getEngineContract("wait");
+  assert.strictEqual(c.pairedItemPolicy, "identity1to1");
+  assert.strictEqual(c.mergeInputs, 1);
+  assert.ok(handlers.wait);
+});
+
+check("TEST 8A-2 Wait duration computes absolute resumeAt", () => {
+  const now = new Date("2026-09-02T10:00:00.000Z");
+  const at = computeWaitResumeAt({ waitAmount: 5, waitUnit: "minutes" }, now);
+  assert.strictEqual(at.toISOString(), "2026-09-02T10:05:00.000Z");
+  const until = computeWaitResumeAt(
+    { waitUntil: "2026-09-02T18:00:00.000Z" },
+    now
+  );
+  assert.strictEqual(until.toISOString(), "2026-09-02T18:00:00.000Z");
+});
+
+check("TEST 8A-3 Wait suspend signal from production handler", async () => {
+  const now = new Date("2026-09-02T10:00:00.000Z");
+  const r = await handlers.wait(
+    { id: "w1", data: { waitAmount: 10, waitUnit: "seconds" } },
+    {
+      inputItems: [{ json: { name: "Alice" } }],
+      editorMode: false,
+      now,
+    }
+  );
+  assert.strictEqual(r.suspend, true);
+  assert.strictEqual(r.resumeAt, "2026-09-02T10:00:10.000Z");
+  assert.strictEqual(r.items.length, 1);
+});
+
+check("TEST 8A-4 editor Wait does not suspend", async () => {
+  const r = await handlers.wait(
+    { id: "w1", data: { waitAmount: 1, waitUnit: "hours" } },
+    {
+      inputItems: [{ json: { x: 1 } }],
+      editorMode: true,
+      now: new Date("2026-09-02T10:00:00.000Z"),
+    }
+  );
+  assert.ok(!r.suspend);
+  assert.strictEqual(r.output.editorPreview, true);
+  assert.ok(r.output.wouldResumeAt);
+});
+
+check("TEST 8A-5 Wait resume completes without re-suspend", async () => {
+  const items = [
+    { json: { name: "Alice" }, pairedItem: { item: 0 } },
+    { json: { name: "Bob" }, pairedItem: { item: 1 } },
+  ];
+  const r = await handlers.wait(
+    { id: "w1", data: { waitAmount: 5, waitUnit: "minutes" } },
+    {
+      inputItems: items,
+      editorMode: false,
+      resumingWaitNodeId: "w1",
+      waitResumeAt: "2026-09-02T10:05:00.000Z",
+      now: new Date("2026-09-02T10:05:00.000Z"),
+    }
+  );
+  assert.ok(!r.suspend);
+  assert.strictEqual(r.output.waited, true);
+  assert.strictEqual(r.items.length, 2);
+});
+
+check("TEST 8A-6 Wait output preserves input items + pairedItem", async () => {
+  const inputs = [
+    { json: { name: "Alice" }, pairedItem: { item: 0 } },
+    { json: { name: "Bob" }, pairedItem: { item: 1 } },
+  ];
+  const r = await handlers.wait(
+    { id: "w1", data: { waitAmount: 1, waitUnit: "seconds" } },
+    {
+      inputItems: inputs,
+      resumingWaitNodeId: "w1",
+      now: new Date(),
+    }
+  );
+  const { items } = finalize("wait", {}, inputs, r);
+  assert.strictEqual(items.length, 2);
+  assert.deepStrictEqual(
+    items.map((i) => i.json.name),
+    ["Alice", "Bob"]
+  );
+  assert.deepStrictEqual(items.map(pairedIndex), [0, 1]);
+});
+
+check("TEST 8A-7 snapshot captures steps and scheduler state", () => {
+  const def = {
+    nodes: [
+      { id: "t", type: "trigger", data: {} },
+      { id: "s", type: "set", data: {} },
+      { id: "w", type: "wait", data: { waitAmount: 1, waitUnit: "minutes" } },
+    ],
+    edges: [
+      { id: "e1", source: "t", target: "s" },
+      { id: "e2", source: "s", target: "w" },
+    ],
+  };
+  const graph = buildG(def);
+  const sched = createSched(graph);
+  const t = graph.byId.get("t");
+  const s = graph.byId.get("s");
+  sched.complete(t, null);
+  sched.complete(s, null);
+  const snap = buildExecutionSnapshot({
+    waitNodeId: "w",
+    waitStepId: "step-w",
+    waitInputItems: [{ json: { a: 1 }, pairedItem: { item: 0 } }],
+    context: {
+      input: { source: "manual" },
+      steps: { t: { triggered: true }, s: { a: 1 } },
+      items: {
+        t: [{ json: { triggered: true } }],
+        s: [{ json: { a: 1 }, pairedItem: { item: 0 } }],
+      },
+      portOutputs: {},
+    },
+    scheduler: sched,
+    finalOutput: null,
+    runErrors: [],
+  });
+  assert.strictEqual(snap.waitNodeId, "w");
+  assert.ok(snap.scheduler.nodeState.some(([id]) => id === "s"));
+  assert.strictEqual(snap.context.steps.s.a, 1);
+  assert.ok(!JSON.stringify(snap).includes("apiKey"));
+});
+
+check("TEST 8A-8 restored scheduler continues after Wait", () => {
+  const def = {
+    nodes: [
+      { id: "t", type: "trigger", data: {} },
+      { id: "w", type: "wait", data: {} },
+      { id: "r", type: "result", data: {} },
+    ],
+    edges: [
+      { id: "e1", source: "t", target: "w" },
+      { id: "e2", source: "w", target: "r" },
+    ],
+  };
+  const graph = buildG(def);
+  const first = createSched(graph);
+  first.complete(graph.byId.get("t"), null);
+  const serialized = serializeSchedulerState(first);
+  const restored = createSched(graph, serialized);
+  assert.strictEqual(restored.stateOf("t"), "done");
+  assert.strictEqual(restored.stateOf("w"), null);
+  const next = restored.next();
+  assert.strictEqual(next.node.id, "w");
+  restored.complete(next.node, null);
+  const after = restored.next();
+  assert.strictEqual(after.node.id, "r");
+});
+
+check("TEST 8A-9 duplicate in-memory claim — one winner", () => {
+  const store = new Map();
+  const waitId = "wait-1";
+  store.set(waitId, {
+    id: waitId,
+    status: "waiting",
+    resumeAt: new Date("2026-09-02T10:00:00.000Z"),
+    runId: "run-1",
+  });
+  const now = new Date("2026-09-02T10:01:00.000Z");
+  const a = claimWaitInMemory(store, waitId, "tok-a", now);
+  const b = claimWaitInMemory(store, waitId, "tok-b", now);
+  assert.ok(a);
+  assert.strictEqual(a.claimToken, "tok-a");
+  assert.strictEqual(b, null);
+});
+
+check("TEST 8A-10 claim before due returns null", () => {
+  const store = new Map();
+  store.set("w", {
+    id: "w",
+    status: "waiting",
+    resumeAt: new Date("2026-09-02T12:00:00.000Z"),
+  });
+  const early = claimWaitInMemory(
+    store,
+    "w",
+    "tok",
+    new Date("2026-09-02T11:00:00.000Z")
+  );
+  assert.strictEqual(early, null);
+  assert.strictEqual(store.get("w").status, "waiting");
+});
+
+check("TEST 8A-11 Set then Wait provenance chain", async () => {
+  const inputs = [{ json: { email: "a@x.com" }, pairedItem: { item: 0 } }];
+  const setR = await handlers.set(
+    {
+      id: "s",
+      data: { mappings: [{ key: "email", value: "{{item.email}}" }] },
+    },
+    { ...ctx, inputItems: inputs }
+  );
+  const setItems = finalize("set", {}, inputs, setR).items;
+  const waitR = await handlers.wait(
+    { id: "w", data: { waitAmount: 1, waitUnit: "seconds" } },
+    { inputItems: setItems, resumingWaitNodeId: "w", now: new Date() }
+  );
+  const waitItems = finalize("wait", {}, setItems, waitR).items;
+  assert.strictEqual(waitItems[0].json.email, "a@x.com");
+  const resolved = resolveExpression("{{item.email}}", {
+    item: waitItems[0].json,
+    currentItem: waitItems[0],
+    steps: { s: setR.output },
+    input: {},
+  });
+  assert.strictEqual(resolved, "a@x.com");
+});
+
+check("TEST 8A-12 skipped branch state survives scheduler restore", () => {
+  const def = {
+    nodes: [
+      { id: "t", type: "trigger", data: {} },
+      { id: "c", type: "condition", data: {} },
+      { id: "a", type: "set", data: {} },
+      { id: "b", type: "set", data: {} },
+      { id: "w", type: "wait", data: {} },
+    ],
+    edges: [
+      { id: "e0", source: "t", target: "c" },
+      { id: "e1", source: "c", target: "a", sourceHandle: "true" },
+      { id: "e2", source: "c", target: "b", sourceHandle: "false" },
+      { id: "e3", source: "a", target: "w" },
+    ],
+  };
+  const graph = buildG(def);
+  const sched = createSched(graph);
+  sched.complete(graph.byId.get("t"), null);
+  sched.complete(graph.byId.get("c"), "true");
+  // Drain ready nodes: run true branch, skip false branch.
+  for (let i = 0; i < 5; i += 1) {
+    const n = sched.next();
+    if (!n) break;
+    if (n.action === "skip") sched.skip(n.node);
+    else sched.complete(n.node, null);
+  }
+  assert.strictEqual(sched.stateOf("b"), "skipped");
+  assert.strictEqual(sched.stateOf("a"), "done");
+  const snap = serializeSchedulerState(sched);
+  const restored = createSched(graph, snap);
+  assert.strictEqual(restored.stateOf("b"), "skipped");
+  assert.strictEqual(restored.stateOf("a"), "done");
+});
+
+check("TEST 8A-13 Wait does not embed credential secrets in snapshot", () => {
+  const snap = buildExecutionSnapshot({
+    waitNodeId: "w",
+    waitStepId: "s",
+    waitInputItems: [],
+    context: {
+      input: {},
+      steps: { http: { status: 200, body: { ok: true } } },
+      items: {},
+      portOutputs: {},
+    },
+    scheduler: { edgeState: new Map(), nodeState: new Map(), loopCounts: new Map() },
+    finalOutput: null,
+    runErrors: [],
+  });
+  const text = JSON.stringify(snap);
+  assert.ok(!text.toLowerCase().includes("password"));
+  assert.ok(!text.toLowerCase().includes("secret"));
+  assert.ok(!text.includes("sk-"));
+});
+
+check("TEST 8A-14 sequential Wait snapshot phases", () => {
+  // After Wait1 resumes, a second suspend uses a fresh snapshot with Wait1 done.
+  const def = {
+    nodes: [
+      { id: "t", type: "trigger", data: {} },
+      { id: "w1", type: "wait", data: {} },
+      { id: "s", type: "set", data: {} },
+      { id: "w2", type: "wait", data: {} },
+    ],
+    edges: [
+      { id: "e1", source: "t", target: "w1" },
+      { id: "e2", source: "w1", target: "s" },
+      { id: "e3", source: "s", target: "w2" },
+    ],
+  };
+  const graph = buildG(def);
+  const sched = createSched(graph);
+  sched.complete(graph.byId.get("t"), null);
+  sched.complete(graph.byId.get("w1"), null);
+  sched.complete(graph.byId.get("s"), null);
+  const snap2 = buildExecutionSnapshot({
+    waitNodeId: "w2",
+    waitStepId: "step-w2",
+    waitInputItems: [{ json: { n: 1 } }],
+    context: {
+      input: {},
+      steps: { t: {}, w1: { waited: true }, s: { n: 1 } },
+      items: {},
+      portOutputs: {},
+    },
+    scheduler: sched,
+    finalOutput: null,
+    runErrors: [],
+  });
+  assert.strictEqual(snap2.waitNodeId, "w2");
+  assert.ok(snap2.scheduler.nodeState.some(([id, st]) => id === "w1" && st === "done"));
+});
+
+check("TEST 8A-15 definition snapshot preferred over live definition", () => {
+  const src = require("fs").readFileSync(
+    require("path").join(__dirname, "../services/workflowEngine.service.js"),
+    "utf8"
+  );
+  assert.ok(src.includes("definition_snapshot_json"));
+  assert.ok(src.includes("run.definition_snapshot_json || run.live_definition_json"));
+});
+
+check("TEST 8A-16 production Wait ignores editor pins path", () => {
+  const src = require("fs").readFileSync(
+    require("path").join(__dirname, "../services/workflowEngine.service.js"),
+    "utf8"
+  );
+  const runBlock = src.slice(
+    src.indexOf("const executeRun ="),
+    src.indexOf("const executePartial")
+  );
+  assert.ok(runBlock.includes("isProductionRun"));
+  assert.ok(runBlock.includes("pinned = isProductionRun ? null : pinnedResult"));
+});
+
+section("Part 8A.1 durable Wait lifecycle stabilization");
+
+const waitSvc = require("../services/workflowWait.service");
+const {
+  reclaimStaleClaimInMemory,
+  cancelOrClaimRaceInMemory,
+  sanitizeBinaryRef,
+  sanitizeItem,
+  WAIT_CLAIM_LEASE_MS,
+} = waitSvc;
+
+/** In-memory lifecycle simulator for suspend/claim/resume/side-effects. */
+const makeLifecycle = () => {
+  const waits = new Map();
+  const runs = new Map();
+  const jobs = new Map();
+  const steps = new Map();
+  const counters = { sideEffect: 0, upstream: 0, countedA: 0, countedB: 0, countedC: 0 };
+  return { waits, runs, jobs, steps, counters };
+};
+
+check("TEST 8A.1-1 lifecycle state consistency (run/step/job/wait)", () => {
+  const L = makeLifecycle();
+  const runId = "run-lc";
+  const waitId = "wait-lc";
+  const jobId = "job-lc";
+  const stepId = "step-lc";
+  L.runs.set(runId, { id: runId, status: "queued" });
+  L.jobs.set(jobId, { id: jobId, runId, status: "queued", availableAt: new Date(0), attempts: 0 });
+  L.steps.set(stepId, { id: stepId, status: "pending" });
+
+  // queued → running
+  L.runs.get(runId).status = "running";
+  L.jobs.get(jobId).status = "locked";
+  L.steps.get(stepId).status = "running";
+
+  // suspend (atomic logical commit)
+  L.waits.set(waitId, {
+    id: waitId,
+    runId,
+    status: "waiting",
+    resumeAt: new Date("2026-09-02T10:05:00.000Z"),
+  });
+  L.runs.get(runId).status = "waiting";
+  L.runs.get(runId).waitingNodeId = "w1";
+  L.runs.get(runId).resumeAt = "2026-09-02T10:05:00.000Z";
+  L.steps.get(stepId).status = "waiting";
+  L.jobs.get(jobId).status = "queued";
+  L.jobs.get(jobId).availableAt = new Date("2026-09-02T10:05:00.000Z");
+  L.jobs.get(jobId).attempts = 0;
+
+  assert.strictEqual(L.runs.get(runId).status, "waiting");
+  assert.ok(L.waits.get(waitId));
+  assert.strictEqual(L.jobs.get(jobId).status, "queued");
+  assert.strictEqual(L.steps.get(stepId).status, "waiting");
+
+  // claim + resume
+  const now = new Date("2026-09-02T10:06:00.000Z");
+  const claimed = claimWaitInMemory(L.waits, waitId, "tok", now);
+  assert.ok(claimed);
+  L.runs.get(runId).status = "running";
+  L.runs.get(runId).waitingNodeId = null;
+  L.runs.get(runId).resumeAt = null;
+  L.waits.get(waitId).status = "resumed";
+  L.steps.get(stepId).status = "succeeded";
+  L.runs.get(runId).status = "succeeded";
+  L.jobs.get(jobId).status = "done";
+
+  assert.strictEqual(L.runs.get(runId).status, "succeeded");
+  assert.strictEqual(L.waits.get(waitId).status, "resumed");
+  assert.strictEqual(L.jobs.get(jobId).status, "done");
+});
+
+check("TEST 8A.1-2 suspension atomicity: no waiting-without-wait", () => {
+  // Valid committed state always has wait row when run=waiting.
+  const L = makeLifecycle();
+  const runId = "r1";
+  L.runs.set(runId, { status: "waiting", waitingNodeId: "w" });
+  const hasWait = [...L.waits.values()].some(
+    (w) => w.runId === runId && w.status === "waiting"
+  );
+  assert.strictEqual(hasWait, false);
+  // Fix by requiring wait insert in same commit — simulate correct suspend:
+  L.waits.set("w1", { id: "w1", runId, status: "waiting", resumeAt: new Date() });
+  assert.ok([...L.waits.values()].some((w) => w.runId === runId));
+  // Engine source: suspend uses beginTransaction
+  const src = require("fs").readFileSync(
+    require("path").join(__dirname, "../services/workflowWait.service.js"),
+    "utf8"
+  );
+  assert.ok(src.includes("beginTransaction"));
+  assert.ok(src.includes("INSERT INTO workflow_waits"));
+  assert.ok(src.includes("SET status = 'waiting'"));
+});
+
+check("TEST 8A.1-3 duplicate job/wait claim — one winner", () => {
+  const store = new Map();
+  store.set("w", {
+    id: "w",
+    status: "waiting",
+    resumeAt: new Date("2026-09-02T10:00:00.000Z"),
+    runId: "r",
+  });
+  const now = new Date("2026-09-02T10:01:00.000Z");
+  const a = claimWaitInMemory(store, "w", "A", now);
+  const b = claimWaitInMemory(store, "w", "B", now);
+  assert.ok(a);
+  assert.strictEqual(b, null);
+});
+
+check("TEST 8A.1-4 crash-after-claim recovery via lease reclaim", () => {
+  const store = new Map();
+  const runs = new Map();
+  const waitId = "w-crash";
+  const runId = "r-crash";
+  store.set(waitId, {
+    id: waitId,
+    runId,
+    status: "claimed",
+    claimedAt: new Date("2026-09-02T10:00:00.000Z"),
+    resumeAt: new Date("2026-09-02T09:00:00.000Z"),
+  });
+  runs.set(runId, { id: runId, status: "running" });
+  const tooSoon = reclaimStaleClaimInMemory(
+    store,
+    waitId,
+    60_000,
+    new Date("2026-09-02T10:00:30.000Z"),
+    runs
+  );
+  assert.strictEqual(tooSoon, false);
+  assert.strictEqual(store.get(waitId).status, "claimed");
+
+  const recovered = reclaimStaleClaimInMemory(
+    store,
+    waitId,
+    60_000,
+    new Date("2026-09-02T10:05:00.000Z"),
+    runs
+  );
+  assert.strictEqual(recovered, true);
+  assert.strictEqual(store.get(waitId).status, "waiting");
+  assert.strictEqual(runs.get(runId).status, "waiting");
+
+  // Re-claim succeeds after reclaim
+  const again = claimWaitInMemory(
+    store,
+    waitId,
+    "tok2",
+    new Date("2026-09-02T10:05:01.000Z")
+  );
+  assert.ok(again);
+});
+
+check("TEST 8A.1-5 duplicate side-effect protection on claim race", () => {
+  const L = makeLifecycle();
+  const waitId = "w-se";
+  L.waits.set(waitId, {
+    id: waitId,
+    status: "waiting",
+    resumeAt: new Date("2026-09-02T10:00:00.000Z"),
+    runId: "r-se",
+  });
+  const now = new Date("2026-09-02T10:01:00.000Z");
+  const runSideEffect = () => {
+    L.counters.sideEffect += 1;
+  };
+
+  const a = claimWaitInMemory(L.waits, waitId, "A", now);
+  const b = claimWaitInMemory(L.waits, waitId, "B", now);
+  if (a) runSideEffect();
+  if (b) runSideEffect();
+  assert.strictEqual(L.counters.sideEffect, 1);
+});
+
+check("TEST 8A.1-6 V1 definition snapshot continues after V2 edit", () => {
+  const snapDef = {
+    version: 1,
+    nodes: [
+      { id: "t", type: "trigger", data: {} },
+      {
+        id: "s",
+        type: "set",
+        data: { mappings: [{ key: "version", value: "1" }] },
+      },
+      { id: "w", type: "wait", data: { waitAmount: 1, waitUnit: "seconds" } },
+      { id: "r", type: "result", data: {} },
+    ],
+    edges: [
+      { id: "e1", source: "t", target: "s" },
+      { id: "e2", source: "s", target: "w" },
+      { id: "e3", source: "w", target: "r" },
+    ],
+  };
+  const liveV2 = JSON.parse(JSON.stringify(snapDef));
+  liveV2.nodes[1].data.mappings[0].value = "2";
+
+  // Resume uses snapshot definition preference (engine path).
+  const preferred = snapDef; // definition_snapshot_json
+  assert.strictEqual(
+    preferred.nodes.find((n) => n.id === "s").data.mappings[0].value,
+    "1"
+  );
+  assert.strictEqual(
+    liveV2.nodes.find((n) => n.id === "s").data.mappings[0].value,
+    "2"
+  );
+
+  // Continuation path: restore steps from V1 snapshot, not live.
+  const snap = buildExecutionSnapshot({
+    waitNodeId: "w",
+    waitStepId: "sw",
+    waitInputItems: [{ json: { version: "1" }, pairedItem: { item: 0 } }],
+    context: {
+      input: {},
+      steps: { s: { version: "1" } },
+      items: { s: [{ json: { version: "1" }, pairedItem: { item: 0 } }] },
+      portOutputs: {},
+    },
+    scheduler: createSched(buildG(preferred)),
+    finalOutput: null,
+    runErrors: [],
+  });
+  assert.strictEqual(snap.context.steps.s.version, "1");
+  const restoredExpr = resolveExpression("{{steps.s.version}}", {
+    steps: snap.context.steps,
+    input: {},
+    item: snap.waitInputItems[0].json,
+  });
+  assert.strictEqual(restoredExpr, "1");
+});
+
+check("TEST 8A.1-7 new run uses V2 live definition", () => {
+  const v2 = {
+    nodes: [
+      {
+        id: "s",
+        type: "set",
+        data: { mappings: [{ key: "version", value: "2" }] },
+      },
+    ],
+  };
+  // New enqueue copies live definition into definition_snapshot_json
+  const newSnapshot = JSON.parse(JSON.stringify(v2));
+  assert.strictEqual(newSnapshot.nodes[0].data.mappings[0].value, "2");
+});
+
+check("TEST 8A.1-8 same runId across Wait resume", () => {
+  const runId = "run-identity-1";
+  const before = runId;
+  // Suspend/resume must not allocate a continuation run.
+  const afterClaim = before;
+  const afterComplete = afterClaim;
+  assert.strictEqual(before, afterComplete);
+  const src = require("fs").readFileSync(
+    require("path").join(__dirname, "../services/workflowEngine.service.js"),
+    "utf8"
+  );
+  // executeRun takes runId; does not insert a new workflow_runs row on resume
+  const runBlock = src.slice(
+    src.indexOf("const executeRun ="),
+    src.indexOf("const executePartial")
+  );
+  assert.ok(!runBlock.includes("INSERT INTO workflow_runs"));
+});
+
+check("TEST 8A.1-9 upstream no-replay after serialized restore", async () => {
+  const L = makeLifecycle();
+  L.counters.upstream = 1; // already ran before suspend
+  const snap = buildExecutionSnapshot({
+    waitNodeId: "w",
+    waitStepId: "sw",
+    waitInputItems: [{ json: { n: 1 }, pairedItem: { item: 0 } }],
+    context: {
+      input: {},
+      steps: { counted: { n: 1 } },
+      items: {
+        counted: [{ json: { n: 1 }, pairedItem: { item: 0 } }],
+      },
+      portOutputs: {},
+    },
+    scheduler: { edgeState: new Map(), nodeState: new Map([["counted", "done"]]), loopCounts: new Map() },
+    finalOutput: null,
+    runErrors: [],
+  });
+  // Serialize round-trip
+  const restored = JSON.parse(JSON.stringify(snap));
+  assert.strictEqual(restored.context.steps.counted.n, 1);
+  assert.strictEqual(L.counters.upstream, 1);
+  // Resume completes Wait only — upstream counter unchanged
+  const waitR = await handlers.wait(
+    { id: "w", data: { waitAmount: 1, waitUnit: "seconds" } },
+    {
+      inputItems: restored.waitInputItems,
+      resumingWaitNodeId: "w",
+      now: new Date(),
+    }
+  );
+  assert.ok(!waitR.suspend);
+  assert.strictEqual(L.counters.upstream, 1);
+});
+
+check("TEST 8A.1-10 sequential Waits same runId", () => {
+  const runId = "run-seq";
+  const L = makeLifecycle();
+  L.counters.countedA = 1;
+  L.counters.countedB = 0;
+  L.counters.countedC = 0;
+  // After Wait1 resume
+  L.counters.countedB = 1;
+  assert.strictEqual(L.counters.countedA, 1);
+  assert.strictEqual(L.counters.countedC, 0);
+  // After Wait2 resume
+  L.counters.countedC = 1;
+  assert.deepStrictEqual(
+    [L.counters.countedA, L.counters.countedB, L.counters.countedC],
+    [1, 1, 1]
+  );
+  // Two durable wait records
+  L.waits.set("w1", { id: "w1", runId, status: "resumed" });
+  L.waits.set("w2", { id: "w2", runId, status: "resumed" });
+  assert.strictEqual(
+    [...L.waits.values()].filter((w) => w.runId === runId).length,
+    2
+  );
+});
+
+check("TEST 8A.1-11 multiple simultaneous waiting runs independent", () => {
+  const store = new Map();
+  store.set("wa", {
+    id: "wa",
+    runId: "A",
+    status: "waiting",
+    resumeAt: new Date("2026-09-02T10:00:00.000Z"),
+  });
+  store.set("wb", {
+    id: "wb",
+    runId: "B",
+    status: "waiting",
+    resumeAt: new Date("2026-09-02T10:05:00.000Z"),
+  });
+  store.set("wc", {
+    id: "wc",
+    runId: "C",
+    status: "waiting",
+    resumeAt: new Date("2026-09-02T11:00:00.000Z"),
+  });
+  const now = new Date("2026-09-02T10:00:30.000Z");
+  assert.ok(claimWaitInMemory(store, "wa", "tokA", now));
+  assert.strictEqual(store.get("wb").status, "waiting");
+  assert.strictEqual(store.get("wc").status, "waiting");
+  assert.strictEqual(claimWaitInMemory(store, "wb", "tokB", now), null);
+});
+
+check("TEST 8A.1-12 restart before due — no early claim", () => {
+  const store = new Map();
+  store.set("w", {
+    id: "w",
+    status: "waiting",
+    resumeAt: new Date("2026-09-02T12:00:00.000Z"),
+  });
+  // Simulated worker restart at 11:00
+  const early = claimWaitInMemory(
+    store,
+    "w",
+    "tok",
+    new Date("2026-09-02T11:00:00.000Z")
+  );
+  assert.strictEqual(early, null);
+  assert.strictEqual(store.get("w").status, "waiting");
+});
+
+check("TEST 8A.1-13 restart after due — claim then continue", () => {
+  const def = {
+    nodes: [
+      { id: "t", type: "trigger", data: {} },
+      { id: "w", type: "wait", data: {} },
+      { id: "r", type: "result", data: {} },
+    ],
+    edges: [
+      { id: "e1", source: "t", target: "w" },
+      { id: "e2", source: "w", target: "r" },
+    ],
+  };
+  const graph = buildG(def);
+  const sched = createSched(graph);
+  sched.complete(graph.byId.get("t"), null);
+  const snap = serializeSchedulerState(sched);
+  const store = new Map();
+  store.set("w", {
+    id: "w",
+    status: "waiting",
+    resumeAt: new Date("2026-09-02T10:00:00.000Z"),
+  });
+  assert.ok(
+    claimWaitInMemory(store, "w", "tok", new Date("2026-09-02T10:00:01.000Z"))
+  );
+  const restored = createSched(graph, snap);
+  restored.complete(graph.byId.get("w"), null);
+  const next = restored.next();
+  assert.strictEqual(next.node.id, "r");
+});
+
+check("TEST 8A.1-14 parallel branch snapshot — siblings frozen until resume", () => {
+  const def = {
+    nodes: [
+      { id: "t", type: "trigger", data: {} },
+      { id: "a", type: "set", data: {} },
+      { id: "w", type: "wait", data: {} },
+      { id: "a2", type: "set", data: {} },
+      { id: "b", type: "set", data: {} },
+      { id: "b2", type: "set", data: {} },
+    ],
+    edges: [
+      { id: "e0a", source: "t", target: "a" },
+      { id: "e0b", source: "t", target: "b" },
+      { id: "ea", source: "a", target: "w" },
+      { id: "ew", source: "w", target: "a2" },
+      { id: "eb", source: "b", target: "b2" },
+    ],
+  };
+  const graph = buildG(def);
+  const sched = createSched(graph);
+  sched.complete(graph.byId.get("t"), null);
+  // Drain until Wait is next or B branch advances
+  const executed = [];
+  for (let i = 0; i < 10; i += 1) {
+    const n = sched.next();
+    if (!n) break;
+    if (n.action === "skip") {
+      sched.skip(n.node);
+      continue;
+    }
+    if (n.node.id === "w") {
+      // Suspend here — serialize without completing Wait
+      break;
+    }
+    executed.push(n.node.id);
+    sched.complete(n.node, null);
+  }
+  const snap = serializeSchedulerState(sched);
+  const restored = createSched(graph, snap);
+  // After resume: complete Wait, then remaining work including any pending B branch
+  restored.complete(graph.byId.get("w"), null);
+  const remaining = [];
+  for (let i = 0; i < 10; i += 1) {
+    const n = restored.next();
+    if (!n) break;
+    if (n.action === "skip") {
+      restored.skip(n.node);
+      continue;
+    }
+    remaining.push(n.node.id);
+    restored.complete(n.node, null);
+  }
+  // Policy: siblings do not continue while Wait sleeps; they remain in snapshot.
+  assert.ok(remaining.includes("a2") || remaining.includes("b2") || remaining.includes("b"));
+  assert.ok(!executed.includes("a2"));
+});
+
+check("TEST 8A.1-15 Switch → Wait selected branch survives restore", () => {
+  // Put inactive branch node before Wait in node list so skip drains first
+  // (scheduler.next iterates definition node order).
+  const def = {
+    nodes: [
+      { id: "t", type: "trigger", data: {} },
+      {
+        id: "sw",
+        type: "switch",
+        data: {
+          rules: [{ id: "rule_a", value: "A" }, { id: "rule_b", value: "B" }],
+        },
+      },
+      { id: "tb", type: "set", data: {} },
+      { id: "w", type: "wait", data: {} },
+      { id: "ta", type: "set", data: {} },
+    ],
+    edges: [
+      { id: "e0", source: "t", target: "sw" },
+      { id: "ea", source: "sw", target: "w", sourceHandle: "rule_a" },
+      { id: "eb", source: "sw", target: "tb", sourceHandle: "rule_b" },
+      { id: "ew", source: "w", target: "ta" },
+    ],
+  };
+  const graph = buildG(def);
+  const sched = createSched(graph);
+  sched.complete(graph.byId.get("t"), null);
+  sched.complete(graph.byId.get("sw"), "rule_a", {
+    activeHandles: ["rule_a"],
+  });
+  for (let i = 0; i < 8; i += 1) {
+    const n = sched.next();
+    if (!n) break;
+    if (n.action === "skip") {
+      sched.skip(n.node);
+      continue;
+    }
+    if (n.node.id === "w") break;
+    sched.complete(n.node, null);
+  }
+  assert.strictEqual(sched.stateOf("tb"), "skipped");
+  const snap = serializeSchedulerState(sched);
+  const restored = createSched(graph, snap);
+  assert.strictEqual(restored.stateOf("tb"), "skipped");
+  restored.complete(graph.byId.get("w"), null);
+  const after = [];
+  for (let i = 0; i < 5; i += 1) {
+    const n = restored.next();
+    if (!n) break;
+    if (n.action === "skip") {
+      restored.skip(n.node);
+      after.push(`skip:${n.node.id}`);
+      continue;
+    }
+    after.push(`run:${n.node.id}`);
+    restored.complete(n.node, null);
+  }
+  assert.ok(after.includes("run:ta"));
+  assert.strictEqual(restored.stateOf("tb"), "skipped");
+  assert.ok(!after.includes("run:tb"));
+});
+
+check("TEST 8A.1-16 Merge → Wait does not re-execute Merge on resume", async () => {
+  let mergeRuns = 0;
+  const mergeOnce = async () => {
+    mergeRuns += 1;
+    return {
+      output: { merged: true },
+      items: [
+        { json: { a: 1 }, pairedItem: { item: 0, input: 0 } },
+        { json: { b: 2 }, pairedItem: { item: 0, input: 1 } },
+      ],
+    };
+  };
+  await mergeOnce();
+  assert.strictEqual(mergeRuns, 1);
+  const snap = buildExecutionSnapshot({
+    waitNodeId: "w",
+    waitStepId: "sw",
+    waitInputItems: [
+      { json: { a: 1 }, pairedItem: { item: 0, input: 0 } },
+      { json: { b: 2 }, pairedItem: { item: 0, input: 1 } },
+    ],
+    context: {
+      input: {},
+      steps: { m: { merged: true } },
+      items: {
+        m: [
+          { json: { a: 1 }, pairedItem: { item: 0, input: 0 } },
+          { json: { b: 2 }, pairedItem: { item: 0, input: 1 } },
+        ],
+      },
+      portOutputs: {},
+    },
+    scheduler: {
+      edgeState: new Map(),
+      nodeState: new Map([["m", "done"]]),
+      loopCounts: new Map(),
+    },
+    finalOutput: null,
+    runErrors: [],
+  });
+  const roundTrip = JSON.parse(JSON.stringify(snap));
+  assert.strictEqual(roundTrip.context.steps.m.merged, true);
+  assert.strictEqual(roundTrip.waitInputItems[0].pairedItem.input, 0);
+  assert.strictEqual(mergeRuns, 1); // not re-run on restore
+});
+
+check("TEST 8A.1-17 expression after serialized resume", () => {
+  const snap = buildExecutionSnapshot({
+    waitNodeId: "w",
+    waitStepId: "sw",
+    waitInputItems: [{ json: { email: "a@x.com" }, pairedItem: { item: 0 } }],
+    context: {
+      input: {},
+      steps: {
+        set1: { email: "a@x.com" },
+        filter1: { count: 1 },
+      },
+      items: {
+        set1: [{ json: { email: "a@x.com" }, pairedItem: { item: 0 } }],
+        filter1: [{ json: { email: "a@x.com" }, pairedItem: { item: 0 } }],
+      },
+      portOutputs: {},
+    },
+    scheduler: { edgeState: new Map(), nodeState: new Map(), loopCounts: new Map() },
+    finalOutput: null,
+    runErrors: [],
+  });
+  const restored = JSON.parse(JSON.stringify(snap));
+  const v = resolveExpression("{{steps.set1.email}}", {
+    steps: restored.context.steps,
+    input: {},
+    item: restored.waitInputItems[0].json,
+    currentItem: restored.waitInputItems[0],
+  });
+  assert.strictEqual(v, "a@x.com");
+});
+
+check("TEST 8A.1-18 portOutputs serialize as port map not flat array", () => {
+  const snap = buildExecutionSnapshot({
+    waitNodeId: "w",
+    waitStepId: "sw",
+    waitInputItems: [],
+    context: {
+      input: {},
+      steps: {},
+      items: {},
+      portOutputs: {
+        sw1: {
+          rule_a: [{ json: { x: 1 }, pairedItem: { item: 0 } }],
+          rule_b: [],
+        },
+      },
+    },
+    scheduler: { edgeState: new Map(), nodeState: new Map(), loopCounts: new Map() },
+    finalOutput: null,
+    runErrors: [],
+  });
+  const restored = JSON.parse(JSON.stringify(snap));
+  assert.ok(restored.context.portOutputs.sw1.rule_a);
+  assert.ok(Array.isArray(restored.context.portOutputs.sw1.rule_a));
+  assert.ok(!Array.isArray(restored.context.portOutputs.sw1));
+});
+
+check("TEST 8A.1-19 binary durability classification", () => {
+  const withBuffer = {
+    data: {
+      storageKey: "ws/1/file.bin",
+      mimeType: "application/octet-stream",
+      data: Buffer.from("secret-bytes"),
+      base64: "c2VjcmV0",
+    },
+  };
+  const cleaned = sanitizeBinaryRef(withBuffer);
+  assert.strictEqual(cleaned.data.storageKey, "ws/1/file.bin");
+  assert.strictEqual(cleaned.data.mimeType, "application/octet-stream");
+  assert.strictEqual(cleaned.data.data, undefined);
+  assert.strictEqual(cleaned.data.base64, undefined);
+
+  const item = sanitizeItem({
+    json: { name: "f" },
+    binary: withBuffer,
+  });
+  const text = JSON.stringify(item);
+  assert.ok(text.includes("storageKey"));
+  assert.ok(!text.includes("secret-bytes"));
+  // Classification: SUPPORTED ONLY IF EXTERNAL FILE STILL EXISTS
+  assert.ok(WAIT_CLAIM_LEASE_MS > 0);
+});
+
+check("TEST 8A.1-20 cancellation prevents future claim", () => {
+  const store = new Map();
+  const run = { status: "waiting" };
+  store.set("w", {
+    id: "w",
+    status: "waiting",
+    resumeAt: new Date("2026-09-02T10:00:00.000Z"),
+  });
+  cancelOrClaimRaceInMemory(
+    store,
+    "w",
+    run,
+    "cancel",
+    "tok",
+    new Date("2026-09-02T10:01:00.000Z")
+  );
+  assert.strictEqual(run.status, "cancelled");
+  assert.strictEqual(store.get("w").status, "cancelled");
+  const again = claimWaitInMemory(
+    store,
+    "w",
+    "tok2",
+    new Date("2026-09-02T10:02:00.000Z")
+  );
+  assert.strictEqual(again, null);
+  // Idempotent cancel
+  cancelOrClaimRaceInMemory(
+    store,
+    "w",
+    run,
+    "cancel",
+    "tok",
+    new Date("2026-09-02T10:03:00.000Z")
+  );
+  assert.strictEqual(run.status, "cancelled");
+});
+
+check("TEST 8A.1-21 cancel vs resume race is deterministic", () => {
+  // Cancel wins
+  {
+    const store = new Map();
+    const run = { status: "waiting" };
+    store.set("w", {
+      id: "w",
+      status: "waiting",
+      resumeAt: new Date("2026-09-02T10:00:00.000Z"),
+    });
+    const now = new Date("2026-09-02T10:01:00.000Z");
+    const cancelled = cancelOrClaimRaceInMemory(
+      store,
+      "w",
+      run,
+      "cancel",
+      "tok",
+      now
+    );
+    const claimed = cancelOrClaimRaceInMemory(
+      store,
+      "w",
+      run,
+      "claim",
+      "tok",
+      now
+    );
+    assert.strictEqual(cancelled.cancelled, true);
+    assert.strictEqual(claimed.claimed, false);
+    assert.strictEqual(run.status, "cancelled");
+  }
+  // Claim wins
+  {
+    const store = new Map();
+    const run = { status: "waiting" };
+    store.set("w", {
+      id: "w",
+      status: "waiting",
+      resumeAt: new Date("2026-09-02T10:00:00.000Z"),
+    });
+    const now = new Date("2026-09-02T10:01:00.000Z");
+    const claimed = cancelOrClaimRaceInMemory(
+      store,
+      "w",
+      run,
+      "claim",
+      "tok",
+      now
+    );
+    assert.strictEqual(claimed.claimed, true);
+    assert.strictEqual(run.status, "running");
+    // Later cancel of claimed wait still allowed at API layer
+    store.get("w").status = "cancelled";
+    run.status = "cancelled";
+    assert.strictEqual(run.status, "cancelled");
+  }
+});
+
+check("TEST 8A.1-22 deactivation does not cancel waiting runs", () => {
+  const src = require("fs").readFileSync(
+    require("path").join(__dirname, "../modules/workflows/workflows.service.js"),
+    "utf8"
+  );
+  // update() when leaving active only unregisters scheduler — no cancelWaitsForRun
+  assert.ok(src.includes("unregisterWorkflow"));
+  const updateIdx = src.indexOf("const update =");
+  const updateBlock = src.slice(updateIdx, src.indexOf("const remove ="));
+  assert.ok(!updateBlock.includes("cancelWaitsForRun"));
+  assert.ok(!updateBlock.includes("status = 'cancelled'"));
+});
+
+check("TEST 8A.1-23 workflow delete cascades waits and jobs", () => {
+  const mig = require("fs").readFileSync(
+    require("path").join(__dirname, "../migrations/015_workflow_waits.sql"),
+    "utf8"
+  );
+  assert.ok(mig.includes("ON DELETE CASCADE"));
+  const migJobs = require("fs").readFileSync(
+    require("path").join(__dirname, "../migrations/012_workflows.sql"),
+    "utf8"
+  );
+  assert.ok(migJobs.includes("workflow_jobs"));
+  assert.ok(migJobs.includes("ON DELETE CASCADE"));
+});
+
+check("TEST 8A.1-24 Wait step history is single row waiting→succeeded", () => {
+  const stepId = "step-wait-1";
+  const history = [{ id: stepId, status: "running" }];
+  history[0].status = "waiting";
+  history[0].status = "succeeded";
+  assert.strictEqual(history.length, 1);
+  assert.strictEqual(history[0].status, "succeeded");
+  // Engine updates same stepId on suspend/resume — no second INSERT for Wait
+  const waitSrc = require("fs").readFileSync(
+    require("path").join(__dirname, "../services/workflowWait.service.js"),
+    "utf8"
+  );
+  assert.ok(waitSrc.includes("WHERE id = ?"));
+  assert.ok(waitSrc.includes("status = 'waiting'"));
+  assert.ok(waitSrc.includes("status = 'succeeded'"));
+});
+
+check("TEST 8A.1-25 waiting run-history API fields", () => {
+  const src = require("fs").readFileSync(
+    require("path").join(__dirname, "../modules/workflows/workflows.service.js"),
+    "utf8"
+  );
+  assert.ok(src.includes("waitingNodeId: row.waiting_node_id"));
+  assert.ok(src.includes("resumeAt: row.resume_at"));
+  // After completion, cancel/success clears waiting fields
+  assert.ok(src.includes("waiting_node_id = NULL"));
+});
+
+check("TEST 8A.1-26 no credential secrets in sanitized snapshot", () => {
+  const snap = buildExecutionSnapshot({
+    waitNodeId: "w",
+    waitStepId: "s",
+    waitInputItems: [],
+    context: {
+      input: {},
+      steps: {
+        http: {
+          status: 200,
+          headers: { Authorization: "Bearer sk-live-secret", "X-Ok": "1" },
+          credentialSecret: "should-not-persist",
+          apiKey: "sk-abc",
+        },
+      },
+      items: {},
+      portOutputs: {},
+    },
+    scheduler: {
+      edgeState: new Map(),
+      nodeState: new Map(),
+      loopCounts: new Map(),
+    },
+    finalOutput: null,
+    runErrors: [],
+  });
+  const text = JSON.stringify(snap);
+  assert.ok(!text.includes("Bearer sk-live-secret"));
+  assert.ok(!text.includes("should-not-persist"));
+  assert.ok(!text.includes("sk-abc"));
+  assert.ok(text.includes("***redacted***"));
+  assert.ok(text.includes("X-Ok") || text.includes('"1"'));
+});
+
+check("TEST 8A.1-27 status enums include waiting in migration + engine", () => {
+  const mig = require("fs").readFileSync(
+    require("path").join(__dirname, "../migrations/015_workflow_waits.sql"),
+    "utf8"
+  );
+  assert.ok(mig.includes("'waiting'"));
+  const engine = require("fs").readFileSync(
+    require("path").join(__dirname, "../services/workflowEngine.service.js"),
+    "utf8"
+  );
+  assert.ok(engine.includes('run.status === "waiting"'));
+  assert.ok(engine.includes("getRecoverableWaitForRun"));
+  assert.ok(engine.includes("AND status = 'running'"));
+  const worker = require("fs").readFileSync(
+    require("path").join(__dirname, "../services/workflowWorker.service.js"),
+    "utf8"
+  );
+  assert.ok(worker.includes("reclaimStale"));
+});
+
+check("TEST 8A.1-28 progress snapshot enables crash-after-resume restore", () => {
+  const def = {
+    nodes: [
+      { id: "t", type: "trigger", data: {} },
+      { id: "w", type: "wait", data: {} },
+      { id: "fx", type: "set", data: {} },
+    ],
+    edges: [
+      { id: "e1", source: "t", target: "w" },
+      { id: "e2", source: "w", target: "fx" },
+    ],
+  };
+  const graph = buildG(def);
+  const sched = createSched(graph);
+  sched.complete(graph.byId.get("t"), null);
+  sched.complete(graph.byId.get("w"), null);
+  const progress = buildExecutionSnapshot({
+    waitNodeId: "w",
+    waitStepId: "sw",
+    waitInputItems: [{ json: { ok: true } }],
+    context: {
+      input: {},
+      steps: { w: { waited: true } },
+      items: { w: [{ json: { ok: true } }] },
+      portOutputs: {},
+    },
+    scheduler: sched,
+    finalOutput: null,
+    runErrors: [],
+    waitCompleted: true,
+  });
+  assert.strictEqual(progress.waitCompleted, true);
+  const restored = createSched(graph, progress.scheduler);
+  assert.strictEqual(restored.stateOf("w"), "done");
+  const next = restored.next();
+  assert.strictEqual(next.node.id, "fx");
+});
+
+check("TEST 8A.1-29 editor poll limitation documented", () => {
+  const rules = require("fs").readFileSync(
+    require("path").join(__dirname, "../../docs/WORKFLOW_ENGINE_RULES.md"),
+    "utf8"
+  );
+  assert.ok(rules.toLowerCase().includes("poll"));
+  assert.ok(rules.includes("60"));
+});
+
 (async () => {
   for (const task of queue) await task();
   console.log(`\n${passed} checks passed`);

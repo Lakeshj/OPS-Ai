@@ -92,12 +92,23 @@ BACKEND_INTERNAL_URL=http://127.0.0.1:5014
 
 On a **dev machine with Cursor/VS Code Remote tunnels**, prefer `http://localhost:PORT` over `http://127.0.0.1:PORT` — IDE forwards can bind `127.0.0.1` and cause Next proxy timeouts / 500s.
 
-### 5. MySQL (once)
+### 5. MySQL (once for bootstrap, then migrate on every deploy)
 
 ```bash
 sudo mysql -u root -p < source/mysql/opsai.sql
 cd source/backend && npm run db:migrate
 ```
+
+**Every later deploy** must also run migrations so live picks up new tables/columns
+(e.g. Part 8A `015_workflow_waits.sql`). Prefer `./deploy.sh` (includes migrate),
+or after a manual pull:
+
+```bash
+cd source/backend && npm run db:migrate
+pm2 restart opsai-backend
+```
+
+See [docs/database-migrations.md](./docs/database-migrations.md).
 
 ### 6. Build + PM2
 
@@ -110,13 +121,17 @@ Or manually:
 
 ```bash
 cd source/frontend && npm install && npm run build
-cd ../backend && npm install
+cd ../backend && npm install && npm run db:migrate
 
 pm2 start npm --name opsai-frontend --cwd /var/www/opsai.yourdomain.com/source/frontend -- start
-pm2 start server.js --name opsai-backend --cwd /var/www/opsai.yourdomain.com/source/backend
+# Prefer npm start so prestart runs db:migrate on process boot
+pm2 start npm --name opsai-backend --cwd /var/www/opsai.yourdomain.com/source/backend -- start
 pm2 save
 pm2 startup
 ```
+
+If the backend was already started with `server.js` directly, either switch to
+`npm start` as above, or always run `npm run db:migrate` in `deploy.sh` / after pull.
 
 Live names on opsai.socialchamps.com: **`opsai-frontend`** + **`opsai-backend`** (not opsai-web / opsai-api).
 
@@ -234,9 +249,12 @@ What it does:
 2. `git pull` inside **`gitsource`**
 3. `rsync` → **`source`** (keeps `.env`, `node_modules`, `.next`, `storage`)
 4. `npm install` + `build` frontend
-5. backend migrate
+5. backend `npm install` + **`npm run db:migrate`** (required for local→live schema parity)
 6. `pm2 restart` `opsai-frontend` + `opsai-backend`
 
+Schema changes (new tables/columns/ENUMs) only reach live if the migration `.sql`
+file is in git **and** migrate runs on the live DB. Details:
+[docs/database-migrations.md](./docs/database-migrations.md).
 ---
 
 ## Ports / PM2 names

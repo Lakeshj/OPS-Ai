@@ -544,6 +544,35 @@ export const NODE_PARAMETER_SCHEMAS: Record<WorkflowNodeType, ParamDescriptor[]>
       },
     ],
 
+    wait: [
+      {
+        name: "waitAmount",
+        displayName: "Wait for",
+        type: "number",
+        default: 5,
+        min: 0,
+      },
+      {
+        name: "waitUnit",
+        displayName: "Unit",
+        type: "options",
+        default: "minutes",
+        options: [
+          { name: "Seconds", value: "seconds" },
+          { name: "Minutes", value: "minutes" },
+          { name: "Hours", value: "hours" },
+          { name: "Days", value: "days" },
+        ],
+      },
+      {
+        name: "waitUntil",
+        displayName: "Or wait until (ISO datetime)",
+        type: "string",
+        placeholder: "2026-09-02T15:00:00.000Z",
+        description: "If set, overrides duration and waits until this absolute time.",
+      },
+    ],
+
     noop: [],
 
     integration: [],

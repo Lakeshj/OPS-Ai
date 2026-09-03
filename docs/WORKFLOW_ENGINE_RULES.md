@@ -49,3 +49,51 @@ Key: `schedule:{workflowId}:{nodeId}:{ruleId}:{localOccurrenceKey}:{timezone}` w
 ### Scheduler runtime
 
 Anchored rules use bounded reconciliation (`MAX_SCHEDULER_WAKE_MS` = 24h): the scheduler never sleeps longer than 24h without recalculating; once within the bound, the timer uses the actual remaining delay. No multi-month `setTimeout`. `refreshAll()` re-registers from persisted definition; anchor and idempotency remain authoritative.
+
+## Wait node semantics (Part 8A — durable time-based)
+
+Authoritative service: `backend/services/workflowWait.service.js`.
+
+### Lifecycle
+
+`queued → running → waiting → running → succeeded|failed|cancelled`
+
+Wait step: `running → waiting → succeeded` (same step row).
+
+Job: `queued → locked → queued(available_at=resumeAt) → locked → done`.
+
+Wait record: `waiting → claimed → resumed` (or `cancelled`).
+
+### Persistence
+
+- `workflow_runs.definition_snapshot_json` freezes the graph at enqueue (resume never uses a later edit).
+- `workflow_waits` stores absolute `resumeAt`, execution snapshot (steps/items/portOutputs/scheduler state), and claim status.
+- No long `setTimeout` as source of truth; worker requeues with `available_at = resumeAt`.
+- Suspension is a single DB transaction (wait row + run waiting + step waiting + job requeue).
+- After claim, a progress snapshot (`waitCompleted: true`) is written so crash mid-downstream can restore without cold-starting.
+- Stale `locked` jobs and `claimed` waits are reclaimed after `WORKFLOW_WAIT_CLAIM_LEASE_MS` / `WORKFLOW_JOB_LOCK_LEASE_MS` (default 5m).
+
+### Parallel branches
+
+The engine is single-threaded per run. Reaching Wait suspends the **entire** run; sibling ready branches are frozen in the scheduler snapshot and continue only after resume. Part 8A does **not** keep other branches executing while one arm waits.
+
+### Binary durability
+
+Snapshot keeps `storageKey` / `filePath` / mime metadata refs only. Inlined Buffer/base64 `data` is stripped. Classification: **SUPPORTED ONLY IF EXTERNAL FILE STILL EXISTS**.
+
+### Editor vs production
+
+- Full Execute / Schedule / Webhook: real durable suspension.
+- Run Step / Run To: preview only (`wouldResumeAt`); no durable wait row.
+
+### Cancellation
+
+`POST /workflows/:id/runs/:runId/cancel` cancels queued/running/waiting runs and marks waits cancelled. Cancel vs resume uses CAS: claim requires run still `waiting`; terminal run updates require status `running`.
+
+### Deactivation
+
+Deactivating a workflow unregisters schedule triggers only. It does **not** cancel already-waiting runs (frozen policy).
+
+### Editor poll limitation
+
+Editor run polling stops after ~60s; open Run history later to see still-waiting runs.

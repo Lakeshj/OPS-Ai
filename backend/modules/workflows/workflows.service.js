@@ -33,6 +33,7 @@ const ALLOWED_NODE_TYPES = new Set([
   "spreadsheet",
   "email",
   "result",
+  "wait",
   "noop",
   "integration",
 ]);
@@ -66,6 +67,9 @@ const formatRun = (row) => ({
   input: parseJson(row.input_json, null),
   output: parseJson(row.output_json, null),
   error: row.error,
+  waitingNodeId: row.waiting_node_id || null,
+  resumeAt: row.resume_at || null,
+  hasDefinitionSnapshot: row.definition_snapshot_json != null,
   startedAt: row.started_at,
   finishedAt: row.finished_at,
   createdBy: row.created_by,
@@ -272,7 +276,7 @@ const remove = async (id, authUser) => {
 };
 
 const startRun = async (workflowId, input, authUser, idempotencyKey = null) => {
-  await getById(workflowId, authUser);
+  const workflow = await getById(workflowId, authUser);
 
   // A repeated webhook delivery reuses the original run instead of
   // processing the same payload twice.
@@ -288,19 +292,21 @@ const startRun = async (workflowId, input, authUser, idempotencyKey = null) => {
 
   const runId = uuidv4();
   const jobId = uuidv4();
+  const definitionSnapshot = workflow.definition || emptyDefinition();
 
   const connection = await pool.getConnection();
   try {
     await connection.beginTransaction();
     await connection.execute(
       `INSERT INTO workflow_runs
-        (id, workflow_id, status, idempotency_key, input_json, created_by)
-       VALUES (?, ?, 'queued', ?, ?, ?)`,
+        (id, workflow_id, status, idempotency_key, input_json, definition_snapshot_json, created_by)
+       VALUES (?, ?, 'queued', ?, ?, ?, ?)`,
       [
         runId,
         workflowId,
         idempotencyKey,
         JSON.stringify(input ?? {}),
+        JSON.stringify(definitionSnapshot),
         authUser.userId,
       ]
     );
@@ -676,6 +682,49 @@ const previewScheduleOccurrences = async (workflowId, body, authUser) => {
   return { previews, count };
 };
 
+const cancelRun = async (runId, authUser) => {
+  const run = await getRunById(runId, authUser);
+  if (!["queued", "running", "waiting"].includes(run.status)) {
+    throw new AppError(
+      `Cannot cancel a run in status "${run.status}"`,
+      400,
+      "VALIDATION_ERROR"
+    );
+  }
+  const connection = await pool.getConnection();
+  try {
+    await connection.beginTransaction();
+    await connection.execute(
+      `UPDATE workflow_waits
+       SET status = 'cancelled'
+       WHERE run_id = ? AND status IN ('waiting', 'claimed')`,
+      [runId]
+    );
+    await connection.execute(
+      `UPDATE workflow_jobs
+       SET status = 'done', locked_at = NULL, locked_by = NULL
+       WHERE run_id = ? AND status IN ('queued', 'locked')`,
+      [runId]
+    );
+    await connection.execute(
+      `UPDATE workflow_runs
+       SET status = 'cancelled',
+           finished_at = CURRENT_TIMESTAMP,
+           waiting_node_id = NULL,
+           resume_at = NULL
+       WHERE id = ? AND status IN ('queued', 'running', 'waiting')`,
+      [runId]
+    );
+    await connection.commit();
+  } catch (err) {
+    await connection.rollback();
+    throw err;
+  } finally {
+    connection.release();
+  }
+  return getRunById(runId, authUser);
+};
+
 module.exports = {
   listAll,
   listByWorkspace,
@@ -686,6 +735,7 @@ module.exports = {
   startRun,
   getRunById,
   listRuns,
+  cancelRun,
   executeNodeStep,
   runToNode,
   executePrevious,
