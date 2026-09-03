@@ -37,6 +37,7 @@ const REASONS = {
   TARGET_NOT_EXECUTED: "TARGET_NOT_EXECUTED",
   PROVENANCE_MISSING: "PROVENANCE_MISSING",
   PROVENANCE_AMBIGUOUS: "PROVENANCE_AMBIGUOUS",
+  OCCURRENCE_AMBIGUOUS: "OCCURRENCE_AMBIGUOUS",
   TARGET_NOT_IN_PATH: "TARGET_NOT_IN_PATH",
   ITEM_INDEX_OUT_OF_RANGE: "ITEM_INDEX_OUT_OF_RANGE",
   INVALID_REFERENCE: "INVALID_REFERENCE",
@@ -101,13 +102,38 @@ const isUpstreamNode = (graph, targetNodeId, nodeId) => {
 };
 
 const getTargetItems = (context, targetNodeId) => {
+  const runData = context.runData;
+  if (runData && typeof runData === "object") {
+    const list = runData[targetNodeId];
+    if (Array.isArray(list) && list.length > 1) {
+      // Prefer pinned source occurrence from current node's inputSources
+      const sources = context.currentInputSources;
+      if (sources && typeof sources === "object") {
+        for (const src of Object.values(sources)) {
+          if (src && src.nodeId === targetNodeId && src.runIndex != null) {
+            const occ = list.find((o) => o.runIndex === src.runIndex);
+            if (occ && Array.isArray(occ.items)) return occ.items;
+          }
+        }
+      }
+      // Multiple occurrences without a source pin — do not silently pick latest
+      return { __occurrenceAmbiguous: true, count: list.length };
+    }
+    if (Array.isArray(list) && list.length === 1 && Array.isArray(list[0].items)) {
+      return list[0].items;
+    }
+  }
   const items = context.items?.[targetNodeId];
   if (Array.isArray(items)) return items;
   return null;
 };
 
+const isOccurrenceAmbiguous = (items) =>
+  items && typeof items === "object" && items.__occurrenceAmbiguous === true;
+
 const legacyPositionalItem = (context, targetNodeId, currentItemIndex) => {
   const targetItems = getTargetItems(context, targetNodeId);
+  if (isOccurrenceAmbiguous(targetItems)) return null;
   if (!targetItems || targetItems.length === 0) return null;
 
   if (targetItems.length === 1) {
@@ -138,6 +164,9 @@ const legacyPositionalItem = (context, targetNodeId, currentItemIndex) => {
 
 const resolveWithoutItemContext = (context, targetNodeId) => {
   const targetItems = getTargetItems(context, targetNodeId);
+  if (isOccurrenceAmbiguous(targetItems)) {
+    return { status: "error", reason: REASONS.OCCURRENCE_AMBIGUOUS };
+  }
   if (targetItems?.length === 1) {
     return { status: "resolved", item: targetItems[0], mode: "legacy_single" };
   }
@@ -171,6 +200,15 @@ const resolveReferencedItem = ({
 
   if (!hasTargetOutput) {
     return { status: "error", reason: REASONS.TARGET_NOT_EXECUTED };
+  }
+
+  const earlyItems = getTargetItems(context, targetNodeId);
+  if (isOccurrenceAmbiguous(earlyItems)) {
+    return {
+      status: "error",
+      reason: REASONS.OCCURRENCE_AMBIGUOUS,
+      occurrenceCount: earlyItems.count,
+    };
   }
 
   let item = currentItem ?? null;
@@ -261,26 +299,11 @@ const resolveReferencedItem = ({
     } else {
       return { status: "error", reason: REASONS.PROVENANCE_AMBIGUOUS };
     }
-  } else {
-    const currentIncoming = normalizeMergeIncomingEdges(graph, nodeId);
-    if (currentIncoming.length === 1) {
-      nodeId = currentIncoming[0].source;
-    } else if (currentIncoming.length > 1) {
-      const port = getPairedInputPort(current.pairedItem);
-      if (!Number.isInteger(port) || port < 0) {
-        return { status: "error", reason: REASONS.PROVENANCE_AMBIGUOUS };
-      }
-      const pred = getPredecessorForPort(graph, nodeId, port);
-      if (!pred) {
-        return { status: "error", reason: REASONS.PROVENANCE_AMBIGUOUS };
-      }
-      nodeId = pred;
-    }
-
-    if (nodeId === targetNodeId) {
-      return { status: "resolved", item: current, mode: "thread" };
-    }
   }
+  // Non-array pairedItem: walk hops below. Do not rewrite nodeId to the
+  // immediate predecessor and return `current` — that skipped pairedItem
+  // indexing and could return the wrong node's item (critical once the same
+  // predecessor has multiple occurrences).
 
   for (let hop = 0; hop < 128; hop += 1) {
     const pi = current?.pairedItem;
@@ -343,6 +366,13 @@ const resolveReferencedItem = ({
     }
 
     const predecessorItems = getTargetItems(context, predecessorNodeId);
+    if (isOccurrenceAmbiguous(predecessorItems)) {
+      return {
+        status: "error",
+        reason: REASONS.OCCURRENCE_AMBIGUOUS,
+        occurrenceCount: predecessorItems.count,
+      };
+    }
     if (!predecessorItems) {
       return { status: "error", reason: REASONS.TARGET_NOT_EXECUTED };
     }

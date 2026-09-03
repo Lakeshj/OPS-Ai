@@ -259,11 +259,11 @@
       "name": "Loop Over Items",
       "category": "Logic",
       "type": "Logic",
-      "description": "Iterate over a list of items",
+      "description": "Iterate over a list of items (runtime Part 9B — unavailable)",
       "icon": "repeat",
       "provider": null,
       "available": false,
-      "engineType": null
+      "engineType": "loop"
     },
     {
       "id": "split-out",

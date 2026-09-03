@@ -34,6 +34,7 @@ const ALLOWED_NODE_TYPES = new Set([
   "email",
   "result",
   "wait",
+  "loop",
   "noop",
   "integration",
 ]);
@@ -80,6 +81,7 @@ const formatStep = (row) => ({
   id: row.id,
   runId: row.run_id,
   nodeId: row.node_id,
+  executionIndex: row.execution_index ?? 0,
   nodeType: row.node_type,
   status: row.status,
   attempts: row.attempts ?? 0,
@@ -123,6 +125,14 @@ const validateDefinition = (definition) => {
   const switchErrors = validateSwitchEdges(definition);
   if (switchErrors.length > 0) {
     throw new AppError(switchErrors[0], 400, "VALIDATION_ERROR");
+  }
+  const { buildGraph } = require("../../services/workflowEngine.service");
+  const {
+    validateControlledCycles,
+  } = require("../../services/workflowLoopGraph.service");
+  const cycleCheck = validateControlledCycles(buildGraph(definition));
+  if (!cycleCheck.ok) {
+    throw new AppError(cycleCheck.errors[0], 400, "VALIDATION_ERROR");
   }
 };
 

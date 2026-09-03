@@ -58,6 +58,21 @@ const setNodeResult = (workflowId, userId, nodeId, result, definition) => {
     portOutputs: result.portOutputs,
     error: result.error || null,
     executionTimeMs: result.executionTimeMs,
+    executionIndex: result.executionIndex ?? 0,
+    // Part 9A: optional occurrence list for future multi-run inspector
+    occurrences: Array.isArray(result.occurrences)
+      ? result.occurrences
+      : result.output !== undefined
+        ? [
+            {
+              runIndex: result.executionIndex ?? 0,
+              status: result.status || "succeeded",
+              items: result.items,
+              output: result.output,
+              portOutputs: result.portOutputs || null,
+            },
+          ]
+        : undefined,
     cacheState: result.status === "failed" ? "dirty" : "clean",
     executionSignature,
     updatedAt: new Date().toISOString(),

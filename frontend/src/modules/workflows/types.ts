@@ -30,6 +30,7 @@ export type WorkflowNodeType =
   | "email"
   | "result"
   | "wait"
+  | "loop"
   | "noop"
   | "integration";
 
@@ -376,6 +377,8 @@ export interface WorkflowRunStep {
   id: string;
   runId: string;
   nodeId: string;
+  /** Part 9A: which execution of this node within the run (0 = first). */
+  executionIndex?: number;
   nodeType: string;
   status: string;
   input?: unknown;

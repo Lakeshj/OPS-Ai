@@ -1723,6 +1723,14 @@ const handlers = {
     },
   }),
 
+  loop: async (node) => {
+    const err = new Error(
+      "Loop runtime is not enabled yet. Controlled Loop topology is recognized but execution starts in Part 9B."
+    );
+    err.code = "LOOP_RUNTIME_NOT_ENABLED";
+    throw err;
+  },
+
   wait: async (node, context) => {
     const data = node.data || {};
     const inputItems = Array.isArray(context.inputItems) ? context.inputItems : [];

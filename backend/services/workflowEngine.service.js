@@ -39,7 +39,20 @@ const {
   sealResumeToken,
   WAIT_MODES,
   resolveWaitMode,
+  normalizeWaitSnapshot,
 } = require("./workflowWait.service");
+const {
+  createRunData,
+  recordOccurrence,
+  nextRunIndex,
+  applyLatestView,
+  buildInputSources,
+  fromLegacyContext,
+} = require("./workflowOccurrence.service");
+const {
+  validateControlledCycles: validateLoopTopology,
+  assertLoopRuntimeNotEnabled: assertNoLoopRuntime,
+} = require("./workflowLoopGraph.service");
 
 const normalizeEditorSession = (sessionOrLegacy) => {
   if (sessionOrLegacy?.nodeResults) {
@@ -455,6 +468,11 @@ const executeRun = async (runId, options = {}) => {
   );
   const input = parseJson(run.input_json, {});
   const graph = buildGraph(definition);
+  assertNoLoopRuntime(graph);
+  const cycleCheck = validateLoopTopology(graph);
+  if (!cycleCheck.ok) {
+    throw new Error(cycleCheck.errors[0] || "Invalid workflow cycle");
+  }
   const isProductionRun =
     input?.source === "schedule" || input?.source === "webhook";
 
@@ -465,13 +483,14 @@ const executeRun = async (runId, options = {}) => {
   let resumeWait = null;
 
   const applyWaitResumeFromSnapshot = async (waitRow, { executeWaitNode }) => {
-    const snap = waitRow.snapshot || {};
+    const snap = normalizeWaitSnapshot(waitRow.snapshot || {});
     scheduler = createScheduler(graph, snap.scheduler || null);
     context = {
       input: snap.context?.input || input,
       steps: { ...(snap.context?.steps || {}) },
       items: { ...(snap.context?.items || {}) },
       portOutputs: { ...(snap.context?.portOutputs || {}) },
+      runData: snap.runData || fromLegacyContext(snap.context || {}),
       inputItems: [],
       runId,
       workspaceId: run.workspace_id,
@@ -483,6 +502,7 @@ const executeRun = async (runId, options = {}) => {
       waitResumeMechanism: waitRow.resume_mechanism || waitRow.resume_mode,
       now,
     };
+    applyLatestView(context);
     finalOutput = snap.finalOutput ?? null;
     runErrors = Array.isArray(snap.runErrors) ? [...snap.runErrors] : [];
 
@@ -508,6 +528,18 @@ const executeRun = async (runId, options = {}) => {
       const waitItems = finalizeNodeItems(waitNode, waitInputItems, waitResult);
       context.items[waitNode.id] = waitItems;
       context.steps[waitNode.id] = waitResult.output ?? null;
+      if (!context.runData) context.runData = createRunData();
+      recordOccurrence(context.runData, {
+        nodeId: waitNode.id,
+        runIndex: nextRunIndex(context.runData, waitNode.id),
+        status: "succeeded",
+        items: waitItems,
+        output: waitResult.output ?? null,
+        inputSources: null,
+        stepId: snap.waitStepId || waitRow.step_id,
+        completedAt: new Date().toISOString(),
+      });
+      applyLatestView(context);
 
       await markWaitResumed(
         waitRow.id,
@@ -566,6 +598,7 @@ const executeRun = async (runId, options = {}) => {
         steps: {},
         items: {},
         portOutputs: {},
+        runData: createRunData(),
         inputItems: [],
         runId,
         workspaceId: run.workspace_id,
@@ -590,6 +623,7 @@ const executeRun = async (runId, options = {}) => {
       steps: {},
       items: {},
       portOutputs: {},
+      runData: createRunData(),
       inputItems: [],
       runId,
       workspaceId: run.workspace_id,
@@ -620,36 +654,51 @@ const executeRun = async (runId, options = {}) => {
       const { node, action } = next;
 
       if (action === "skip") {
+        const skipIndex = nextRunIndex(context.runData || createRunData(), node.id);
+        if (!context.runData) context.runData = createRunData();
         scheduler.skip(node);
         await pool.execute(
           `INSERT INTO workflow_run_steps
-            (id, run_id, node_id, node_type, status, started_at, finished_at)
-           VALUES (?, ?, ?, ?, 'skipped', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
+            (id, run_id, node_id, execution_index, node_type, status, started_at, finished_at)
+           VALUES (?, ?, ?, ?, ?, 'skipped', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
           [
             uuidv4(),
             runId,
             node.id,
+            skipIndex,
             node.type || node.data?.nodeType || "unknown",
           ]
         );
+        recordOccurrence(context.runData, {
+          nodeId: node.id,
+          runIndex: skipIndex,
+          status: "skipped",
+          items: [],
+          output: null,
+        });
         continue;
       }
 
       {
         const nodeType = node.type || node.data?.nodeType || "unknown";
+        if (!context.runData) context.runData = createRunData();
+        const executionIndex = nextRunIndex(context.runData, node.id);
+        const inputSources = buildInputSources(graph, node.id, context.runData);
         const stepId = uuidv4();
         const stepInput = {
           nodeType,
           nodeData: compactValue(node.data || {}),
           contextInput: compactValue(context.input),
           incoming: buildIncomingSnapshot(graph, node.id, context),
+          executionIndex,
+          inputSources,
         };
 
         await pool.execute(
           `INSERT INTO workflow_run_steps
-            (id, run_id, node_id, node_type, status, input_json, started_at)
-           VALUES (?, ?, ?, ?, 'running', ?, CURRENT_TIMESTAMP)`,
-          [stepId, runId, node.id, nodeType, JSON.stringify(stepInput)]
+            (id, run_id, node_id, execution_index, node_type, status, input_json, started_at)
+           VALUES (?, ?, ?, ?, ?, 'running', ?, CURRENT_TIMESTAMP)`,
+          [stepId, runId, node.id, executionIndex, nodeType, JSON.stringify(stepInput)]
         );
 
         context.inputItems = collectIncomingItems(graph, node.id, context);
@@ -657,6 +706,8 @@ const executeRun = async (runId, options = {}) => {
           edgeState: scheduler.edgeState,
         });
         context.currentNodeId = node.id;
+        context.currentRunIndex = executionIndex;
+        context.currentInputSources = inputSources;
         context.graph = graph;
 
         if (
@@ -781,6 +832,19 @@ const executeRun = async (runId, options = {}) => {
           }
           context.steps[node.id] = output;
 
+          recordOccurrence(context.runData, {
+            nodeId: node.id,
+            runIndex: executionIndex,
+            status: "succeeded",
+            items,
+            output,
+            portOutputs: context.portOutputs?.[node.id] || null,
+            inputSources,
+            stepId,
+            completedAt: new Date().toISOString(),
+          });
+          applyLatestView(context);
+
           await updateStep(stepId, {
             status: "succeeded",
             attempts,
@@ -821,6 +885,18 @@ const executeRun = async (runId, options = {}) => {
         const errorOutput = { error: message, failed: true, nodeId: node.id };
         context.steps[node.id] = errorOutput;
         context.items[node.id] = [errorOutput];
+        recordOccurrence(context.runData, {
+          nodeId: node.id,
+          runIndex: executionIndex,
+          status: "failed",
+          items: [errorOutput],
+          output: errorOutput,
+          inputSources,
+          stepId,
+          error: message,
+          completedAt: new Date().toISOString(),
+        });
+        applyLatestView(context);
         runErrors.push({ nodeId: node.id, error: message });
 
         scheduler.complete(node, policy.onError === "route" ? "error" : null);
@@ -899,6 +975,11 @@ const executePartial = async ({
   reconcileSessionWithDefinition(editorSession, definition);
 
   const graph = buildGraph(definition);
+  assertNoLoopRuntime(graph);
+  const cycleCheck = validateLoopTopology(graph);
+  if (!cycleCheck.ok) {
+    throw new Error(cycleCheck.errors[0] || "Invalid workflow cycle");
+  }
   const target = graph.byId.get(targetNodeId);
   if (!target) throw new Error(`Node not found: ${targetNodeId}`);
 
@@ -950,6 +1031,8 @@ const executePartial = async ({
     input,
     steps: {},
     items: {},
+    portOutputs: {},
+    runData: createRunData(),
     inputItems: [],
     runId: null,
     workspaceId: null,
@@ -1103,12 +1186,27 @@ const executePartial = async ({
     }
     context.steps[node.id] = output;
 
+    const executionIndex = nextRunIndex(context.runData, node.id);
+    recordOccurrence(context.runData, {
+      nodeId: node.id,
+      runIndex: executionIndex,
+      status: "succeeded",
+      items,
+      output,
+      portOutputs: portOutputs || null,
+      inputSources: buildInputSources(graph, node.id, context.runData),
+      completedAt: new Date().toISOString(),
+    });
+    applyLatestView(context);
+
     results[node.id] = {
       nodeId: node.id,
       status: "succeeded",
       output,
       items,
       portOutputs,
+      executionIndex,
+      occurrences: context.runData[node.id],
       executionTimeMs: Date.now() - nodeStart,
       cacheState: pinned ? "pinned" : "clean",
     };
@@ -1295,4 +1393,18 @@ module.exports = {
   createScheduler,
   finalizeNodeItems,
   finalizeSwitchOutputs,
+  validateControlledCycles: (definitionOrGraph) => {
+    const graph =
+      definitionOrGraph?.byId != null
+        ? definitionOrGraph
+        : buildGraph(definitionOrGraph);
+    return validateLoopTopology(graph);
+  },
+  assertLoopRuntimeNotEnabled: (definitionOrGraph) => {
+    const graph =
+      definitionOrGraph?.byId != null
+        ? definitionOrGraph
+        : buildGraph(definitionOrGraph);
+    return assertNoLoopRuntime(graph);
+  },
 };

@@ -8,6 +8,11 @@ const { v4: uuidv4 } = require("uuid");
 const { pool } = require("../config/database");
 const { redactHeaders } = require("../utils/workflowDebug");
 const { encryptSecret, decryptSecret } = require("./secretBox.service");
+const {
+  serializeRunData,
+  deserializeRunData,
+  fromLegacyContext,
+} = require("./workflowOccurrence.service");
 
 /** Default lease before a claimed wait / locked job may be reclaimed (ms). */
 const WAIT_CLAIM_LEASE_MS =
@@ -189,6 +194,25 @@ const sanitizeSteps = (steps) => {
   return out;
 };
 
+/** Sanitize occurrence-aware runData the same way as legacy steps/items maps. */
+const sanitizeRunData = (runData) => {
+  if (!runData || typeof runData !== "object") return {};
+  const out = {};
+  for (const [nodeId, list] of Object.entries(runData)) {
+    if (!Array.isArray(list)) continue;
+    out[nodeId] = list.map((occ) => ({
+      ...occ,
+      items: Array.isArray(occ.items) ? occ.items.map(sanitizeItem) : [],
+      output: sanitizeStepValue(occ.output),
+      portOutputs: occ.portOutputs
+        ? sanitizePortOutputs({ [nodeId]: occ.portOutputs })[nodeId]
+        : null,
+      error: occ.error || null,
+    }));
+  }
+  return out;
+};
+
 const buildExecutionSnapshot = ({
   waitNodeId,
   waitStepId,
@@ -198,22 +222,45 @@ const buildExecutionSnapshot = ({
   finalOutput,
   runErrors,
   waitCompleted = false,
-}) => ({
-  version: 1,
-  waitNodeId,
-  waitStepId,
-  waitCompleted: Boolean(waitCompleted),
-  waitInputItems: (waitInputItems || []).map(sanitizeItem),
-  context: {
-    input: context.input || {},
-    steps: sanitizeSteps(context.steps || {}),
-    items: sanitizeItemsMap(context.items || {}),
-    portOutputs: sanitizePortOutputs(context.portOutputs || {}),
-  },
-  scheduler: serializeSchedulerState(scheduler),
-  finalOutput: finalOutput ?? null,
-  runErrors: runErrors || [],
-});
+}) => {
+  const steps = sanitizeSteps(context.steps || {});
+  const items = sanitizeItemsMap(context.items || {});
+  const portOutputs = sanitizePortOutputs(context.portOutputs || {});
+  const rawRunData =
+    context.runData && Object.keys(context.runData).length > 0
+      ? context.runData
+      : fromLegacyContext({ steps, items, portOutputs });
+  return {
+    version: 2,
+    waitNodeId,
+    waitStepId,
+    waitCompleted: Boolean(waitCompleted),
+    waitInputItems: (waitInputItems || []).map(sanitizeItem),
+    runData: serializeRunData(sanitizeRunData(rawRunData)),
+    context: {
+      input: context.input || {},
+      steps,
+      items,
+      portOutputs,
+    },
+    scheduler: serializeSchedulerState(scheduler),
+    finalOutput: finalOutput ?? null,
+    runErrors: runErrors || [],
+  };
+};
+
+/**
+ * Normalize Wait snapshots (v1 nodeId maps → runData occurrence 0).
+ */
+const normalizeWaitSnapshot = (raw) => {
+  const snap = raw && typeof raw === "object" ? { ...raw } : {};
+  if (snap.runData && typeof snap.runData === "object") {
+    snap.runData = deserializeRunData(snap.runData);
+  } else {
+    snap.runData = fromLegacyContext(snap.context || {});
+  }
+  return snap;
+};
 
 /**
  * Suspend production run at Wait. Persists wait row + snapshot, sets run WAITING,
@@ -922,4 +969,5 @@ module.exports = {
   signalWaitInMemory,
   findWaitByTokenHashInMemory,
   parseJson,
+  normalizeWaitSnapshot,
 };

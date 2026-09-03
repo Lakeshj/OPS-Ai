@@ -50,7 +50,7 @@ Key: `schedule:{workflowId}:{nodeId}:{ruleId}:{localOccurrenceKey}:{timezone}` w
 
 Anchored rules use bounded reconciliation (`MAX_SCHEDULER_WAKE_MS` = 24h): the scheduler never sleeps longer than 24h without recalculating; once within the bound, the timer uses the actual remaining delay. No multi-month `setTimeout`. `refreshAll()` re-registers from persisted definition; anchor and idempotency remain authoritative.
 
-## Wait node semantics (Part 8A / 8A.1 / 8B)
+## Wait node semantics (Part 8A / 8A.1 / 8B) — FROZEN
 
 Authoritative service: `backend/services/workflowWait.service.js`.
 
@@ -68,54 +68,49 @@ All modes converge: signal (or due time) → job available → worker `claimDueW
 
 `queued → running → waiting → running → succeeded|failed|cancelled`
 
-Wait step: `running → waiting → succeeded` (same step row).
-
-Job: `queued → locked → queued(available_at) → locked → done`.
-
-Wait record: `waiting → claimed → resumed` (or `cancelled`).
-
-### External token security
-
-- 256-bit `crypto.randomBytes` → base64url
-- At rest: SHA-256 hash for lookup + AES ciphertext for authorized UI reveal only
-- Raw token never in snapshot, step output, or public list APIs
-- Transport: **body / Bearer header only** (not URL path/query — avoids access-log leakage)
-- One-time / idempotent signal; invalid/cancelled tokens → generic `404 { ok: false, code: "INVALID" }`
-
 ### Persistence
 
-- `workflow_runs.definition_snapshot_json` freezes the graph at enqueue (resume never uses a later edit).
-- `workflow_waits` stores mode, absolute/null `resumeAt`, execution snapshot, claim status, token hash.
-- No long `setTimeout` as source of truth; worker requeues with `available_at`.
-- Suspension is a single DB transaction.
-- After claim, progress snapshot (`waitCompleted: true`) enables crash mid-downstream recovery.
-- Stale locks reclaimed after lease (default 5m).
-
-### Parallel branches
-
-The engine is single-threaded per run. Reaching Wait suspends the **entire** run; sibling ready branches are frozen in the scheduler snapshot and continue only after resume.
-
-### Binary durability
-
-Snapshot keeps `storageKey` / `filePath` / mime metadata refs only. Inlined Buffer/base64 `data` is stripped. Classification: **SUPPORTED ONLY IF EXTERNAL FILE STILL EXISTS**.
+- Definition snapshot at enqueue; Wait snapshot serializes scheduler + context + `runData` (v2).
+- Legacy v1 Wait snapshots normalize to occurrence 0.
+- Suspension is transactional; claim leases recover crash-after-claim.
 
 ### Editor vs production
 
-- Full Execute / Schedule / Webhook: real durable suspension.
-- Run Step / Run To: preview only (`wouldResumeAt` / `wouldWaitFor`); no durable wait row or tokens.
+- Full Execute / Schedule / Webhook: durable suspension.
+- Run Step / Run To: preview only; no durable wait/token.
+- Editor run status poll interval is **60** seconds for waiting runs (UI limitation; production resume is signal/job driven, not poll-driven).
 
-### Cancellation
+### Deactivation / delete
 
-`POST /workflows/:id/runs/:runId/cancel` cancels queued/running/waiting runs and marks waits cancelled. Cancel vs resume uses CAS.
+Deactivate does **not** cancel already-waiting runs. Delete cascades waits/jobs/runs.
 
-### Deactivation
+## Execution occurrences + controlled cycles (Part 9A — foundation)
 
-Deactivating a workflow unregisters schedule triggers only. It does **not** cancel already-waiting runs (manual/external tokens remain valid until cancel/delete).
+Authoritative services:
 
-### Webhook + Wait
+- `backend/services/workflowOccurrence.service.js` — `runData[nodeId][]`
+- `backend/services/workflowLoopGraph.service.js` — Loop topology + DAG projection
 
-Webhook trigger returns `201` with the queued run immediately — it does **not** hold the HTTP connection until the workflow finishes. Wait does not hang the inbound webhook request.
+### Occurrence identity
 
-### Editor poll limitation
+Node identity ≠ execution occurrence. Each execution has `runIndex` (0 for normal workflows).
 
-Editor run polling stops after ~60s; open Run history later to see still-waiting runs.
+Canonical storage: `runData[nodeId] = [{ runIndex, items, output, portOutputs, inputSources, status, ... }]`.
+
+Compatibility views: `context.items` / `steps` / `portOutputs` = **latest** occurrence.
+
+`inputSources` names the exact predecessor occurrence per input port (not encoded in `pairedItem`).
+
+### Persistence
+
+`workflow_run_steps.execution_index` (migration `017`). Multiple rows per `(run_id, node_id)` allowed. Retries update the same step row (same occurrence).
+
+### Loop contract (runtime NOT enabled)
+
+Ports: `items` + `continue` (in); `batch` + `done` (out). Param: `batchSize` default 1.
+
+Only sanctioned `Loop.continue` back-edges from that Loop's batch body are valid cycles. Generic cycles rejected. Nested Loop rejected. Exactly one continue edge. Forward DAG = graph minus sanctioned back-edges.
+
+Execute with a Loop node → `LOOP_RUNTIME_NOT_ENABLED` until Part 9B.
+
+Library entry remains `available: false`.

@@ -589,6 +589,17 @@ export const NODE_PARAMETER_SCHEMAS: Record<WorkflowNodeType, ParamDescriptor[]>
       },
     ],
 
+    loop: [
+      {
+        name: "batchSize",
+        displayName: "Batch size",
+        type: "number",
+        default: 1,
+        min: 1,
+        description: "Items per iteration (Loop runtime ships in Part 9B).",
+      },
+    ],
+
     noop: [],
 
     integration: [],

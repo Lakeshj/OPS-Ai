@@ -1147,6 +1147,76 @@ export const NODE_CONTRACTS: Record<WorkflowNodeType, NodeContract> = {
     ],
   },
 
+  loop: {
+    type: "loop",
+    version: 1,
+    category: "Logic",
+    label: "Loop",
+    inputs: [
+      {
+        id: "items",
+        kind: "main",
+        direction: "in",
+        maxConnections: 1,
+        required: true,
+        label: "Items",
+      },
+      {
+        id: "continue",
+        kind: "main",
+        direction: "in",
+        maxConnections: 1,
+        required: false,
+        label: "Continue",
+      },
+    ],
+    outputs: [
+      {
+        id: "batch",
+        kind: "main",
+        direction: "out",
+        label: "Batch",
+      },
+      {
+        id: "done",
+        kind: "main",
+        direction: "out",
+        label: "Done",
+      },
+    ],
+    cardinality: "N-to-N",
+    pairedItemPolicy: "identity1to1",
+    pairedItemNotes:
+      "Part 9A foundation only — Loop runtime is Part 9B (LOOP_RUNTIME_NOT_ENABLED)",
+    settings: {
+      disabled: true,
+      onError: false,
+      retries: false,
+      timeoutMs: false,
+      alwaysOutputData: false,
+      executeOnce: false,
+      notes: true,
+    },
+    capabilities: ["disable", "notes"],
+    params: [
+      {
+        name: "batchSize",
+        displayName: "Batch size",
+        type: "number",
+        default: 1,
+        min: 1,
+        description: "Items per Loop iteration (runtime Part 9B)",
+      },
+    ],
+    dirtyTriggers: ["params", "edges", "disabled"],
+    edgeCases: [
+      "V1: only sanctioned continue back-edges from batch body are valid cycles",
+      "Nested Loop not supported in V1",
+      "Exactly one continue edge allowed",
+      "Runtime not enabled — execute returns LOOP_RUNTIME_NOT_ENABLED",
+    ],
+  },
+
   // ---- PLACEHOLDERS ----
   noop: {
     type: "noop",
