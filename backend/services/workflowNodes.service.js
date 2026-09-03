@@ -720,6 +720,39 @@ const handlers = {
     },
   }),
 
+  // Part 10A internal sub-workflow entry (library not enabled until 10B).
+  workflowTrigger: async (node, context) => {
+    const input = context.input || {};
+    if (input.source === "subworkflow" && Array.isArray(input.items)) {
+      const items = input.items.map((raw) => {
+        if (raw && typeof raw === "object" && !Array.isArray(raw)) {
+          if (
+            Object.prototype.hasOwnProperty.call(raw, "json") ||
+            Object.prototype.hasOwnProperty.call(raw, "binary")
+          ) {
+            const item = { json: raw.json ?? null };
+            if (raw.binary != null) item.binary = raw.binary;
+            return item;
+          }
+          return { json: raw };
+        }
+        return { json: raw ?? null };
+      });
+      return {
+        output: {
+          triggered: true,
+          kind: "subworkflow",
+          itemCount: items.length,
+        },
+        items,
+      };
+    }
+    return {
+      output: { triggered: true, kind: "subworkflow", itemCount: 0 },
+      items: [],
+    };
+  },
+
   schedule: async (node, context) => {
     const { rulesToCrons, buildTestTriggerPayload } = require("../utils/scheduleRules");
     const data = node.data || {};

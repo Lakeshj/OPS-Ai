@@ -42,6 +42,15 @@ const {
   normalizeWaitSnapshot,
 } = require("./workflowWait.service");
 const {
+  claimDueChildDependency,
+  notifyParentOfChildTerminal,
+  WAITING_REASON_CHILD,
+  SUBWORKFLOW_SOURCE,
+  boundaryItems,
+  CHILD_CANCELLED_CODE,
+  CHILD_FAILED_CODE,
+} = require("./workflowSubworkflow.service");
+const {
   createRunData,
   recordOccurrence,
   nextRunIndex,
@@ -191,7 +200,12 @@ const buildGraph = (definition) => {
 
 const isStartType = (n) => {
   const type = n.type || n.data?.nodeType;
-  return type === "trigger" || type === "schedule" || type === "webhook";
+  return (
+    type === "trigger" ||
+    type === "schedule" ||
+    type === "webhook" ||
+    type === "workflowTrigger"
+  );
 };
 
 const findStartNodes = (graph) => {
@@ -676,11 +690,116 @@ const executeRun = async (runId, options = {}) => {
   const isProductionRun =
     input?.source === "schedule" || input?.source === "webhook";
 
+  const isSubworkflowInvocation = input?.source === SUBWORKFLOW_SOURCE;
+
   let scheduler;
   let context;
   let runErrors = [];
   let finalOutput = null;
   let resumeWait = null;
+
+  const applyChildResumeFromSnapshot = async (depClaim) => {
+    const snap = normalizeWaitSnapshot(depClaim.snapshot || {});
+    scheduler = createScheduler(graph, snap.scheduler || null);
+    context = {
+      input: snap.context?.input || input,
+      steps: { ...(snap.context?.steps || {}) },
+      items: { ...(snap.context?.items || {}) },
+      portOutputs: { ...(snap.context?.portOutputs || {}) },
+      runData: snap.runData || fromLegacyContext(snap.context || {}),
+      loopControllers: restoreLoopControllers(snap.loopControllers),
+      inputItems: [],
+      runId,
+      workspaceId: run.workspace_id,
+      workflowId: run.workflow_id,
+      editorMode: false,
+      useProductionPins: isProductionRun,
+      now,
+    };
+    applyLatestView(context);
+    finalOutput = snap.finalOutput ?? null;
+    runErrors = Array.isArray(snap.runErrors) ? [...snap.runErrors] : [];
+
+    const parentNodeId = depClaim.parentNodeId;
+    const execIndex = Number(depClaim.parentExecutionIndex) || 0;
+    const childResult = depClaim.childResult || {};
+    const stepId = depClaim.parentStepId || snap.waitStepId || null;
+
+    if (childResult.status !== "succeeded") {
+      const code =
+        childResult.error?.code ||
+        (childResult.status === "cancelled"
+          ? CHILD_CANCELLED_CODE
+          : CHILD_FAILED_CODE);
+      const message =
+        childResult.error?.message ||
+        `Child workflow run ${childResult.status || "failed"}`;
+      const errOutput = {
+        error: message,
+        code,
+        childRunId: depClaim.childRunId,
+        failed: true,
+      };
+      context.steps[parentNodeId] = errOutput;
+      context.items[parentNodeId] = [errOutput];
+      if (!context.runData) context.runData = createRunData();
+      recordOccurrence(context.runData, {
+        nodeId: parentNodeId,
+        runIndex: execIndex,
+        status: "failed",
+        items: [errOutput],
+        output: errOutput,
+        stepId,
+        error: message,
+        completedAt: new Date().toISOString(),
+      });
+      applyLatestView(context);
+      if (stepId) {
+        await updateStep(stepId, {
+          status: "failed",
+          error: message,
+          output_json: JSON.stringify(errOutput),
+          finished_at: new Date(),
+        });
+      }
+      const err = new Error(message);
+      err.code = code;
+      err.childRunId = depClaim.childRunId;
+      throw err;
+    }
+
+    const items = Array.isArray(childResult.items) ? childResult.items : [];
+    const output = {
+      childRunId: depClaim.childRunId,
+      items,
+      itemCount: items.length,
+    };
+    context.steps[parentNodeId] = output;
+    context.items[parentNodeId] = items;
+    if (!context.runData) context.runData = createRunData();
+    recordOccurrence(context.runData, {
+      nodeId: parentNodeId,
+      runIndex: execIndex,
+      status: "succeeded",
+      items,
+      output,
+      stepId,
+      completedAt: new Date().toISOString(),
+    });
+    applyLatestView(context);
+    if (stepId) {
+      await updateStep(stepId, {
+        status: "succeeded",
+        output_json: JSON.stringify(output),
+        finished_at: new Date(),
+      });
+    }
+
+    const node = graph.byId.get(parentNodeId);
+    if (node) {
+      scheduler.complete(node, null);
+    }
+  };
 
   const applyWaitResumeFromSnapshot = async (waitRow, { executeWaitNode }) => {
     const snap = normalizeWaitSnapshot(waitRow.snapshot || {});
@@ -776,12 +895,20 @@ const executeRun = async (runId, options = {}) => {
   };
 
   if (run.status === "waiting") {
-    resumeWait = await claimDueWaitForRun(runId, claimToken, now);
-    if (!resumeWait) {
-      // Not due yet, another worker claimed it, or cancel won the race.
-      return { status: "waiting", deferred: true };
+    if (run.waiting_reason === WAITING_REASON_CHILD) {
+      const depClaim = await claimDueChildDependency(runId, claimToken);
+      if (!depClaim) {
+        return { status: "waiting", deferred: true };
+      }
+      await applyChildResumeFromSnapshot(depClaim);
+    } else {
+      resumeWait = await claimDueWaitForRun(runId, claimToken, now);
+      if (!resumeWait) {
+        // Not due yet, another worker claimed it, or cancel won the race.
+        return { status: "waiting", deferred: true };
+      }
+      await applyWaitResumeFromSnapshot(resumeWait, { executeWaitNode: true });
     }
-    await applyWaitResumeFromSnapshot(resumeWait, { executeWaitNode: true });
   } else if (run.status === "cancelled") {
     return { status: "cancelled" };
   } else if (run.status === "running") {
@@ -895,6 +1022,33 @@ const executeRun = async (runId, options = {}) => {
       {
         const nodeType = node.type || node.data?.nodeType || "unknown";
         if (!context.runData) context.runData = createRunData();
+
+        // Sub-workflow invocation uses Workflow Trigger entry — never fire
+        // the child's Schedule/Webhook/Manual Trigger as the entry point.
+        if (
+          isSubworkflowInvocation &&
+          (nodeType === "schedule" ||
+            nodeType === "webhook" ||
+            nodeType === "trigger")
+        ) {
+          const skipIndex = nextRunIndex(context.runData, node.id);
+          scheduler.skip(node);
+          await pool.execute(
+            `INSERT INTO workflow_run_steps
+              (id, run_id, node_id, execution_index, node_type, status, started_at, finished_at)
+             VALUES (?, ?, ?, ?, ?, 'skipped', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
+            [uuidv4(), runId, node.id, skipIndex, nodeType]
+          );
+          recordOccurrence(context.runData, {
+            nodeId: node.id,
+            runIndex: skipIndex,
+            status: "skipped",
+            items: [],
+            output: { skipped: true, reason: "subworkflow_entry" },
+          });
+          continue;
+        }
+
         const executionIndex = nextRunIndex(context.runData, node.id);
         const inputSources = buildInputSources(graph, node.id, context.runData);
         const stepId = uuidv4();
@@ -1150,6 +1304,29 @@ const executeRun = async (runId, options = {}) => {
         ? runErrors.map((e) => `${e.nodeId}: ${e.error}`).join("\n")
         : null;
 
+    let outputPayload =
+      finalOutput ?? {
+        steps: Object.fromEntries(
+          Object.entries(context.steps).map(([id, value]) => [id, value])
+        ),
+      };
+
+    if (isSubworkflowInvocation && finalOutput) {
+      const resultNodes = (definition.nodes || []).filter(
+        (n) => (n.type || n.data?.nodeType) === "result"
+      );
+      if (resultNodes.length === 1) {
+        const rid = resultNodes[0].id;
+        const items = context.items?.[rid];
+        if (Array.isArray(items)) {
+          outputPayload = {
+            ...finalOutput,
+            __subworkflowItems: boundaryItems(items),
+          };
+        }
+      }
+    }
+
     await pool.execute(
       `UPDATE workflow_runs
        SET status = 'succeeded',
@@ -1157,32 +1334,31 @@ const executeRun = async (runId, options = {}) => {
            finished_at = CURRENT_TIMESTAMP,
            error = ?,
            waiting_node_id = NULL,
+           waiting_reason = NULL,
            resume_at = NULL
        WHERE id = ? AND status = 'running'`,
-      [
-        JSON.stringify(
-          finalOutput ?? {
-            steps: Object.fromEntries(
-              Object.entries(context.steps).map(([id, value]) => [id, value])
-            ),
-          }
-        ),
-        warning,
-        runId,
-      ]
+      [JSON.stringify(outputPayload), warning, runId]
     );
 
     const [finalRows] = await pool.execute(
-      `SELECT status FROM workflow_runs WHERE id = ?`,
+      `SELECT status, parent_run_id FROM workflow_runs WHERE id = ?`,
       [runId]
     );
     if (finalRows[0]?.status === "cancelled") {
       return { status: "cancelled" };
     }
 
+    if (finalRows[0]?.parent_run_id) {
+      try {
+        await notifyParentOfChildTerminal(runId);
+      } catch {
+        // reconcileOrphanedChildWaits recovers
+      }
+    }
+
     return {
       status: "succeeded",
-      output: finalOutput ?? { steps: { ...context.steps } },
+      output: outputPayload,
       warning,
     };
   } catch (err) {
@@ -1190,10 +1366,17 @@ const executeRun = async (runId, options = {}) => {
     await pool.execute(
       `UPDATE workflow_runs
        SET status = 'failed', error = ?, finished_at = CURRENT_TIMESTAMP,
-           waiting_node_id = NULL, resume_at = NULL
+           waiting_node_id = NULL, waiting_reason = NULL, resume_at = NULL
        WHERE id = ? AND status = 'running'`,
       [message, runId]
     );
+    if (run.parent_run_id) {
+      try {
+        await notifyParentOfChildTerminal(runId);
+      } catch {
+        // reconcile recovers
+      }
+    }
     throw err;
   }
 };

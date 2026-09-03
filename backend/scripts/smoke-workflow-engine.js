@@ -9273,6 +9273,12 @@ check("TEST 9C-29 Existing Wait workspace behavior unchanged", async () => {
   assert.strictEqual(r.suspend, true);
 });
 
+require("./smoke-workflow-subworkflow-10a").registerPart10ATests({
+  check,
+  section,
+  assert,
+});
+
 (async () => {
   for (const task of queue) await task();
   console.log(`\n${passed} checks passed`);

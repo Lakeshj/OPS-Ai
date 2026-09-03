@@ -133,3 +133,19 @@ Library: **Loop Over Items** is available (`available: true`). Semantic ports: I
 Crash during Loop: at-least-once worker semantics (no mid-loop checkpoint beyond existing Wait durability).
 
 Known V1 limits: nested Loop, Wait-in-Loop, break/continue, mid-loop crash resume, Tidy/auto-layout of Continue back-edges (dedicated layout phase later). Clipboard: selecting Loop + full body + Continue remaps IDs safely; duplicating Loop alone does not copy the body.
+
+## Sub-workflow execution foundation (Part 10A)
+
+Authoritative service: `backend/services/workflowSubworkflow.service.js`.
+
+- Parent and child are **separate** `workflow_runs` (not inlined nodes).
+- Lineage: `parent_run_id`, `parent_node_id`, `parent_execution_index`, `root_run_id`.
+- Idempotent invocation per parent occurrence (UNIQUE).
+- Child freezes its own `definition_snapshot_json` at invoke.
+- Durable parent wait uses `workflow_run_dependencies` + `waiting_reason=child_run` (not Wait-node rows).
+- Child terminal → wake parent job; `reconcileOrphanedChildWaits` recovers missed wakes.
+- Recursion rejected via ancestor workflow IDs; `MAX_SUBWORKFLOW_DEPTH = 10`.
+- Internal entry type: `workflowTrigger` (library not enabled until Part 10B).
+- V1 callable contract: exactly one Result + Workflow Trigger entry.
+
+Do **not** enable Execute Workflow / Workflow Trigger UI until Part 10B.

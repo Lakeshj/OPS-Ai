@@ -338,6 +338,7 @@ const suspendRunAtWait = async ({
       `UPDATE workflow_runs
        SET status = 'waiting',
            waiting_node_id = ?,
+           waiting_reason = 'wait_node',
            resume_at = ?,
            finished_at = NULL,
            error = NULL
@@ -366,21 +367,32 @@ const suspendRunAtWait = async ({
     }
 
     // TIME: schedule job for resumeAt. MANUAL/EXTERNAL: park far future until signal.
-    const availableAt =
-      resumeDate || new Date(Date.now() + 100 * 365 * 24 * 60 * 60 * 1000);
-
+    // TIMESTAMP max is 2038 — use SQL INTERVAL, not a 100-year JS Date.
     if (jobId) {
-      await connection.execute(
-        `UPDATE workflow_jobs
-         SET status = 'queued',
-             locked_at = NULL,
-             locked_by = NULL,
-             available_at = ?,
-             attempts = 0
-         WHERE id = ?`,
-        [availableAt, jobId]
-      );
-    } else {
+      if (resumeDate) {
+        await connection.execute(
+          `UPDATE workflow_jobs
+           SET status = 'queued',
+               locked_at = NULL,
+               locked_by = NULL,
+               available_at = ?,
+               attempts = 0
+           WHERE id = ?`,
+          [resumeDate, jobId]
+        );
+      } else {
+        await connection.execute(
+          `UPDATE workflow_jobs
+           SET status = 'queued',
+               locked_at = NULL,
+               locked_by = NULL,
+               available_at = DATE_ADD(CURRENT_TIMESTAMP, INTERVAL 30 DAY),
+               attempts = 0
+           WHERE id = ?`,
+          [jobId]
+        );
+      }
+    } else if (resumeDate) {
       await connection.execute(
         `UPDATE workflow_jobs
          SET status = 'queued',
@@ -389,7 +401,18 @@ const suspendRunAtWait = async ({
              available_at = ?,
              attempts = 0
          WHERE run_id = ? AND status IN ('locked', 'queued')`,
-        [availableAt, runId]
+        [resumeDate, runId]
+      );
+    } else {
+      await connection.execute(
+        `UPDATE workflow_jobs
+         SET status = 'queued',
+             locked_at = NULL,
+             locked_by = NULL,
+             available_at = DATE_ADD(CURRENT_TIMESTAMP, INTERVAL 30 DAY),
+             attempts = 0
+         WHERE run_id = ? AND status IN ('locked', 'queued')`,
+        [runId]
       );
     }
 

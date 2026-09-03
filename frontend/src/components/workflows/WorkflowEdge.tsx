@@ -5,6 +5,7 @@ import {
   BaseEdge,
   EdgeLabelRenderer,
   getBezierPath,
+  getSmoothStepPath,
   type EdgeProps,
 } from "@xyflow/react";
 import { Plus, X } from "lucide-react";
@@ -32,16 +33,28 @@ function WorkflowEdgeComponent({
 }: EdgeProps) {
   const edgeData = (data || {}) as WorkflowEdgeData;
   const [hovered, setHovered] = useState(false);
-  const [path, labelX, labelY] = getBezierPath({
-    sourceX,
-    sourceY,
-    targetX,
-    targetY,
-    sourcePosition,
-    targetPosition,
-  });
-
   const isContinue = Boolean(edgeData.loopContinue);
+
+  // Route Continue below the body so it doesn't cut through nodes.
+  const [path, labelX, labelY] = isContinue
+    ? getSmoothStepPath({
+        sourceX,
+        sourceY,
+        targetX,
+        targetY,
+        sourcePosition,
+        targetPosition,
+        borderRadius: 16,
+        offset: 28,
+      })
+    : getBezierPath({
+        sourceX,
+        sourceY,
+        targetX,
+        targetY,
+        sourcePosition,
+        targetPosition,
+      });
 
   const stroke =
     edgeData.runStatus === "running"
@@ -108,7 +121,7 @@ function WorkflowEdgeComponent({
           onMouseEnter={() => setHovered(true)}
           onMouseLeave={() => setHovered(false)}
         >
-          {edgeData.onInsert && (
+          {edgeData.onInsert && !isContinue && (
             <button
               type="button"
               className="flex h-6 w-6 items-center justify-center rounded-full text-muted-foreground hover:bg-primary hover:text-primary-foreground"

@@ -11,6 +11,7 @@ import {
   reconnectEdge,
   useEdgesState,
   useNodesState,
+  useReactFlow,
   type Connection,
   type Edge,
   type Node,
@@ -45,6 +46,7 @@ import {
   validateLoopGraph,
   findLoopRegionForNode,
 } from "@/modules/workflows/loopValidation";
+import { layoutWorkflowGraph } from "@/modules/workflows/workflowLayout";
 import {
   getNodeConfigIssues,
   nodeHasMissingConfig,
@@ -737,6 +739,7 @@ function WorkflowCanvasInner({
   onResumeRun,
   resuming,
 }: Props) {
+  const { fitView } = useReactFlow();
   const [nodes, setNodes, onNodesChange] = useNodesState(
     toFlowNodes(definition, latestRun)
   );
@@ -1252,18 +1255,33 @@ function WorkflowCanvasInner({
     toast.success("Pasted");
   }, [pushHistory, setNodes, setEdges]);
 
-  const tidyWorkflow = useCallback(() => {
-    pushHistory();
-    const sorted = [...nodes].sort((a, b) => a.position.x - b.position.x);
-    const colWidth = 260;
-    setNodes(
-      sorted.map((n, i) => ({
-        ...n,
-        position: { x: 40 + i * colWidth, y: 120 + (i % 2) * 80 },
-      }))
-    );
-    toast.success("Workflow tidied");
-  }, [nodes, pushHistory, setNodes]);
+  const tidyWorkflow = useCallback(async () => {
+    try {
+      const result = await layoutWorkflowGraph({ nodes, edges });
+      if (!result.ok) {
+        toast.error(result.message);
+        return;
+      }
+
+      // One undo entry for the whole Tidy (positions only).
+      pushHistory();
+      setNodes((prev) =>
+        prev.map((n) => {
+          const pos = result.positions[n.id];
+          if (!pos) return n;
+          return { ...n, position: { x: pos.x, y: pos.y } };
+        })
+      );
+
+      // Positions are UI-only — do not invalidate editor execution cache.
+      window.requestAnimationFrame(() => {
+        void fitView({ padding: 0.18, duration: 280, maxZoom: 1.15 });
+      });
+      toast.success("Workflow tidied");
+    } catch {
+      toast.error("Couldn't tidy this workflow.");
+    }
+  }, [nodes, edges, pushHistory, setNodes, fitView]);
 
   const deleteEdge = useCallback(
     (edgeId: string) => {
@@ -1676,6 +1694,11 @@ function WorkflowCanvasInner({
         setRenameNodeId(selectedId);
         return;
       }
+      if (e.shiftKey && e.altKey && (e.key === "t" || e.key === "T")) {
+        e.preventDefault();
+        void tidyWorkflow();
+        return;
+      }
       if (e.key === "Escape") {
         setSelectedIds(new Set());
         setRenameNodeId(null);
@@ -1706,6 +1729,7 @@ function WorkflowCanvasInner({
     selectedEdgeId,
     deleteEdge,
     pushHistory,
+    tidyWorkflow,
   ]);
 
   const updateSelectedData = (patch: WorkflowNodeData) => {

@@ -16,6 +16,8 @@ const ALLOWED_NODE_TYPES = new Set([
   "trigger",
   "schedule",
   "webhook",
+  // Part 10A internal entry — library stays unavailable until 10B
+  "workflowTrigger",
   "ai",
   "bot",
   "http",
@@ -69,7 +71,13 @@ const formatRun = (row) => ({
   output: parseJson(row.output_json, null),
   error: row.error,
   waitingNodeId: row.waiting_node_id || null,
+  waitingReason: row.waiting_reason || null,
   resumeAt: row.resume_at || null,
+  parentRunId: row.parent_run_id || null,
+  parentNodeId: row.parent_node_id || null,
+  parentExecutionIndex:
+    row.parent_execution_index == null ? null : Number(row.parent_execution_index),
+  rootRunId: row.root_run_id || null,
   hasDefinitionSnapshot: row.definition_snapshot_json != null,
   startedAt: row.started_at,
   finishedAt: row.finished_at,
@@ -730,6 +738,14 @@ const cancelRun = async (runId, authUser) => {
       "VALIDATION_ERROR"
     );
   }
+  const {
+    cancelActiveChildRuns,
+    notifyParentOfChildTerminal,
+  } = require("../../services/workflowSubworkflow.service");
+
+  // Cancel active child descendants first (V1 lineage propagation).
+  await cancelActiveChildRuns(runId);
+
   const connection = await pool.getConnection();
   try {
     await connection.beginTransaction();
@@ -746,10 +762,17 @@ const cancelRun = async (runId, authUser) => {
       [runId]
     );
     await connection.execute(
+      `UPDATE workflow_run_dependencies
+       SET status = 'cancelled', completed_at = CURRENT_TIMESTAMP
+       WHERE parent_run_id = ? AND status = 'waiting'`,
+      [runId]
+    );
+    await connection.execute(
       `UPDATE workflow_runs
        SET status = 'cancelled',
            finished_at = CURRENT_TIMESTAMP,
            waiting_node_id = NULL,
+           waiting_reason = NULL,
            resume_at = NULL
        WHERE id = ? AND status IN ('queued', 'running', 'waiting')`,
       [runId]
@@ -761,6 +784,16 @@ const cancelRun = async (runId, authUser) => {
   } finally {
     connection.release();
   }
+
+  // Direct child cancel must wake a waiting parent.
+  if (run.parentRunId) {
+    try {
+      await notifyParentOfChildTerminal(runId);
+    } catch {
+      // Parent wake is best-effort; reconcile scanner recovers.
+    }
+  }
+
   return getRunById(runId, authUser);
 };
 

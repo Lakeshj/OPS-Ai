@@ -125,6 +125,15 @@ const markJobFailedOrRetry = async (job, errorMessage) => {
 const processOnce = async (options = {}) => {
   await reclaimStaleWork(options.now instanceof Date ? options.now : new Date());
 
+  try {
+    const {
+      reconcileOrphanedChildWaits,
+    } = require("./workflowSubworkflow.service");
+    await reconcileOrphanedChildWaits(20);
+  } catch {
+    // Non-fatal — next poll retries.
+  }
+
   const job = await claimNextJob();
   if (!job) return false;
 
