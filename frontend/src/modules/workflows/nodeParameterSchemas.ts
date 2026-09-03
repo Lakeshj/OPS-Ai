@@ -546,11 +546,25 @@ export const NODE_PARAMETER_SCHEMAS: Record<WorkflowNodeType, ParamDescriptor[]>
 
     wait: [
       {
+        name: "resumeMode",
+        displayName: "Resume mode",
+        type: "options",
+        default: "time",
+        options: [
+          { name: "Time", value: "time" },
+          { name: "Manual", value: "manual" },
+          { name: "External", value: "external" },
+        ],
+        description:
+          "Time: wait until duration/datetime. Manual: authorized Resume. External: secure one-time token.",
+      },
+      {
         name: "waitAmount",
         displayName: "Wait for",
         type: "number",
         default: 5,
         min: 0,
+        displayOptions: { show: { resumeMode: ["time"] } },
       },
       {
         name: "waitUnit",
@@ -563,6 +577,7 @@ export const NODE_PARAMETER_SCHEMAS: Record<WorkflowNodeType, ParamDescriptor[]>
           { name: "Hours", value: "hours" },
           { name: "Days", value: "days" },
         ],
+        displayOptions: { show: { resumeMode: ["time"] } },
       },
       {
         name: "waitUntil",
@@ -570,6 +585,7 @@ export const NODE_PARAMETER_SCHEMAS: Record<WorkflowNodeType, ParamDescriptor[]>
         type: "string",
         placeholder: "2026-09-02T15:00:00.000Z",
         description: "If set, overrides duration and waits until this absolute time.",
+        displayOptions: { show: { resumeMode: ["time"] } },
       },
     ],
 

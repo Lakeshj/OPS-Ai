@@ -34,6 +34,11 @@ const {
   getRecoverableWaitForRun,
   updateWaitProgressSnapshot,
   markWaitResumed,
+  generateResumeToken,
+  hashResumeToken,
+  sealResumeToken,
+  WAIT_MODES,
+  resolveWaitMode,
 } = require("./workflowWait.service");
 
 const normalizeEditorSession = (sessionOrLegacy) => {
@@ -475,6 +480,7 @@ const executeRun = async (runId, options = {}) => {
       useProductionPins: isProductionRun,
       resumingWaitNodeId: snap.waitNodeId,
       waitResumeAt: waitRow.resume_at,
+      waitResumeMechanism: waitRow.resume_mechanism || waitRow.resume_mode,
       now,
     };
     finalOutput = snap.finalOutput ?? null;
@@ -709,7 +715,23 @@ const executeRun = async (runId, options = {}) => {
 
         // Durable Wait suspension — persist and release worker.
         if (!failure && result?.suspend) {
-          const resumeAt = new Date(result.resumeAt);
+          const mode = resolveWaitMode({
+            resumeMode: result.resumeMode || node.data?.resumeMode,
+          });
+          const resumeAt =
+            mode === WAIT_MODES.TIME && result.resumeAt
+              ? new Date(result.resumeAt)
+              : null;
+
+          let resumeTokenHash = null;
+          let resumeTokenCiphertext = null;
+          if (mode === WAIT_MODES.EXTERNAL) {
+            const rawToken = generateResumeToken();
+            resumeTokenHash = hashResumeToken(rawToken);
+            resumeTokenCiphertext = sealResumeToken(rawToken);
+            // Raw token is sealed for authorized reveal only — never in snapshot.
+          }
+
           const snapshot = buildExecutionSnapshot({
             waitNodeId: node.id,
             waitStepId: stepId,
@@ -725,12 +747,16 @@ const executeRun = async (runId, options = {}) => {
             nodeId: node.id,
             stepId,
             resumeAt,
+            resumeMode: mode,
+            resumeTokenHash,
+            resumeTokenCiphertext,
             snapshot,
             jobId: options.jobId || null,
           });
           return {
             status: "waiting",
-            resumeAt: resumeAt.toISOString(),
+            resumeAt: resumeAt ? resumeAt.toISOString() : null,
+            resumeMode: mode,
             waitingNodeId: node.id,
           };
         }

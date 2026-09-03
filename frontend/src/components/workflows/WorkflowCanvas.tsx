@@ -190,6 +190,8 @@ type Props = {
   workflowId?: string;
   workflowStatus?: WorkflowStatus;
   onPublish?: () => Promise<void>;
+  onResumeRun?: () => void | Promise<void>;
+  resuming?: boolean;
 };
 
 function formatStepOutput(output: unknown): string {
@@ -708,6 +710,8 @@ function WorkflowCanvasInner({
   workflowId,
   workflowStatus = "draft",
   onPublish,
+  onResumeRun,
+  resuming,
 }: Props) {
   const [nodes, setNodes, onNodesChange] = useNodesState(
     toFlowNodes(definition, latestRun)
@@ -2048,6 +2052,8 @@ function WorkflowCanvasInner({
               ?.pinned
           )
         }
+        onResumeRun={onResumeRun}
+        resuming={resuming}
       />
 
       <WorkflowNodeDialog

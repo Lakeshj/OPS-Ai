@@ -42,6 +42,17 @@ export const workflowsApi = {
   getRun: (workflowId: string, runId: string) =>
     apiClient.get<WorkflowRun>(`/workflows/${workflowId}/runs/${runId}`),
 
+  cancelRun: (workflowId: string, runId: string) =>
+    apiClient.post<WorkflowRun>(`/workflows/${workflowId}/runs/${runId}/cancel`, {}),
+
+  resumeRun: (workflowId: string, runId: string) =>
+    apiClient.post<{
+      accepted: boolean;
+      idempotent?: boolean;
+      runId: string;
+      run: WorkflowRun;
+    }>(`/workflows/${workflowId}/runs/${runId}/resume`, {}),
+
   getEditorSession: (workflowId: string) =>
     apiClient.get<import("./types").WorkflowEditorSession>(
       `/workflows/${workflowId}/editor-session`

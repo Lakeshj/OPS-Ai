@@ -352,7 +352,30 @@ const getRunById = async (runId, authUser) => {
     `SELECT * FROM workflow_run_steps WHERE run_id = ? ORDER BY created_at ASC`,
     [runId]
   );
-  return { ...run, steps: steps.map(formatStep) };
+
+  const { getActiveWaitForRun } = require("../../services/workflowWait.service");
+  const activeWait = await getActiveWaitForRun(runId);
+  const waitInfo = activeWait
+    ? {
+        resumeMode: activeWait.resumeMode,
+        resumeMechanism: activeWait.resumeMechanism,
+        signalledAt: activeWait.signalledAt,
+        waitStatus: activeWait.status,
+        // Authorized users only — never exposed on public endpoints.
+        externalResumeToken:
+          activeWait.resumeMode === "external" &&
+          activeWait.status === "waiting" &&
+          activeWait.externalResumeToken
+            ? activeWait.externalResumeToken
+            : null,
+      }
+    : null;
+
+  return {
+    ...run,
+    steps: steps.map(formatStep),
+    wait: waitInfo,
+  };
 };
 
 const listRuns = async (workflowId, authUser) => {
@@ -725,6 +748,82 @@ const cancelRun = async (runId, authUser) => {
   return getRunById(runId, authUser);
 };
 
+/**
+ * Authenticated manual resume — signals wait; worker continues same run.
+ * Does not execute the workflow inline.
+ */
+const resumeRun = async (workflowId, runId, authUser) => {
+  const workflow = await getById(workflowId, authUser);
+  const run = await getRunById(runId, authUser);
+  if (run.workflowId !== workflow.id) {
+    throw new AppError("Run does not belong to this workflow", 404, "NOT_FOUND");
+  }
+  if (run.status !== "waiting") {
+    throw new AppError(
+      `Cannot resume a run in status "${run.status}"`,
+      400,
+      "VALIDATION_ERROR"
+    );
+  }
+
+  const { requestWaitResume, WAIT_MODES } = require("../../services/workflowWait.service");
+  const result = await requestWaitResume({
+    runId,
+    mechanism: WAIT_MODES.MANUAL,
+    actorUserId: authUser.userId,
+  });
+
+  if (!result.ok) {
+    if (result.code === "WRONG_MODE") {
+      throw new AppError(
+        "This wait is not configured for manual resume",
+        400,
+        "VALIDATION_ERROR"
+      );
+    }
+    if (result.code === "CANCELLED") {
+      throw new AppError("Run was cancelled", 400, "VALIDATION_ERROR");
+    }
+    throw new AppError("Wait cannot be resumed", 400, "VALIDATION_ERROR");
+  }
+
+  return {
+    accepted: true,
+    idempotent: Boolean(result.idempotent),
+    runId: result.runId,
+    run: await getRunById(runId, authUser),
+  };
+};
+
+/**
+ * Public external resume by opaque token — no auth session.
+ * Always returns generic outcomes suitable for anonymous callers.
+ */
+const resumeByExternalToken = async (rawToken) => {
+  const { requestWaitResume, WAIT_MODES } = require("../../services/workflowWait.service");
+  if (!rawToken || typeof rawToken !== "string" || rawToken.length > 512) {
+    return { status: 404, body: { ok: false, code: "INVALID" } };
+  }
+
+  const result = await requestWaitResume({
+    mechanism: WAIT_MODES.EXTERNAL,
+    token: rawToken,
+  });
+
+  if (!result.ok) {
+    return { status: 404, body: { ok: false, code: "INVALID" } };
+  }
+
+  return {
+    status: 202,
+    body: {
+      ok: true,
+      accepted: true,
+      idempotent: Boolean(result.idempotent),
+    },
+  };
+};
+
 module.exports = {
   listAll,
   listByWorkspace,
@@ -736,6 +835,8 @@ module.exports = {
   getRunById,
   listRuns,
   cancelRun,
+  resumeRun,
+  resumeByExternalToken,
   executeNodeStep,
   runToNode,
   executePrevious,

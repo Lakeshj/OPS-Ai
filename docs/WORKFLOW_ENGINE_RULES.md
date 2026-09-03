@@ -50,9 +50,19 @@ Key: `schedule:{workflowId}:{nodeId}:{ruleId}:{localOccurrenceKey}:{timezone}` w
 
 Anchored rules use bounded reconciliation (`MAX_SCHEDULER_WAKE_MS` = 24h): the scheduler never sleeps longer than 24h without recalculating; once within the bound, the timer uses the actual remaining delay. No multi-month `setTimeout`. `refreshAll()` re-registers from persisted definition; anchor and idempotency remain authoritative.
 
-## Wait node semantics (Part 8A — durable time-based)
+## Wait node semantics (Part 8A / 8A.1 / 8B)
 
 Authoritative service: `backend/services/workflowWait.service.js`.
+
+### Modes
+
+| Mode | Resume trigger | `resume_at` |
+|------|----------------|-------------|
+| **time** | Absolute duration / waitUntil | Set at suspend |
+| **manual** | Authenticated `POST .../runs/:runId/resume` | `null` until signalled → NOW |
+| **external** | Opaque token `POST /workflow-resume` body `{ token }` | `null` until signalled → NOW |
+
+All modes converge: signal (or due time) → job available → worker `claimDueWaitForRun` → same `runId` continues from snapshot.
 
 ### Lifecycle
 
@@ -60,22 +70,30 @@ Authoritative service: `backend/services/workflowWait.service.js`.
 
 Wait step: `running → waiting → succeeded` (same step row).
 
-Job: `queued → locked → queued(available_at=resumeAt) → locked → done`.
+Job: `queued → locked → queued(available_at) → locked → done`.
 
 Wait record: `waiting → claimed → resumed` (or `cancelled`).
+
+### External token security
+
+- 256-bit `crypto.randomBytes` → base64url
+- At rest: SHA-256 hash for lookup + AES ciphertext for authorized UI reveal only
+- Raw token never in snapshot, step output, or public list APIs
+- Transport: **body / Bearer header only** (not URL path/query — avoids access-log leakage)
+- One-time / idempotent signal; invalid/cancelled tokens → generic `404 { ok: false, code: "INVALID" }`
 
 ### Persistence
 
 - `workflow_runs.definition_snapshot_json` freezes the graph at enqueue (resume never uses a later edit).
-- `workflow_waits` stores absolute `resumeAt`, execution snapshot (steps/items/portOutputs/scheduler state), and claim status.
-- No long `setTimeout` as source of truth; worker requeues with `available_at = resumeAt`.
-- Suspension is a single DB transaction (wait row + run waiting + step waiting + job requeue).
-- After claim, a progress snapshot (`waitCompleted: true`) is written so crash mid-downstream can restore without cold-starting.
-- Stale `locked` jobs and `claimed` waits are reclaimed after `WORKFLOW_WAIT_CLAIM_LEASE_MS` / `WORKFLOW_JOB_LOCK_LEASE_MS` (default 5m).
+- `workflow_waits` stores mode, absolute/null `resumeAt`, execution snapshot, claim status, token hash.
+- No long `setTimeout` as source of truth; worker requeues with `available_at`.
+- Suspension is a single DB transaction.
+- After claim, progress snapshot (`waitCompleted: true`) enables crash mid-downstream recovery.
+- Stale locks reclaimed after lease (default 5m).
 
 ### Parallel branches
 
-The engine is single-threaded per run. Reaching Wait suspends the **entire** run; sibling ready branches are frozen in the scheduler snapshot and continue only after resume. Part 8A does **not** keep other branches executing while one arm waits.
+The engine is single-threaded per run. Reaching Wait suspends the **entire** run; sibling ready branches are frozen in the scheduler snapshot and continue only after resume.
 
 ### Binary durability
 
@@ -84,15 +102,19 @@ Snapshot keeps `storageKey` / `filePath` / mime metadata refs only. Inlined Buff
 ### Editor vs production
 
 - Full Execute / Schedule / Webhook: real durable suspension.
-- Run Step / Run To: preview only (`wouldResumeAt`); no durable wait row.
+- Run Step / Run To: preview only (`wouldResumeAt` / `wouldWaitFor`); no durable wait row or tokens.
 
 ### Cancellation
 
-`POST /workflows/:id/runs/:runId/cancel` cancels queued/running/waiting runs and marks waits cancelled. Cancel vs resume uses CAS: claim requires run still `waiting`; terminal run updates require status `running`.
+`POST /workflows/:id/runs/:runId/cancel` cancels queued/running/waiting runs and marks waits cancelled. Cancel vs resume uses CAS.
 
 ### Deactivation
 
-Deactivating a workflow unregisters schedule triggers only. It does **not** cancel already-waiting runs (frozen policy).
+Deactivating a workflow unregisters schedule triggers only. It does **not** cancel already-waiting runs (manual/external tokens remain valid until cancel/delete).
+
+### Webhook + Wait
+
+Webhook trigger returns `201` with the queued run immediately — it does **not** hold the HTTP connection until the workflow finishes. Wait does not hang the inbound webhook request.
 
 ### Editor poll limitation
 

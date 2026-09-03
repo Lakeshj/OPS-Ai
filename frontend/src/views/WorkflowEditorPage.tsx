@@ -32,6 +32,7 @@ export default function WorkflowEditorPage({
   const [saving, setSaving] = useState(false);
   const [running, setRunning] = useState(false);
   const [latestRun, setLatestRun] = useState<WorkflowRun | null>(null);
+  const [resuming, setResuming] = useState(false);
 
   const load = useCallback(async () => {
     if (!workflowId) return;
@@ -88,15 +89,36 @@ export default function WorkflowEditorPage({
         return run;
       }
       if (run.status === "waiting" && i === 0) {
+        const mode = run.wait?.resumeMode;
         toast.message(
-          run.resumeAt
-            ? `Waiting until ${new Date(run.resumeAt).toLocaleString()}`
-            : "Workflow is waiting"
+          mode === "manual"
+            ? "Waiting for manual resume"
+            : mode === "external"
+              ? "Waiting for external signal"
+              : run.resumeAt
+                ? `Waiting until ${new Date(run.resumeAt).toLocaleString()}`
+                : "Workflow is waiting"
         );
       }
       await new Promise((r) => setTimeout(r, 1500));
     }
     return latestRun;
+  };
+
+  const handleResumeRun = async () => {
+    if (!workflow || !latestRun) return;
+    setResuming(true);
+    try {
+      const result = await workflowsApi.resumeRun(workflow.id, latestRun.id);
+      setLatestRun(result.run);
+      toast.message("Resume signalled — continuing…");
+      await pollRun(latestRun.id);
+    } catch (error) {
+      console.error(error);
+      toast.error("Failed to resume run");
+    } finally {
+      setResuming(false);
+    }
   };
 
   const handleRun = async (input: Record<string, unknown>) => {
@@ -207,6 +229,8 @@ export default function WorkflowEditorPage({
           workflowId={workflow.id}
           workflowStatus={workflow.status}
           onPublish={handlePublish}
+          onResumeRun={handleResumeRun}
+          resuming={resuming}
         />
       </div>
     </div>

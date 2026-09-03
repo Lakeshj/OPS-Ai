@@ -387,6 +387,15 @@ export interface WorkflowRunStep {
   createdAt: string;
 }
 
+export interface WorkflowRunWaitInfo {
+  resumeMode?: "time" | "manual" | "external" | null;
+  resumeMechanism?: "time" | "manual" | "external" | null;
+  signalledAt?: string | null;
+  waitStatus?: string | null;
+  /** Authorized getRun only — never from public APIs. */
+  externalResumeToken?: string | null;
+}
+
 export interface WorkflowRun {
   id: string;
   workflowId: string;
@@ -402,4 +411,5 @@ export interface WorkflowRun {
   createdBy: string;
   createdAt: string;
   steps?: WorkflowRunStep[];
+  wait?: WorkflowRunWaitInfo | null;
 }

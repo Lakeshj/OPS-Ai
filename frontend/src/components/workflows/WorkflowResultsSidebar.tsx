@@ -13,6 +13,8 @@ export type WorkflowResultsPanelProps = {
   onSelectStepNode?: (nodeId: string) => void;
   onTogglePin?: (nodeId: string) => void;
   isPinned?: (nodeId: string) => boolean;
+  onResumeRun?: () => void | Promise<void>;
+  resuming?: boolean;
 };
 
 type Props = WorkflowResultsPanelProps & {
@@ -207,8 +209,38 @@ export function WorkflowResultsPanel({
   onSelectStepNode,
   onTogglePin,
   isPinned,
+  onResumeRun,
+  resuming,
 }: WorkflowResultsPanelProps) {
   const [expanded, setExpanded] = useState<string | null>(null);
+  const waitMode = latestRun?.wait?.resumeMode;
+  const externalToken = latestRun?.wait?.externalResumeToken;
+
+  const waitingLabel = (() => {
+    if (!latestRun || latestRun.status !== "waiting") return null;
+    if (waitMode === "manual") return "Waiting for manual resume";
+    if (waitMode === "external") return "Waiting for external signal";
+    if (latestRun.resumeAt) {
+      return `Waiting until ${new Date(latestRun.resumeAt).toLocaleString()}`;
+    }
+    return "Workflow is waiting";
+  })();
+
+  const copyExternalUrl = async () => {
+    if (!externalToken) return;
+    const base =
+      typeof window !== "undefined"
+        ? `${window.location.origin}/api/workflow-resume`
+        : "/api/workflow-resume";
+    // Instructive curl-style payload — token never placed in query string.
+    const text = `POST ${base}\nContent-Type: application/json\n\n${JSON.stringify({ token: externalToken }, null, 2)}`;
+    try {
+      await navigator.clipboard.writeText(text);
+      toast.success("Resume request copied");
+    } catch {
+      toast.error("Clipboard not available");
+    }
+  };
 
   return (
     <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-1 py-1">
@@ -218,7 +250,7 @@ export function WorkflowResultsPanel({
           </p>
         ) : (
           <div className="space-y-3">
-            <div className="flex items-center gap-2 text-sm">
+            <div className="flex flex-wrap items-center gap-2 text-sm">
               <span
                 className={
                   latestRun.status === "succeeded"
@@ -232,15 +264,49 @@ export function WorkflowResultsPanel({
               >
                 {latestRun.status}
               </span>
-              {latestRun.status === "waiting" && latestRun.resumeAt && (
+              {waitingLabel && (
                 <span className="text-xs text-muted-foreground">
-                  until {new Date(latestRun.resumeAt).toLocaleString()}
+                  {waitingLabel}
                   {latestRun.waitingNodeId
                     ? ` · ${latestRun.waitingNodeId}`
                     : ""}
                 </span>
               )}
+              {latestRun.status !== "waiting" &&
+                latestRun.wait?.resumeMechanism && (
+                  <span className="text-xs text-muted-foreground">
+                    Resumed via {latestRun.wait.resumeMechanism}
+                    {latestRun.wait.signalledAt
+                      ? ` · ${new Date(latestRun.wait.signalledAt).toLocaleString()}`
+                      : ""}
+                  </span>
+                )}
             </div>
+
+            {latestRun.status === "waiting" && waitMode === "manual" && onResumeRun && (
+              <Button
+                type="button"
+                size="sm"
+                disabled={resuming}
+                onClick={() => void onResumeRun()}
+              >
+                {resuming ? "Resuming…" : "Resume execution"}
+              </Button>
+            )}
+
+            {latestRun.status === "waiting" &&
+              waitMode === "external" &&
+              externalToken && (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={() => void copyExternalUrl()}
+                >
+                  <Copy className="mr-1.5 h-3.5 w-3.5" />
+                  Copy resume request
+                </Button>
+              )}
 
             {latestRun.error && (
               <div className="rounded-md border border-destructive/40 bg-destructive/10 p-2.5 text-sm text-destructive whitespace-pre-wrap">

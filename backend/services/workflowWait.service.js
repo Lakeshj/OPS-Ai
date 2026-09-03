@@ -1,15 +1,23 @@
 /**
- * Durable time-based Wait (Part 8A / 8A.1).
- * Authoritative resumeAt in DB; no long setTimeout as source of truth.
+ * Durable Wait (Part 8A / 8A.1 / 8B).
+ * Time / manual / external resume converge on the same claim → worker path.
  */
 
+const crypto = require("crypto");
 const { v4: uuidv4 } = require("uuid");
 const { pool } = require("../config/database");
 const { redactHeaders } = require("../utils/workflowDebug");
+const { encryptSecret, decryptSecret } = require("./secretBox.service");
 
 /** Default lease before a claimed wait / locked job may be reclaimed (ms). */
 const WAIT_CLAIM_LEASE_MS =
   Number(process.env.WORKFLOW_WAIT_CLAIM_LEASE_MS) || 5 * 60 * 1000;
+
+const WAIT_MODES = Object.freeze({
+  TIME: "time",
+  MANUAL: "manual",
+  EXTERNAL: "external",
+});
 
 const WAIT_UNITS_MS = {
   seconds: 1000,
@@ -32,8 +40,20 @@ const parseJson = (value, fallback = null) => {
   }
 };
 
+/** Normalize Wait node resume mode (default: time). */
+const resolveWaitMode = (nodeData = {}) => {
+  const raw = String(
+    nodeData.resumeMode || nodeData.waitMode || nodeData.mode || WAIT_MODES.TIME
+  )
+    .toLowerCase()
+    .trim();
+  if (raw === "manual") return WAIT_MODES.MANUAL;
+  if (raw === "external") return WAIT_MODES.EXTERNAL;
+  return WAIT_MODES.TIME;
+};
+
 /**
- * Absolute resume instant from Wait node data.
+ * Absolute resume instant from Wait node data (TIME mode only).
  * Prefer waitUntil (ISO); else amount + unit from `now`.
  */
 const computeWaitResumeAt = (nodeData = {}, now = new Date()) => {
@@ -52,6 +72,24 @@ const computeWaitResumeAt = (nodeData = {}, now = new Date()) => {
     );
   }
   return new Date(now.getTime() + amount * ms);
+};
+
+/** 256-bit opaque token (base64url). */
+const generateResumeToken = () => crypto.randomBytes(32).toString("base64url");
+
+const hashResumeToken = (rawToken) =>
+  crypto.createHash("sha256").update(String(rawToken), "utf8").digest("hex");
+
+const sealResumeToken = (rawToken) => encryptSecret({ t: String(rawToken) });
+
+const unsealResumeToken = (ciphertext) => {
+  if (!ciphertext) return null;
+  try {
+    const payload = decryptSecret(ciphertext);
+    return payload && typeof payload.t === "string" ? payload.t : null;
+  } catch {
+    return null;
+  }
 };
 
 const serializeSchedulerState = (scheduler) => ({
@@ -179,34 +217,46 @@ const buildExecutionSnapshot = ({
 
 /**
  * Suspend production run at Wait. Persists wait row + snapshot, sets run WAITING,
- * requeues job for resumeAt. Atomic transaction — crash mid-txn rolls back.
+ * requeues job for resumeAt (TIME) or holds until signalled (MANUAL/EXTERNAL).
  */
 const suspendRunAtWait = async ({
   runId,
   workflowId,
   nodeId,
   stepId,
-  resumeAt,
+  resumeAt = null,
+  resumeMode = WAIT_MODES.TIME,
+  resumeTokenHash = null,
+  resumeTokenCiphertext = null,
   snapshot,
   jobId = null,
 }) => {
   const waitId = uuidv4();
+  const mode = resolveWaitMode({ resumeMode });
   const resumeDate =
-    resumeAt instanceof Date ? resumeAt : new Date(String(resumeAt));
+    resumeAt == null
+      ? null
+      : resumeAt instanceof Date
+        ? resumeAt
+        : new Date(String(resumeAt));
   const connection = await pool.getConnection();
   try {
     await connection.beginTransaction();
 
     await connection.execute(
       `INSERT INTO workflow_waits
-        (id, run_id, workflow_id, node_id, step_id, status, resume_at, snapshot_json)
-       VALUES (?, ?, ?, ?, ?, 'waiting', ?, ?)`,
+        (id, run_id, workflow_id, node_id, step_id, status, resume_mode,
+         resume_token_hash, resume_token_ciphertext, resume_at, snapshot_json)
+       VALUES (?, ?, ?, ?, ?, 'waiting', ?, ?, ?, ?, ?)`,
       [
         waitId,
         runId,
         workflowId,
         nodeId,
         stepId,
+        mode,
+        resumeTokenHash,
+        resumeTokenCiphertext,
         resumeDate,
         JSON.stringify(snapshot),
       ]
@@ -233,16 +283,20 @@ const suspendRunAtWait = async ({
         [
           JSON.stringify({
             waiting: true,
-            resumeAt: resumeDate.toISOString(),
+            resumeMode: mode,
+            resumeAt: resumeDate ? resumeDate.toISOString() : null,
             nodeId,
+            // Never include raw token here.
           }),
           stepId,
         ]
       );
     }
 
-    // Release worker lock; schedule same job for absolute resumeAt.
-    // Reset attempts so Wait wake cycles do not burn MAX_ATTEMPTS.
+    // TIME: schedule job for resumeAt. MANUAL/EXTERNAL: park far future until signal.
+    const availableAt =
+      resumeDate || new Date(Date.now() + 100 * 365 * 24 * 60 * 60 * 1000);
+
     if (jobId) {
       await connection.execute(
         `UPDATE workflow_jobs
@@ -252,7 +306,7 @@ const suspendRunAtWait = async ({
              available_at = ?,
              attempts = 0
          WHERE id = ?`,
-        [resumeDate, jobId]
+        [availableAt, jobId]
       );
     } else {
       await connection.execute(
@@ -263,7 +317,7 @@ const suspendRunAtWait = async ({
              available_at = ?,
              attempts = 0
          WHERE run_id = ? AND status IN ('locked', 'queued')`,
-        [resumeDate, runId]
+        [availableAt, runId]
       );
     }
 
@@ -272,7 +326,8 @@ const suspendRunAtWait = async ({
       id: waitId,
       runId,
       nodeId,
-      resumeAt: resumeDate.toISOString(),
+      resumeAt: resumeDate ? resumeDate.toISOString() : null,
+      resumeMode: mode,
       status: "waiting",
     };
   } catch (err) {
@@ -286,6 +341,7 @@ const suspendRunAtWait = async ({
 /**
  * Atomic claim of a due wait for a run.
  * WAITING → claimed only if resume_at <= now and still waiting.
+ * MANUAL/EXTERNAL waits get resume_at set by requestWaitResume (signal).
  */
 const claimDueWaitForRun = async (runId, claimToken, now = new Date()) => {
   const connection = await pool.getConnection();
@@ -297,6 +353,7 @@ const claimDueWaitForRun = async (runId, claimToken, now = new Date()) => {
        FROM workflow_waits
        WHERE run_id = ?
          AND status = 'waiting'
+         AND resume_at IS NOT NULL
          AND resume_at <= ?
        ORDER BY resume_at ASC
        LIMIT 1
@@ -314,7 +371,8 @@ const claimDueWaitForRun = async (runId, claimToken, now = new Date()) => {
       `UPDATE workflow_waits
        SET status = 'claimed',
            claim_token = ?,
-           claimed_at = CURRENT_TIMESTAMP
+           claimed_at = CURRENT_TIMESTAMP,
+           resume_mechanism = COALESCE(resume_mechanism, resume_mode)
        WHERE id = ? AND status = 'waiting'`,
       [claimToken, wait.id]
     );
@@ -351,6 +409,7 @@ const claimDueWaitForRun = async (runId, claimToken, now = new Date()) => {
       snapshot: parseJson(wait.snapshot_json, {}),
       status: "claimed",
       claim_token: claimToken,
+      resume_mechanism: wait.resume_mechanism || wait.resume_mode,
     };
   } catch (err) {
     await connection.rollback();
@@ -358,6 +417,214 @@ const claimDueWaitForRun = async (runId, claimToken, now = new Date()) => {
   } finally {
     connection.release();
   }
+};
+
+/**
+ * Signal a waiting run to become due — does NOT execute the workflow.
+ * Common path for MANUAL (auth) and EXTERNAL (token) resume.
+ *
+ * Atomic: wait stays `waiting`, resume_at → NOW, job available now.
+ * Worker then claims via claimDueWaitForRun.
+ */
+const requestWaitResume = async ({
+  runId = null,
+  waitId = null,
+  mechanism,
+  actorUserId = null,
+  token = null,
+  now = new Date(),
+}) => {
+  const mech = String(mechanism || "").toLowerCase();
+  if (mech !== WAIT_MODES.MANUAL && mech !== WAIT_MODES.EXTERNAL) {
+    return { ok: false, code: "INVALID_MECHANISM" };
+  }
+
+  const connection = await pool.getConnection();
+  try {
+    await connection.beginTransaction();
+
+    let wait = null;
+    if (mech === WAIT_MODES.EXTERNAL) {
+      if (!token || typeof token !== "string") {
+        await connection.rollback();
+        return { ok: false, code: "INVALID_TOKEN" };
+      }
+      const tokenHash = hashResumeToken(token);
+      const [rows] = await connection.execute(
+        `SELECT *
+         FROM workflow_waits
+         WHERE resume_token_hash = ?
+         LIMIT 1
+         FOR UPDATE`,
+        [tokenHash]
+      );
+      if (rows.length === 0) {
+        await connection.rollback();
+        return { ok: false, code: "INVALID_TOKEN" };
+      }
+      wait = rows[0];
+    } else {
+      const [rows] = await connection.execute(
+        waitId
+          ? `SELECT * FROM workflow_waits WHERE id = ? AND run_id = ? LIMIT 1 FOR UPDATE`
+          : `SELECT * FROM workflow_waits
+             WHERE run_id = ? AND status IN ('waiting', 'claimed', 'resumed')
+             ORDER BY created_at DESC LIMIT 1 FOR UPDATE`,
+        waitId ? [waitId, runId] : [runId]
+      );
+      if (rows.length === 0) {
+        await connection.rollback();
+        return { ok: false, code: "NOT_FOUND" };
+      }
+      wait = rows[0];
+    }
+
+    // Idempotent: already past waiting
+    if (wait.status === "claimed" || wait.status === "resumed") {
+      await connection.commit();
+      return {
+        ok: true,
+        idempotent: true,
+        runId: wait.run_id,
+        waitId: wait.id,
+        status: wait.status,
+      };
+    }
+
+    if (wait.status === "cancelled" || wait.status === "failed") {
+      await connection.rollback();
+      return { ok: false, code: mech === WAIT_MODES.EXTERNAL ? "INVALID_TOKEN" : "NOT_RESUMABLE" };
+    }
+
+    if (wait.status !== "waiting") {
+      await connection.rollback();
+      return { ok: false, code: "NOT_RESUMABLE" };
+    }
+
+    // Mode gate
+    if (mech === WAIT_MODES.MANUAL && wait.resume_mode !== WAIT_MODES.MANUAL) {
+      await connection.rollback();
+      return { ok: false, code: "WRONG_MODE" };
+    }
+    if (mech === WAIT_MODES.EXTERNAL && wait.resume_mode !== WAIT_MODES.EXTERNAL) {
+      await connection.rollback();
+      return { ok: false, code: "INVALID_TOKEN" };
+    }
+
+    // Cancel race: run must still be waiting
+    const [runRows] = await connection.execute(
+      `SELECT id, status FROM workflow_runs WHERE id = ? FOR UPDATE`,
+      [wait.run_id]
+    );
+    if (runRows.length === 0 || runRows[0].status !== "waiting") {
+      await connection.rollback();
+      return {
+        ok: false,
+        code:
+          mech === WAIT_MODES.EXTERNAL
+            ? "INVALID_TOKEN"
+            : runRows[0]?.status === "cancelled"
+              ? "CANCELLED"
+              : "NOT_RESUMABLE",
+      };
+    }
+
+    // Already signalled (idempotent wake)
+    if (wait.signalled_at && wait.resume_at && new Date(wait.resume_at) <= now) {
+      await connection.execute(
+        `UPDATE workflow_jobs
+         SET status = 'queued',
+             locked_at = NULL,
+             locked_by = NULL,
+             available_at = LEAST(available_at, ?),
+             attempts = 0
+         WHERE run_id = ? AND status IN ('queued', 'locked')`,
+        [now, wait.run_id]
+      );
+      await connection.commit();
+      return {
+        ok: true,
+        idempotent: true,
+        runId: wait.run_id,
+        waitId: wait.id,
+        status: "signalled",
+      };
+    }
+
+    await connection.execute(
+      `UPDATE workflow_waits
+       SET resume_at = ?,
+           signalled_at = ?,
+           resume_mechanism = ?,
+           resumed_by = COALESCE(?, resumed_by)
+       WHERE id = ? AND status = 'waiting'`,
+      [now, now, mech, actorUserId, wait.id]
+    );
+
+    await connection.execute(
+      `UPDATE workflow_runs
+       SET resume_at = ?
+       WHERE id = ? AND status = 'waiting'`,
+      [now, wait.run_id]
+    );
+
+    await connection.execute(
+      `UPDATE workflow_jobs
+       SET status = 'queued',
+           locked_at = NULL,
+           locked_by = NULL,
+           available_at = ?,
+           attempts = 0
+       WHERE run_id = ? AND status IN ('queued', 'locked')`,
+      [now, wait.run_id]
+    );
+
+    await connection.commit();
+    return {
+      ok: true,
+      idempotent: false,
+      runId: wait.run_id,
+      waitId: wait.id,
+      status: "signalled",
+    };
+  } catch (err) {
+    await connection.rollback();
+    throw err;
+  } finally {
+    connection.release();
+  }
+};
+
+/** Load active waiting row for a run (authorized UI). */
+const getActiveWaitForRun = async (runId) => {
+  const [rows] = await pool.execute(
+    `SELECT *
+     FROM workflow_waits
+     WHERE run_id = ? AND status IN ('waiting', 'claimed', 'resumed')
+     ORDER BY created_at DESC
+     LIMIT 1`,
+    [runId]
+  );
+  if (rows.length === 0) return null;
+  const wait = rows[0];
+  return {
+    id: wait.id,
+    runId: wait.run_id,
+    workflowId: wait.workflow_id,
+    nodeId: wait.node_id,
+    status: wait.status,
+    resumeMode: wait.resume_mode,
+    resumeAt: wait.resume_at,
+    resumeMechanism: wait.resume_mechanism,
+    resumedBy: wait.resumed_by,
+    signalledAt: wait.signalled_at,
+    resumedAt: wait.resumed_at,
+    hasExternalToken: Boolean(wait.resume_token_hash),
+    // Decrypt only for authorized callers — never log this.
+    externalResumeToken: wait.resume_token_ciphertext
+      ? unsealResumeToken(wait.resume_token_ciphertext)
+      : null,
+  };
 };
 
 /**
@@ -580,16 +847,70 @@ const cancelOrClaimRaceInMemory = (store, waitId, run, action, claimToken, now) 
   return { claimed: true, cancelled: false };
 };
 
+/**
+ * In-memory signal for manual/external resume (Part 8B).
+ * Sets resumeAt=now while status stays waiting — worker claims later.
+ */
+const signalWaitInMemory = (store, waitId, run, mechanism, now = new Date()) => {
+  const row = store.get(waitId);
+  if (!row) return { ok: false, code: "NOT_FOUND" };
+  if (row.status === "claimed" || row.status === "resumed") {
+    return { ok: true, idempotent: true, status: row.status };
+  }
+  if (row.status === "cancelled") {
+    return { ok: false, code: "INVALID_TOKEN" };
+  }
+  if (run.status !== "waiting") {
+    return { ok: false, code: "NOT_RESUMABLE" };
+  }
+  if (mechanism === "manual" && row.resumeMode !== "manual") {
+    return { ok: false, code: "WRONG_MODE" };
+  }
+  if (mechanism === "external" && row.resumeMode !== "external") {
+    return { ok: false, code: "INVALID_TOKEN" };
+  }
+  if (row.tokenHash && mechanism === "external") {
+    // caller already matched hash
+  }
+  if (row.signalledAt && row.resumeAt && new Date(row.resumeAt) <= now) {
+    return { ok: true, idempotent: true, status: "signalled" };
+  }
+  row.resumeAt = now;
+  row.signalledAt = now;
+  row.resumeMechanism = mechanism;
+  store.set(waitId, row);
+  run.resumeAt = now;
+  return { ok: true, idempotent: false, status: "signalled", runId: run.id };
+};
+
+/**
+ * Lookup wait by token hash (in-memory external resume).
+ */
+const findWaitByTokenHashInMemory = (store, tokenHash) => {
+  for (const row of store.values()) {
+    if (row.tokenHash === tokenHash) return row;
+  }
+  return null;
+};
+
 module.exports = {
   WAIT_UNITS_MS,
   WAIT_CLAIM_LEASE_MS,
+  WAIT_MODES,
+  resolveWaitMode,
   computeWaitResumeAt,
+  generateResumeToken,
+  hashResumeToken,
+  sealResumeToken,
+  unsealResumeToken,
   serializeSchedulerState,
   buildExecutionSnapshot,
   sanitizeBinaryRef,
   sanitizeItem,
   suspendRunAtWait,
   claimDueWaitForRun,
+  requestWaitResume,
+  getActiveWaitForRun,
   getRecoverableWaitForRun,
   updateWaitProgressSnapshot,
   markWaitResumed,
@@ -598,5 +919,7 @@ module.exports = {
   claimWaitInMemory,
   reclaimStaleClaimInMemory,
   cancelOrClaimRaceInMemory,
+  signalWaitInMemory,
+  findWaitByTokenHashInMemory,
   parseJson,
 };

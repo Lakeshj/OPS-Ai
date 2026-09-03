@@ -1727,6 +1727,12 @@ const handlers = {
     const data = node.data || {};
     const inputItems = Array.isArray(context.inputItems) ? context.inputItems : [];
     const now = context.now instanceof Date ? context.now : new Date();
+    const {
+      resolveWaitMode,
+      WAIT_MODES,
+      computeWaitResumeAt: computeResume,
+    } = require("./workflowWait.service");
+    const mode = resolveWaitMode(data);
 
     // Completing a previously suspended Wait on resume.
     if (context.resumingWaitNodeId === node.id) {
@@ -1734,47 +1740,92 @@ const handlers = {
         items: inputItems,
         output: {
           waited: true,
+          resumeMode: mode,
           resumedAt: now.toISOString(),
           resumeAt: context.waitResumeAt
             ? new Date(context.waitResumeAt).toISOString()
             : undefined,
+          resumeMechanism: context.waitResumeMechanism || undefined,
         },
-        resolved: { resumed: true, itemsOut: inputItems.length },
+        resolved: { resumed: true, resumeMode: mode, itemsOut: inputItems.length },
       };
     }
 
-    const { computeWaitResumeAt: computeResume } = require("./workflowWait.service");
-    const resumeAt = computeResume(data, now);
-
-    // Editor partial runs never create durable suspensions.
+    // Editor partial runs never create durable suspensions or tokens.
     if (context.editorMode) {
+      const preview =
+        mode === WAIT_MODES.TIME
+          ? { wouldResumeAt: computeResume(data, now).toISOString() }
+          : { wouldWaitFor: mode };
       return {
         items: inputItems,
         output: {
           waited: false,
           editorPreview: true,
-          wouldResumeAt: resumeAt.toISOString(),
+          resumeMode: mode,
+          ...preview,
           message:
             "Wait requires a full workflow execution to suspend. This preview does not sleep.",
         },
         resolved: {
           editorPreview: true,
-          wouldResumeAt: resumeAt.toISOString(),
+          resumeMode: mode,
+          ...preview,
           itemsOut: inputItems.length,
         },
       };
     }
 
+    if (mode === WAIT_MODES.MANUAL) {
+      return {
+        suspend: true,
+        resumeMode: WAIT_MODES.MANUAL,
+        resumeAt: null,
+        items: inputItems,
+        output: {
+          waiting: true,
+          resumeMode: WAIT_MODES.MANUAL,
+        },
+        resolved: {
+          waiting: true,
+          resumeMode: WAIT_MODES.MANUAL,
+          itemsIn: inputItems.length,
+        },
+      };
+    }
+
+    if (mode === WAIT_MODES.EXTERNAL) {
+      return {
+        suspend: true,
+        resumeMode: WAIT_MODES.EXTERNAL,
+        resumeAt: null,
+        items: inputItems,
+        output: {
+          waiting: true,
+          resumeMode: WAIT_MODES.EXTERNAL,
+        },
+        resolved: {
+          waiting: true,
+          resumeMode: WAIT_MODES.EXTERNAL,
+          itemsIn: inputItems.length,
+        },
+      };
+    }
+
+    const resumeAt = computeResume(data, now);
     return {
       suspend: true,
+      resumeMode: WAIT_MODES.TIME,
       resumeAt: resumeAt.toISOString(),
       items: inputItems,
       output: {
         waiting: true,
+        resumeMode: WAIT_MODES.TIME,
         resumeAt: resumeAt.toISOString(),
       },
       resolved: {
         waiting: true,
+        resumeMode: WAIT_MODES.TIME,
         resumeAt: resumeAt.toISOString(),
         itemsIn: inputItems.length,
       },

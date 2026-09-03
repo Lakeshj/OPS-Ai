@@ -86,6 +86,27 @@ const cancelRun = asyncHandler(async (req, res) => {
   res.json(await workflowsService.cancelRun(req.params.runId, req.user));
 });
 
+const resumeRun = asyncHandler(async (req, res) => {
+  const result = await workflowsService.resumeRun(
+    req.params.id,
+    req.params.runId,
+    req.user
+  );
+  res.status(202).json(result);
+});
+
+/** Public opaque-token resume — token in body only (never query/path). */
+const resumeByExternalToken = asyncHandler(async (req, res) => {
+  const token =
+    (typeof req.body?.token === "string" && req.body.token) ||
+    (typeof req.headers.authorization === "string" &&
+    req.headers.authorization.toLowerCase().startsWith("bearer ")
+      ? req.headers.authorization.slice(7).trim()
+      : null);
+  const result = await workflowsService.resumeByExternalToken(token);
+  res.status(result.status).json(result.body);
+});
+
 const executeNodeStep = asyncHandler(async (req, res) => {
   res.json(
     await workflowsService.executeNodeStep(
@@ -184,6 +205,8 @@ module.exports = {
   listRuns,
   getRun,
   cancelRun,
+  resumeRun,
+  resumeByExternalToken,
   executeNodeStep,
   runToNode,
   executePrevious,

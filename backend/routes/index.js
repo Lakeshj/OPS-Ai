@@ -55,6 +55,22 @@ router.use(
   require("../modules/generatedMedia/generatedMedia.routes")
 );
 
+// Part 8B: opaque external Wait resume (token in body/Authorization — not URL path)
+const rateLimit = require("express-rate-limit");
+const config = require("../config");
+const { resumeByExternalToken } = require("../modules/workflows/workflows.controller");
+const workflowResumeLimiter =
+  config.env === "development"
+    ? (_req, _res, next) => next()
+    : rateLimit({
+        windowMs: 60 * 1000,
+        max: 30,
+        standardHeaders: true,
+        legacyHeaders: false,
+        message: { ok: false, code: "RATE_LIMIT" },
+      });
+router.post("/workflow-resume", workflowResumeLimiter, resumeByExternalToken);
+
 // Protected routes
 router.use(authenticateToken);
 

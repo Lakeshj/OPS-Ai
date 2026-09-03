@@ -1140,8 +1140,10 @@ export const NODE_CONTRACTS: Record<WorkflowNodeType, NodeContract> = {
     params: [],
     dirtyTriggers: ["params", "edges", "pin", "disabled"],
     edgeCases: [
-      "Production: suspends run until resumeAt; survives backend restart",
-      "Editor Run Step: preview only — does not create durable waiting run",
+      "Production TIME: suspends until resumeAt; survives backend restart",
+      "Production MANUAL: waits until authorized Resume; no resumeAt timer",
+      "Production EXTERNAL: waits for one-time opaque token (hash at rest)",
+      "Editor Run Step: preview only — does not create durable waiting run or tokens",
     ],
   },
 

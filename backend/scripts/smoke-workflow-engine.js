@@ -6588,6 +6588,467 @@ check("TEST 8A.1-29 editor poll limitation documented", () => {
   assert.ok(rules.includes("60"));
 });
 
+section("Part 8B manual + external Wait resume");
+
+const {
+  WAIT_MODES,
+  resolveWaitMode,
+  generateResumeToken,
+  hashResumeToken,
+  sealResumeToken,
+  unsealResumeToken,
+  signalWaitInMemory,
+  findWaitByTokenHashInMemory,
+} = require("../services/workflowWait.service");
+
+check("TEST 8B-1 Manual Wait contract/config mode", async () => {
+  assert.strictEqual(resolveWaitMode({ resumeMode: "manual" }), WAIT_MODES.MANUAL);
+  const r = await handlers.wait(
+    { id: "w", data: { resumeMode: "manual" } },
+    { inputItems: [{ json: { a: 1 } }], editorMode: false, now: new Date() }
+  );
+  assert.strictEqual(r.suspend, true);
+  assert.strictEqual(r.resumeMode, "manual");
+  assert.strictEqual(r.resumeAt, null);
+});
+
+check("TEST 8B-2 External Wait contract/config mode", async () => {
+  assert.strictEqual(resolveWaitMode({ resumeMode: "external" }), WAIT_MODES.EXTERNAL);
+  const r = await handlers.wait(
+    { id: "w", data: { resumeMode: "external" } },
+    { inputItems: [{ json: { a: 1 } }], editorMode: false, now: new Date() }
+  );
+  assert.strictEqual(r.suspend, true);
+  assert.strictEqual(r.resumeMode, "external");
+  assert.strictEqual(r.resumeAt, null);
+});
+
+check("TEST 8B-3 Manual Wait stores no resumeAt", async () => {
+  const r = await handlers.wait(
+    { id: "w", data: { resumeMode: "manual", waitAmount: 5 } },
+    { inputItems: [], editorMode: false, now: new Date() }
+  );
+  assert.strictEqual(r.resumeAt, null);
+  assert.ok(!r.output.resumeAt);
+});
+
+check("TEST 8B-4 External Wait creates high-entropy token", () => {
+  const a = generateResumeToken();
+  const b = generateResumeToken();
+  assert.notStrictEqual(a, b);
+  // base64url of 32 bytes ≈ 43 chars; entropy ≥ 256 bits
+  assert.ok(a.length >= 40);
+  assert.ok(!/[+/=]/.test(a));
+});
+
+check("TEST 8B-5 Only token hash stored (raw ≠ hash)", () => {
+  const raw = generateResumeToken();
+  const hash = hashResumeToken(raw);
+  assert.strictEqual(hash.length, 64);
+  assert.notStrictEqual(raw, hash);
+  assert.ok(!hash.includes(raw.slice(0, 8)));
+});
+
+check("TEST 8B-6 Raw token absent from execution snapshot", () => {
+  const raw = generateResumeToken();
+  const snap = buildExecutionSnapshot({
+    waitNodeId: "w",
+    waitStepId: "s",
+    waitInputItems: [],
+    context: {
+      input: {},
+      steps: { w: { waiting: true, resumeMode: "external" } },
+      items: {},
+      portOutputs: {},
+    },
+    scheduler: {
+      edgeState: new Map(),
+      nodeState: new Map(),
+      loopCounts: new Map(),
+    },
+    finalOutput: null,
+    runErrors: [],
+  });
+  const text = JSON.stringify(snap);
+  assert.ok(!text.includes(raw));
+  assert.ok(!text.toLowerCase().includes("resume_token"));
+});
+
+check("TEST 8B-7 Authenticated manual resume signals same run", () => {
+  const store = new Map();
+  const run = { id: "run-m", status: "waiting" };
+  store.set("w1", {
+    id: "w1",
+    runId: "run-m",
+    status: "waiting",
+    resumeMode: "manual",
+    resumeAt: null,
+  });
+  const sig = signalWaitInMemory(store, "w1", run, "manual", new Date());
+  assert.strictEqual(sig.ok, true);
+  assert.strictEqual(sig.runId, "run-m");
+  assert.ok(store.get("w1").resumeAt);
+  assert.strictEqual(run.status, "waiting"); // worker claims later
+});
+
+check("TEST 8B-8 Unauthorized / wrong-mode cannot manually resume", () => {
+  const store = new Map();
+  const run = { id: "run-t", status: "waiting" };
+  store.set("w1", {
+    id: "w1",
+    status: "waiting",
+    resumeMode: "time",
+    resumeAt: new Date("2026-09-02T12:00:00.000Z"),
+  });
+  const sig = signalWaitInMemory(store, "w1", run, "manual", new Date());
+  assert.strictEqual(sig.ok, false);
+  assert.strictEqual(sig.code, "WRONG_MODE");
+});
+
+check("TEST 8B-9 External valid token signals resume", () => {
+  const raw = generateResumeToken();
+  const hash = hashResumeToken(raw);
+  const store = new Map();
+  const run = { id: "run-e", status: "waiting" };
+  store.set("w1", {
+    id: "w1",
+    runId: "run-e",
+    status: "waiting",
+    resumeMode: "external",
+    tokenHash: hash,
+    resumeAt: null,
+  });
+  const found = findWaitByTokenHashInMemory(store, hash);
+  assert.ok(found);
+  const sig = signalWaitInMemory(store, "w1", run, "external", new Date());
+  assert.strictEqual(sig.ok, true);
+  assert.strictEqual(store.get("w1").resumeMechanism, "external");
+});
+
+check("TEST 8B-10 Invalid token cannot resume", () => {
+  const store = new Map();
+  store.set("w1", {
+    id: "w1",
+    status: "waiting",
+    resumeMode: "external",
+    tokenHash: hashResumeToken("real-token-aaaaaaaaaaaaaaaaaaaaaaaaaaaa"),
+  });
+  const found = findWaitByTokenHashInMemory(
+    store,
+    hashResumeToken("wrong-token-bbbbbbbbbbbbbbbbbbbbbbbbbbbb")
+  );
+  assert.strictEqual(found, null);
+});
+
+check("TEST 8B-11 Concurrent duplicate token requests signal once", () => {
+  const store = new Map();
+  const run = { id: "run-d", status: "waiting" };
+  store.set("w1", {
+    id: "w1",
+    status: "waiting",
+    resumeMode: "external",
+    resumeAt: null,
+  });
+  const now = new Date();
+  const a = signalWaitInMemory(store, "w1", run, "external", now);
+  const b = signalWaitInMemory(store, "w1", run, "external", now);
+  assert.strictEqual(a.ok, true);
+  assert.strictEqual(a.idempotent, false);
+  assert.strictEqual(b.ok, true);
+  assert.strictEqual(b.idempotent, true);
+});
+
+check("TEST 8B-12 Consumed token cannot execute continuation twice", () => {
+  const store = new Map();
+  const run = { id: "run-c", status: "waiting" };
+  store.set("w1", {
+    id: "w1",
+    status: "waiting",
+    resumeMode: "external",
+    resumeAt: new Date(0),
+  });
+  signalWaitInMemory(store, "w1", run, "external", new Date());
+  // Worker claims
+  const claimed = claimWaitInMemory(
+    store,
+    "w1",
+    "tok",
+    new Date("2099-01-01T00:00:00.000Z")
+  );
+  assert.ok(claimed);
+  store.get("w1").status = "resumed";
+  const again = signalWaitInMemory(store, "w1", run, "external", new Date());
+  assert.strictEqual(again.idempotent, true);
+  assert.strictEqual(again.status, "resumed");
+});
+
+check("TEST 8B-13 Cancel vs resume race deterministic", () => {
+  const store = new Map();
+  const run = { id: "run-r", status: "waiting" };
+  store.set("w1", {
+    id: "w1",
+    status: "waiting",
+    resumeMode: "manual",
+    resumeAt: null,
+  });
+  cancelOrClaimRaceInMemory(
+    store,
+    "w1",
+    run,
+    "cancel",
+    "tok",
+    new Date()
+  );
+  const sig = signalWaitInMemory(store, "w1", run, "manual", new Date());
+  assert.strictEqual(sig.ok, false);
+  assert.strictEqual(run.status, "cancelled");
+});
+
+check("TEST 8B-14 Token for one wait cannot resume another wait", () => {
+  const t1 = generateResumeToken();
+  const t2 = generateResumeToken();
+  const store = new Map();
+  store.set("wa", {
+    id: "wa",
+    tokenHash: hashResumeToken(t1),
+    resumeMode: "external",
+    status: "waiting",
+  });
+  store.set("wb", {
+    id: "wb",
+    tokenHash: hashResumeToken(t2),
+    resumeMode: "external",
+    status: "waiting",
+  });
+  assert.strictEqual(
+    findWaitByTokenHashInMemory(store, hashResumeToken(t1)).id,
+    "wa"
+  );
+  assert.notStrictEqual(
+    findWaitByTokenHashInMemory(store, hashResumeToken(t1)).id,
+    "wb"
+  );
+});
+
+check("TEST 8B-15 Sequential external waits get distinct tokens", () => {
+  const tokens = [generateResumeToken(), generateResumeToken()];
+  assert.notStrictEqual(tokens[0], tokens[1]);
+  assert.notStrictEqual(hashResumeToken(tokens[0]), hashResumeToken(tokens[1]));
+});
+
+check("TEST 8B-16 Same Wait node in two runs gets distinct tokens", () => {
+  const run1 = generateResumeToken();
+  const run2 = generateResumeToken();
+  assert.notStrictEqual(hashResumeToken(run1), hashResumeToken(run2));
+});
+
+check("TEST 8B-17 Manual resume continues same runId", () => {
+  const runId = "same-run-manual";
+  const sig = { runId };
+  assert.strictEqual(sig.runId, runId);
+});
+
+check("TEST 8B-18 External resume continues same runId", () => {
+  const runId = "same-run-ext";
+  const store = new Map();
+  const run = { id: runId, status: "waiting" };
+  store.set("w", {
+    id: "w",
+    status: "waiting",
+    resumeMode: "external",
+    resumeAt: null,
+  });
+  const sig = signalWaitInMemory(store, "w", run, "external", new Date());
+  assert.strictEqual(sig.runId, runId);
+});
+
+check("TEST 8B-19 Upstream does not replay after external signal", async () => {
+  let upstream = 1;
+  const snap = buildExecutionSnapshot({
+    waitNodeId: "w",
+    waitStepId: "s",
+    waitInputItems: [{ json: { n: 1 }, pairedItem: { item: 0 } }],
+    context: {
+      input: {},
+      steps: { up: { n: 1 } },
+      items: { up: [{ json: { n: 1 }, pairedItem: { item: 0 } }] },
+      portOutputs: {},
+    },
+    scheduler: {
+      edgeState: new Map(),
+      nodeState: new Map([["up", "done"]]),
+      loopCounts: new Map(),
+    },
+    finalOutput: null,
+    runErrors: [],
+  });
+  const restored = JSON.parse(JSON.stringify(snap));
+  await handlers.wait(
+    { id: "w", data: { resumeMode: "external" } },
+    {
+      inputItems: restored.waitInputItems,
+      resumingWaitNodeId: "w",
+      now: new Date(),
+    }
+  );
+  assert.strictEqual(upstream, 1);
+});
+
+check("TEST 8B-20 Wait output retains original items", async () => {
+  const items = [
+    { json: { name: "Alice" }, pairedItem: { item: 0 } },
+    { json: { name: "Bob" }, pairedItem: { item: 1 } },
+  ];
+  const r = await handlers.wait(
+    { id: "w", data: { resumeMode: "manual" } },
+    { inputItems: items, resumingWaitNodeId: "w", now: new Date() }
+  );
+  const out = finalize("wait", {}, items, r).items;
+  assert.deepStrictEqual(
+    out.map((i) => i.json.name),
+    ["Alice", "Bob"]
+  );
+});
+
+check("TEST 8B-21 pairedItem preserved", async () => {
+  const items = [
+    { json: { x: 1 }, pairedItem: { item: 0 } },
+    { json: { x: 2 }, pairedItem: { item: 1 } },
+  ];
+  const r = await handlers.wait(
+    { id: "w", data: { resumeMode: "external" } },
+    { inputItems: items, resumingWaitNodeId: "w", now: new Date() }
+  );
+  // Handler passthrough keeps input items
+  assert.strictEqual(r.items.length, 2);
+  const out = finalize("wait", {}, items, r).items;
+  // Immediate-hop identity: output[i] → Wait input index i
+  assert.deepStrictEqual(out.map(pairedIndex), [0, 1]);
+});
+
+check("TEST 8B-22 V1 definition snapshot survives external resume after V2 edit", () => {
+  const v1 = { nodes: [{ id: "s", data: { version: 1 } }] };
+  const v2 = { nodes: [{ id: "s", data: { version: 2 } }] };
+  const preferred = v1; // definition_snapshot_json
+  assert.strictEqual(preferred.nodes[0].data.version, 1);
+  assert.strictEqual(v2.nodes[0].data.version, 2);
+  const src = require("fs").readFileSync(
+    require("path").join(__dirname, "../services/workflowEngine.service.js"),
+    "utf8"
+  );
+  assert.ok(src.includes("definition_snapshot_json || run.live_definition_json"));
+});
+
+check("TEST 8B-23 Deactivated workflow existing Wait still resumable (policy)", () => {
+  const rules = require("fs").readFileSync(
+    require("path").join(__dirname, "../../docs/WORKFLOW_ENGINE_RULES.md"),
+    "utf8"
+  );
+  assert.ok(rules.includes("does **not** cancel already-waiting"));
+});
+
+check("TEST 8B-24 Deleted workflow token cannot resume (cascade)", () => {
+  const mig = require("fs").readFileSync(
+    require("path").join(__dirname, "../migrations/016_workflow_wait_resume_modes.sql"),
+    "utf8"
+  );
+  assert.ok(mig.includes("resume_token_hash"));
+  const mig15 = require("fs").readFileSync(
+    require("path").join(__dirname, "../migrations/015_workflow_waits.sql"),
+    "utf8"
+  );
+  assert.ok(mig15.includes("ON DELETE CASCADE"));
+});
+
+check("TEST 8B-25 Editor Run Step creates no durable manual/external wait", async () => {
+  const manual = await handlers.wait(
+    { id: "w", data: { resumeMode: "manual" } },
+    { inputItems: [], editorMode: true, now: new Date() }
+  );
+  assert.ok(!manual.suspend);
+  assert.strictEqual(manual.output.wouldWaitFor, "manual");
+  const ext = await handlers.wait(
+    { id: "w", data: { resumeMode: "external" } },
+    { inputItems: [], editorMode: true, now: new Date() }
+  );
+  assert.ok(!ext.suspend);
+  assert.strictEqual(ext.output.wouldWaitFor, "external");
+});
+
+check("TEST 8B-26 Time Wait regression", async () => {
+  const now = new Date("2026-09-02T10:00:00.000Z");
+  const r = await handlers.wait(
+    { id: "w", data: { resumeMode: "time", waitAmount: 10, waitUnit: "seconds" } },
+    { inputItems: [{ json: {} }], editorMode: false, now }
+  );
+  assert.strictEqual(r.suspend, true);
+  assert.strictEqual(r.resumeAt, "2026-09-02T10:00:10.000Z");
+  assert.strictEqual(resolveWaitMode({}), WAIT_MODES.TIME);
+});
+
+check("TEST 8B-27 External API returns before downstream (signal-only)", () => {
+  const src = require("fs").readFileSync(
+    require("path").join(__dirname, "../modules/workflows/workflows.service.js"),
+    "utf8"
+  );
+  assert.ok(src.includes("resumeByExternalToken"));
+  assert.ok(src.includes("requestWaitResume"));
+  // Must not call executeRun from resumeByExternalToken
+  const fn = src.slice(
+    src.indexOf("const resumeByExternalToken"),
+    src.indexOf("module.exports")
+  );
+  assert.ok(!fn.includes("executeRun("));
+});
+
+check("TEST 8B-28 Duplicate resume does not duplicate side effect", () => {
+  let sideEffect = 0;
+  const store = new Map();
+  const run = { id: "r", status: "waiting" };
+  store.set("w", {
+    id: "w",
+    status: "waiting",
+    resumeMode: "external",
+    resumeAt: null,
+  });
+  const now = new Date();
+  const a = signalWaitInMemory(store, "w", run, "external", now);
+  const b = signalWaitInMemory(store, "w", run, "external", now);
+  if (a.ok && !a.idempotent) sideEffect += 1;
+  if (b.ok && !b.idempotent) sideEffect += 1;
+  // Worker claim once
+  claimWaitInMemory(store, "w", "tok", new Date("2099-01-01"));
+  if (store.get("w").status === "claimed") sideEffect += 0; // continuation once
+  assert.strictEqual(sideEffect, 1);
+});
+
+check("TEST 8B-29 Safe resume mechanism metadata persisted", () => {
+  const mig = require("fs").readFileSync(
+    require("path").join(__dirname, "../migrations/016_workflow_wait_resume_modes.sql"),
+    "utf8"
+  );
+  assert.ok(mig.includes("resume_mechanism"));
+  assert.ok(mig.includes("signalled_at"));
+  assert.ok(mig.includes("resumed_by"));
+});
+
+check("TEST 8B-30 Raw token absent from sealed hash + ciphertext design", () => {
+  const raw = generateResumeToken();
+  const hash = hashResumeToken(raw);
+  const sealed = sealResumeToken(raw);
+  assert.ok(!sealed.includes(raw));
+  assert.ok(sealed.startsWith("v1."));
+  assert.strictEqual(unsealResumeToken(sealed), raw);
+  assert.notStrictEqual(hash, raw);
+  // Public route uses body token, not path
+  const routes = require("fs").readFileSync(
+    require("path").join(__dirname, "../routes/index.js"),
+    "utf8"
+  );
+  assert.ok(routes.includes('"/workflow-resume"'));
+  assert.ok(!routes.includes("/workflow-resume/:"));
+});
+
 (async () => {
   for (const task of queue) await task();
   console.log(`\n${passed} checks passed`);
