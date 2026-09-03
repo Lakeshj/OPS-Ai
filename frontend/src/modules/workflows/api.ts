@@ -140,6 +140,7 @@ export const workflowsApi = {
     payload: {
       expression: string;
       itemIndex?: number;
+      runIndex?: number;
       parameterName?: string;
       definition?: import("./types").WorkflowDefinition;
       input?: Record<string, unknown>;

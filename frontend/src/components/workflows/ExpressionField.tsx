@@ -30,6 +30,8 @@ export type ExpressionFieldContext = {
   workflowId?: string;
   nodeId?: string;
   itemIndex?: number;
+  /** Part 9C — selected Loop body / Batch occurrence */
+  runIndex?: number;
   definition?: WorkflowDefinition;
   input?: Record<string, unknown>;
   steps?: Record<string, unknown>;
@@ -138,6 +140,7 @@ export function ExpressionField({
         .previewExpression(ctx.workflowId!, ctx.nodeId!, {
           expression: value,
           itemIndex: ctx.itemIndex ?? 0,
+          runIndex: ctx.runIndex,
           definition: ctx.definition,
           input: ctx.input,
         })
@@ -164,6 +167,7 @@ export function ExpressionField({
     ctx?.workflowId,
     ctx?.nodeId,
     ctx?.itemIndex,
+    ctx?.runIndex,
     ctx?.definition,
     ctx?.input,
   ]);

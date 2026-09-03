@@ -1723,12 +1723,23 @@ const handlers = {
     },
   }),
 
-  loop: async (node) => {
-    const err = new Error(
-      "Loop runtime is not enabled yet. Controlled Loop topology is recognized but execution starts in Part 9B."
-    );
-    err.code = "LOOP_RUNTIME_NOT_ENABLED";
-    throw err;
+  loop: async (node, context) => {
+    const {
+      executeLoopOccurrence,
+    } = require("./workflowLoopRuntime.service");
+    if (context?.editorMode) {
+      const err = new Error(
+        "Loop is not supported in editor partial execution (Part 9C)."
+      );
+      err.code = "LOOP_PARTIAL_UNSUPPORTED";
+      throw err;
+    }
+    return executeLoopOccurrence({
+      node,
+      graph: context.graph,
+      context,
+      runData: context.runData || {},
+    });
   },
 
   wait: async (node, context) => {

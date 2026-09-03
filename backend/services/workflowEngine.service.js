@@ -51,8 +51,103 @@ const {
 } = require("./workflowOccurrence.service");
 const {
   validateControlledCycles: validateLoopTopology,
+  definitionHasLoop,
   assertLoopRuntimeNotEnabled: assertNoLoopRuntime,
+  analyzeLoopRegion,
+  isLoopNode,
 } = require("./workflowLoopGraph.service");
+const {
+  validateLoopForExecution: validateLoopRuntime,
+  loopReopenNodeIds,
+  isLoopBackEdge,
+  serializeLoopControllers,
+  restoreLoopControllers,
+  LOOP_PORTS,
+} = require("./workflowLoopRuntime.service");
+
+const LOOP_EDITOR_UNSUPPORTED = "LOOP_EDITOR_UNSUPPORTED";
+
+/** Loop / body membership for a node (V1 single-region). */
+const findLoopMembership = (graph, nodeId) => {
+  for (const node of graph.nodes || []) {
+    if (!isLoopNode(node)) continue;
+    const region = analyzeLoopRegion(graph, node.id);
+    if (!region?.ok) continue;
+    if (nodeId === node.id) return { kind: "loop", region };
+    if (region.bodyNodes?.has(nodeId)) return { kind: "body", region };
+  }
+  return null;
+};
+
+const collectAncestorIds = (graph, targetNodeId) => {
+  const ancestors = new Set();
+  const stack = [...(graph.incoming.get(targetNodeId) || []).map((e) => e.source)];
+  while (stack.length > 0) {
+    const id = stack.pop();
+    if (ancestors.has(id)) continue;
+    ancestors.add(id);
+    for (const e of graph.incoming.get(id) || []) stack.push(e.source);
+  }
+  return ancestors;
+};
+
+/** Expand partial node set so each included Loop brings its full body. */
+const expandPartialIdsWithLoopBodies = (graph, seedIds) => {
+  const ids = new Set(seedIds);
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (const node of graph.nodes || []) {
+      if (!isLoopNode(node) || !ids.has(node.id)) continue;
+      const region = analyzeLoopRegion(graph, node.id);
+      if (!region?.ok) continue;
+      for (const bodyId of region.bodyNodes || []) {
+        if (!ids.has(bodyId)) {
+          ids.add(bodyId);
+          changed = true;
+        }
+      }
+    }
+  }
+  return ids;
+};
+
+const pruneDefinitionToNodeIds = (definition, ids) => ({
+  version: definition?.version ?? 1,
+  nodes: (definition?.nodes || []).filter((n) => ids.has(n.id)),
+  edges: (definition?.edges || []).filter(
+    (e) => ids.has(e.source) && ids.has(e.target)
+  ),
+});
+
+const resultsFromRunData = (runData, ids) => {
+  const results = {};
+  for (const id of ids) {
+    const list = runData?.[id];
+    if (!Array.isArray(list) || list.length === 0) continue;
+    const latest = list[list.length - 1];
+    results[id] = {
+      nodeId: id,
+      status: latest.status || "succeeded",
+      output: latest.output,
+      items: latest.items,
+      portOutputs: latest.portOutputs || undefined,
+      error: latest.error || null,
+      executionIndex: latest.runIndex ?? list.length - 1,
+      occurrences: list,
+      executionTimeMs: 0,
+      cacheState: latest.status === "failed" ? "dirty" : "clean",
+    };
+  }
+  return results;
+};
+
+const throwLoopEditorUnsupported = (message) => {
+  const err = new Error(message);
+  err.code = LOOP_EDITOR_UNSUPPORTED;
+  err.statusCode = 400;
+  throw err;
+};
 
 const normalizeEditorSession = (sessionOrLegacy) => {
   if (sessionOrLegacy?.nodeResults) {
@@ -330,6 +425,9 @@ const createScheduler = (graph, restored = null) => {
   const loopCounts = new Map(
     Array.isArray(restored?.loopCounts) ? restored.loopCounts : []
   );
+  const closedLoops = new Set(
+    Array.isArray(restored?.closedLoops) ? restored.closedLoops : []
+  );
 
   const staticIncoming = (nodeId) =>
     (graph.incoming.get(nodeId) || []).filter((e) => !backEdges.has(edgeKey(e)));
@@ -351,8 +449,11 @@ const createScheduler = (graph, restored = null) => {
     );
   };
 
-  const settleOutgoing = (node, nextHandle, skipAll = false, activeHandles = null) => {
+  const settleOutgoing = (node, nextHandle, skipAll = false, activeHandles = null, pendingHandles = null) => {
     const outgoing = graph.outgoing.get(node.id) || [];
+    const pending = new Set(
+      Array.isArray(pendingHandles) ? pendingHandles.map(String) : []
+    );
     let activeKeys;
     if (skipAll) {
       activeKeys = new Set();
@@ -375,6 +476,11 @@ const createScheduler = (graph, restored = null) => {
     }
     for (const edge of outgoing) {
       const key = edgeKey(edge);
+      const handle = String(edge.sourceHandle || "");
+      if (pending.has(handle)) {
+        edgeState.delete(key); // leave unsettled (e.g. Loop.batch after done)
+        continue;
+      }
       edgeState.set(key, activeKeys.has(key) ? "active" : "skipped");
     }
     return outgoing.filter(
@@ -382,11 +488,41 @@ const createScheduler = (graph, restored = null) => {
     );
   };
 
-  /** A live back edge re-opens its cycle so the nodes inside can run again. */
+  /**
+   * A live (or skipped Loop.continue) back edge re-opens body nodes so they
+   * can run the next iteration. Loop reopen is limited to Loop + body region
+   * (never done descendants).
+   */
   const reopenCycle = (backEdge) => {
     const key = edgeKey(backEdge);
     const count = (loopCounts.get(key) || 0) + 1;
     loopCounts.set(key, count);
+
+    const loopScoped = loopReopenNodeIds(graph, backEdge);
+    if (loopScoped) {
+      if (closedLoops.has(backEdge.target)) {
+        return; // Loop.done already emitted — never reactivate body
+      }
+      // Finite Loop: iteration budget is controller.expectedIterations;
+      // keep a hard ceiling as safety net.
+      if (count > MAX_LOOP_ITERATIONS) {
+        throw new Error(
+          `Loop ${backEdge.target} exceeded ${MAX_LOOP_ITERATIONS} reopen events — internal Loop-state error`
+        );
+      }
+      for (const id of loopScoped) {
+        nodeState.delete(id);
+        for (const e of graph.outgoing.get(id) || []) {
+          edgeState.delete(edgeKey(e));
+        }
+        // Clear stale port outputs for body so Merge/Switch cannot mix iterations
+        if (id !== backEdge.target && typeof reopenClearPort === "function") {
+          reopenClearPort(id);
+        }
+      }
+      return;
+    }
+
     if (count > MAX_LOOP_ITERATIONS) {
       throw new Error(
         `Loop ${backEdge.source} → ${backEdge.target} exceeded ${MAX_LOOP_ITERATIONS} iterations — add a condition that ends the loop`
@@ -411,11 +547,52 @@ const createScheduler = (graph, restored = null) => {
     }
   };
 
+  /** Optional hook set by executeRun to clear context.portOutputs on body reopen. */
+  let reopenClearPort = null;
+
+  const maybeReopenLoopContinue = (node, settledSkipped = false) => {
+    for (const edge of graph.outgoing.get(node.id) || []) {
+      if (!backEdges.has(edgeKey(edge))) continue;
+      if (!isLoopBackEdge(graph, edge)) continue;
+      if (settledSkipped || edgeState.get(edgeKey(edge)) === "active") {
+        // Ensure skipped continue is visible as settled for advance checks.
+        if (settledSkipped && !edgeState.has(edgeKey(edge))) {
+          edgeState.set(edgeKey(edge), "skipped");
+        }
+      }
+    }
+  };
+
+  /**
+   * Continue settlement advances iteration only when all body nodes are settled
+   * (done or skipped), so parallel body branches cannot leak mid-iteration.
+   */
+  const tryAdvanceLoopAfterBodySettle = (fromNodeId) => {
+    for (const edge of graph.outgoing.get(fromNodeId) || []) {
+      if (!isLoopBackEdge(graph, edge)) continue;
+      const regionIds = loopReopenNodeIds(graph, edge);
+      if (!regionIds) continue;
+      const bodyReady = [...regionIds].every((id) => {
+        if (id === edge.target) return true; // Loop itself may still be "done" until reopen
+        return nodeState.has(id);
+      });
+      if (!bodyReady) continue;
+      const st = edgeState.get(edgeKey(edge));
+      if (st === "active" || st === "skipped") {
+        reopenCycle(edge);
+      }
+    }
+  };
+
   return {
     backEdges,
     edgeState,
     nodeState,
     loopCounts,
+    closedLoops,
+    setReopenClearPort(fn) {
+      reopenClearPort = fn;
+    },
     next() {
       for (const node of graph.nodes) {
         if (nodeState.has(node.id)) continue;
@@ -431,12 +608,34 @@ const createScheduler = (graph, restored = null) => {
     complete(node, nextHandle, options = {}) {
       nodeState.set(node.id, "done");
       const activeHandles = options.activeHandles || null;
-      for (const back of settleOutgoing(node, nextHandle, false, activeHandles))
-        reopenCycle(back);
+      const pendingHandles = options.pendingHandles || null;
+      if (
+        (node.type === "loop" || node.data?.nodeType === "loop") &&
+        Array.isArray(activeHandles) &&
+        activeHandles.includes(LOOP_PORTS.DONE)
+      ) {
+        closedLoops.add(node.id);
+      }
+      for (const back of settleOutgoing(
+        node,
+        nextHandle,
+        false,
+        activeHandles,
+        pendingHandles
+      )) {
+        if (isLoopBackEdge(graph, back)) {
+          tryAdvanceLoopAfterBodySettle(node.id);
+        } else {
+          reopenCycle(back);
+        }
+      }
+      tryAdvanceLoopAfterBodySettle(node.id);
     },
     skip(node) {
       nodeState.set(node.id, "skipped");
       settleOutgoing(node, null, true);
+      maybeReopenLoopContinue(node, true);
+      tryAdvanceLoopAfterBodySettle(node.id);
     },
     stateOf: (nodeId) => nodeState.get(nodeId) || null,
   };
@@ -468,10 +667,11 @@ const executeRun = async (runId, options = {}) => {
   );
   const input = parseJson(run.input_json, {});
   const graph = buildGraph(definition);
-  assertNoLoopRuntime(graph);
-  const cycleCheck = validateLoopTopology(graph);
-  if (!cycleCheck.ok) {
-    throw new Error(cycleCheck.errors[0] || "Invalid workflow cycle");
+  const loopCheck = validateLoopRuntime(graph);
+  if (!loopCheck.ok) {
+    const err = new Error(loopCheck.errors[0] || "Invalid Loop topology");
+    if (loopCheck.code) err.code = loopCheck.code;
+    throw err;
   }
   const isProductionRun =
     input?.source === "schedule" || input?.source === "webhook";
@@ -485,23 +685,24 @@ const executeRun = async (runId, options = {}) => {
   const applyWaitResumeFromSnapshot = async (waitRow, { executeWaitNode }) => {
     const snap = normalizeWaitSnapshot(waitRow.snapshot || {});
     scheduler = createScheduler(graph, snap.scheduler || null);
-    context = {
-      input: snap.context?.input || input,
-      steps: { ...(snap.context?.steps || {}) },
-      items: { ...(snap.context?.items || {}) },
-      portOutputs: { ...(snap.context?.portOutputs || {}) },
-      runData: snap.runData || fromLegacyContext(snap.context || {}),
-      inputItems: [],
-      runId,
-      workspaceId: run.workspace_id,
-      workflowId: run.workflow_id,
-      editorMode: false,
-      useProductionPins: isProductionRun,
-      resumingWaitNodeId: snap.waitNodeId,
-      waitResumeAt: waitRow.resume_at,
-      waitResumeMechanism: waitRow.resume_mechanism || waitRow.resume_mode,
-      now,
-    };
+      context = {
+        input: snap.context?.input || input,
+        steps: { ...(snap.context?.steps || {}) },
+        items: { ...(snap.context?.items || {}) },
+        portOutputs: { ...(snap.context?.portOutputs || {}) },
+        runData: snap.runData || fromLegacyContext(snap.context || {}),
+        loopControllers: restoreLoopControllers(snap.loopControllers),
+        inputItems: [],
+        runId,
+        workspaceId: run.workspace_id,
+        workflowId: run.workflow_id,
+        editorMode: false,
+        useProductionPins: isProductionRun,
+        resumingWaitNodeId: snap.waitNodeId,
+        waitResumeAt: waitRow.resume_at,
+        waitResumeMechanism: waitRow.resume_mechanism || waitRow.resume_mode,
+        now,
+      };
     applyLatestView(context);
     finalOutput = snap.finalOutput ?? null;
     runErrors = Array.isArray(snap.runErrors) ? [...snap.runErrors] : [];
@@ -529,9 +730,15 @@ const executeRun = async (runId, options = {}) => {
       context.items[waitNode.id] = waitItems;
       context.steps[waitNode.id] = waitResult.output ?? null;
       if (!context.runData) context.runData = createRunData();
+      // Resume updates the SAME Wait occurrence (never nextRunIndex).
+      const waitExecutionIndex =
+        snap.waitExecutionIndex != null
+          ? Number(snap.waitExecutionIndex) || 0
+          : 0;
+      context.currentRunIndex = waitExecutionIndex;
       recordOccurrence(context.runData, {
         nodeId: waitNode.id,
-        runIndex: nextRunIndex(context.runData, waitNode.id),
+        runIndex: waitExecutionIndex,
         status: "succeeded",
         items: waitItems,
         output: waitResult.output ?? null,
@@ -599,6 +806,7 @@ const executeRun = async (runId, options = {}) => {
         items: {},
         portOutputs: {},
         runData: createRunData(),
+        loopControllers: {},
         inputItems: [],
         runId,
         workspaceId: run.workspace_id,
@@ -624,6 +832,7 @@ const executeRun = async (runId, options = {}) => {
       items: {},
       portOutputs: {},
       runData: createRunData(),
+      loopControllers: {},
       inputItems: [],
       runId,
       workspaceId: run.workspace_id,
@@ -637,6 +846,10 @@ const executeRun = async (runId, options = {}) => {
     // Terminal run — do not re-execute.
     return { status: run.status };
   }
+
+  scheduler.setReopenClearPort((nodeId) => {
+    if (context.portOutputs) delete context.portOutputs[nodeId];
+  });
 
   try {
     for (;;) {
@@ -783,9 +996,27 @@ const executeRun = async (runId, options = {}) => {
             // Raw token is sealed for authorized reveal only — never in snapshot.
           }
 
+          // Same occurrence: waiting → (later) succeeded. Do not allocate a new index.
+          recordOccurrence(context.runData, {
+            nodeId: node.id,
+            runIndex: executionIndex,
+            status: "waiting",
+            items: Array.isArray(context.inputItems) ? context.inputItems : [],
+            output: {
+              waiting: true,
+              resumeMode: mode,
+              resumeAt: resumeAt ? resumeAt.toISOString() : null,
+            },
+            inputSources,
+            stepId,
+            startedAt: new Date().toISOString(),
+          });
+          applyLatestView(context);
+
           const snapshot = buildExecutionSnapshot({
             waitNodeId: node.id,
             waitStepId: stepId,
+            waitExecutionIndex: executionIndex,
             waitInputItems: context.inputItems,
             context,
             scheduler,
@@ -814,7 +1045,15 @@ const executeRun = async (runId, options = {}) => {
 
         if (!failure) {
           let items;
-          if (nodeType === "switch" && result.outputsByPort) {
+          const occurrenceInputSources = result.inputSources || inputSources;
+          if (nodeType === "loop" && result.portOutputs) {
+            applyPortOutputsToContext(node.id, result.portOutputs, context);
+            items = Array.isArray(result.items) ? result.items : [];
+            result.output = attachCanonicalItemsToOutput(
+              result.output ?? {},
+              items
+            );
+          } else if (nodeType === "switch" && result.outputsByPort) {
             const finalized = finalizeSwitchOutputs(node, context.inputItems, result);
             items = finalized.items;
             applyPortOutputsToContext(node.id, finalized.portOutputs, context);
@@ -839,9 +1078,10 @@ const executeRun = async (runId, options = {}) => {
             items,
             output,
             portOutputs: context.portOutputs?.[node.id] || null,
-            inputSources,
+            inputSources: occurrenceInputSources,
             stepId,
             completedAt: new Date().toISOString(),
+            ...(result.loopMeta ? { executionContext: result.loopMeta } : {}),
           });
           applyLatestView(context);
 
@@ -852,6 +1092,7 @@ const executeRun = async (runId, options = {}) => {
               ...stepInput,
               itemsIn: context.inputItems.length,
               resolved: compactValue(result.resolved ?? null),
+              loopMeta: result.loopMeta || null,
             }),
             output_json: JSON.stringify(output),
             finished_at: new Date(),
@@ -863,6 +1104,7 @@ const executeRun = async (runId, options = {}) => {
 
           scheduler.complete(node, result.nextHandle, {
             activeHandles: result.activeHandles,
+            pendingHandles: result.pendingHandles,
           });
           continue;
         }
@@ -975,7 +1217,6 @@ const executePartial = async ({
   reconcileSessionWithDefinition(editorSession, definition);
 
   const graph = buildGraph(definition);
-  assertNoLoopRuntime(graph);
   const cycleCheck = validateLoopTopology(graph);
   if (!cycleCheck.ok) {
     throw new Error(cycleCheck.errors[0] || "Invalid workflow cycle");
@@ -983,13 +1224,57 @@ const executePartial = async ({
   const target = graph.byId.get(targetNodeId);
   if (!target) throw new Error(`Node not found: ${targetNodeId}`);
 
-  const ancestors = new Set();
-  const stack = [...(graph.incoming.get(targetNodeId) || []).map((e) => e.source)];
-  while (stack.length > 0) {
-    const id = stack.pop();
-    if (ancestors.has(id)) continue;
-    ancestors.add(id);
-    for (const e of graph.incoming.get(id) || []) stack.push(e.source);
+  const membership = findLoopMembership(graph, targetNodeId);
+  if (membership?.kind === "loop") {
+    throwLoopEditorUnsupported(
+      "Loop runs as a complete region. Use Run to a node after Done, or Execute workflow."
+    );
+  }
+  if (membership?.kind === "body") {
+    throwLoopEditorUnsupported(
+      "Iteration-level rerun inside Loop isn't supported yet. Use Execute workflow or Run to a node after Done."
+    );
+  }
+
+  const ancestors = collectAncestorIds(graph, targetNodeId);
+
+  // Path includes a Loop region → execute Loop as a complete unit (not step-through).
+  const pathIds = new Set(ancestors);
+  if (mode !== "upstream") pathIds.add(targetNodeId);
+  const pathTouchesLoop = [...pathIds].some((id) => findLoopMembership(graph, id));
+
+  if (pathTouchesLoop) {
+    const loopCheck = validateLoopRuntime(graph);
+    if (!loopCheck.ok) {
+      const err = new Error(loopCheck.errors[0] || "Invalid Loop topology");
+      if (loopCheck.code) err.code = loopCheck.code;
+      throw err;
+    }
+
+    const seedIds = new Set(ancestors);
+    if (mode === "run-to" || mode === "step") seedIds.add(targetNodeId);
+    const ids = expandPartialIdsWithLoopBodies(graph, seedIds);
+    // Upstream of Loop.items must be present for the controller
+    for (const id of ancestors) ids.add(id);
+
+    const pruned = pruneDefinitionToNodeIds(definition, ids);
+    const startMs = Date.now();
+    const mem = await executeGraphInMemory(pruned, { input });
+    const resultIds =
+      mode === "upstream"
+        ? new Set([...ids].filter((id) => id !== targetNodeId))
+        : ids;
+    const results = resultsFromRunData(mem.runData, resultIds);
+
+    return {
+      targetNodeId,
+      mode,
+      results,
+      input,
+      durationMs: Date.now() - startMs,
+      inputItems: collectIncomingItems(graph, targetNodeId, mem.context || {}),
+      editorSession,
+    };
   }
 
   const nodeNeedsExecution = (nodeId) => {
@@ -1341,28 +1626,96 @@ const seedEditorExpressionData = (definition, sessionOrResults = {}) => {
 
 /**
  * Build resolver context for expression preview (never executes nodes).
+ * Optional runIndex pins the current node's occurrence (Loop body iteration).
  */
 const buildExpressionPreviewContext = (
   definition,
   sessionOrResults,
   nodeId,
   itemIndex = 0,
-  runInput = {}
+  runInput = {},
+  runIndex = null
 ) => {
   const graph = buildGraph(definition);
+  const editorSession = normalizeEditorSession(sessionOrResults);
   const { steps, items, pinnedNodeIds, staleNodeIds } = seedEditorExpressionData(
     definition,
     sessionOrResults
   );
-  const inputPreview = getNodeInputPreview(
-    definition,
-    sessionOrResults,
-    nodeId,
-    runInput
-  );
+
+  const runData = {};
+  for (const [id, cached] of Object.entries(editorSession.nodeResults || {})) {
+    if (Array.isArray(cached?.occurrences) && cached.occurrences.length > 0) {
+      runData[id] = cached.occurrences;
+    } else if (cached?.output !== undefined || Array.isArray(cached?.items)) {
+      runData[id] = [
+        {
+          runIndex: cached.executionIndex ?? 0,
+          status: cached.status || "succeeded",
+          items: Array.isArray(cached.items) ? cached.items : [],
+          output: cached.output ?? null,
+          portOutputs: cached.portOutputs || null,
+          inputSources: null,
+        },
+      ];
+    }
+  }
+
+  let currentInputSources = null;
+  let inputItems = [];
+  const selectedRunIndex =
+    runIndex != null && Number.isInteger(Number(runIndex))
+      ? Number(runIndex)
+      : null;
+
+  if (selectedRunIndex != null && Array.isArray(runData[nodeId])) {
+    const occ =
+      runData[nodeId].find((o) => o.runIndex === selectedRunIndex) || null;
+    if (occ) {
+      currentInputSources = occ.inputSources || null;
+      // Resolve input items from predecessor occurrences when possible
+      if (occ.inputSources && typeof occ.inputSources === "object") {
+        const collected = [];
+        for (const src of Object.values(occ.inputSources)) {
+          if (!src || src.mode === "perItem" || !src.nodeId) continue;
+          const list = runData[src.nodeId];
+          const srcOcc = Array.isArray(list)
+            ? list.find((o) => o.runIndex === (src.runIndex ?? 0))
+            : null;
+          if (!srcOcc) continue;
+          if (
+            src.outputPort &&
+            srcOcc.portOutputs &&
+            Array.isArray(srcOcc.portOutputs[src.outputPort])
+          ) {
+            collected.push(...srcOcc.portOutputs[src.outputPort]);
+          } else if (Array.isArray(srcOcc.items)) {
+            collected.push(...srcOcc.items);
+          }
+        }
+        if (collected.length > 0) inputItems = collected;
+      }
+      // Prefer this occurrence's own items as "current node output" pin for steps.* of self
+      if (Array.isArray(occ.items)) {
+        items[nodeId] = occ.items;
+      }
+      if (occ.output !== undefined) steps[nodeId] = occ.output;
+    }
+  }
+
+  if (inputItems.length === 0) {
+    const inputPreview = getNodeInputPreview(
+      definition,
+      sessionOrResults,
+      nodeId,
+      runInput
+    );
+    inputItems = inputPreview.items || [];
+  }
+
   const safeIndex =
     Number.isInteger(itemIndex) && itemIndex >= 0 ? itemIndex : 0;
-  const currentItem = inputPreview.items[safeIndex] ?? null;
+  const currentItem = inputItems[safeIndex] ?? null;
 
   return {
     context: {
@@ -1370,9 +1723,12 @@ const buildExpressionPreviewContext = (
       steps,
       items,
       graph,
+      runData,
       currentNodeId: nodeId,
+      currentRunIndex: selectedRunIndex,
+      currentInputSources,
       currentItemIndex: safeIndex,
-      inputItems: inputPreview.items,
+      inputItems,
       currentItem,
       item: currentItem,
     },
@@ -1382,9 +1738,190 @@ const buildExpressionPreviewContext = (
   };
 };
 
+/**
+ * In-memory production-style graph execution (no DB). Used by Part 9B tests
+ * and internal verification. Honors Loop runtime.
+ */
+const executeGraphInMemory = async (definition, options = {}) => {
+  const input = options.input || {};
+  const now = options.now instanceof Date ? options.now : new Date();
+  const graph = buildGraph(definition);
+  const loopCheck = validateLoopRuntime(graph);
+  if (!loopCheck.ok) {
+    const err = new Error(loopCheck.errors[0] || "Invalid Loop topology");
+    if (loopCheck.code) err.code = loopCheck.code;
+    throw err;
+  }
+
+  const context = {
+    input,
+    steps: {},
+    items: {},
+    portOutputs: {},
+    runData: createRunData(),
+    loopControllers: {},
+    inputItems: [],
+    runId: options.runId || null,
+    workspaceId: null,
+    workflowId: null,
+    editorMode: false,
+    useProductionPins: true,
+    graph,
+    now,
+  };
+
+  const scheduler = createScheduler(graph);
+  scheduler.setReopenClearPort((nodeId) => {
+    if (context.portOutputs) delete context.portOutputs[nodeId];
+  });
+
+  const runErrors = [];
+  let finalOutput = null;
+  const stepLog = [];
+
+  for (;;) {
+    const next = scheduler.next();
+    if (!next) break;
+    const { node, action } = next;
+
+    if (action === "skip") {
+      const skipIndex = nextRunIndex(context.runData, node.id);
+      scheduler.skip(node);
+      recordOccurrence(context.runData, {
+        nodeId: node.id,
+        runIndex: skipIndex,
+        status: "skipped",
+        items: [],
+        output: null,
+      });
+      stepLog.push({ nodeId: node.id, action: "skip", runIndex: skipIndex });
+      continue;
+    }
+
+    const nodeType = node.type || node.data?.nodeType || "unknown";
+    const executionIndex = nextRunIndex(context.runData, node.id);
+    const inputSources = buildInputSources(graph, node.id, context.runData);
+
+    context.inputItems = collectIncomingItems(graph, node.id, context);
+    prepareNodeExecutionInputs(graph, node.id, context, {
+      edgeState: scheduler.edgeState,
+    });
+    context.currentNodeId = node.id;
+    context.currentRunIndex = executionIndex;
+    context.currentInputSources = inputSources;
+    context.graph = graph;
+
+    const policy = {
+      retries: Number(node.data?.retryOnFail) > 0 ? Number(node.data?.maxTries || 1) - 1 : 0,
+      retryDelayMs: 0,
+      onError: node.data?.onError || "stop",
+    };
+
+    let result = null;
+    let failure = null;
+    let attempts = 0;
+    for (let attempt = 1; attempt <= policy.retries + 1; attempt += 1) {
+      attempts = attempt;
+      try {
+        result = await executeNode(node, context);
+        failure = null;
+        break;
+      } catch (err) {
+        failure = err;
+      }
+    }
+
+    if (result?.suspend) {
+      const err = new Error("Wait suspension is not supported in executeGraphInMemory");
+      err.code = "WAIT_IN_MEMORY_UNSUPPORTED";
+      throw err;
+    }
+
+    if (!failure) {
+      let items;
+      const occurrenceInputSources = result.inputSources || inputSources;
+      if (nodeType === "loop" && result.portOutputs) {
+        applyPortOutputsToContext(node.id, result.portOutputs, context);
+        items = Array.isArray(result.items) ? result.items : [];
+        result.output = attachCanonicalItemsToOutput(result.output ?? {}, items);
+      } else if (nodeType === "switch" && result.outputsByPort) {
+        const finalized = finalizeSwitchOutputs(node, context.inputItems, result);
+        items = finalized.items;
+        applyPortOutputsToContext(node.id, finalized.portOutputs, context);
+      } else {
+        items = finalizeNodeItems(node, context.inputItems, result, {
+          portInputs: context.portInputs,
+        });
+        context.items[node.id] = items;
+      }
+      const output = result.output ?? null;
+      context.steps[node.id] = output;
+      recordOccurrence(context.runData, {
+        nodeId: node.id,
+        runIndex: executionIndex,
+        status: "succeeded",
+        items,
+        output,
+        portOutputs: context.portOutputs?.[node.id] || null,
+        inputSources: occurrenceInputSources,
+        completedAt: new Date().toISOString(),
+        ...(result.loopMeta ? { executionContext: result.loopMeta } : {}),
+      });
+      applyLatestView(context);
+      stepLog.push({
+        nodeId: node.id,
+        action: "run",
+        runIndex: executionIndex,
+        status: "succeeded",
+        attempts,
+        loopMeta: result.loopMeta || null,
+      });
+      if (result.terminal || nodeType === "result") finalOutput = output;
+      scheduler.complete(node, result.nextHandle, {
+        activeHandles: result.activeHandles,
+        pendingHandles: result.pendingHandles,
+      });
+      continue;
+    }
+
+    const message = failure instanceof Error ? failure.message : String(failure);
+    recordOccurrence(context.runData, {
+      nodeId: node.id,
+      runIndex: executionIndex,
+      status: "failed",
+      items: [{ json: { error: message } }],
+      output: { error: message },
+      inputSources,
+      error: message,
+    });
+    applyLatestView(context);
+    stepLog.push({
+      nodeId: node.id,
+      action: "run",
+      runIndex: executionIndex,
+      status: "failed",
+      error: message,
+    });
+    if (policy.onError === "stop") throw failure;
+    runErrors.push({ nodeId: node.id, error: message });
+    scheduler.complete(node, policy.onError === "route" ? "error" : null);
+  }
+
+  return {
+    status: runErrors.length ? "succeeded_with_errors" : "succeeded",
+    context,
+    runData: context.runData,
+    loopControllers: context.loopControllers,
+    finalOutput,
+    runErrors,
+    stepLog,
+  };
+};
+
 module.exports = {
   executeRun,
   executePartial,
+  executeGraphInMemory,
   getNodeInputPreview,
   buildExpressionPreviewContext,
   buildGraph,
@@ -1399,6 +1936,13 @@ module.exports = {
         ? definitionOrGraph
         : buildGraph(definitionOrGraph);
     return validateLoopTopology(graph);
+  },
+  validateLoopForExecution: (definitionOrGraph) => {
+    const graph =
+      definitionOrGraph?.byId != null
+        ? definitionOrGraph
+        : buildGraph(definitionOrGraph);
+    return validateLoopRuntime(graph);
   },
   assertLoopRuntimeNotEnabled: (definitionOrGraph) => {
     const graph =

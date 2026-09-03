@@ -575,6 +575,7 @@ const REASON_TO_PREVIEW_STATUS = {
   [REASONS.TARGET_NOT_IN_PATH]: "BROKEN_REFERENCE",
   [REASONS.PROVENANCE_MISSING]: "BROKEN_REFERENCE",
   [REASONS.PROVENANCE_AMBIGUOUS]: "AMBIGUOUS",
+  [REASONS.OCCURRENCE_AMBIGUOUS]: "AMBIGUOUS",
   [REASONS.ITEM_INDEX_OUT_OF_RANGE]: "BROKEN_REFERENCE",
   [REASONS.INVALID_REFERENCE]: "INVALID_EXPRESSION",
 };
@@ -587,6 +588,10 @@ const previewExpression = async (workflowId, nodeId, body, authUser) => {
     body?.itemIndex != null && Number.isInteger(Number(body.itemIndex))
       ? Number(body.itemIndex)
       : 0;
+  const runIndex =
+    body?.runIndex != null && Number.isInteger(Number(body.runIndex))
+      ? Number(body.runIndex)
+      : null;
   const userId = authUser.userId;
   const session = editorSession.prepareSessionForDefinition(
     workflowId,
@@ -601,7 +606,8 @@ const previewExpression = async (workflowId, nodeId, body, authUser) => {
       session,
       nodeId,
       itemIndex,
-      runInput
+      runInput,
+      runIndex
     );
 
   const usesPinned = [...pinnedNodeIds].some((id) =>

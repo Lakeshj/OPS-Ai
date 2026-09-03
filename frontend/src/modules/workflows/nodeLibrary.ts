@@ -33,6 +33,7 @@ export const nodeLibraryCatalog = catalog as NodeLibraryCatalog;
 
 export const LIBRARY_CATEGORIES = nodeLibraryCatalog.categories;
 
+/** @deprecated Prefer searchNodes() from nodeSearch for ranked discovery. */
 export function searchLibraryNodes(
   query: string,
   category: string | "all" = "all"

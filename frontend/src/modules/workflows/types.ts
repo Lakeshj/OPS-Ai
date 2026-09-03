@@ -93,6 +93,26 @@ export interface WorkflowItem {
   pairedItem?: WorkflowPairedItem;
 }
 
+export interface WorkflowEditorOccurrence {
+  runIndex: number;
+  status?: string;
+  items?: WorkflowItem[];
+  output?: unknown;
+  portOutputs?: Record<string, WorkflowItem[]>;
+  inputSources?: Record<string, unknown> | null;
+  error?: string | null;
+  executionContext?: {
+    loopNodeId?: string;
+    iterationIndex?: number;
+    phase?: string;
+    batchStart?: number;
+    batchEnd?: number;
+  } | null;
+  startedAt?: string | null;
+  completedAt?: string | null;
+  executionTimeMs?: number;
+}
+
 export interface WorkflowEditorNodeResult {
   nodeId: string;
   status: "succeeded" | "failed" | "skipped" | "running";
@@ -104,6 +124,10 @@ export interface WorkflowEditorNodeResult {
   cacheState?: "clean" | "dirty" | "pinned";
   executionSignature?: string;
   cached?: boolean;
+  /** Latest occurrence index (compat). */
+  executionIndex?: number;
+  /** Full occurrence history when a node ran more than once (Loop body / Loop). */
+  occurrences?: WorkflowEditorOccurrence[];
 }
 
 export interface WorkflowEditorDirtyNode {

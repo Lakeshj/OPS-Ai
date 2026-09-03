@@ -33,6 +33,8 @@ export interface NodePortDef {
   maxConnections?: number;
   required?: boolean;
   label?: string;
+  /** Short helper for tooltips / inspector */
+  description?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -1151,7 +1153,7 @@ export const NODE_CONTRACTS: Record<WorkflowNodeType, NodeContract> = {
     type: "loop",
     version: 1,
     category: "Logic",
-    label: "Loop",
+    label: "Loop Over Items",
     inputs: [
       {
         id: "items",
@@ -1160,6 +1162,7 @@ export const NODE_CONTRACTS: Record<WorkflowNodeType, NodeContract> = {
         maxConnections: 1,
         required: true,
         label: "Items",
+        description: "Initial items to loop over",
       },
       {
         id: "continue",
@@ -1168,6 +1171,7 @@ export const NODE_CONTRACTS: Record<WorkflowNodeType, NodeContract> = {
         maxConnections: 1,
         required: false,
         label: "Continue",
+        description: "Connect the end of the loop body back here",
       },
     ],
     outputs: [
@@ -1176,18 +1180,20 @@ export const NODE_CONTRACTS: Record<WorkflowNodeType, NodeContract> = {
         kind: "main",
         direction: "out",
         label: "Batch",
+        description: "Items for the current iteration",
       },
       {
         id: "done",
         kind: "main",
         direction: "out",
         label: "Done",
+        description: "Collected results after all iterations",
       },
     ],
     cardinality: "N-to-N",
     pairedItemPolicy: "identity1to1",
     pairedItemNotes:
-      "Part 9A foundation only — Loop runtime is Part 9B (LOOP_RUNTIME_NOT_ENABLED)",
+      "Batch items retain original Items provenance; Done uses per-item continue occurrence sources",
     settings: {
       disabled: true,
       onError: false,
@@ -1205,15 +1211,17 @@ export const NODE_CONTRACTS: Record<WorkflowNodeType, NodeContract> = {
         type: "number",
         default: 1,
         min: 1,
-        description: "Items per Loop iteration (runtime Part 9B)",
+        description:
+          "How many items to process per iteration (integer ≥ 1). Topology: Items → Loop → Batch → body → Continue; Done → downstream.",
       },
     ],
     dirtyTriggers: ["params", "edges", "disabled"],
     edgeCases: [
       "V1: only sanctioned continue back-edges from batch body are valid cycles",
       "Nested Loop not supported in V1",
+      "Wait inside Loop not supported",
       "Exactly one continue edge allowed",
-      "Runtime not enabled — execute returns LOOP_RUNTIME_NOT_ENABLED",
+      "Editor Run Step / Run To inside body unsupported — use Execute workflow or Run To downstream of Done",
     ],
   },
 

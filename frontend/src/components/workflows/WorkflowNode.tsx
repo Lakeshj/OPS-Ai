@@ -37,6 +37,8 @@ const typeStyles: Record<string, string> = {
   document: "border-indigo-500/60",
   spreadsheet: "border-lime-600/60",
   email: "border-pink-500/60",
+  wait: "border-stone-500/60",
+  loop: "border-teal-600/60",
   result: "border-rose-500/60",
   noop: "border-border",
   integration: "border-dashed border-muted-foreground/50",
@@ -176,6 +178,11 @@ function WorkflowNodeComponent({ id, data, type, selected }: NodeProps) {
                 type="target"
                 position={Position.Left}
                 id={port.id}
+                title={
+                  port.description
+                    ? `${port.label || port.id}: ${port.description}`
+                    : port.label || port.id
+                }
                 style={{
                   top: `${((index + 1) / (mainInputPorts.length + 1)) * 100}%`,
                 }}
@@ -225,7 +232,13 @@ function WorkflowNodeComponent({ id, data, type, selected }: NodeProps) {
       {mainInputPorts.length > 1 && (
         <div className="mt-1 flex flex-col gap-0.5 text-[9px] text-muted-foreground">
           {mainInputPorts.map((port) => (
-            <span key={port.id}>{port.label || port.id}</span>
+            <span
+              key={port.id}
+              title={port.description || undefined}
+              className="truncate"
+            >
+              {port.label || port.id}
+            </span>
           ))}
         </div>
       )}
@@ -264,6 +277,11 @@ function WorkflowNodeComponent({ id, data, type, selected }: NodeProps) {
               type="source"
               position={Position.Right}
               id={port.id}
+              title={
+                port.description
+                  ? `${port.label || port.id}: ${port.description}`
+                  : port.label || port.id
+              }
               style={{
                 top: `${((index + 1) / (mainOutputPorts.length + 1)) * 100}%`,
               }}
@@ -272,7 +290,11 @@ function WorkflowNodeComponent({ id, data, type, selected }: NodeProps) {
           ))}
           <div className="mt-1 flex flex-col gap-0.5 text-[9px] text-muted-foreground">
             {mainOutputPorts.map((port) => (
-              <span key={port.id} className="truncate">
+              <span
+                key={port.id}
+                className="truncate"
+                title={port.description || undefined}
+              >
                 {port.label || port.id}
               </span>
             ))}

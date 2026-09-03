@@ -103,14 +103,33 @@ Compatibility views: `context.items` / `steps` / `portOutputs` = **latest** occu
 
 ### Persistence
 
-`workflow_run_steps.execution_index` (migration `017`). Multiple rows per `(run_id, node_id)` allowed. Retries update the same step row (same occurrence).
+`workflow_run_steps.execution_index` (migration `017`). Multiple rows per `(run_id, node_id)` allowed.
 
-### Loop contract (runtime NOT enabled)
+**Occurrence identity (Part 9A.1):** UNIQUE `(run_id, node_id, execution_index)` (migration `018`). Retries and Wait resume update the same step row / same `execution_index`. Status changes do not allocate a new index. `runData[nodeId][runIndex]` aligns 1:1 with `execution_index`.
 
-Ports: `items` + `continue` (in); `batch` + `done` (out). Param: `batchSize` default 1.
+### Loop contract (Part 9B — production runtime)
 
-Only sanctioned `Loop.continue` back-edges from that Loop's batch body are valid cycles. Generic cycles rejected. Nested Loop rejected. Exactly one continue edge. Forward DAG = graph minus sanctioned back-edges.
+Ports: `items` + `continue` (in); `batch` + `done` (out). Param: `batchSize` default 1 (integer ≥ 1).
 
-Execute with a Loop node → `LOOP_RUNTIME_NOT_ENABLED` until Part 9B.
+Finite iterations: `ceil(initialItemCount / batchSize)`. Body fan-out / empty output does not change iteration count.
 
-Library entry remains `available: false`.
+Controller state lives on `context.loopControllers[loopNodeId]` (serializable; included in Wait snapshots).
+
+Body region alone reactivates per iteration (new `runIndex` each time). `done` emits once with collected continue results; per-item `inputSources.continue` preserves body occurrence identity.
+
+Reject: Wait-in-body, nested Loop, body side exits, invalid batchSize, missing continue/batch edges.
+
+Library: **Loop Over Items** is available (`available: true`). Semantic ports: Items / Continue / Batch / Done.
+
+### Editor execution (Part 9C)
+
+- Full **Execute workflow** runs production Loop.
+- **Run Step** on Loop or body: unsupported (clear message).
+- **Run To** / **Execute Previous** on Loop or body: unsupported.
+- **Run To** / **Execute Previous** on a node after `Loop.done`: executes the Loop region as a complete unit, then (for Run To) the target path.
+- Inspector: occurrence selector when `occurrences.length > 1`; Loop Batch / Done views; expression preview accepts `runIndex`.
+- Outside Loop, `{{steps.<bodyId>.field}}` with multiple body occurrences remains `OCCURRENCE_AMBIGUOUS`.
+
+Crash during Loop: at-least-once worker semantics (no mid-loop checkpoint beyond existing Wait durability).
+
+Known V1 limits: nested Loop, Wait-in-Loop, break/continue, mid-loop crash resume, Tidy/auto-layout of Continue back-edges (dedicated layout phase later). Clipboard: selecting Loop + full body + Continue remaps IDs safely; duplicating Loop alone does not copy the body.

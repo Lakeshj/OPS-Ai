@@ -7,6 +7,15 @@ const {
   getIncomingEdgeForInputIndex,
   normalizeMergeIncomingEdges,
 } = require("./workflowMultiInput.service");
+const { LOOP_PORTS } = require("./workflowLoopGraph.service");
+
+/** Incoming edges for item thread-walking — exclude Loop.continue control edges. */
+const normalizeExpressionIncoming = (graph, nodeId) => {
+  const incoming = normalizeMergeIncomingEdges(graph, nodeId);
+  return incoming.filter(
+    (e) => String(e.targetHandle || "") !== LOOP_PORTS.CONTINUE
+  );
+};
 
 const getItemPayload = (item) => {
   if (item == null) return item;
@@ -101,13 +110,18 @@ const isUpstreamNode = (graph, targetNodeId, nodeId) => {
   return false;
 };
 
-const getTargetItems = (context, targetNodeId) => {
+/**
+ * Resolve items for a node, pinning to a specific occurrence when multiple exist.
+ * @param {object} context
+ * @param {string} targetNodeId
+ * @param {object|null} sourcePins - inputSources from the consumer occurrence
+ */
+const getTargetItems = (context, targetNodeId, sourcePins = null) => {
   const runData = context.runData;
   if (runData && typeof runData === "object") {
     const list = runData[targetNodeId];
     if (Array.isArray(list) && list.length > 1) {
-      // Prefer pinned source occurrence from current node's inputSources
-      const sources = context.currentInputSources;
+      const sources = sourcePins || context.currentInputSources;
       if (sources && typeof sources === "object") {
         for (const src of Object.values(sources)) {
           if (src && src.nodeId === targetNodeId && src.runIndex != null) {
@@ -126,6 +140,22 @@ const getTargetItems = (context, targetNodeId) => {
   const items = context.items?.[targetNodeId];
   if (Array.isArray(items)) return items;
   return null;
+};
+
+/** inputSources for the occurrence of `nodeId` that owns `item` (or latest / current). */
+const inputSourcesForWalkNode = (context, nodeId, item) => {
+  const list = context.runData?.[nodeId];
+  if (Array.isArray(list) && list.length > 0) {
+    const match =
+      (item && list.find((o) => Array.isArray(o.items) && o.items.includes(item))) ||
+      list.find((o) => o.inputSources) ||
+      list[list.length - 1];
+    if (match?.inputSources) return match.inputSources;
+  }
+  if (nodeId === context.currentNodeId && context.currentInputSources) {
+    return context.currentInputSources;
+  }
+  return context.currentInputSources || null;
 };
 
 const isOccurrenceAmbiguous = (items) =>
@@ -202,14 +232,9 @@ const resolveReferencedItem = ({
     return { status: "error", reason: REASONS.TARGET_NOT_EXECUTED };
   }
 
-  const earlyItems = getTargetItems(context, targetNodeId);
-  if (isOccurrenceAmbiguous(earlyItems)) {
-    return {
-      status: "error",
-      reason: REASONS.OCCURRENCE_AMBIGUOUS,
-      occurrenceCount: earlyItems.count,
-    };
-  }
+  // Do not early-reject multi-occurrence targets here: thread-walk can pin via
+  // inputSources along the path. Ambiguity is enforced in resolveWithoutItemContext
+  // and when a hop cannot pin an occurrence.
 
   let item = currentItem ?? null;
   if (!item && currentItemIndex != null && Array.isArray(context.inputItems)) {
@@ -242,18 +267,25 @@ const resolveReferencedItem = ({
   let current = item;
 
   const resolvePredecessor = (fromNodeId, pairedRef) => {
-    const incoming = normalizeMergeIncomingEdges(graph, fromNodeId);
+    const incoming = normalizeExpressionIncoming(graph, fromNodeId);
     if (incoming.length === 0) return null;
     if (incoming.length === 1) return incoming[0].source;
     const port = getPairedInputPort(pairedRef);
-    if (!Number.isInteger(port) || port < 0) return null;
+    if (!Number.isInteger(port) || port < 0) {
+      // Loop batch items: prefer items port when multi-input after continue filter
+      const itemsEdge = incoming.find(
+        (e) => String(e.targetHandle || "") === LOOP_PORTS.ITEMS
+      );
+      if (itemsEdge) return itemsEdge.source;
+      return null;
+    }
     return getPredecessorForPort(graph, fromNodeId, port);
   };
 
   const pi0 = current?.pairedItem;
   if (Array.isArray(pi0)) {
     const producerNodeId = (() => {
-      const incoming = normalizeMergeIncomingEdges(graph, nodeId);
+      const incoming = normalizeExpressionIncoming(graph, nodeId);
       if (incoming.length === 1) return incoming[0].source;
       return nodeId;
     })();
@@ -299,11 +331,37 @@ const resolveReferencedItem = ({
     } else {
       return { status: "error", reason: REASONS.PROVENANCE_AMBIGUOUS };
     }
+  } else {
+    // currentItem is an input item to currentNodeId (already a predecessor output).
+    // Adopt that predecessor as the item's node identity before further pairedItem hops.
+    // Do NOT index into the predecessor here — that would double-apply pairedItem.
+    const currentIncoming = normalizeExpressionIncoming(graph, nodeId);
+    if (currentIncoming.length === 1) {
+      nodeId = currentIncoming[0].source;
+    } else if (currentIncoming.length > 1) {
+      const port = getPairedInputPort(current.pairedItem);
+      if (!Number.isInteger(port) || port < 0) {
+        const itemsEdge = currentIncoming.find(
+          (e) => String(e.targetHandle || "") === LOOP_PORTS.ITEMS
+        );
+        if (itemsEdge) {
+          nodeId = itemsEdge.source;
+        } else {
+          return { status: "error", reason: REASONS.PROVENANCE_AMBIGUOUS };
+        }
+      } else {
+        const pred = getPredecessorForPort(graph, nodeId, port);
+        if (!pred) {
+          return { status: "error", reason: REASONS.PROVENANCE_AMBIGUOUS };
+        }
+        nodeId = pred;
+      }
+    }
+
+    if (nodeId === targetNodeId) {
+      return { status: "resolved", item: current, mode: "thread" };
+    }
   }
-  // Non-array pairedItem: walk hops below. Do not rewrite nodeId to the
-  // immediate predecessor and return `current` — that skipped pairedItem
-  // indexing and could return the wrong node's item (critical once the same
-  // predecessor has multiple occurrences).
 
   for (let hop = 0; hop < 128; hop += 1) {
     const pi = current?.pairedItem;
@@ -365,7 +423,46 @@ const resolveReferencedItem = ({
       return { status: "error", reason: REASONS.TARGET_NOT_IN_PATH };
     }
 
-    const predecessorItems = getTargetItems(context, predecessorNodeId);
+    const walkPins = inputSourcesForWalkNode(context, nodeId, current);
+    // Loop.done per-item continue aggregate: pin exact body occurrence
+    if (walkPins && typeof walkPins === "object") {
+      for (const pin of Object.values(walkPins)) {
+        if (pin && pin.mode === "perItem" && Array.isArray(pin.items)) {
+          const entry = pin.items[inputIndex];
+          if (entry && entry.nodeId === predecessorNodeId) {
+            const {
+              resolvePerItemEntry,
+            } = require("./workflowLoopRuntime.service");
+            const upstream = resolvePerItemEntry(context.runData, entry);
+            if (!upstream) {
+              return { status: "error", reason: REASONS.ITEM_INDEX_OUT_OF_RANGE };
+            }
+            current = upstream;
+            nodeId = predecessorNodeId;
+            if (nodeId === targetNodeId) {
+              return { status: "resolved", item: current, mode: "thread" };
+            }
+            continue;
+          }
+          if (entry && targetNodeId === entry.nodeId) {
+            const {
+              resolvePerItemEntry,
+            } = require("./workflowLoopRuntime.service");
+            const upstream = resolvePerItemEntry(context.runData, entry);
+            if (!upstream) {
+              return { status: "error", reason: REASONS.ITEM_INDEX_OUT_OF_RANGE };
+            }
+            return { status: "resolved", item: upstream, mode: "thread" };
+          }
+        }
+      }
+    }
+
+    const predecessorItems = getTargetItems(
+      context,
+      predecessorNodeId,
+      walkPins
+    );
     if (isOccurrenceAmbiguous(predecessorItems)) {
       return {
         status: "error",
@@ -570,6 +667,11 @@ const throwExpressionError = (resolved, meta) => {
       throw new ExpressionReferenceError(
         `Cannot resolve step "${meta.targetNodeId}" for the current item because provenance metadata is missing.`,
         { ...meta, reason: REASONS.PROVENANCE_MISSING }
+      );
+    case REASONS.OCCURRENCE_AMBIGUOUS:
+      throw new ExpressionReferenceError(
+        `This step ran multiple times inside Loop.`,
+        { ...meta, reason: REASONS.OCCURRENCE_AMBIGUOUS }
       );
     default:
       throw new ExpressionReferenceError(

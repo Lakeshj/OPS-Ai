@@ -14,6 +14,8 @@ export type WorkflowEdgeData = {
   runStatus?: "running" | "succeeded" | "failed" | "skipped";
   onDelete?: (edgeId: string) => void;
   onInsert?: (edgeId: string) => void;
+  /** Part 9C — Loop Continue back-edge */
+  loopContinue?: boolean;
 };
 
 function WorkflowEdgeComponent({
@@ -39,6 +41,8 @@ function WorkflowEdgeComponent({
     targetPosition,
   });
 
+  const isContinue = Boolean(edgeData.loopContinue);
+
   const stroke =
     edgeData.runStatus === "running"
       ? "#f59e0b"
@@ -48,9 +52,11 @@ function WorkflowEdgeComponent({
           ? "#ef4444"
           : selected
             ? "hsl(var(--primary))"
-            : hovered
-              ? "hsl(var(--foreground) / 0.55)"
-              : "hsl(var(--muted-foreground) / 0.65)";
+            : isContinue
+              ? "hsl(var(--muted-foreground) / 0.85)"
+              : hovered
+                ? "hsl(var(--foreground) / 0.55)"
+                : "hsl(var(--muted-foreground) / 0.65)";
 
   const showControls = hovered || selected;
 
@@ -71,13 +77,25 @@ function WorkflowEdgeComponent({
         path={path}
         markerEnd={markerEnd}
         style={{
-          strokeWidth: selected ? 3 : hovered ? 2.5 : 1.75,
+          strokeWidth: selected ? 3 : hovered ? 2.5 : isContinue ? 2 : 1.75,
           stroke,
+          strokeDasharray: isContinue ? "6 4" : undefined,
           transition: "stroke 120ms ease, stroke-width 120ms ease",
         }}
         interactionWidth={24}
       />
       <EdgeLabelRenderer>
+        {isContinue && (
+          <div
+            className="nodrag nopan pointer-events-none rounded border bg-card/90 px-1.5 py-0.5 text-[9px] font-medium text-muted-foreground shadow-sm"
+            style={{
+              position: "absolute",
+              transform: `translate(-50%, -120%) translate(${labelX}px,${labelY}px)`,
+            }}
+          >
+            Continue
+          </div>
+        )}
         <div
           className={cn(
             "nodrag nopan pointer-events-auto flex items-center gap-1.5 rounded-full border bg-card/95 px-1 py-0.5 shadow-md backdrop-blur-sm transition-opacity",

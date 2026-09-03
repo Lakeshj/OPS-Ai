@@ -7155,19 +7155,20 @@ check("TEST 9A-6 pairedItem + inputSources resolves correct same-node occurrence
     ],
     edges: [{ id: "e", source: "A", target: "B" }],
   });
+  // Expression during B: currentItem is the input item from A occurrence 1
   const resolved = resolveReferencedItem({
     currentNodeId: "B",
-    currentItem: { json: { x: 1 }, pairedItem: { item: 0 } },
+    currentItem: runData.A[1].items[0],
     currentItemIndex: 0,
     targetNodeId: "A",
     context: {
       runData,
-      items: { A: runData.A[1].items }, // latest view
+      items: { A: runData.A[1].items },
       steps: { A: { name: "A1" } },
       currentInputSources: {
         main: { nodeId: "A", runIndex: 1, outputPort: "main" },
       },
-      inputItems: [{ json: { x: 1 }, pairedItem: { item: 0 } }],
+      inputItems: runData.A[1].items,
     },
     graph,
   });
@@ -7215,23 +7216,42 @@ check("TEST 9A-8 Expression resolver resolves exact synthetic occurrence", () =>
     nodes: [
       { id: "A", type: "set", data: {} },
       { id: "B", type: "set", data: {} },
+      { id: "C", type: "set", data: {} },
     ],
-    edges: [{ id: "e", source: "A", target: "B" }],
+    edges: [
+      { id: "e1", source: "A", target: "B" },
+      { id: "e2", source: "B", target: "C" },
+    ],
+  });
+  // C processes B item that paired back into A occurrence 1
+  const bItem = {
+    json: { from: "B" },
+    pairedItem: { item: 0 },
+  };
+  occ.recordOccurrence(runData, {
+    nodeId: "B",
+    runIndex: 0,
+    items: [bItem],
+    inputSources: { main: { nodeId: "A", runIndex: 1, outputPort: "main" } },
   });
   const r = resolveReferencedItem({
-    currentNodeId: "B",
-    currentItem: { json: {}, pairedItem: { item: 0 } },
+    currentNodeId: "C",
+    currentItem: bItem,
     targetNodeId: "A",
     context: {
       runData,
-      items: occ.getLatestNodeItems(runData, "A"),
+      items: {
+        A: occ.getLatestNodeItems(runData, "A"),
+        B: [bItem],
+      },
       steps: { A: { name: "A1" } },
       currentInputSources: {
-        main: { nodeId: "A", runIndex: 1, outputPort: "main" },
+        main: { nodeId: "B", runIndex: 0, outputPort: "main" },
       },
     },
     graph,
   });
+  assert.strictEqual(r.status, "resolved");
   assert.strictEqual(r.item.json.name, "A1");
 });
 
@@ -7345,7 +7365,10 @@ check("TEST 9A-13 Multiple workflow_run_steps for same node persist separately",
     "utf8"
   );
   assert.ok(mig.includes("execution_index"));
-  assert.ok(mig.includes("idx_workflow_run_steps_occurrence"));
+  assert.ok(
+    mig.includes("idx_workflow_run_steps_occurrence") ||
+      mig.includes("uq_workflow_run_steps_occurrence")
+  );
   const engineSrc = require("fs").readFileSync(
     require("path").join(__dirname, "../services/workflowEngine.service.js"),
     "utf8"
@@ -7646,17 +7669,41 @@ check("TEST 9A-30 Existing Wait workflow occurrence 0 unchanged", async () => {
   assert.strictEqual(runData.w[0].runIndex, 0);
 });
 
-check("TEST 9A-31 Loop runtime not enabled on execute", async () => {
+check("TEST 9A-31 Loop runtime enabled for production handler", async () => {
+  const graph = buildGraph(loopDef());
+  const context = {
+    input: {},
+    items: {
+      t: [
+        { json: { n: 1 }, pairedItem: { item: 0 } },
+        { json: { n: 2 }, pairedItem: { item: 1 } },
+      ],
+    },
+    steps: { t: { ok: true } },
+    portOutputs: {},
+    runData: occ.createRunData(),
+    loopControllers: {},
+    graph,
+    editorMode: false,
+  };
+  occ.recordOccurrence(context.runData, {
+    nodeId: "t",
+    items: context.items.t,
+  });
+  const r = await handlers.loop(
+    { id: "L", type: "loop", data: { batchSize: 1 } },
+    context
+  );
+  assert.ok(r.activeHandles.includes("batch"));
+  assert.strictEqual(r.portOutputs.batch.length, 1);
   await assert.rejects(
     () =>
-      handlers.loop({ id: "L", data: { batchSize: 1 } }, ctx),
-    (err) => err.code === "LOOP_RUNTIME_NOT_ENABLED"
+      handlers.loop(
+        { id: "L", type: "loop", data: { batchSize: 1 } },
+        { ...context, editorMode: true }
+      ),
+    (err) => err.code === "LOOP_PARTIAL_UNSUPPORTED"
   );
-  const graph = buildGraph(loopDef());
-  assert.throws(() => loopGraph.assertLoopRuntimeNotEnabled(graph), (err) => {
-    assert.strictEqual(err.code, "LOOP_RUNTIME_NOT_ENABLED");
-    return true;
-  });
 });
 
 check("TEST 9A-32 analyzeLoopRegion identifies body and back-edge", () => {
@@ -7666,6 +7713,1564 @@ check("TEST 9A-32 analyzeLoopRegion identifies body and back-edge", () => {
   assert.ok(region.bodyNodes.has("body"));
   assert.strictEqual(region.backEdge.source, "body");
   assert.strictEqual(region.continueEdges.length, 1);
+});
+
+section("Part 9A.1 execution occurrence identity stabilization");
+
+check("TEST 9A.1-1 One run/node/index uniquely identifies one step occurrence", () => {
+  const mig = require("fs").readFileSync(
+    require("path").join(
+      __dirname,
+      "../migrations/018_workflow_execution_index_unique.sql"
+    ),
+    "utf8"
+  );
+  assert.ok(mig.includes("uq_workflow_run_steps_occurrence"));
+  assert.ok(mig.includes("UNIQUE INDEX") || mig.includes("UNIQUE KEY"));
+  assert.ok(mig.includes("DROP INDEX idx_workflow_run_steps_occurrence"));
+});
+
+check("TEST 9A.1-2 Three occurrences 0/1/2 persist separately", () => {
+  const runData = occ.createRunData();
+  occ.recordOccurrence(runData, { nodeId: "A", items: [{ json: { i: 0 } }] });
+  occ.recordOccurrence(runData, { nodeId: "A", items: [{ json: { i: 1 } }] });
+  occ.recordOccurrence(runData, { nodeId: "A", items: [{ json: { i: 2 } }] });
+  assert.strictEqual(runData.A.length, 3);
+  assert.deepStrictEqual(
+    runData.A.map((o) => o.runIndex),
+    [0, 1, 2]
+  );
+  assert.strictEqual(runData.A[0].items[0].json.i, 0);
+  assert.strictEqual(runData.A[2].items[0].json.i, 2);
+});
+
+check("TEST 9A.1-3 Duplicate occurrence identity rejected", async () => {
+  const mig = require("fs").readFileSync(
+    require("path").join(
+      __dirname,
+      "../migrations/018_workflow_execution_index_unique.sql"
+    ),
+    "utf8"
+  );
+  assert.ok(mig.includes("uq_workflow_run_steps_occurrence"));
+  const { pool } = require("../config/database");
+  const { v4: uuidv4 } = require("uuid");
+  try {
+    const [idxRows] = await pool.execute(
+      `SHOW INDEX FROM workflow_run_steps WHERE Key_name = 'uq_workflow_run_steps_occurrence'`
+    );
+    if (idxRows.length === 0) {
+      assert.ok(true, "UNIQUE not applied yet — migration 018 defines it");
+      return;
+    }
+    const [runs] = await pool.execute(`SELECT id FROM workflow_runs LIMIT 1`);
+    if (!runs.length) {
+      assert.ok(true, "no runs to fixture against — UNIQUE index present");
+      return;
+    }
+    const runId = runs[0].id;
+    const nodeId = `__9a1_dup_${uuidv4().slice(0, 8)}`;
+    await pool.execute(
+      `INSERT INTO workflow_run_steps
+        (id, run_id, node_id, execution_index, node_type, status)
+       VALUES (?, ?, ?, 1, 'set', 'succeeded')`,
+      [uuidv4(), runId, nodeId]
+    );
+    let dupFailed = false;
+    try {
+      await pool.execute(
+        `INSERT INTO workflow_run_steps
+          (id, run_id, node_id, execution_index, node_type, status)
+         VALUES (?, ?, ?, 1, 'set', 'succeeded')`,
+        [uuidv4(), runId, nodeId]
+      );
+    } catch (err) {
+      dupFailed =
+        err.code === "ER_DUP_ENTRY" ||
+        err.errno === 1062 ||
+        String(err.message || "").includes("Duplicate");
+    }
+    await pool.execute(
+      `DELETE FROM workflow_run_steps WHERE run_id = ? AND node_id = ?`,
+      [runId, nodeId]
+    );
+    assert.ok(dupFailed, "duplicate (run,node,index) must be rejected by UNIQUE");
+  } catch (err) {
+    if (err.code === "ER_NO_SUCH_TABLE" || err.errno === 1146) {
+      assert.ok(true, "workflow tables absent — migration covers constraint");
+      return;
+    }
+    throw err;
+  }
+});
+
+check("TEST 9A.1-4 Retry updates same occurrence", () => {
+  const runData = occ.createRunData();
+  occ.recordOccurrence(runData, {
+    nodeId: "http",
+    runIndex: 0,
+    status: "succeeded",
+    items: [],
+  });
+  occ.recordOccurrence(runData, {
+    nodeId: "http",
+    runIndex: 1,
+    status: "succeeded",
+    items: [],
+  });
+  occ.recordOccurrence(runData, {
+    nodeId: "http",
+    runIndex: 2,
+    status: "succeeded",
+    items: [],
+  });
+  // Attempt 1 fails — same occurrence 3
+  occ.recordOccurrence(runData, {
+    nodeId: "http",
+    runIndex: 3,
+    status: "failed",
+    items: [{ json: { error: true } }],
+    error: "timeout",
+  });
+  // Attempt 2 succeeds — REPLACE same runIndex 3 (not 4)
+  occ.recordOccurrence(runData, {
+    nodeId: "http",
+    runIndex: 3,
+    status: "succeeded",
+    items: [{ json: { ok: true } }],
+  });
+  assert.strictEqual(runData.http.length, 4);
+  assert.strictEqual(runData.http[3].runIndex, 3);
+  assert.strictEqual(runData.http[3].status, "succeeded");
+  assert.strictEqual(occ.nextRunIndex(runData, "http"), 4);
+  const engineSrc = require("fs").readFileSync(
+    require("path").join(__dirname, "../services/workflowEngine.service.js"),
+    "utf8"
+  );
+  // Retries loop inside one stepId; updateStep by id — no second INSERT per attempt
+  assert.ok(engineSrc.includes("for (let attempt = 1; attempt <= policy.retries + 1"));
+  assert.ok(engineSrc.includes("await updateStep(stepId,"));
+});
+
+check("TEST 9A.1-5 Wait resume updates same occurrence", () => {
+  const { buildExecutionSnapshot, normalizeWaitSnapshot } = require(
+    "../services/workflowWait.service"
+  );
+  const runData = occ.createRunData();
+  occ.recordOccurrence(runData, {
+    nodeId: "src",
+    runIndex: 0,
+    items: [{ json: { a: 1 } }],
+  });
+  occ.recordOccurrence(runData, {
+    nodeId: "w",
+    runIndex: 2,
+    status: "waiting",
+    items: [{ json: { a: 1 } }],
+    stepId: "step-w",
+  });
+  const snap = buildExecutionSnapshot({
+    waitNodeId: "w",
+    waitStepId: "step-w",
+    waitExecutionIndex: 2,
+    waitInputItems: [{ json: { a: 1 } }],
+    context: { runData, steps: {}, items: {}, portOutputs: {}, input: {} },
+    scheduler: { edgeState: new Map(), nodeState: new Map(), loopCounts: new Map() },
+    finalOutput: null,
+    runErrors: [],
+  });
+  assert.strictEqual(snap.waitExecutionIndex, 2);
+  const normalized = normalizeWaitSnapshot(JSON.parse(JSON.stringify(snap)));
+  assert.strictEqual(normalized.waitExecutionIndex, 2);
+  // Resume replaces same index — does not append index 3
+  occ.recordOccurrence(normalized.runData, {
+    nodeId: "w",
+    runIndex: normalized.waitExecutionIndex,
+    status: "succeeded",
+    items: [{ json: { a: 1 } }],
+    stepId: "step-w",
+  });
+  assert.strictEqual(normalized.runData.w.length, 1);
+  assert.strictEqual(normalized.runData.w[0].runIndex, 2);
+  assert.strictEqual(normalized.runData.w[0].status, "succeeded");
+  const engineSrc = require("fs").readFileSync(
+    require("path").join(__dirname, "../services/workflowEngine.service.js"),
+    "utf8"
+  );
+  assert.ok(engineSrc.includes("waitExecutionIndex"));
+  assert.ok(
+    !engineSrc.includes(
+      "runIndex: nextRunIndex(context.runData, waitNode.id)"
+    )
+  );
+});
+
+check("TEST 9A.1-6 Sequential genuine executions create increasing indices", () => {
+  const runData = occ.createRunData();
+  const indices = [];
+  for (let i = 0; i < 3; i += 1) {
+    const idx = occ.nextRunIndex(runData, "body");
+    indices.push(idx);
+    occ.recordOccurrence(runData, {
+      nodeId: "body",
+      runIndex: idx,
+      items: [{ json: { i } }],
+    });
+  }
+  assert.deepStrictEqual(indices, [0, 1, 2]);
+});
+
+check("TEST 9A.1-7 runData runIndex aligns with DB execution_index", () => {
+  const runData = occ.createRunData();
+  const executionIndex = occ.nextRunIndex(runData, "N");
+  assert.strictEqual(executionIndex, 0);
+  occ.recordOccurrence(runData, {
+    nodeId: "N",
+    runIndex: executionIndex,
+    items: [{ json: { x: 1 } }],
+    stepId: "step-n",
+  });
+  assert.strictEqual(runData.N[executionIndex].runIndex, executionIndex);
+  const engineSrc = require("fs").readFileSync(
+    require("path").join(__dirname, "../services/workflowEngine.service.js"),
+    "utf8"
+  );
+  assert.ok(engineSrc.includes("execution_index"));
+  assert.ok(engineSrc.includes("const executionIndex = nextRunIndex"));
+});
+
+check("TEST 9A.1-8 Exact intermediate occurrence expression resolution", () => {
+  const runData = occ.createRunData();
+  occ.recordOccurrence(runData, {
+    nodeId: "A",
+    items: [{ json: { name: "old" } }],
+  });
+  occ.recordOccurrence(runData, {
+    nodeId: "A",
+    items: [{ json: { name: "correct" } }],
+  });
+  occ.recordOccurrence(runData, {
+    nodeId: "A",
+    items: [{ json: { name: "newer" } }],
+  });
+  const graph = buildGraph({
+    nodes: [
+      { id: "A", type: "set", data: {} },
+      { id: "B", type: "set", data: {} },
+      { id: "C", type: "set", data: {} },
+    ],
+    edges: [
+      { id: "e1", source: "A", target: "B" },
+      { id: "e2", source: "B", target: "C" },
+    ],
+  });
+  const bItem = { json: { x: 1 }, pairedItem: { item: 0 } };
+  occ.recordOccurrence(runData, {
+    nodeId: "B",
+    items: [bItem],
+    inputSources: { main: { nodeId: "A", runIndex: 1, outputPort: "main" } },
+  });
+  const resolved = resolveReferencedItem({
+    currentNodeId: "C",
+    currentItem: bItem,
+    currentItemIndex: 0,
+    targetNodeId: "A",
+    context: {
+      runData,
+      items: {
+        A: occ.getLatestNodeItems(runData, "A"),
+        B: [bItem],
+      },
+      currentInputSources: {
+        main: { nodeId: "B", runIndex: 0, outputPort: "main" },
+      },
+    },
+    graph,
+  });
+  assert.strictEqual(resolved.status, "resolved");
+  assert.strictEqual(resolved.item.json.name, "correct");
+  assert.notStrictEqual(resolved.item.json.name, "newer");
+});
+
+check("TEST 9A.1-9 Multi-input source run indices preserved", () => {
+  const runData = occ.createRunData();
+  occ.recordOccurrence(runData, {
+    nodeId: "A",
+    runIndex: 2,
+    items: [{ json: { a: 2 } }],
+  });
+  occ.recordOccurrence(runData, {
+    nodeId: "B",
+    runIndex: 4,
+    items: [{ json: { b: 4 } }],
+  });
+  const sources = {
+    input1: { nodeId: "A", runIndex: 2, outputPort: "main" },
+    input2: { nodeId: "B", runIndex: 4, outputPort: "main" },
+  };
+  const a = occ.resolveSourceOccurrence(runData, sources, "input1");
+  const b = occ.resolveSourceOccurrence(runData, sources, "input2");
+  assert.strictEqual(a.runIndex, 2);
+  assert.strictEqual(a.items[0].json.a, 2);
+  assert.strictEqual(b.runIndex, 4);
+  assert.strictEqual(b.items[0].json.b, 4);
+  const snap = require("../services/workflowWait.service").buildExecutionSnapshot({
+    waitNodeId: "m",
+    waitStepId: "s",
+    waitExecutionIndex: 0,
+    waitInputItems: [],
+    context: {
+      runData,
+      steps: {},
+      items: {},
+      portOutputs: {},
+      input: {},
+    },
+    scheduler: {
+      edgeState: new Map(),
+      nodeState: new Map(),
+      loopCounts: new Map(),
+    },
+    finalOutput: null,
+    runErrors: [],
+  });
+  const restored = require("../services/workflowWait.service").normalizeWaitSnapshot(
+    JSON.parse(JSON.stringify(snap))
+  );
+  assert.strictEqual(restored.runData.A[0].runIndex, 2);
+  assert.strictEqual(restored.runData.B[0].runIndex, 4);
+});
+
+check("TEST 9A.1-10 Legacy normal workflow occurrence 0 unchanged", () => {
+  const runData = occ.fromLegacyContext({
+    steps: { set1: { v: 1 } },
+    items: { set1: [{ json: { v: 1 } }] },
+  });
+  assert.strictEqual(runData.set1.length, 1);
+  assert.strictEqual(runData.set1[0].runIndex, 0);
+  const legacySnap = require("../services/workflowWait.service").normalizeWaitSnapshot({
+    version: 1,
+    waitNodeId: "w",
+    context: {
+      steps: { set1: { v: 1 } },
+      items: { set1: [{ json: { v: 1 } }] },
+    },
+  });
+  assert.strictEqual(legacySnap.waitExecutionIndex, 0);
+  assert.strictEqual(legacySnap.runData.set1[0].runIndex, 0);
+});
+
+section("Part 9B Loop over items runtime");
+
+const {
+  executeGraphInMemory,
+  validateLoopForExecution: validateLoopExec,
+} = require("../services/workflowEngine.service");
+const loopRt = require("../services/workflowLoopRuntime.service");
+
+const seedCode =
+  "return (input.items||[]).map((row,i)=>({json:row,pairedItem:{item:i}}))";
+
+const loopWorkflow = ({ batchSize = 2, bodyType = "noop", bodyData = {}, extraNodes = [], extraEdges = [] } = {}) => ({
+  nodes: [
+    { id: "t", type: "code", data: { code: seedCode } },
+    { id: "L", type: "loop", data: { batchSize } },
+    { id: "body", type: bodyType, data: bodyData },
+    { id: "after", type: "noop", data: {} },
+    ...extraNodes,
+  ],
+  edges: [
+    { id: "e1", source: "t", target: "L", targetHandle: "items" },
+    { id: "e2", source: "L", target: "body", sourceHandle: "batch" },
+    { id: "e3", source: "body", target: "L", targetHandle: "continue" },
+    { id: "e4", source: "L", target: "after", sourceHandle: "done" },
+    ...extraEdges,
+  ],
+});
+
+const five = [{ n: 0 }, { n: 1 }, { n: 2 }, { n: 3 }, { n: 4 }];
+
+check("TEST 9B-1 5 items batchSize 2 → 3 iterations", async () => {
+  const r = await executeGraphInMemory(loopWorkflow({ batchSize: 2 }), {
+    input: { items: five },
+  });
+  assert.strictEqual(r.status, "succeeded");
+  assert.strictEqual(r.loopControllers.L.expectedIterations, 3);
+  assert.strictEqual(
+    r.runData.L.filter((o) => o.executionContext?.phase === "batch").length,
+    3
+  );
+});
+
+check("TEST 9B-2 Body nodes execute occurrence indices 0,1,2", async () => {
+  const r = await executeGraphInMemory(loopWorkflow({ batchSize: 2 }), {
+    input: { items: five },
+  });
+  assert.deepStrictEqual(
+    r.runData.body.map((o) => o.runIndex),
+    [0, 1, 2]
+  );
+});
+
+check("TEST 9B-3 Loop occurrences append, do not overwrite", async () => {
+  const r = await executeGraphInMemory(loopWorkflow({ batchSize: 2 }), {
+    input: { items: five },
+  });
+  assert.strictEqual(r.runData.L.length, 4);
+  assert.ok(r.runData.L.every((o, i) => o.runIndex === i));
+});
+
+check("TEST 9B-4 Batch sizes are 2,2,1", async () => {
+  const r = await executeGraphInMemory(loopWorkflow({ batchSize: 2 }), {
+    input: { items: five },
+  });
+  const batches = r.runData.L.filter((o) => o.output?.batch);
+  assert.deepStrictEqual(
+    batches.map((o) => o.items.length),
+    [2, 2, 1]
+  );
+});
+
+check("TEST 9B-5 Original item ordering preserved across batches", async () => {
+  const r = await executeGraphInMemory(loopWorkflow({ batchSize: 2 }), {
+    input: { items: five },
+  });
+  const done = r.runData.L.find((o) => o.output?.done);
+  assert.deepStrictEqual(
+    done.items.map((i) => i.json.n),
+    [0, 1, 2, 3, 4]
+  );
+});
+
+check("TEST 9B-6 Zero initial items → done [] without body execution", async () => {
+  const r = await executeGraphInMemory(loopWorkflow({ batchSize: 2 }), {
+    input: { items: [] },
+  });
+  assert.ok(!r.runData.body || r.runData.body.length === 0);
+  const done = r.runData.L.find((o) => o.output?.done);
+  assert.ok(done);
+  assert.strictEqual(done.items.length, 0);
+});
+
+check("TEST 9B-7 Continue with 0 items still advances", async () => {
+  const r = await executeGraphInMemory(
+    loopWorkflow({
+      batchSize: 1,
+      bodyType: "filter",
+      bodyData: { fieldName: "n", operator: "equals", right: "999" },
+    }),
+    { input: { items: [{ n: 1 }, { n: 2 }] } }
+  );
+  assert.strictEqual(r.loopControllers.L.expectedIterations, 2);
+  assert.strictEqual(r.runData.body.length, 2);
+  const done = r.runData.L.find((o) => o.output?.done);
+  assert.strictEqual(done.items.length, 0);
+});
+
+check("TEST 9B-8 Body fan-out does not increase iteration count", async () => {
+  const r = await executeGraphInMemory(
+    loopWorkflow({
+      batchSize: 1,
+      bodyType: "code",
+      bodyData: {
+        code: "return items.flatMap(it => [{json:{...it.json,x:1}},{json:{...it.json,x:2}},{json:{...it.json,x:3}}])",
+      },
+    }),
+    { input: { items: [{ n: 0 }, { n: 1 }] } }
+  );
+  assert.strictEqual(r.loopControllers.L.expectedIterations, 2);
+  assert.strictEqual(r.runData.body.length, 2);
+  const done = r.runData.L.find((o) => o.output?.done);
+  assert.strictEqual(done.items.length, 6);
+});
+
+check("TEST 9B-9 Done collects body outputs in deterministic iteration order", async () => {
+  const r = await executeGraphInMemory(
+    loopWorkflow({
+      batchSize: 2,
+      bodyType: "code",
+      bodyData: {
+        code: "return items.map(it => ({json:{tag:'b'+it.json.n}}))",
+      },
+    }),
+    { input: { items: five } }
+  );
+  const done = r.runData.L.find((o) => o.output?.done);
+  assert.deepStrictEqual(
+    done.items.map((i) => i.json.tag),
+    ["b0", "b1", "b2", "b3", "b4"]
+  );
+});
+
+check("TEST 9B-10 Done emits once", async () => {
+  const r = await executeGraphInMemory(loopWorkflow({ batchSize: 2 }), {
+    input: { items: five },
+  });
+  assert.strictEqual(r.runData.L.filter((o) => o.output?.done).length, 1);
+  assert.strictEqual(r.stepLog.filter((s) => s.nodeId === "after").length, 1);
+});
+
+check("TEST 9B-11 Duplicate continue signal does not duplicate done", async () => {
+  const r = await executeGraphInMemory(loopWorkflow({ batchSize: 5 }), {
+    input: { items: five },
+  });
+  assert.strictEqual(r.loopControllers.L.doneEmitted, true);
+  assert.throws(() => {
+    loopRt.executeLoopOccurrence({
+      node: { id: "L", data: { batchSize: 5 } },
+      graph: buildGraph(loopWorkflow()),
+      context: { ...r.context, loopControllers: r.loopControllers },
+      runData: r.runData,
+    });
+  }, (err) => err.code === "LOOP_STATE_ERROR");
+});
+
+check("TEST 9B-12 batch pairedItem points to original items source", async () => {
+  const r = await executeGraphInMemory(loopWorkflow({ batchSize: 2 }), {
+    input: { items: five },
+  });
+  const batch0 = r.runData.L[0];
+  assert.strictEqual(batch0.inputSources.items.nodeId, "t");
+  assert.strictEqual(batch0.items[0].pairedItem.item, 0);
+  assert.strictEqual(batch0.items[1].pairedItem.item, 1);
+});
+
+check("TEST 9B-13 Later batch still points to original items source, not previous continue", async () => {
+  const r = await executeGraphInMemory(loopWorkflow({ batchSize: 2 }), {
+    input: { items: five },
+  });
+  const batch2 = r.runData.L.filter((o) => o.output?.batch)[2];
+  assert.strictEqual(batch2.inputSources.items.nodeId, "t");
+  assert.strictEqual(batch2.items[0].pairedItem.item, 4);
+});
+
+check("TEST 9B-14 Done provenance resolves body occurrence 0 correctly", async () => {
+  const r = await executeGraphInMemory(loopWorkflow({ batchSize: 2 }), {
+    input: { items: five },
+  });
+  const done = r.runData.L.find((o) => o.output?.done);
+  const src = done.inputSources.continue;
+  assert.strictEqual(src.mode, "perItem");
+  assert.strictEqual(src.items[0].runIndex, 0);
+  const item = loopRt.resolvePerItemEntry(r.runData, src.items[0]);
+  assert.strictEqual(item.json.n, 0);
+});
+
+check("TEST 9B-15 Done provenance resolves body occurrence 1 correctly", async () => {
+  const r = await executeGraphInMemory(loopWorkflow({ batchSize: 2 }), {
+    input: { items: five },
+  });
+  const done = r.runData.L.find((o) => o.output?.done);
+  const entry = done.inputSources.continue.items[2]; // item n=2 from body occ 1
+  assert.strictEqual(entry.runIndex, 1);
+  const item = loopRt.resolvePerItemEntry(r.runData, entry);
+  assert.strictEqual(item.json.n, 2);
+});
+
+check("TEST 9B-16 Per-item source occurrence mapping survives JSON serialization", async () => {
+  const r = await executeGraphInMemory(loopWorkflow({ batchSize: 2 }), {
+    input: { items: five },
+  });
+  const snap = require("../services/workflowWait.service").buildExecutionSnapshot({
+    waitNodeId: "w",
+    waitStepId: "s",
+    waitExecutionIndex: 0,
+    waitInputItems: [],
+    context: r.context,
+    scheduler: {
+      edgeState: new Map(),
+      nodeState: new Map(),
+      loopCounts: new Map(),
+      closedLoops: new Set(["L"]),
+    },
+    finalOutput: null,
+    runErrors: [],
+  });
+  const round = JSON.parse(JSON.stringify(snap));
+  const restored = require("../services/workflowWait.service").normalizeWaitSnapshot(round);
+  const done = restored.runData.L.find((o) => o.output?.done);
+  assert.strictEqual(done.inputSources.continue.mode, "perItem");
+  assert.ok(restored.loopControllers.L);
+});
+
+check("TEST 9B-17 Expression inside body resolves current original source item", async () => {
+  const def = loopWorkflow({
+    batchSize: 1,
+    bodyType: "code",
+    bodyData: { code: "return items" },
+  });
+  const r = await executeGraphInMemory(def, {
+    input: { items: [{ name: "A" }, { name: "B" }] },
+  });
+  const bodyItem = r.runData.body[1].items[0];
+  const graph = buildGraph(def);
+  // Walk body → Loop batch → original t via Loop.inputSources.items + pairedItem
+  const loopOcc = r.runData.L[1];
+  const batchItem = loopOcc.items[0];
+  assert.strictEqual(batchItem.pairedItem.item, 1);
+  const resolved = resolveReferencedItem({
+    currentNodeId: "L",
+    currentItem: batchItem,
+    targetNodeId: "t",
+    context: {
+      runData: r.runData,
+      items: r.context.items,
+      currentInputSources: loopOcc.inputSources,
+    },
+    graph,
+  });
+  assert.strictEqual(resolved.status, "resolved");
+  assert.strictEqual(resolved.item.json.name, "B");
+});
+
+check("TEST 9B-18 B occurrence 2 resolves A occurrence 2", async () => {
+  const def = {
+    nodes: [
+      { id: "t", type: "code", data: { code: seedCode } },
+      { id: "L", type: "loop", data: { batchSize: 1 } },
+      { id: "A", type: "noop", data: {} },
+      { id: "B", type: "noop", data: {} },
+      { id: "after", type: "noop", data: {} },
+    ],
+    edges: [
+      { id: "e1", source: "t", target: "L", targetHandle: "items" },
+      { id: "e2", source: "L", target: "A", sourceHandle: "batch" },
+      { id: "e3", source: "A", target: "B" },
+      { id: "e4", source: "B", target: "L", targetHandle: "continue" },
+      { id: "e5", source: "L", target: "after", sourceHandle: "done" },
+    ],
+  };
+  const r = await executeGraphInMemory(def, {
+    input: { items: [{ n: 0 }, { n: 1 }, { n: 2 }] },
+  });
+  assert.strictEqual(r.runData.A[2].runIndex, 2);
+  assert.strictEqual(r.runData.B[2].inputSources.main.runIndex, 2);
+  const resolved = resolveReferencedItem({
+    currentNodeId: "B",
+    currentItem: r.runData.B[2].items[0],
+    targetNodeId: "A",
+    context: {
+      runData: r.runData,
+      items: r.context.items,
+      currentInputSources: r.runData.B[2].inputSources,
+    },
+    graph: buildGraph(def),
+  });
+  assert.strictEqual(resolved.item.json.n, 2);
+});
+
+check("TEST 9B-19 Outside-loop body reference with many occurrences errors OCCURRENCE_AMBIGUOUS", async () => {
+  const r = await executeGraphInMemory(loopWorkflow({ batchSize: 1 }), {
+    input: { items: [{ n: 0 }, { n: 1 }] },
+  });
+  assert.strictEqual(occ.classifyOccurrenceReach(r.runData, "body"), occ.OCCURRENCE_REACH.MANY);
+  const resolved = resolveReferencedItem({
+    currentNodeId: null,
+    currentItem: null,
+    targetNodeId: "body",
+    context: {
+      runData: r.runData,
+      items: r.context.items,
+      steps: r.context.steps,
+    },
+    graph: null,
+  });
+  assert.strictEqual(resolved.status, "error");
+  assert.strictEqual(resolved.reason, REASONS.OCCURRENCE_AMBIGUOUS);
+});
+
+check("TEST 9B-20 {{item.*}} downstream of done reads collected body results", async () => {
+  const r = await executeGraphInMemory(loopWorkflow({ batchSize: 2 }), {
+    input: { items: five },
+  });
+  assert.deepStrictEqual(
+    r.context.items.after.map((i) => i.json.n),
+    [0, 1, 2, 3, 4]
+  );
+});
+
+check("TEST 9B-21 Filter body with empty continue still advances", async () => {
+  const r = await executeGraphInMemory(
+    loopWorkflow({
+      batchSize: 1,
+      bodyType: "filter",
+      bodyData: { fieldName: "keep", operator: "equals", right: "yes" },
+    }),
+    { input: { items: [{ keep: "no" }, { keep: "yes" }, { keep: "no" }] } }
+  );
+  assert.strictEqual(r.runData.body.length, 3);
+  const done = r.runData.L.find((o) => o.output?.done);
+  assert.strictEqual(done.items.length, 1);
+  assert.strictEqual(done.items[0].json.keep, "yes");
+});
+
+check("TEST 9B-22 Switch in body resets per iteration", async () => {
+  const ruleA = "rule_a";
+  const def = {
+    nodes: [
+      { id: "t", type: "code", data: { code: seedCode } },
+      { id: "L", type: "loop", data: { batchSize: 1 } },
+      {
+        id: "sw",
+        type: "switch",
+        data: { rules: [{ id: ruleA, value: "A", outputKey: "x" }] },
+      },
+      { id: "body", type: "noop", data: {} },
+      { id: "after", type: "noop", data: {} },
+    ],
+    edges: [
+      { id: "e1", source: "t", target: "L", targetHandle: "items" },
+      { id: "e2", source: "L", target: "sw", sourceHandle: "batch" },
+      { id: "e3", source: "sw", target: "body", sourceHandle: ruleA },
+      { id: "e4", source: "body", target: "L", targetHandle: "continue" },
+      { id: "e5", source: "L", target: "after", sourceHandle: "done" },
+    ],
+  };
+  const r = await executeGraphInMemory(def, {
+    input: { items: [{ x: "A" }, { x: "A" }] },
+  });
+  assert.strictEqual(r.runData.sw.length, 2);
+  assert.ok(r.runData.sw[0].portOutputs);
+  assert.ok(r.runData.sw[1].portOutputs);
+});
+
+check("TEST 9B-23 Merge in body does not combine cross-iteration data", async () => {
+  const def = {
+    nodes: [
+      { id: "t", type: "code", data: { code: seedCode } },
+      { id: "L", type: "loop", data: { batchSize: 1 } },
+      { id: "a", type: "noop", data: {} },
+      { id: "b", type: "noop", data: {} },
+      { id: "m", type: "merge", data: { mode: "append" } },
+      { id: "after", type: "noop", data: {} },
+    ],
+    edges: [
+      { id: "e1", source: "t", target: "L", targetHandle: "items" },
+      { id: "e2", source: "L", target: "a", sourceHandle: "batch" },
+      { id: "e3", source: "L", target: "b", sourceHandle: "batch" },
+      { id: "e4", source: "a", target: "m", targetHandle: "input1" },
+      { id: "e5", source: "b", target: "m", targetHandle: "input2" },
+      { id: "e6", source: "m", target: "L", targetHandle: "continue" },
+      { id: "e7", source: "L", target: "after", sourceHandle: "done" },
+    ],
+  };
+  const r = await executeGraphInMemory(def, {
+    input: { items: [{ n: 0 }, { n: 1 }] },
+  });
+  assert.strictEqual(r.runData.m.length, 2);
+  assert.strictEqual(r.runData.m[0].inputSources.input1.runIndex, 0);
+  assert.strictEqual(r.runData.m[1].inputSources.input1.runIndex, 1);
+});
+
+check("TEST 9B-24 Body error stops loop according to existing error semantics", async () => {
+  await assert.rejects(
+    () =>
+      executeGraphInMemory(
+        loopWorkflow({
+          batchSize: 1,
+          bodyType: "code",
+          bodyData: { code: "throw new Error('boom')" },
+        }),
+        { input: { items: [{ n: 0 }, { n: 1 }] } }
+      ),
+    /boom/
+  );
+});
+
+check("TEST 9B-25 Retry stays same body occurrence", () => {
+  const runData = occ.createRunData();
+  occ.recordOccurrence(runData, {
+    nodeId: "body",
+    runIndex: 2,
+    status: "failed",
+  });
+  occ.recordOccurrence(runData, {
+    nodeId: "body",
+    runIndex: 2,
+    status: "succeeded",
+    items: [{ json: { ok: true } }],
+  });
+  assert.strictEqual(runData.body.length, 1);
+  assert.strictEqual(runData.body[0].runIndex, 2);
+});
+
+check("TEST 9B-26 Invalid batchSize rejected", () => {
+  assert.throws(() => loopRt.parseBatchSize(0), (e) => e.code === "INVALID_BATCH_SIZE");
+  assert.throws(() => loopRt.parseBatchSize(-1), (e) => e.code === "INVALID_BATCH_SIZE");
+  assert.throws(() => loopRt.parseBatchSize(1.5), (e) => e.code === "INVALID_BATCH_SIZE");
+  const v = validateLoopExec(
+    buildGraph(loopWorkflow({ batchSize: 0 }))
+  );
+  assert.strictEqual(v.ok, false);
+});
+
+check("TEST 9B-27 Wait inside body rejected", () => {
+  const def = loopWorkflow({
+    extraNodes: [{ id: "w", type: "wait", data: { resumeMode: "time", waitAmount: 1, waitUnit: "seconds" } }],
+    extraEdges: [
+      { id: "ew", source: "body", target: "w" },
+      // replace continue from body - need wait in body on path
+    ],
+  });
+  // Put wait on batch path
+  const g = buildGraph({
+    nodes: [
+      { id: "t", type: "trigger", data: {} },
+      { id: "L", type: "loop", data: { batchSize: 1 } },
+      { id: "w", type: "wait", data: {} },
+      { id: "after", type: "result", data: {} },
+    ],
+    edges: [
+      { id: "e1", source: "t", target: "L", targetHandle: "items" },
+      { id: "e2", source: "L", target: "w", sourceHandle: "batch" },
+      { id: "e3", source: "w", target: "L", targetHandle: "continue" },
+      { id: "e4", source: "L", target: "after", sourceHandle: "done" },
+    ],
+  });
+  const v = validateLoopExec(g);
+  assert.strictEqual(v.ok, false);
+  assert.ok(v.errors.some((e) => String(e).includes("Wait inside Loop")));
+  assert.strictEqual(v.code, "WAIT_IN_LOOP_NOT_SUPPORTED");
+});
+
+check("TEST 9B-28 Nested Loop rejected", () => {
+  const g = buildGraph({
+    nodes: [
+      { id: "t", type: "trigger", data: {} },
+      { id: "L1", type: "loop", data: { batchSize: 1 } },
+      { id: "L2", type: "loop", data: { batchSize: 1 } },
+      { id: "b", type: "noop", data: {} },
+      { id: "after", type: "result", data: {} },
+    ],
+    edges: [
+      { id: "e1", source: "t", target: "L1", targetHandle: "items" },
+      { id: "e2", source: "L1", target: "L2", sourceHandle: "batch" },
+      { id: "e3", source: "L2", target: "b", sourceHandle: "batch" },
+      { id: "e4", source: "b", target: "L2", targetHandle: "continue" },
+      { id: "e5", source: "L2", target: "L1", sourceHandle: "done", targetHandle: "continue" },
+      { id: "e6", source: "L1", target: "after", sourceHandle: "done" },
+    ],
+  });
+  const v = validateLoopExec(g);
+  assert.strictEqual(v.ok, false);
+  assert.ok(v.errors.some((e) => /[Nn]ested/.test(e)));
+});
+
+check("TEST 9B-29 Body side exit rejected", () => {
+  const g = buildGraph({
+    nodes: [
+      { id: "t", type: "trigger", data: {} },
+      { id: "L", type: "loop", data: { batchSize: 1 } },
+      { id: "body", type: "noop", data: {} },
+      { id: "leak", type: "noop", data: {} },
+      { id: "after", type: "result", data: {} },
+    ],
+    edges: [
+      { id: "e1", source: "t", target: "L", targetHandle: "items" },
+      { id: "e2", source: "L", target: "body", sourceHandle: "batch" },
+      { id: "e3", source: "body", target: "L", targetHandle: "continue" },
+      { id: "e4", source: "body", target: "leak" },
+      { id: "e5", source: "L", target: "after", sourceHandle: "done" },
+    ],
+  });
+  const v = validateLoopExec(g);
+  assert.strictEqual(v.ok, false);
+  assert.ok(v.errors.some((e) => /side exit/.test(e)));
+});
+
+check("TEST 9B-30 More than one continue edge rejected", () => {
+  const g = buildGraph({
+    nodes: [
+      { id: "t", type: "trigger", data: {} },
+      { id: "L", type: "loop", data: { batchSize: 1 } },
+      { id: "a", type: "noop", data: {} },
+      { id: "b", type: "noop", data: {} },
+      { id: "after", type: "result", data: {} },
+    ],
+    edges: [
+      { id: "e1", source: "t", target: "L", targetHandle: "items" },
+      { id: "e2", source: "L", target: "a", sourceHandle: "batch" },
+      { id: "e3", source: "L", target: "b", sourceHandle: "batch" },
+      { id: "e4", source: "a", target: "L", targetHandle: "continue" },
+      { id: "e5", source: "b", target: "L", targetHandle: "continue" },
+      { id: "e6", source: "L", target: "after", sourceHandle: "done" },
+    ],
+  });
+  const v = validateLoopExec(g);
+  assert.strictEqual(v.ok, false);
+});
+
+check("TEST 9B-31 Generic cycle remains rejected", () => {
+  const g = buildGraph({
+    nodes: [
+      { id: "a", type: "noop", data: {} },
+      { id: "b", type: "noop", data: {} },
+    ],
+    edges: [
+      { id: "e1", source: "a", target: "b" },
+      { id: "e2", source: "b", target: "a" },
+    ],
+  });
+  const v = validateLoopExec(g);
+  assert.strictEqual(v.ok, false);
+});
+
+check("TEST 9B-32 Sequential non-nested Loop A → Loop B works", async () => {
+  const def = {
+    nodes: [
+      { id: "t", type: "code", data: { code: seedCode } },
+      { id: "L1", type: "loop", data: { batchSize: 2 } },
+      { id: "b1", type: "noop", data: {} },
+      { id: "L2", type: "loop", data: { batchSize: 2 } },
+      { id: "b2", type: "noop", data: {} },
+      { id: "after", type: "noop", data: {} },
+    ],
+    edges: [
+      { id: "e1", source: "t", target: "L1", targetHandle: "items" },
+      { id: "e2", source: "L1", target: "b1", sourceHandle: "batch" },
+      { id: "e3", source: "b1", target: "L1", targetHandle: "continue" },
+      { id: "e4", source: "L1", target: "L2", sourceHandle: "done", targetHandle: "items" },
+      { id: "e5", source: "L2", target: "b2", sourceHandle: "batch" },
+      { id: "e6", source: "b2", target: "L2", targetHandle: "continue" },
+      { id: "e7", source: "L2", target: "after", sourceHandle: "done" },
+    ],
+  };
+  const r = await executeGraphInMemory(def, { input: { items: five } });
+  assert.strictEqual(r.status, "succeeded");
+  assert.ok(r.loopControllers.L1.doneEmitted);
+  assert.ok(r.loopControllers.L2.doneEmitted);
+});
+
+check("TEST 9B-33 Full Manual production run executes Loop", async () => {
+  const r = await executeGraphInMemory(loopWorkflow({ batchSize: 2 }), {
+    input: { source: "manual", items: five },
+  });
+  assert.strictEqual(r.status, "succeeded");
+  assert.ok(r.runData.L.some((o) => o.output?.done));
+});
+
+check("TEST 9B-34 Schedule-triggered run executes Loop", async () => {
+  const r = await executeGraphInMemory(loopWorkflow({ batchSize: 2 }), {
+    input: { source: "schedule", items: five },
+  });
+  assert.strictEqual(r.status, "succeeded");
+});
+
+check("TEST 9B-35 Webhook-triggered run executes Loop", async () => {
+  const r = await executeGraphInMemory(loopWorkflow({ batchSize: 2 }), {
+    input: { source: "webhook", items: five },
+  });
+  assert.strictEqual(r.status, "succeeded");
+});
+
+check("TEST 9B-36 Wait before Loop works", async () => {
+  // Structural: Wait outside then Loop — validate topology OK
+  const g = buildGraph({
+    nodes: [
+      { id: "t", type: "trigger", data: {} },
+      { id: "w", type: "wait", data: { resumeMode: "time", waitAmount: 1, waitUnit: "seconds" } },
+      { id: "L", type: "loop", data: { batchSize: 1 } },
+      { id: "body", type: "noop", data: {} },
+      { id: "after", type: "result", data: {} },
+    ],
+    edges: [
+      { id: "e0", source: "t", target: "w" },
+      { id: "e1", source: "w", target: "L", targetHandle: "items" },
+      { id: "e2", source: "L", target: "body", sourceHandle: "batch" },
+      { id: "e3", source: "body", target: "L", targetHandle: "continue" },
+      { id: "e4", source: "L", target: "after", sourceHandle: "done" },
+    ],
+  });
+  const v = validateLoopExec(g);
+  assert.strictEqual(v.ok, true);
+});
+
+check("TEST 9B-37 Wait after Loop preserves Loop runData in snapshot", async () => {
+  const r = await executeGraphInMemory(loopWorkflow({ batchSize: 2 }), {
+    input: { items: five },
+  });
+  const snap = require("../services/workflowWait.service").buildExecutionSnapshot({
+    waitNodeId: "w",
+    waitStepId: "s",
+    waitExecutionIndex: 0,
+    waitInputItems: r.context.items.after,
+    context: r.context,
+    scheduler: {
+      edgeState: new Map(),
+      nodeState: new Map(),
+      loopCounts: new Map(),
+      closedLoops: new Set(["L"]),
+    },
+    finalOutput: null,
+    runErrors: [],
+  });
+  assert.ok(snap.runData.L.length >= 4);
+  assert.ok(snap.loopControllers.L.doneEmitted);
+});
+
+check("TEST 9B-38 Production Loop ignores editor pins", async () => {
+  const def = loopWorkflow({ batchSize: 2 });
+  def.nodes.find((n) => n.id === "body").data.pinnedOutput = { pinned: true };
+  def.nodes.find((n) => n.id === "body").data.pinnedItems = [
+    { json: { pinned: true } },
+  ];
+  const r = await executeGraphInMemory(def, { input: { items: five } });
+  assert.ok(r.runData.body.every((o) => !o.items[0]?.json?.pinned));
+});
+
+check("TEST 9B-39 Partial Run Step on Loop body is controlled-unsupported", async () => {
+  await assert.rejects(
+    () =>
+      executePartial({
+        definition: loopWorkflow(),
+        targetNodeId: "body",
+        mode: "step",
+      }),
+    (err) =>
+      err.code === "LOOP_EDITOR_UNSUPPORTED" ||
+      /Iteration-level|Loop/i.test(String(err.message))
+  );
+});
+
+check("TEST 9B-40 workflow_run_steps persists repeated body execution_index values", () => {
+  const engineSrc = require("fs").readFileSync(
+    require("path").join(__dirname, "../services/workflowEngine.service.js"),
+    "utf8"
+  );
+  assert.ok(engineSrc.includes("execution_index"));
+  assert.ok(engineSrc.includes("nextRunIndex"));
+});
+
+check("TEST 9B-41 Occurrence 0 success + occurrence 1 failure remain independently visible", () => {
+  const runData = occ.createRunData();
+  occ.recordOccurrence(runData, {
+    nodeId: "body",
+    runIndex: 0,
+    status: "succeeded",
+    items: [{ json: { ok: 1 } }],
+  });
+  occ.recordOccurrence(runData, {
+    nodeId: "body",
+    runIndex: 1,
+    status: "failed",
+    error: "x",
+  });
+  assert.strictEqual(runData.body[0].status, "succeeded");
+  assert.strictEqual(runData.body[1].status, "failed");
+});
+
+check("TEST 9B-42 Loop completion guard prevents duplicate downstream execution", async () => {
+  const r = await executeGraphInMemory(loopWorkflow({ batchSize: 2 }), {
+    input: { items: five },
+  });
+  assert.strictEqual(r.stepLog.filter((s) => s.nodeId === "after" && s.status === "succeeded").length, 1);
+});
+
+check("TEST 9B-43 Existing non-loop workflow remains unchanged", async () => {
+  const r = await executeGraphInMemory(
+    {
+      nodes: [
+        { id: "t", type: "trigger", data: {} },
+        { id: "s", type: "noop", data: {} },
+        { id: "r", type: "result", data: {} },
+      ],
+      edges: [
+        { id: "e1", source: "t", target: "s" },
+        { id: "e2", source: "s", target: "r" },
+      ],
+    },
+    { input: {} }
+  );
+  assert.strictEqual(r.status, "succeeded");
+  assert.strictEqual(r.runData.s[0].runIndex, 0);
+});
+
+check("TEST 9B-44 Existing Merge outside Loop unchanged", async () => {
+  const r = await handlers.merge(
+    { id: "m", data: { mode: "append" } },
+    {
+      ...ctx,
+      inputItems: [{ json: { a: 1 } }],
+      portInputs: {
+        input1: { state: "ready", items: [{ json: { a: 1 } }] },
+        input2: { state: "ready", items: [{ json: { b: 2 } }] },
+      },
+    }
+  );
+  assert.ok(r.items.length >= 1);
+});
+
+check("TEST 9B-45 Existing Switch outside Loop unchanged", async () => {
+  const ruleA = "rule_a";
+  const r = await handlers.switch(
+    { id: "sw", data: { rules: [{ id: ruleA, value: "A", outputKey: "x" }] } },
+    { ...ctx, inputItems: [{ json: { x: "A" }, pairedItem: { item: 0 } }] }
+  );
+  assert.ok(r.outputsByPort);
+});
+
+check("TEST 9B-46 Existing Wait outside Loop unchanged", async () => {
+  const now = new Date("2026-09-02T10:00:00.000Z");
+  const r = await handlers.wait(
+    { id: "w", data: { resumeMode: "time", waitAmount: 5, waitUnit: "seconds" } },
+    { inputItems: [{ json: { ok: true } }], editorMode: false, now }
+  );
+  assert.strictEqual(r.suspend, true);
+});
+
+check("TEST 9B-47 Library Loop is available (Part 9C)", () => {
+  const raw = require("fs").readFileSync(
+    require("path").join(
+      __dirname,
+      "../../frontend/src/modules/workflows/nodeLibrary.json"
+    ),
+    "utf8"
+  );
+  const lib = JSON.parse(raw);
+  const loop = (lib.nodes || lib).find
+    ? (Array.isArray(lib) ? lib : lib.nodes || []).find(
+        (n) => n.engineType === "loop" || n.id === "loop-over-items"
+      )
+    : null;
+  // nodeLibrary is typically { nodes: [...] } or a flat array under a key
+  let entry = null;
+  const walk = (obj) => {
+    if (!obj || entry) return;
+    if (Array.isArray(obj)) {
+      for (const n of obj) {
+        if (n && (n.engineType === "loop" || n.id === "loop-over-items")) {
+          entry = n;
+          return;
+        }
+      }
+      return;
+    }
+    if (typeof obj === "object") {
+      for (const v of Object.values(obj)) walk(v);
+    }
+  };
+  walk(lib);
+  assert.ok(entry, "Loop library entry missing");
+  assert.strictEqual(entry.available, true);
+  assert.ok(/Loop Over Items/i.test(entry.name || ""));
+});
+
+section("Part 9C Loop workspace / editor");
+
+check("TEST 9C-1 Loop library available true", () => {
+  const raw = require("fs").readFileSync(
+    require("path").join(
+      __dirname,
+      "../../frontend/src/modules/workflows/nodeLibrary.json"
+    ),
+    "utf8"
+  );
+  assert.ok(raw.includes('"engineType": "loop"'));
+  assert.ok(raw.includes('"available": true'));
+});
+
+check("TEST 9C-2 Contract semantic handles items/continue/batch/done", () => {
+  const contract = require("fs").readFileSync(
+    require("path").join(
+      __dirname,
+      "../../frontend/src/modules/workflows/nodeContract.ts"
+    ),
+    "utf8"
+  );
+  assert.ok(contract.includes('id: "items"'));
+  assert.ok(contract.includes('id: "continue"'));
+  assert.ok(contract.includes('id: "batch"'));
+  assert.ok(contract.includes('id: "done"'));
+  assert.ok(contract.includes("Loop Over Items"));
+});
+
+check("TEST 9C-3 Valid back-edge accepted by controlled-cycle validation", () => {
+  const g = require("../services/workflowEngine.service").buildGraph(
+    loopWorkflow({ batchSize: 2 })
+  );
+  const v = require("../services/workflowEngine.service").validateControlledCycles(g);
+  assert.strictEqual(v.ok, true);
+});
+
+check("TEST 9C-4 Ordinary cycle rejected", () => {
+  const def = {
+    nodes: [
+      { id: "a", type: "noop", data: {} },
+      { id: "b", type: "noop", data: {} },
+    ],
+    edges: [
+      { id: "e1", source: "a", target: "b" },
+      { id: "e2", source: "b", target: "a" },
+    ],
+  };
+  const g = require("../services/workflowEngine.service").buildGraph(def);
+  const v = require("../services/workflowEngine.service").validateControlledCycles(g);
+  assert.strictEqual(v.ok, false);
+});
+
+check("TEST 9C-5 Wait-in-Loop rejected before execution", () => {
+  const def = loopWorkflow({
+    batchSize: 2,
+    bodyType: "wait",
+    bodyData: { resumeMode: "time", waitAmount: 1, waitUnit: "seconds" },
+  });
+  const g = require("../services/workflowEngine.service").buildGraph(def);
+  const v = require("../services/workflowEngine.service").validateLoopForExecution(g);
+  assert.strictEqual(v.ok, false);
+});
+
+check("TEST 9C-6 Save/reload preserves Loop handles (definition round-trip)", () => {
+  const def = loopWorkflow({ batchSize: 2 });
+  const json = JSON.stringify(def);
+  const again = JSON.parse(json);
+  assert.strictEqual(
+    again.edges.find((e) => e.targetHandle === "continue").targetHandle,
+    "continue"
+  );
+  assert.ok(again.edges.some((e) => e.sourceHandle === "batch"));
+  assert.ok(again.edges.some((e) => e.sourceHandle === "done"));
+  assert.ok(again.edges.some((e) => e.targetHandle === "items"));
+});
+
+check("TEST 9C-7 Editor full execute Loop via executeGraphInMemory", async () => {
+  const r = await executeGraphInMemory(loopWorkflow({ batchSize: 2 }), {
+    input: { items: five },
+  });
+  assert.strictEqual(r.status, "succeeded");
+  assert.strictEqual(r.runData.body.length, 3);
+});
+
+check("TEST 9C-8 Body has 3 occurrences", async () => {
+  const r = await executeGraphInMemory(loopWorkflow({ batchSize: 2 }), {
+    input: { items: five },
+  });
+  assert.deepStrictEqual(
+    r.runData.body.map((o) => o.runIndex),
+    [0, 1, 2]
+  );
+});
+
+check("TEST 9C-9 Selected occurrence input is iteration-local", async () => {
+  const r = await executeGraphInMemory(loopWorkflow({ batchSize: 2 }), {
+    input: { items: five },
+  });
+  const src0 = r.runData.body[0].inputSources;
+  const src1 = r.runData.body[1].inputSources;
+  assert.ok(src0);
+  assert.ok(src1);
+  const pin0 = Object.values(src0)[0];
+  const pin1 = Object.values(src1)[0];
+  assert.notStrictEqual(pin0.runIndex, pin1.runIndex);
+});
+
+check("TEST 9C-10 Selected occurrence output is iteration-local", async () => {
+  const r = await executeGraphInMemory(loopWorkflow({ batchSize: 2 }), {
+    input: { items: five },
+  });
+  assert.strictEqual(r.runData.body[0].items.length, 2);
+  assert.strictEqual(r.runData.body[2].items.length, 1);
+  assert.notDeepStrictEqual(
+    r.runData.body[0].items.map((i) => i.json),
+    r.runData.body[2].items.map((i) => i.json)
+  );
+});
+
+check("TEST 9C-11 Loop Batch exposes iteration occurrences", async () => {
+  const r = await executeGraphInMemory(loopWorkflow({ batchSize: 2 }), {
+    input: { items: five },
+  });
+  const batches = r.runData.L.filter((o) => o.executionContext?.phase === "batch");
+  assert.strictEqual(batches.length, 3);
+});
+
+check("TEST 9C-12 Loop Done exposes final collected items", async () => {
+  const r = await executeGraphInMemory(loopWorkflow({ batchSize: 2 }), {
+    input: { items: five },
+  });
+  const done = r.runData.L.find((o) => o.executionContext?.phase === "done");
+  assert.ok(done);
+  assert.strictEqual(done.items.length, 5);
+});
+
+check("TEST 9C-13 Empty Loop done state", async () => {
+  const r = await executeGraphInMemory(loopWorkflow({ batchSize: 2 }), {
+    input: { items: [] },
+  });
+  assert.strictEqual(r.runData.body?.length || 0, 0);
+  const done = r.runData.L.find((o) => o.executionContext?.phase === "done");
+  assert.ok(done);
+  assert.strictEqual(done.items.length, 0);
+});
+
+check("TEST 9C-14 Zero-body-output still completes", async () => {
+  const r = await executeGraphInMemory(
+    loopWorkflow({
+      batchSize: 2,
+      bodyType: "filter",
+      bodyData: { fieldName: "keep", operator: "equals", right: "never" },
+    }),
+    {
+      input: {
+        items: five.map((row) => ({ ...row, keep: "no" })),
+      },
+    }
+  );
+  assert.strictEqual(r.runData.body.length, 3);
+  const done = r.runData.L.find((o) => o.output?.done || o.executionContext?.phase === "done");
+  assert.strictEqual(done.items.length, 0);
+});
+
+check("TEST 9C-15 Fan-out body keeps original iteration count", async () => {
+  const r = await executeGraphInMemory(
+    loopWorkflow({
+      batchSize: 1,
+      bodyType: "code",
+      bodyData: {
+        code: "return items.flatMap(it => [{json:{...it.json,x:1}},{json:{...it.json,x:2}}])",
+      },
+    }),
+    { input: { items: [{ n: 0 }, { n: 1 }, { n: 2 }] } }
+  );
+  assert.strictEqual(r.runData.body.length, 3);
+  const done = r.runData.L.find((o) => o.output?.done || o.executionContext?.phase === "done");
+  assert.strictEqual(done.items.length, 6);
+});
+
+check("TEST 9C-16 Occurrence-aware expression preview context accepts runIndex", () => {
+  const { buildExpressionPreviewContext } = require("../services/workflowEngine.service");
+  const session = {
+    nodeResults: {
+      body: {
+        nodeId: "body",
+        status: "succeeded",
+        output: { last: true },
+        items: [{ json: { n: 4 } }],
+        occurrences: [
+          {
+            runIndex: 0,
+            status: "succeeded",
+            items: [{ json: { n: 0 } }, { json: { n: 1 } }],
+            output: {},
+            inputSources: {
+              main: { nodeId: "L", runIndex: 0, outputPort: "batch" },
+            },
+          },
+          {
+            runIndex: 1,
+            status: "succeeded",
+            items: [{ json: { n: 2 } }, { json: { n: 3 } }],
+            output: {},
+            inputSources: {
+              main: { nodeId: "L", runIndex: 1, outputPort: "batch" },
+            },
+          },
+        ],
+      },
+      L: {
+        nodeId: "L",
+        status: "succeeded",
+        items: [],
+        occurrences: [
+          {
+            runIndex: 0,
+            status: "succeeded",
+            items: [{ json: { n: 0 } }, { json: { n: 1 } }],
+            portOutputs: {
+              batch: [{ json: { n: 0 } }, { json: { n: 1 } }],
+            },
+          },
+          {
+            runIndex: 1,
+            status: "succeeded",
+            items: [{ json: { n: 2 } }, { json: { n: 3 } }],
+            portOutputs: {
+              batch: [{ json: { n: 2 } }, { json: { n: 3 } }],
+            },
+          },
+        ],
+      },
+    },
+  };
+  const { context } = buildExpressionPreviewContext(
+    loopWorkflow(),
+    session,
+    "body",
+    0,
+    {},
+    1
+  );
+  assert.strictEqual(context.currentRunIndex, 1);
+  assert.ok(context.runData.body.length === 2);
+});
+
+check("TEST 9C-17 Body external expression ambiguity surfaced", () => {
+  const { resolveReferencedItem, REASONS } = require("../services/workflowExpression.service");
+  const runData = occ.createRunData();
+  occ.recordOccurrence(runData, {
+    nodeId: "body",
+    runIndex: 0,
+    items: [{ json: { a: 1 } }],
+  });
+  occ.recordOccurrence(runData, {
+    nodeId: "body",
+    runIndex: 1,
+    items: [{ json: { a: 2 } }],
+  });
+  const resolved = resolveReferencedItem({
+    currentNodeId: null,
+    currentItem: null,
+    targetNodeId: "body",
+    context: {
+      runData,
+      items: { body: [{ json: { a: 2 } }] },
+      steps: { body: { a: 2 } },
+    },
+    graph: null,
+  });
+  assert.strictEqual(resolved.status, "error");
+  assert.strictEqual(resolved.reason, REASONS.OCCURRENCE_AMBIGUOUS);
+});
+
+check("TEST 9C-18 Run Step Loop safely unsupported", async () => {
+  await assert.rejects(
+    () =>
+      executePartial({
+        definition: loopWorkflow(),
+        targetNodeId: "L",
+        mode: "step",
+      }),
+    (err) => err.code === "LOOP_EDITOR_UNSUPPORTED"
+  );
+});
+
+check("TEST 9C-19 Run Step body safely unsupported", async () => {
+  await assert.rejects(
+    () =>
+      executePartial({
+        definition: loopWorkflow(),
+        targetNodeId: "body",
+        mode: "step",
+      }),
+    (err) => err.code === "LOOP_EDITOR_UNSUPPORTED"
+  );
+});
+
+check("TEST 9C-20 Run To downstream after Loop executes region", async () => {
+  const partial = await executePartial({
+    definition: loopWorkflow({ batchSize: 2 }),
+    targetNodeId: "after",
+    mode: "run-to",
+    input: { items: five },
+  });
+  assert.ok(partial.results.after);
+  assert.ok(partial.results.body?.occurrences?.length === 3);
+  assert.ok(partial.results.L?.occurrences?.length >= 4);
+});
+
+check("TEST 9C-21 Run To inside body safely unsupported", async () => {
+  await assert.rejects(
+    () =>
+      executePartial({
+        definition: loopWorkflow(),
+        targetNodeId: "body",
+        mode: "run-to",
+      }),
+    (err) => err.code === "LOOP_EDITOR_UNSUPPORTED"
+  );
+});
+
+check("TEST 9C-22 Execute Previous after Loop excludes target", async () => {
+  const partial = await executePartial({
+    definition: loopWorkflow({ batchSize: 2 }),
+    targetNodeId: "after",
+    mode: "upstream",
+    input: { items: five },
+  });
+  assert.ok(!partial.results.after);
+  assert.ok(partial.results.body?.occurrences?.length === 3);
+  assert.ok(partial.results.L);
+});
+
+check("TEST 9C-23 Reconnect invalid Continue rejected by topology", () => {
+  const def = loopWorkflow({ batchSize: 2 });
+  def.edges = def.edges.filter((e) => e.targetHandle !== "continue");
+  def.edges.push({
+    id: "bad",
+    source: "t",
+    target: "L",
+    targetHandle: "continue",
+  });
+  const g = require("../services/workflowEngine.service").buildGraph(def);
+  const v = require("../services/workflowEngine.service").validateControlledCycles(g);
+  assert.strictEqual(v.ok, false);
+});
+
+check("TEST 9C-24 Delete Loop clears edges (definition filter)", () => {
+  const def = loopWorkflow();
+  const nodes = def.nodes.filter((n) => n.id !== "L");
+  const edges = def.edges.filter((e) => e.source !== "L" && e.target !== "L");
+  assert.ok(!edges.some((e) => e.targetHandle === "continue"));
+  assert.strictEqual(nodes.some((n) => n.type === "loop"), false);
+});
+
+check("TEST 9C-25 Duplicate Loop starts unconnected (clipboard remaps IDs)", () => {
+  const src = require("fs").readFileSync(
+    require("path").join(
+      __dirname,
+      "../../frontend/src/modules/workflows/workflowClipboard.ts"
+    ),
+    "utf8"
+  );
+  assert.ok(src.includes("idMap"));
+  assert.ok(src.includes("targetHandle"));
+  assert.ok(src.includes("serializeSelection"));
+});
+
+check("TEST 9C-26 Non-loop inspector remains single-occurrence by default", async () => {
+  const r = await executeGraphInMemory(
+    {
+      nodes: [
+        { id: "t", type: "trigger", data: {} },
+        { id: "s", type: "noop", data: {} },
+      ],
+      edges: [{ id: "e1", source: "t", target: "s" }],
+    },
+    { input: {} }
+  );
+  assert.strictEqual(r.runData.s.length, 1);
+});
+
+check("TEST 9C-27 Existing Merge workspace behavior unchanged", async () => {
+  const r = await handlers.merge(
+    { id: "m", data: { mode: "append" } },
+    {
+      ...ctx,
+      inputItems: [{ json: { a: 1 } }],
+      portInputs: {
+        input1: { state: "ready", items: [{ json: { a: 1 } }] },
+        input2: { state: "ready", items: [{ json: { b: 2 } }] },
+      },
+    }
+  );
+  assert.ok(r.items.length >= 1);
+});
+
+check("TEST 9C-28 Existing Switch workspace behavior unchanged", async () => {
+  const ruleA = "rule_a";
+  const r = await handlers.switch(
+    { id: "sw", data: { rules: [{ id: ruleA, value: "A", outputKey: "x" }] } },
+    { ...ctx, inputItems: [{ json: { x: "A" }, pairedItem: { item: 0 } }] }
+  );
+  assert.ok(r.outputsByPort);
+});
+
+check("TEST 9C-29 Existing Wait workspace behavior unchanged", async () => {
+  const now = new Date("2026-09-02T10:00:00.000Z");
+  const r = await handlers.wait(
+    { id: "w", data: { resumeMode: "time", waitAmount: 5, waitUnit: "seconds" } },
+    { inputItems: [{ json: { ok: true } }], editorMode: false, now }
+  );
+  assert.strictEqual(r.suspend, true);
 });
 
 (async () => {

@@ -596,7 +596,8 @@ export const NODE_PARAMETER_SCHEMAS: Record<WorkflowNodeType, ParamDescriptor[]>
         type: "number",
         default: 1,
         min: 1,
-        description: "Items per iteration (Loop runtime ships in Part 9B).",
+        description:
+          "How many items to process per iteration (integer ≥ 1). Connect body output back to Continue.",
       },
     ],
 

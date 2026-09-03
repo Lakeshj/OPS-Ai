@@ -119,6 +119,7 @@ export const pasteSnapshot = (
     source: idMap.get(e.source)!,
     target: idMap.get(e.target)!,
     sourceHandle: remapSourceHandle(e.source, e.sourceHandle) ?? undefined,
+    targetHandle: e.targetHandle ?? undefined,
   }));
 
   return { nodes, edges };

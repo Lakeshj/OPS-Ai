@@ -26,6 +26,8 @@ const REASON_MESSAGES: Record<string, string> = {
     "OpsAi can't determine which upstream item corresponds to this item.",
   PROVENANCE_AMBIGUOUS:
     "Multiple upstream items match. Use $first, $last, or $all[index].",
+  OCCURRENCE_AMBIGUOUS:
+    "This step ran multiple times inside Loop.",
   ITEM_INDEX_OUT_OF_RANGE: "That item index isn't available.",
   INVALID_REFERENCE: "This expression reference is invalid.",
 };

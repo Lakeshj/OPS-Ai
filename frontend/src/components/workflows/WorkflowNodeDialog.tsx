@@ -26,6 +26,7 @@ import type {
   WorkflowItem,
   WorkflowNodeData,
   WorkflowNodeType,
+  WorkflowRun,
   WorkflowStatus,
 } from "@/modules/workflows/types";
 import { resolveNodeOutputPorts } from "@/modules/workflows/dynamicPorts";
@@ -36,7 +37,16 @@ import {
 } from "@/modules/workflows/nodeRegistry";
 import { workflowsApi } from "@/modules/workflows/api";
 import type { WorkflowDefinition } from "@/modules/workflows/types";
+import {
+  findLoopRegionForNode,
+} from "@/modules/workflows/loopValidation";
+import {
+  mergeSessionWithRun,
+  resolveOccurrenceInputItems,
+  type LoopPortView,
+} from "@/modules/workflows/occurrenceView";
 import { toast } from "sonner";
+import type { Node as FlowNode, Edge as FlowEdge } from "@xyflow/react";
 
 type Props = {
   open: boolean;
@@ -54,6 +64,7 @@ type Props = {
   definition?: WorkflowDefinition;
   editorSession?: WorkflowEditorSession | null;
   onEditorSessionChange?: (session: WorkflowEditorSession) => void;
+  latestRun?: WorkflowRun | null;
   onTogglePin?: (nodeId: string) => void;
   workflowStatus?: WorkflowStatus;
   onExecuteWorkflow?: () => void;
@@ -88,6 +99,7 @@ export function WorkflowNodeDialog({
   definition,
   editorSession,
   onEditorSessionChange,
+  latestRun,
   onTogglePin,
   workflowStatus,
   onExecuteWorkflow,
@@ -97,6 +109,8 @@ export function WorkflowNodeDialog({
   );
   const [executing, setExecuting] = useState(false);
   const [selectedInputItemIndex, setSelectedInputItemIndex] = useState(0);
+  const [selectedRunIndex, setSelectedRunIndex] = useState<number | null>(null);
+  const [loopPortView, setLoopPortView] = useState<LoopPortView>("done");
   const [inputPreview, setInputPreview] = useState<{
     incoming?: Record<string, unknown>;
     items?: WorkflowItem[];
@@ -105,10 +119,67 @@ export function WorkflowNodeDialog({
     staleNodeIds?: string[];
   }>({});
 
+  const flowNodes = useMemo(
+    () =>
+      (definition?.nodes || []).map(
+        (n) =>
+          ({
+            id: n.id,
+            type: n.type,
+            position: n.position || { x: 0, y: 0 },
+            data: n.data || {},
+          }) as FlowNode
+      ),
+    [definition]
+  );
+  const flowEdges = useMemo(
+    () =>
+      (definition?.edges || []).map(
+        (e) =>
+          ({
+            id: e.id,
+            source: e.source,
+            target: e.target,
+            sourceHandle: e.sourceHandle,
+            targetHandle: e.targetHandle,
+          }) as FlowEdge
+      ),
+    [definition]
+  );
+
+  const loopRegion = useMemo(
+    () =>
+      selectedId
+        ? findLoopRegionForNode(selectedId, flowNodes, flowEdges)
+        : null,
+    [selectedId, flowNodes, flowEdges]
+  );
+
+  const isLoopNode = selectedType === "loop";
+  const insideLoop = Boolean(loopRegion && loopRegion.loopId !== selectedId);
+
   const nodeResult: WorkflowEditorNodeResult | null = useMemo(() => {
-    if (!selectedId || !editorSession?.nodeResults) return null;
-    return editorSession.nodeResults[selectedId] || null;
-  }, [selectedId, editorSession]);
+    if (!selectedId) return null;
+    const session = editorSession?.nodeResults?.[selectedId] || null;
+    return mergeSessionWithRun(session, latestRun, selectedId);
+  }, [selectedId, editorSession, latestRun]);
+
+  useEffect(() => {
+    setSelectedRunIndex(null);
+    setLoopPortView("done");
+    setSelectedInputItemIndex(0);
+  }, [selectedId]);
+
+  const occurrenceInputItems = useMemo(() => {
+    if (selectedRunIndex == null || !nodeResult?.occurrences) return null;
+    const occ = nodeResult.occurrences.find((o) => o.runIndex === selectedRunIndex);
+    if (!occ) return null;
+    const resolved = resolveOccurrenceInputItems(
+      occ,
+      editorSession?.nodeResults
+    );
+    return resolved.length > 0 ? resolved : null;
+  }, [selectedRunIndex, nodeResult, editorSession]);
 
   const previewContext = useMemo(() => {
     const steps: Record<string, unknown> = {};
@@ -123,6 +194,13 @@ export function WorkflowNodeDialog({
       for (const [id, r] of Object.entries(editorSession.nodeResults)) {
         if (r.output !== undefined) steps[id] = r.output;
         if (Array.isArray(r.items)) stepItems[id] = r.items;
+        if (selectedId === id && selectedRunIndex != null && r.occurrences) {
+          const occ = r.occurrences.find((o) => o.runIndex === selectedRunIndex);
+          if (occ) {
+            if (occ.output !== undefined) steps[id] = occ.output;
+            if (Array.isArray(occ.items)) stepItems[id] = occ.items;
+          }
+        }
       }
     }
     if (definition?.nodes) {
@@ -139,20 +217,23 @@ export function WorkflowNodeDialog({
       workflowId,
       nodeId: selectedId ?? undefined,
       itemIndex: selectedInputItemIndex,
+      runIndex: selectedRunIndex ?? undefined,
       definition,
       input: parseRunInput(runInput),
       steps,
       stepItems,
-      inputItems: inputPreview.items,
+      inputItems: occurrenceInputItems || inputPreview.items,
       nodeLabels,
     };
   }, [
     editorSession,
     runInput,
     inputPreview.items,
+    occurrenceInputItems,
     workflowId,
     selectedId,
     selectedInputItemIndex,
+    selectedRunIndex,
     definition,
   ]);
 
@@ -197,6 +278,14 @@ export function WorkflowNodeDialog({
   const runPartial = async (mode: "step" | "run-to" | "upstream") => {
     if (!workflowId || !selectedId || !definition) {
       toast.error("Save the workflow first");
+      return;
+    }
+    if (isLoopNode || insideLoop) {
+      toast.error(
+        isLoopNode
+          ? "Loop runs as a complete region. Use Run to a node after Done, or Execute workflow."
+          : "Iteration-level rerun inside Loop isn't supported yet. Use Execute workflow or Run to a node after Done."
+      );
       return;
     }
     setExecuting(true);
@@ -275,16 +364,22 @@ export function WorkflowNodeDialog({
                   <ResizablePanel defaultSize={26} minSize={18} className="min-w-[200px]">
                     <div className="flex h-full min-h-0 flex-col overflow-y-auto border-r p-4">
                       <NodeInputPanel
-                        items={inputPreview.items}
-                        incoming={inputPreview.incoming}
-                        portInputs={inputPreview.portInputs}
+                        items={occurrenceInputItems || inputPreview.items}
+                        incoming={
+                          occurrenceInputItems ? undefined : inputPreview.incoming
+                        }
+                        portInputs={
+                          occurrenceInputItems ? undefined : inputPreview.portInputs
+                        }
                         runInputData={parseRunInput(runInput)}
                         loading={executing}
                         onExecutePrevious={() => void runPartial("upstream")}
                         selectedItemIndex={selectedInputItemIndex}
                         onSelectedItemIndexChange={setSelectedInputItemIndex}
-                        stale={inputPreview.stale}
-                        staleNodeIds={inputPreview.staleNodeIds}
+                        stale={occurrenceInputItems ? false : inputPreview.stale}
+                        staleNodeIds={
+                          occurrenceInputItems ? undefined : inputPreview.staleNodeIds
+                        }
                       />
                     </div>
                   </ResizablePanel>
@@ -345,6 +440,12 @@ export function WorkflowNodeDialog({
                         </TabsTrigger>
                       </TabsList>
                       <TabsContent value="parameters" className="mt-0 space-y-0">
+                        {isLoopNode && (
+                          <p className="mb-3 text-[11px] leading-relaxed text-muted-foreground">
+                            Topology: Items → Loop → Batch → body → Continue;
+                            Done → downstream.
+                          </p>
+                        )}
                         <NodeInspector
                           nodeId={selectedId}
                           nodeType={selectedType}
@@ -422,6 +523,12 @@ export function WorkflowNodeDialog({
                     pinned={Boolean(selectedData.pinned)}
                     isTrigger={isTrigger}
                     staticSchema={triggerOutputSchema}
+                    isLoopNode={isLoopNode}
+                    insideLoop={insideLoop}
+                    selectedRunIndex={selectedRunIndex}
+                    onSelectedRunIndexChange={setSelectedRunIndex}
+                    loopPortView={loopPortView}
+                    onLoopPortViewChange={setLoopPortView}
                     onExecuteStep={() => void runPartial("step")}
                     onTestTrigger={
                       isTrigger ? () => void runPartial("step") : undefined

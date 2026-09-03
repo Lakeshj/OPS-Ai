@@ -45,7 +45,7 @@ const NODE_ENGINE_CONTRACTS = {
     pairedItemPolicy: "identity1to1",
     mergeInputs: 2,
     blocking: true,
-    runtimeEnabled: false,
+    runtimeEnabled: true,
     inputs: ["items", "continue"],
     outputs: ["batch", "done"],
   },

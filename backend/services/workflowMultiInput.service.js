@@ -20,7 +20,10 @@ const PORT_STATES = {
 const nodeTypeOf = (node) => node?.type || node?.data?.nodeType || "noop";
 
 const isMultiInputNode = (node) => {
-  const contract = getEngineContract(nodeTypeOf(node));
+  const type = nodeTypeOf(node);
+  // Loop uses semantic ports items/continue — not Merge input1/input2.
+  if (type === "loop") return false;
+  const contract = getEngineContract(type);
   return Number(contract.mergeInputs) > 1;
 };
 

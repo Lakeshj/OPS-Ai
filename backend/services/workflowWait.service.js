@@ -13,6 +13,9 @@ const {
   deserializeRunData,
   fromLegacyContext,
 } = require("./workflowOccurrence.service");
+const {
+  serializeLoopControllers,
+} = require("./workflowLoopRuntime.service");
 
 /** Default lease before a claimed wait / locked job may be reclaimed (ms). */
 const WAIT_CLAIM_LEASE_MS =
@@ -101,6 +104,7 @@ const serializeSchedulerState = (scheduler) => ({
   edgeState: [...(scheduler.edgeState || new Map()).entries()],
   nodeState: [...(scheduler.nodeState || new Map()).entries()],
   loopCounts: [...(scheduler.loopCounts || new Map()).entries()],
+  closedLoops: [...(scheduler.closedLoops || new Set())],
 });
 
 /**
@@ -216,6 +220,7 @@ const sanitizeRunData = (runData) => {
 const buildExecutionSnapshot = ({
   waitNodeId,
   waitStepId,
+  waitExecutionIndex = 0,
   waitInputItems,
   context,
   scheduler,
@@ -234,9 +239,13 @@ const buildExecutionSnapshot = ({
     version: 2,
     waitNodeId,
     waitStepId,
+    // Same occurrence identity as workflow_run_steps.execution_index
+    waitExecutionIndex:
+      waitExecutionIndex == null ? 0 : Number(waitExecutionIndex) || 0,
     waitCompleted: Boolean(waitCompleted),
     waitInputItems: (waitInputItems || []).map(sanitizeItem),
     runData: serializeRunData(sanitizeRunData(rawRunData)),
+    loopControllers: serializeLoopControllers(context.loopControllers || {}),
     context: {
       input: context.input || {},
       steps,
@@ -251,6 +260,7 @@ const buildExecutionSnapshot = ({
 
 /**
  * Normalize Wait snapshots (v1 nodeId maps → runData occurrence 0).
+ * Preserves waitExecutionIndex when present; otherwise infers 0.
  */
 const normalizeWaitSnapshot = (raw) => {
   const snap = raw && typeof raw === "object" ? { ...raw } : {};
@@ -258,6 +268,21 @@ const normalizeWaitSnapshot = (raw) => {
     snap.runData = deserializeRunData(snap.runData);
   } else {
     snap.runData = fromLegacyContext(snap.context || {});
+  }
+  const {
+    restoreLoopControllers,
+  } = require("./workflowLoopRuntime.service");
+  snap.loopControllers = restoreLoopControllers(snap.loopControllers || {});
+  if (snap.waitExecutionIndex == null) {
+    const waitId = snap.waitNodeId;
+    const existing =
+      waitId && Array.isArray(snap.runData?.[waitId])
+        ? snap.runData[waitId].find((o) => o.stepId && o.stepId === snap.waitStepId)
+        : null;
+    snap.waitExecutionIndex =
+      existing?.runIndex != null ? existing.runIndex : 0;
+  } else {
+    snap.waitExecutionIndex = Number(snap.waitExecutionIndex) || 0;
   }
   return snap;
 };

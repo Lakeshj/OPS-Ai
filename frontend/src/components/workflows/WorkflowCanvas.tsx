@@ -41,6 +41,11 @@ import type {
   WorkflowStatus,
 } from "@/modules/workflows/types";
 import {
+  getLoopConnectionError,
+  validateLoopGraph,
+  findLoopRegionForNode,
+} from "@/modules/workflows/loopValidation";
+import {
   getNodeConfigIssues,
   nodeHasMissingConfig,
 } from "@/modules/workflows/nodeValidation";
@@ -174,8 +179,18 @@ const isValidWorkflowConnection = (
     }
   }
 
+  if (getLoopConnectionError(connection, nodes, edges)) return false;
+
   return true;
 };
+
+/** Message for toast when connection rejected (Loop-aware). */
+const getConnectionRejectMessage = (
+  connection: Connection,
+  nodes: Node[],
+  edges: Edge[]
+): string =>
+  getLoopConnectionError(connection, nodes, edges) || "Invalid connection";
 
 type Props = {
   name: string;
@@ -576,16 +591,25 @@ const toFlowEdges = (
   definition: WorkflowDefinition,
   edgeMeta?: Record<string, { runStatus?: string }>
 ): Edge[] =>
-  (definition.edges || []).map((e) => ({
-    id: e.id,
-    source: e.source,
-    target: e.target,
-    sourceHandle: e.sourceHandle || undefined,
-    targetHandle: e.targetHandle || undefined,
-    type: "workflow",
-    className: "group",
-    data: edgeMeta?.[e.id] || {},
-  }));
+  (definition.edges || []).map((e) => {
+    const targetNode = (definition.nodes || []).find((n) => n.id === e.target);
+    const loopContinue =
+      String(targetNode?.type || "") === "loop" &&
+      String(e.targetHandle || "") === "continue";
+    return {
+      id: e.id,
+      source: e.source,
+      target: e.target,
+      sourceHandle: e.sourceHandle || undefined,
+      targetHandle: e.targetHandle || undefined,
+      type: "workflow",
+      className: "group",
+      data: {
+        ...(edgeMeta?.[e.id] || {}),
+        ...(loopContinue ? { loopContinue: true } : {}),
+      },
+    };
+  });
 
 const LLM_TYPES = new Set(["ai", "bot"]);
 /** Nodes that produce data a Result node can display directly. */
@@ -879,6 +903,10 @@ function WorkflowCanvasInner({
             (e.sourceHandle || null) === (connection.sourceHandle || null)
         );
         if (exists) return eds;
+        const targetNode = nodes.find((n) => n.id === connection.target);
+        const loopContinue =
+          String(targetNode?.type || "") === "loop" &&
+          String(connection.targetHandle || "") === "continue";
         return addEdge(
           {
             ...connection,
@@ -887,12 +915,13 @@ function WorkflowCanvasInner({
               connection.target,
               connection.sourceHandle
             ),
+            data: loopContinue ? { loopContinue: true } : {},
           },
           eds
         );
       });
     },
-    [setEdges]
+    [setEdges, nodes]
   );
 
   const onSelectionChange = useCallback(
@@ -957,11 +986,36 @@ function WorkflowCanvasInner({
       if (
         !isValidWorkflowConnection(newConnection, nodes, edgesWithoutOld)
       ) {
-        toast.error("Invalid connection");
+        toast.error(
+          getConnectionRejectMessage(newConnection, nodes, edgesWithoutOld)
+        );
         return;
       }
       pushHistory();
-      setEdges((eds) => reconnectEdge(oldEdge, newConnection, eds));
+      setEdges((eds) => {
+        const next = reconnectEdge(oldEdge, newConnection, eds);
+        return next.map((e) => {
+          if (
+            e.source === newConnection.source &&
+            e.target === newConnection.target &&
+            (e.sourceHandle || null) === (newConnection.sourceHandle || null) &&
+            (e.targetHandle || null) === (newConnection.targetHandle || null)
+          ) {
+            const targetNode = nodes.find((n) => n.id === e.target);
+            const loopContinue =
+              String(targetNode?.type || "") === "loop" &&
+              String(e.targetHandle || "") === "continue";
+            return {
+              ...e,
+              data: {
+                ...(e.data || {}),
+                loopContinue: loopContinue || undefined,
+              },
+            };
+          }
+          return e;
+        });
+      });
       void invalidateEditorCache({
         type: "edge_reconnect",
         edgeId: oldEdge.id,
@@ -1077,6 +1131,16 @@ function WorkflowCanvasInner({
         toast.error("Save the workflow first");
         return;
       }
+      const region = findLoopRegionForNode(nodeId, nodes, edges);
+      if (region) {
+        const isLoop = region.loopId === nodeId;
+        toast.error(
+          isLoop
+            ? "Loop runs as a complete region. Use Run to a node after Done, or Execute workflow."
+            : "Iteration-level rerun inside Loop isn't supported yet. Use Execute workflow or Run to a node after Done."
+        );
+        return;
+      }
       setExecutingNode(nodeId);
       setNodes((prev) =>
         prev.map((n) =>
@@ -1127,7 +1191,7 @@ function WorkflowCanvasInner({
         setExecutingNode(null);
       }
     },
-    [workflowId, parseRunInput, setNodes, buildDefinition]
+    [workflowId, parseRunInput, setNodes, buildDefinition, nodes, edges, applyEditorSession]
   );
 
   const toggleDisableNode = useCallback(
@@ -1532,6 +1596,10 @@ function WorkflowCanvasInner({
 
   const addLibraryNode = (libraryNode: LibraryNode) => {
     setLocalError(null);
+    if (!libraryNode.available) {
+      toast.message(`${libraryNode.name} isn't available yet`);
+      return;
+    }
     const engineType = resolveEngineType(libraryNode);
 
     // Dropping an AI/Bot into a bare Start → Result flow should splice it in.
@@ -1555,13 +1623,7 @@ function WorkflowCanvasInner({
     setSelected(id);
     setRightPanel(null);
     openNodeDialog();
-    if (!libraryNode.available) {
-      toast.message(
-        `${libraryNode.name} added as a placeholder — not executable yet`
-      );
-    } else {
-      toast.success(`Added ${libraryNode.name}`);
-    }
+    toast.success(`Added ${libraryNode.name}`);
   };
 
   useEffect(() => {
@@ -1698,6 +1760,11 @@ function WorkflowCanvasInner({
     }
     if (isSimplePassThrough) {
       return "This only echoes input. Insert an AI node (or use a template) for a real reply.";
+    }
+
+    const loopCheck = validateLoopGraph(nodes, edges);
+    if (!loopCheck.ok) {
+      return loopCheck.message || "Invalid Loop topology";
     }
 
     for (const n of nodes) {
@@ -1952,7 +2019,7 @@ function WorkflowCanvasInner({
             reconnectRadius={24}
             onConnect={(c) => {
               if (!isValidWorkflowConnection(c, nodes, edges)) {
-                toast.error("Invalid connection");
+                toast.error(getConnectionRejectMessage(c, nodes, edges));
                 return;
               }
               pushHistory();
@@ -2072,6 +2139,7 @@ function WorkflowCanvasInner({
         definition={buildDefinition()}
         editorSession={editorSession}
         onEditorSessionChange={setEditorSession}
+        latestRun={latestRun}
         onTogglePin={togglePin}
         workflowStatus={workflowStatus}
         onExecuteWorkflow={() => void handleRun()}

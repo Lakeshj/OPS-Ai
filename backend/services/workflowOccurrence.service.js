@@ -42,6 +42,7 @@ const recordOccurrence = (
     completedAt = null,
     error = null,
     stepId = null,
+    executionContext = null,
   }
 ) => {
   if (!nodeId) throw new Error("recordOccurrence requires nodeId");
@@ -59,6 +60,7 @@ const recordOccurrence = (
     completedAt: completedAt || null,
     error: error || null,
     stepId: stepId || null,
+    executionContext: executionContext || null,
   };
   // Append if new; replace only when same runIndex already exists (retry of same occurrence)
   const existing = bucket.findIndex((o) => o.runIndex === index);
