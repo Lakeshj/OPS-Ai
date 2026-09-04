@@ -211,11 +211,13 @@ Multiple succeeded Result occurrences on one child run → `SUBWORKFLOW_AMBIGUOU
 - Run identity: `workflow_id` FK retained + optional `workflow_name_snapshot` at run start.
 - Explicit run retention/cleanup (if any) is separate from definition soft-delete.
 
-## Error Workflow foundation (Part 11A)
+## Error Workflow (Parts 11A–11B)
 
 - Source run terminal `FAILED` may create one durable `workflow_error_dispatches` row (UNIQUE on `source_run_id`).
 - Source remains `FAILED` regardless of Error Workflow outcome; source worker does not await the Error run.
 - `workflows.error_workflow_id` + `workflow_runs.error_workflow_id_snapshot` freeze routing at run start.
+- Configure via workflow settings (`PATCH /workflows/:id/error-workflow`) and picker (`GET /workflows/error-targets`).
 - `suppress_error_routing` on Error runs (and descendants) prevents recursive error storms.
-- Internal `errorTrigger` node (`available: false` until 11B) emits one safe failure event item.
+- `errorTrigger` node is library-available; emits one safe failure event item.
 - Cancelled / retries / job lease recovery do not dispatch.
+- Failure lineage / Open Error Run UI is Part 11C.

@@ -33,6 +33,17 @@ export const NODE_SEARCH_META: Record<string, NodeSearchMeta> = {
     ],
     keywords: ["trigger", "callable", "sub-workflow"],
   },
+  "error-trigger": {
+    aliases: [
+      "error",
+      "failure",
+      "failed workflow",
+      "on error",
+      "error handler",
+      "incident",
+    ],
+    keywords: ["trigger", "error", "failure", "handler", "alert"],
+  },
   "execute-workflow": {
     aliases: [
       "subworkflow",

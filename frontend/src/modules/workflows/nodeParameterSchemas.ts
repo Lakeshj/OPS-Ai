@@ -78,6 +78,8 @@ export const NODE_PARAMETER_SCHEMAS: Record<WorkflowNodeType, ParamDescriptor[]>
 
     workflowTrigger: [],
 
+    errorTrigger: [],
+
     ai: [
       {
         name: "provider",
@@ -625,6 +627,7 @@ export const NODE_PARAMETERS_PANEL: Partial<
   schedule: "trigger",
   webhook: "trigger",
   workflowTrigger: "trigger",
+  errorTrigger: "trigger",
   integration: "placeholder",
   noop: "placeholder",
 };

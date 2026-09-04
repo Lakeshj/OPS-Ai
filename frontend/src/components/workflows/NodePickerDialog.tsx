@@ -20,6 +20,7 @@ import {
 import { cn } from "@/lib/utils";
 import {
   LIBRARY_CATEGORIES,
+  resolveEngineType,
   type LibraryNode,
 } from "@/modules/workflows/nodeLibrary";
 import {
@@ -30,6 +31,7 @@ import {
   CATEGORY_DISPLAY_LABELS,
   PRIMARY_LIBRARY_CATEGORIES,
 } from "@/modules/workflows/nodeSearchMeta";
+import { isTriggerNode } from "@/modules/workflows/nodeRegistry";
 
 type Props = {
   open: boolean;
@@ -38,6 +40,8 @@ type Props = {
   description?: string;
   /** When set, prefer nodes compatible with this source port context */
   filterAvailableOnly?: boolean;
+  /** Exclude root triggers (insert-on-edge / add-next-step). */
+  excludeTriggers?: boolean;
   onPick: (node: LibraryNode) => void;
 };
 
@@ -49,6 +53,7 @@ export function NodePickerDialog({
   title = "Add step",
   description = "Search and select a node to add to your workflow.",
   filterAvailableOnly = true,
+  excludeTriggers = false,
   onPick,
 }: Props) {
   const [query, setQuery] = useState("");
@@ -65,16 +70,23 @@ export function NodePickerDialog({
     [primarySet]
   );
 
-  const filtered = useMemo(
-    () =>
-      searchNodes({
-        query,
-        category: category === "all" ? "all" : category,
-        availability: filterAvailableOnly ? "available" : "all",
-        limit: 80,
-      }),
-    [query, category, filterAvailableOnly]
-  );
+  const filtered = useMemo(() => {
+    const ranked = searchNodes({
+      query,
+      category: category === "all" ? "all" : category,
+      availability: filterAvailableOnly ? "available" : "all",
+      limit: 80,
+    });
+    if (!excludeTriggers) return ranked;
+    return ranked.filter((node) => {
+      try {
+        const engineType = resolveEngineType(node);
+        return !isTriggerNode(engineType);
+      } catch {
+        return node.type !== "Trigger";
+      }
+    });
+  }, [query, category, filterAvailableOnly, excludeTriggers]);
 
   useEffect(() => {
     if (open) {

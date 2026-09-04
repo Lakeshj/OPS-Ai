@@ -575,7 +575,7 @@ export const NODE_CONTRACTS: Record<WorkflowNodeType, NodeContract> = {
     ],
   },
 
-  // Part 11A — hidden until 11B UI
+  // Part 11B — Error Workflow entry
   errorTrigger: {
     type: "errorTrigger",
     version: 1,
@@ -591,16 +591,20 @@ export const NODE_CONTRACTS: Record<WorkflowNodeType, NodeContract> = {
     params: [],
     outputSchema: {
       event: "workflow_failed",
-      workflow: { id: "", name: "" },
-      execution: {},
-      failure: {},
+      "workflow.id": "string",
+      "workflow.name": "string",
+      "execution.runId": "string",
+      "failure.message": "string",
+      "failure.nodeId": "string",
+      "failure.code": "string",
     },
     dirtyTriggers: ["pin"],
     edgeCases: [
       "Starts when another workflow reaches terminal FAILED",
       "Exactly one Error Trigger required on Error Workflows",
       "Result node not required",
-      "Library unavailable until Part 11B",
+      "No INPUT panel",
+      "Nothing may wire into this node",
     ],
   },
 

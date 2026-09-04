@@ -26,6 +26,31 @@ const listCallableTargets = asyncHandler(async (req, res) => {
   );
 });
 
+const listErrorTargets = asyncHandler(async (req, res) => {
+  if (!req.query.workspaceId) {
+    res.status(400).json({ message: "workspaceId is required" });
+    return;
+  }
+  res.json(
+    await workflowsService.listErrorTargets(req.query.workspaceId, req.user, {
+      excludeWorkflowId: req.query.excludeWorkflowId || null,
+    })
+  );
+});
+
+const setErrorWorkflow = asyncHandler(async (req, res) => {
+  const raw = req.body?.errorWorkflowId;
+  const errorWorkflowId =
+    raw === undefined || raw === null || raw === "" ? null : String(raw);
+  res.json(
+    await workflowsService.setErrorWorkflow(
+      req.params.id,
+      errorWorkflowId,
+      req.user
+    )
+  );
+});
+
 const getById = asyncHandler(async (req, res) => {
   res.json(await workflowsService.getById(req.params.id, req.user));
 });
@@ -238,6 +263,8 @@ const invalidateEditorSession = asyncHandler(async (req, res) => {
 module.exports = {
   list,
   listCallableTargets,
+  listErrorTargets,
+  setErrorWorkflow,
   getById,
   create,
   update,

@@ -3,6 +3,8 @@ const validate = require("../../middleware/validate");
 const {
   list,
   listCallableTargets,
+  listErrorTargets,
+  setErrorWorkflow,
   getById,
   create,
   update,
@@ -41,8 +43,9 @@ router.get("/credentials", listCredentials);
 router.post("/credentials", validate(validateCredential), createCredential);
 router.delete("/credentials/:credentialId", removeCredential);
 
-// Callable picker metadata (Part 10B) — before /:id
+// Callable / Error Workflow picker metadata — before /:id
 router.get("/callable-targets", listCallableTargets);
+router.get("/error-targets", listErrorTargets);
 
 router.get("/", list);
 router.post("/", validate(validateCreate), create);
@@ -65,6 +68,7 @@ router.get("/:id/nodes/:nodeId/input", getNodeInput);
 router.post("/:id/nodes/:nodeId/expression-preview", previewExpression);
 router.post("/:id/nodes/:nodeId/schedule-preview", previewScheduleOccurrences);
 router.post("/:id/webhook", webhookTrigger);
+router.patch("/:id/error-workflow", setErrorWorkflow);
 router.get("/:id", getById);
 router.put("/:id", validate(validateUpdate), update);
 router.delete("/:id", remove);

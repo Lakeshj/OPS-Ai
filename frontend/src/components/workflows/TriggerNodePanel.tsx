@@ -149,6 +149,19 @@ export function TriggerNodePanel({
           Pair with exactly one Result node to make this workflow callable.
         </div>
       )}
+
+      {nodeType === "errorTrigger" && (
+        <div className="rounded-md border border-blue-500/25 bg-blue-500/10 px-3 py-2 text-xs text-muted-foreground">
+          <span className="font-medium text-foreground">Error Trigger</span> —
+          starts this workflow when another workflow fails and is configured to
+          use this as its Error Workflow. Downstream nodes receive one item with{" "}
+          <code className="text-[10px]">workflow</code>,{" "}
+          <code className="text-[10px]">execution</code>, and{" "}
+          <code className="text-[10px]">failure</code> fields. Test by failing a
+          source workflow that points here — manual Test trigger uses an empty
+          safe sample event.
+        </div>
+      )}
     </div>
   );
 }

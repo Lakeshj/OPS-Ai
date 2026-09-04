@@ -65,6 +65,7 @@ const formatWorkflow = (row) => ({
   description: row.description,
   definition: parseJson(row.definition_json, { version: 1, nodes: [], edges: [] }),
   status: row.status,
+  errorWorkflowId: row.error_workflow_id || null,
   isDeleted: isWorkflowDeleted(row),
   deletedAt: row.deleted_at || null,
   createdBy: row.created_by,
@@ -259,6 +260,68 @@ const listCallableTargets = async (
           : null,
     };
   });
+};
+
+/**
+ * Lightweight picker metadata for Error Workflow targets (Part 11B).
+ * Eligibility = validateErrorWorkflow (exactly one Error Trigger). Result not required.
+ */
+const listErrorTargets = async (
+  workspaceId,
+  authUser,
+  { excludeWorkflowId = null } = {}
+) => {
+  await assertWorkspaceAccess(authUser, workspaceId);
+  const {
+    validateErrorWorkflow,
+  } = require("../../services/workflowErrorRouting.service");
+  const [rows] = await pool.execute(
+    `SELECT id, name, status, definition_json, updated_at
+     FROM workflows
+     WHERE workspace_id = ?
+       AND deleted_at IS NULL
+     ORDER BY updated_at DESC`,
+    [workspaceId]
+  );
+  return rows.map((row) => {
+    const definition = parseJson(row.definition_json, {
+      version: 1,
+      nodes: [],
+      edges: [],
+    });
+    const callability = validateErrorWorkflow(definition);
+    const isSelf =
+      excludeWorkflowId != null && String(row.id) === String(excludeWorkflowId);
+    let disabledReason = null;
+    if (isSelf) {
+      disabledReason = "This workflow cannot handle its own errors.";
+    } else if (!callability.valid) {
+      disabledReason =
+        "Add exactly one Error Trigger to use this workflow for errors.";
+    }
+    return {
+      id: row.id,
+      name: row.name,
+      status: row.status,
+      updatedAt: row.updated_at,
+      validErrorWorkflow: callability.valid && !isSelf,
+      isSelf,
+      validation: {
+        valid: callability.valid,
+        errors: callability.errors,
+        errorTriggerNodeId: callability.errorTriggerNodeId,
+      },
+      disabledReason,
+    };
+  });
+};
+
+const setErrorWorkflow = async (workflowId, errorWorkflowId, authUser) => {
+  const {
+    setWorkflowErrorWorkflowId,
+  } = require("../../services/workflowErrorRouting.service");
+  await setWorkflowErrorWorkflowId(workflowId, errorWorkflowId, authUser);
+  return getById(workflowId, authUser);
 };
 
 const listAll = async (authUser) => {
@@ -1071,6 +1134,8 @@ module.exports = {
   listAll,
   listByWorkspace,
   listCallableTargets,
+  listErrorTargets,
+  setErrorWorkflow,
   getById,
   create,
   update,

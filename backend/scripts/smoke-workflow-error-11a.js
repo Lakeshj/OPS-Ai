@@ -733,7 +733,7 @@ const registerPart11ATests = ({ check, section, assert }) => {
     await cleanup();
   });
 
-  check("TEST 11A-28 Error Trigger is hidden from library", () => {
+  check("TEST 11A-28 Error Trigger library entry exists (enabled in 11B)", () => {
     const lib = JSON.parse(
       fs.readFileSync(
         path.join(__dirname, "../../frontend/src/modules/workflows/nodeLibrary.json"),
@@ -746,8 +746,9 @@ const registerPart11ATests = ({ check, section, assert }) => {
       (n) => n.id === "error-trigger"
     );
     assert.ok(row);
-    assert.strictEqual(row.available, false);
     assert.strictEqual(row.engineType, "errorTrigger");
+    // Part 11B flips available: true — foundation still requires the catalog row.
+    assert.strictEqual(typeof row.available, "boolean");
   });
 
   check("TEST 11A-29 Error workflow validator requires exactly one Error Trigger", () => {

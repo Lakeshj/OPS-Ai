@@ -398,6 +398,8 @@ export interface Workflow {
   description?: string | null;
   definition: WorkflowDefinition;
   status: WorkflowStatus;
+  /** Part 11B — configured Error Workflow (nullable). */
+  errorWorkflowId?: string | null;
   /** Soft-deleted live definition (Part 10C.1 historical retention). */
   isDeleted?: boolean;
   deletedAt?: string | null;
@@ -419,6 +421,22 @@ export interface WorkflowCallableTarget {
     errors: string[];
     workflowTriggerNodeId: string | null;
     resultNodeId: string | null;
+  };
+  disabledReason: string | null;
+}
+
+/** Lightweight picker row from GET /workflows/error-targets (Part 11B) */
+export interface WorkflowErrorTarget {
+  id: string;
+  name: string;
+  status: WorkflowStatus;
+  updatedAt: string;
+  validErrorWorkflow: boolean;
+  isSelf: boolean;
+  validation: {
+    valid: boolean;
+    errors: string[];
+    errorTriggerNodeId: string | null;
   };
   disabledReason: string | null;
 }

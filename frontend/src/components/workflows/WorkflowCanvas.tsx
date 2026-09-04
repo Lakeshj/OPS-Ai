@@ -27,6 +27,7 @@ import { NodeLibrarySidebar } from "./NodeLibrarySidebar";
 import { WorkflowResultsDialog } from "./WorkflowResultsDialog";
 import { WorkflowNodeDialog } from "./WorkflowNodeDialog";
 import { NodePickerDialog } from "./NodePickerDialog";
+import { WorkflowErrorSettingsDialog } from "./WorkflowErrorSettingsDialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -52,7 +53,7 @@ import {
   getNodeConfigIssues,
   nodeHasMissingConfig,
 } from "@/modules/workflows/nodeValidation";
-import { getNodeContract } from "@/modules/workflows/nodeRegistry";
+import { getNodeContract, isTriggerNode } from "@/modules/workflows/nodeRegistry";
 import {
   isValidSwitchSourceHandle,
   normalizeDefinitionSwitchNodes,
@@ -86,6 +87,8 @@ const nodeTypes = {
   trigger: WorkflowNode,
   schedule: WorkflowNode,
   webhook: WorkflowNode,
+  workflowTrigger: WorkflowNode,
+  errorTrigger: WorkflowNode,
   ai: WorkflowNode,
   bot: WorkflowNode,
   http: WorkflowNode,
@@ -104,6 +107,9 @@ const nodeTypes = {
   spreadsheet: WorkflowNode,
   email: WorkflowNode,
   result: WorkflowNode,
+  wait: WorkflowNode,
+  executeWorkflow: WorkflowNode,
+  loop: WorkflowNode,
   noop: WorkflowNode,
   integration: WorkflowNode,
 };
@@ -118,7 +124,13 @@ const defaultEdgeOptions = {
   reconnectable: true,
 };
 
-const START_TYPES = new Set(["trigger", "schedule", "webhook", "workflowTrigger"]);
+const START_TYPES = new Set([
+  "trigger",
+  "schedule",
+  "webhook",
+  "workflowTrigger",
+  "errorTrigger",
+]);
 
 type PickerTarget =
   | { kind: "insert"; edgeId: string }
@@ -207,6 +219,8 @@ type Props = {
   workspaceId?: string;
   workflowId?: string;
   workflowStatus?: WorkflowStatus;
+  errorWorkflowId?: string | null;
+  onErrorWorkflowChange?: (errorWorkflowId: string | null) => void;
   onPublish?: () => Promise<void>;
   onResumeRun?: () => void | Promise<void>;
   resuming?: boolean;
@@ -469,6 +483,8 @@ const defaultDataForType = (type: WorkflowNodeType): WorkflowNodeData => {
       };
     case "workflowTrigger":
       return { label: "Workflow Trigger", nodeType: "workflowTrigger" };
+    case "errorTrigger":
+      return { label: "Error Trigger", nodeType: "errorTrigger" };
     case "result":
       return { label: "Result", nodeType: "result", mapFrom: "{{input}}" };
     case "noop":
@@ -768,6 +784,8 @@ function WorkflowCanvasInner({
   workspaceId,
   workflowId,
   workflowStatus = "draft",
+  errorWorkflowId = null,
+  onErrorWorkflowChange,
   onPublish,
   onResumeRun,
   resuming,
@@ -782,6 +800,7 @@ function WorkflowCanvasInner({
   const selectedIdRef = useRef<string | null>(null);
   const [runInput, setRunInput] = useState("");
   const [publishing, setPublishing] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const hasManualTrigger = useMemo(
     () => nodes.some((n) => n.type === "trigger"),
     [nodes]
@@ -1662,6 +1681,16 @@ function WorkflowCanvasInner({
     }
     const engineType = resolveEngineType(libraryNode);
 
+    if (
+      engineType === "errorTrigger" &&
+      nodes.some((n) => n.type === "errorTrigger")
+    ) {
+      toast.message(
+        "This workflow already has an Error Trigger. Error Workflows need exactly one."
+      );
+      return;
+    }
+
     // Dropping an AI/Bot into a bare Start → Result flow should splice it in.
     if ((engineType === "ai" || engineType === "bot") && isSimplePassThrough) {
       insertAiBetween(engineType);
@@ -2002,6 +2031,20 @@ function WorkflowCanvasInner({
           <LayoutGrid className="h-4 w-4" />
           <span className="hidden sm:inline">Tidy</span>
         </Button>
+        {workflowId && workspaceId && (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="h-9 gap-1"
+            disabled={historicalView}
+            onClick={() => setSettingsOpen(true)}
+            title="Workflow settings"
+          >
+            <Settings2 className="h-4 w-4" />
+            <span className="hidden sm:inline">Settings</span>
+          </Button>
+        )}
         <div className="flex items-center gap-1 rounded-lg border bg-card p-0.5">
           <Button
             type="button"
@@ -2263,8 +2306,23 @@ function WorkflowCanvasInner({
             ? "The new step will sit between the connected nodes."
             : "A new branch will be created from this output."
         }
+        excludeTriggers
         onPick={handlePickerPick}
       />
+
+      {workflowId && workspaceId && (
+        <WorkflowErrorSettingsDialog
+          open={settingsOpen}
+          onOpenChange={setSettingsOpen}
+          workflowId={workflowId}
+          workspaceId={workspaceId}
+          errorWorkflowId={errorWorkflowId}
+          disabled={historicalView}
+          onSaved={(nextId) => {
+            onErrorWorkflowChange?.(nextId);
+          }}
+        />
+      )}
 
       {selectedEdgeId && (
         <div className="fixed bottom-20 left-1/2 z-50 flex -translate-x-1/2 gap-2 rounded-lg border bg-card p-2 shadow-lg">

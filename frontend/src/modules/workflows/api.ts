@@ -195,6 +195,21 @@ export const workflowsApi = {
       `/workflows/callable-targets?${params.toString()}`
     );
   },
+
+  listErrorTargets: (workspaceId: string, excludeWorkflowId?: string) => {
+    const params = new URLSearchParams({ workspaceId });
+    if (excludeWorkflowId) {
+      params.set("excludeWorkflowId", excludeWorkflowId);
+    }
+    return apiClient.get<import("./types").WorkflowErrorTarget[]>(
+      `/workflows/error-targets?${params.toString()}`
+    );
+  },
+
+  setErrorWorkflow: (id: string, errorWorkflowId: string | null) =>
+    apiClient.patch<Workflow>(`/workflows/${id}/error-workflow`, {
+      errorWorkflowId,
+    }),
 };
 
 /** Secrets are write-only: the API never returns a stored secret value. */

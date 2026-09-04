@@ -52,7 +52,13 @@ const statusStyles: Record<string, string> = {
   skipped: "opacity-60",
 };
 
-const START_TYPES = new Set(["trigger", "schedule", "webhook", "workflowTrigger"]);
+const START_TYPES = new Set([
+  "trigger",
+  "schedule",
+  "webhook",
+  "workflowTrigger",
+  "errorTrigger",
+]);
 
 function StatusBadge({
   runStatus,

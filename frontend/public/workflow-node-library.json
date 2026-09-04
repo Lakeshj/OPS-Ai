@@ -105,10 +105,10 @@
       "name": "Error Trigger",
       "category": "Triggers",
       "type": "Trigger",
-      "description": "Start when another workflow errors",
+      "description": "Start this workflow when another workflow fails.",
       "icon": "alert",
       "provider": null,
-      "available": false,
+      "available": true,
       "engineType": "errorTrigger"
     },
     {

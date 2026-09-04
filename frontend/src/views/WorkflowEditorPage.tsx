@@ -357,6 +357,12 @@ export default function WorkflowEditorPage({
           running={running}
           latestRun={latestRun}
           workflowStatus={workflow.status}
+          errorWorkflowId={workflow.errorWorkflowId ?? null}
+          onErrorWorkflowChange={(nextId) => {
+            setWorkflow((prev) =>
+              prev ? { ...prev, errorWorkflowId: nextId } : prev
+            );
+          }}
           onResumeRun={handleResumeRun}
           resuming={resuming}
           historicalView={Boolean(workflow.isDeleted)}
