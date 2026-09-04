@@ -720,11 +720,11 @@ const handlers = {
     },
   }),
 
-  // Part 10A internal sub-workflow entry (library not enabled until 10B).
+  // Part 10A/10B internal sub-workflow entry.
   workflowTrigger: async (node, context) => {
     const input = context.input || {};
-    if (input.source === "subworkflow" && Array.isArray(input.items)) {
-      const items = input.items.map((raw) => {
+    const toItems = (rawItems) =>
+      (Array.isArray(rawItems) ? rawItems : []).map((raw) => {
         if (raw && typeof raw === "object" && !Array.isArray(raw)) {
           if (
             Object.prototype.hasOwnProperty.call(raw, "json") ||
@@ -738,6 +738,9 @@ const handlers = {
         }
         return { json: raw ?? null };
       });
+
+    if (input.source === "subworkflow" && Array.isArray(input.items)) {
+      const items = toItems(input.items);
       return {
         output: {
           triggered: true,
@@ -747,9 +750,62 @@ const handlers = {
         items,
       };
     }
+
+    // Manual / editor test of a callable workflow: optional items on run input.
+    if (Array.isArray(input.items)) {
+      const items = toItems(input.items);
+      return {
+        output: {
+          triggered: true,
+          kind: "workflowTrigger",
+          itemCount: items.length,
+        },
+        items,
+      };
+    }
+
+    // Safe empty canonical item — not Manual Trigger semantics.
     return {
-      output: { triggered: true, kind: "subworkflow", itemCount: 0 },
-      items: [],
+      output: { triggered: true, kind: "workflowTrigger", itemCount: 1 },
+      items: [{ json: {} }],
+    };
+  },
+
+  executeWorkflow: async (node, context) => {
+    const childWorkflowId = String(node.data?.workflowId || "").trim();
+    if (!childWorkflowId) {
+      const err = new Error("Select a workflow to execute");
+      err.code = "EXECUTE_WORKFLOW_MISSING_TARGET";
+      throw err;
+    }
+
+    if (context.editorMode) {
+      const err = new Error(
+        "Execute Workflow requires a full workflow run. Run Step cannot safely wait for a child workflow."
+      );
+      err.code = "EXECUTE_WORKFLOW_PARTIAL_UNSUPPORTED";
+      err.statusCode = 400;
+      throw err;
+    }
+
+    if (!context.runId) {
+      const err = new Error(
+        "Execute Workflow requires a durable parent run"
+      );
+      err.code = "EXECUTE_WORKFLOW_NO_RUN";
+      throw err;
+    }
+
+    if (childWorkflowId === context.workflowId) {
+      const err = new Error("This workflow cannot call itself");
+      err.code = "SUBWORKFLOW_RECURSION";
+      throw err;
+    }
+
+    return {
+      invokeChild: true,
+      childWorkflowId,
+      items: Array.isArray(context.inputItems) ? context.inputItems : [],
     };
   },
 
@@ -1945,6 +2001,10 @@ const handlers = {
       }
     }
 
+    // Historical Result contract (pre-10B): terminal scalar `output.result` only.
+    // Canonical WorkflowItem[] for callable return are captured by the engine from
+    // Result's *incoming* items (__callableReturnItems) — not by changing Result
+    // into a passthrough node.
     return {
       resolved: { mapFrom, effectiveMapFrom },
       output: {

@@ -12,6 +12,20 @@ const list = asyncHandler(async (req, res) => {
   res.json(await workflowsService.listAll(req.user));
 });
 
+const listCallableTargets = asyncHandler(async (req, res) => {
+  if (!req.query.workspaceId) {
+    res.status(400).json({ message: "workspaceId is required" });
+    return;
+  }
+  res.json(
+    await workflowsService.listCallableTargets(
+      req.query.workspaceId,
+      req.user,
+      { excludeWorkflowId: req.query.excludeWorkflowId || null }
+    )
+  );
+});
+
 const getById = asyncHandler(async (req, res) => {
   res.json(await workflowsService.getById(req.params.id, req.user));
 });
@@ -196,6 +210,7 @@ const invalidateEditorSession = asyncHandler(async (req, res) => {
 
 module.exports = {
   list,
+  listCallableTargets,
   getById,
   create,
   update,

@@ -149,3 +149,45 @@ Authoritative service: `backend/services/workflowSubworkflow.service.js`.
 - V1 callable contract: exactly one Result + Workflow Trigger entry.
 
 Do **not** enable Execute Workflow / Workflow Trigger UI until Part 10B.
+
+## Execute Workflow + Workflow Trigger (Part 10B)
+
+Authoritative services:
+
+- `backend/services/workflowSubworkflow.service.js` — `validateCallableWorkflow`, `invokeSubworkflow`
+- `handlers.executeWorkflow` / `handlers.workflowTrigger` in `workflowNodes.service.js`
+
+### Nodes
+
+| Node | Role |
+|------|------|
+| **Workflow Trigger** | Callable entry; emits invocation `WorkflowItem[]` when `input.source === "subworkflow"` |
+| **Execute Workflow** | Invokes child via Part 10A; param `workflowId` only |
+
+### Callable contract
+
+Exactly one Workflow Trigger + exactly one Result, and Result reachable from Trigger.
+Additional Schedule/Webhook triggers allowed for other modes.
+
+### Editor
+
+Run Step / Run To on Execute Workflow: **controlled unsupported** (`EXECUTE_WORKFLOW_PARTIAL_UNSUPPORTED`).
+Full durable Execute (worker) uses Part 10A parent wait / child wake.
+
+### Picker
+
+`GET /workflows/callable-targets?workspaceId=&excludeWorkflowId=` — metadata only, same-workspace.
+
+## Result node + callable return (Part 10B.1)
+
+Two concepts (do not conflate):
+
+| Concept | Meaning |
+|---------|---------|
+| **Result NODE** | Terminal scalar `output.result` from `mapFrom` (historical pre-10B contract). Occurrence `items` are derived from that output wrapper. No output port (`N-to-0`). |
+| **Callable RETURN** | Canonical `WorkflowItem[]` that **arrived at** Result (`context.inputItems`), persisted on the Result step as `__callableReturnItems`. |
+
+`getSubworkflowResult` reads the Result step’s `__callableReturnItems` (authoritative).  
+`run.output.__subworkflowItems` is a **compatibility mirror** written once from the same array at child success — not a second source of truth.
+
+Multiple succeeded Result occurrences on one child run → `SUBWORKFLOW_AMBIGUOUS_OUTPUT` (never silently pick latest).

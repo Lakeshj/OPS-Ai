@@ -170,6 +170,16 @@ export const workflowsApi = {
       }>;
       count: number;
     }>(`/workflows/${workflowId}/nodes/${nodeId}/schedule-preview`, payload),
+
+  listCallableTargets: (workspaceId: string, excludeWorkflowId?: string) => {
+    const params = new URLSearchParams({ workspaceId });
+    if (excludeWorkflowId) {
+      params.set("excludeWorkflowId", excludeWorkflowId);
+    }
+    return apiClient.get<import("./types").WorkflowCallableTarget[]>(
+      `/workflows/callable-targets?${params.toString()}`
+    );
+  },
 };
 
 /** Secrets are write-only: the API never returns a stored secret value. */

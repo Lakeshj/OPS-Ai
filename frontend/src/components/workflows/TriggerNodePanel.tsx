@@ -141,6 +141,14 @@ export function TriggerNodePanel({
           </div>
         </>
       )}
+
+      {nodeType === "workflowTrigger" && (
+        <div className="rounded-md border border-blue-500/25 bg-blue-500/10 px-3 py-2 text-xs text-muted-foreground">
+          <span className="font-medium text-foreground">Workflow trigger</span> —
+          starts this workflow when another workflow calls it via Execute Workflow.
+          Pair with exactly one Result node to make this workflow callable.
+        </div>
+      )}
     </div>
   );
 }

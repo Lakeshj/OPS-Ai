@@ -72,8 +72,8 @@ export const pasteSnapshot = (
       return {
         ...node,
         position: {
-          x: n.position.x + offset.x,
-          y: n.position.y + offset.y,
+          x: (Number(n.position?.x) || 0) + offset.x,
+          y: (Number(n.position?.y) || 0) + offset.y,
         },
         selected: true,
         data: {
@@ -87,8 +87,8 @@ export const pasteSnapshot = (
       ...n,
       id: newId,
       position: {
-        x: n.position.x + offset.x,
-        y: n.position.y + offset.y,
+        x: (Number(n.position?.x) || 0) + offset.x,
+        y: (Number(n.position?.y) || 0) + offset.y,
       },
       selected: true,
       data: {
@@ -169,12 +169,19 @@ export const readClipboard = async (): Promise<WorkflowSnapshot | null> => {
 export const snapshotToDefinition = (
   snapshot: WorkflowSnapshot
 ): Pick<WorkflowDefinition, "nodes" | "edges"> => ({
-  nodes: snapshot.nodes.map((n) => ({
-    id: n.id,
-    type: (n.type || "ai") as WorkflowDefinition["nodes"][0]["type"],
-    position: n.position,
-    data: n.data as WorkflowDefinition["nodes"][0]["data"],
-  })),
+  nodes: snapshot.nodes.map((n, index) => {
+    const x = Number(n.position?.x);
+    const y = Number(n.position?.y);
+    return {
+      id: n.id,
+      type: (n.type || "ai") as WorkflowDefinition["nodes"][0]["type"],
+      position: {
+        x: Number.isFinite(x) ? x : 40 + index * 36,
+        y: Number.isFinite(y) ? y : 120 + index * 28,
+      },
+      data: n.data as WorkflowDefinition["nodes"][0]["data"],
+    };
+  }),
   edges: snapshot.edges.map((e) => ({
     id: e.id,
     source: e.source,

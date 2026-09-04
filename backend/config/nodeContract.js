@@ -40,6 +40,8 @@ const NODE_ENGINE_CONTRACTS = {
   email: { cardinality: "N-to-N", pairedItemPolicy: "identity1to1", mergeInputs: 1, isSideEffecting: true },
   http: { cardinality: "N-to-N", pairedItemPolicy: "identity1to1", mergeInputs: 1, isSideEffecting: true },
   wait: { cardinality: "N-to-N", pairedItemPolicy: "identity1to1", mergeInputs: 1 },
+  workflowTrigger: { cardinality: "0-to-1", pairedItemPolicy: "none", isTrigger: true, mergeInputs: 0 },
+  executeWorkflow: { cardinality: "N-to-N", pairedItemPolicy: "none", mergeInputs: 1, isSideEffecting: true },
   loop: {
     cardinality: "N-to-N",
     pairedItemPolicy: "identity1to1",

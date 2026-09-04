@@ -22,6 +22,27 @@ export const NODE_SEARCH_META: Record<string, NodeSearchMeta> = {
     aliases: ["webhook", "hook", "incoming"],
     keywords: ["http", "api", "trigger", "endpoint"],
   },
+  "workflow-trigger": {
+    aliases: [
+      "subworkflow",
+      "child workflow",
+      "call workflow",
+      "run workflow",
+      "workflow",
+      "when executed",
+    ],
+    keywords: ["trigger", "callable", "sub-workflow"],
+  },
+  "execute-workflow": {
+    aliases: [
+      "subworkflow",
+      "child workflow",
+      "call workflow",
+      "run workflow",
+      "workflow",
+    ],
+    keywords: ["execute", "invoke", "callable"],
+  },
   wait: {
     aliases: ["pause", "delay", "sleep"],
     keywords: ["resume", "signal", "time"],

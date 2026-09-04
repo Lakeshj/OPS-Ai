@@ -449,7 +449,10 @@ const claimDueWaitForRun = async (runId, claimToken, now = new Date()) => {
        WHERE run_id = ?
          AND status = 'waiting'
          AND resume_at IS NOT NULL
-         AND resume_at <= ?
+         AND (
+           resume_at <= ?
+           OR signalled_at IS NOT NULL
+         )
        ORDER BY resume_at ASC
        LIMIT 1
        FOR UPDATE`,

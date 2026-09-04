@@ -131,7 +131,8 @@ export type ParamCustomRenderer =
   | "botAssistant"
   | "scheduleRules"
   | "queryParams"
-  | "httpPagination";
+  | "httpPagination"
+  | "workflowPicker";
 
 export interface DisplayOptions {
   show?: Record<string, Array<string | number | boolean>>;
@@ -429,7 +430,7 @@ const SCHEDULE_OUTPUT_SCHEMA: Record<string, string> = {
 };
 
 // ---------------------------------------------------------------------------
-// Full registry — all 22 node types
+// Full registry — engine node types (contracts are authoritative)
 // ---------------------------------------------------------------------------
 
 export const NODE_CONTRACTS: Record<WorkflowNodeType, NodeContract> = {
@@ -548,6 +549,29 @@ export const NODE_CONTRACTS: Record<WorkflowNodeType, NodeContract> = {
       "No INPUT panel",
       "Pin ignored in production — real request body wins",
       "Test URL vs production URL are distinct UI states",
+    ],
+  },
+
+  workflowTrigger: {
+    type: "workflowTrigger",
+    version: 1,
+    category: "Triggers",
+    label: "Workflow Trigger",
+    inputs: [],
+    outputs: [mainOut],
+    cardinality: "0-to-1",
+    pairedItemPolicy: "none",
+    settings: SETTINGS_TRIGGER,
+    capabilities: CAP_TRIGGER,
+    isTrigger: true,
+    params: [],
+    outputSchema: { json: "{}" },
+    dirtyTriggers: ["pin"],
+    edgeCases: [
+      "Start this workflow when called by another workflow.",
+      "No INPUT panel",
+      "Nothing may wire into this node",
+      "Callable workflows require exactly one Workflow Trigger and one Result",
     ],
   },
 
@@ -1114,7 +1138,8 @@ export const NODE_CONTRACTS: Record<WorkflowNodeType, NodeContract> = {
     dirtyTriggers: ["params"],
     edgeCases: [
       "Terminal — no output port, no + Add next step",
-      "OUTPUT panel shows final run payload",
+      "OUTPUT panel shows final run payload (mapFrom → output.result)",
+      "Callable return uses incoming items at Result (__callableReturnItems), not mapFrom wrapper",
     ],
   },
 
@@ -1146,6 +1171,43 @@ export const NODE_CONTRACTS: Record<WorkflowNodeType, NodeContract> = {
       "Production MANUAL: waits until authorized Resume; no resumeAt timer",
       "Production EXTERNAL: waits for one-time opaque token (hash at rest)",
       "Editor Run Step: preview only — does not create durable waiting run or tokens",
+    ],
+  },
+
+  executeWorkflow: {
+    type: "executeWorkflow",
+    version: 1,
+    category: "Core",
+    label: "Execute Workflow",
+    inputs: [mainIn()],
+    outputs: [mainOut],
+    cardinality: "N-to-N",
+    pairedItemPolicy: "none",
+    settings: {
+      disabled: true,
+      onError: false,
+      retries: false,
+      timeoutMs: false,
+      alwaysOutputData: false,
+      executeOnce: false,
+      notes: true,
+    },
+    capabilities: ["execute_step", "disable", "pin", "notes"],
+    params: [
+      {
+        name: "workflowId",
+        displayName: "Workflow",
+        type: "string",
+        required: true,
+        customRenderer: "workflowPicker",
+      },
+    ],
+    dirtyTriggers: ["params", "edges", "pin", "disabled"],
+    edgeCases: [
+      "Production: parent waits for child run (waitingReason child_run) until Result",
+      "Editor Run Step / partial execution: not supported (EXECUTE_WORKFLOW_PARTIAL_UNSUPPORTED)",
+      "Target must be callable: exactly one Workflow Trigger + one Result, reachable",
+      "Cannot select the same workflow (no self-call)",
     ],
   },
 

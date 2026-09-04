@@ -11,6 +11,7 @@ export type WorkflowNodeType =
   | "trigger"
   | "schedule"
   | "webhook"
+  | "workflowTrigger"
   | "ai"
   | "bot"
   | "http"
@@ -30,6 +31,7 @@ export type WorkflowNodeType =
   | "email"
   | "result"
   | "wait"
+  | "executeWorkflow"
   | "loop"
   | "noop"
   | "integration";
@@ -361,6 +363,9 @@ export interface WorkflowNodeData {
   sheetName?: string;
   hasHeader?: boolean;
   rowLimit?: number;
+  /** Execute Workflow */
+  workflowId?: string;
+  workflowName?: string;
   [key: string]: unknown;
 }
 
@@ -397,6 +402,23 @@ export interface Workflow {
   updatedAt: string;
 }
 
+/** Lightweight picker row from GET /workflows/callable-targets */
+export interface WorkflowCallableTarget {
+  id: string;
+  name: string;
+  status: WorkflowStatus;
+  updatedAt: string;
+  callable: boolean;
+  isSelf: boolean;
+  callability: {
+    valid: boolean;
+    errors: string[];
+    workflowTriggerNodeId: string | null;
+    resultNodeId: string | null;
+  };
+  disabledReason: string | null;
+}
+
 export interface WorkflowRunStep {
   id: string;
   runId: string;
@@ -431,6 +453,7 @@ export interface WorkflowRun {
   output?: unknown;
   error?: string | null;
   waitingNodeId?: string | null;
+  waitingReason?: string | null;
   resumeAt?: string | null;
   hasDefinitionSnapshot?: boolean;
   startedAt?: string | null;

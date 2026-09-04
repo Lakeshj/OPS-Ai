@@ -218,6 +218,9 @@ export function WorkflowResultsPanel({
 
   const waitingLabel = (() => {
     if (!latestRun || latestRun.status !== "waiting") return null;
+    if (latestRun.waitingReason === "child_run") {
+      return "Waiting for child workflow";
+    }
     if (waitMode === "manual") return "Waiting for manual resume";
     if (waitMode === "external") return "Waiting for external signal";
     if (latestRun.resumeAt) {

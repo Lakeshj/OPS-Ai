@@ -85,34 +85,89 @@ const countWorkflowTriggerNodes = (definition) => {
   );
 };
 
+const isReachableFrom = (definition, fromId, toId) => {
+  if (!fromId || !toId) return false;
+  if (fromId === toId) return true;
+  const edges = Array.isArray(definition?.edges) ? definition.edges : [];
+  const outgoing = new Map();
+  for (const e of edges) {
+    if (!outgoing.has(e.source)) outgoing.set(e.source, []);
+    outgoing.get(e.source).push(e.target);
+  }
+  const seen = new Set();
+  const queue = [fromId];
+  while (queue.length > 0) {
+    const id = queue.shift();
+    if (seen.has(id)) continue;
+    seen.add(id);
+    for (const next of outgoing.get(id) || []) {
+      if (next === toId) return true;
+      if (!seen.has(next)) queue.push(next);
+    }
+  }
+  return false;
+};
+
 /**
- * V1 callable contract: exactly one Result terminal + Workflow Trigger entry.
- * Not exposed in UI yet — foundation/tests only.
+ * V1 callable contract (authoritative).
+ * Exactly one Workflow Trigger, exactly one Result, Result reachable from Trigger.
+ */
+const validateCallableWorkflow = (definition) => {
+  const triggers = countWorkflowTriggerNodes(definition);
+  const results = countResultNodes(definition);
+  const errors = [];
+
+  if (triggers.length === 0) {
+    errors.push("Callable workflow requires exactly one Workflow Trigger");
+  } else if (triggers.length > 1) {
+    errors.push("Callable workflow must have exactly one Workflow Trigger");
+  }
+
+  if (results.length === 0) {
+    errors.push("Callable workflow requires exactly one Result node");
+  } else if (results.length > 1) {
+    errors.push("Callable workflow must have exactly one Result node");
+  }
+
+  const workflowTriggerNodeId = triggers.length === 1 ? triggers[0].id : null;
+  const resultNodeId = results.length === 1 ? results[0].id : null;
+
+  if (
+    workflowTriggerNodeId &&
+    resultNodeId &&
+    !isReachableFrom(definition, workflowTriggerNodeId, resultNodeId)
+  ) {
+    errors.push("Result must be reachable from Workflow Trigger");
+  }
+
+  return {
+    valid: errors.length === 0,
+    workflowTriggerNodeId,
+    resultNodeId,
+    errors,
+  };
+};
+
+/**
+ * Throws AppError when definition is not callable.
  */
 const assertCallableChildDefinition = (definition) => {
-  const results = countResultNodes(definition);
-  if (results.length === 0) {
-    throw new AppError(
-      "Callable sub-workflow requires exactly one Result node",
-      400,
-      "SUBWORKFLOW_AMBIGUOUS_OUTPUT"
-    );
+  const check = validateCallableWorkflow(definition);
+  if (!check.valid) {
+    const message = check.errors[0] || "Workflow is not callable";
+    const code =
+      /Trigger/.test(message) && !/reachable/i.test(message)
+        ? "SUBWORKFLOW_ENTRY_REQUIRED"
+        : "SUBWORKFLOW_AMBIGUOUS_OUTPUT";
+    throw new AppError(message, 400, code);
   }
-  if (results.length > 1) {
-    throw new AppError(
-      "Callable sub-workflow must have exactly one Result node",
-      400,
-      "SUBWORKFLOW_AMBIGUOUS_OUTPUT"
-    );
-  }
-  if (countWorkflowTriggerNodes(definition).length === 0) {
-    throw new AppError(
-      "Callable sub-workflow requires a Workflow Trigger entry node",
-      400,
-      "SUBWORKFLOW_ENTRY_REQUIRED"
-    );
-  }
-  return { resultNode: results[0] };
+  const nodes = Array.isArray(definition?.nodes) ? definition.nodes : [];
+  const resultNode = nodes.find((n) => n.id === check.resultNodeId);
+  return {
+    resultNode,
+    workflowTriggerNodeId: check.workflowTriggerNodeId,
+    resultNodeId: check.resultNodeId,
+  };
 };
 
 const loadRunRow = async (runId, connection = pool) => {
@@ -191,20 +246,51 @@ const assertRecursionAndDepth = async ({
   }
 };
 
-const extractResultItemsFromRun = (runRow, definition) => {
-  assertCallableChildDefinition(definition);
+/**
+ * Authoritative callable return items for a succeeded child run.
+ *
+ * Priority:
+ * 1. Exactly one succeeded Result step's `__callableReturnItems`
+ *    (incoming WorkflowItem[] at Result — Part 10B.1)
+ * 2. Compatibility cache: run.output.__subworkflowItems
+ *    (written once from the same source at child success)
+ *
+ * Multiple succeeded Result occurrences → ambiguous (never silently pick latest).
+ * Do not treat Result's mapFrom scalar / derived wrapper `items` as business return.
+ */
+const extractResultItemsFromRun = async (runRow, definition) => {
+  const check = validateCallableWorkflow(definition);
+  if (!check.valid) {
+    assertCallableChildDefinition(definition);
+  }
+  const resultNodeId = check.resultNodeId;
+
+  if (resultNodeId) {
+    const [steps] = await pool.execute(
+      `SELECT execution_index, output_json, status
+       FROM workflow_run_steps
+       WHERE run_id = ? AND node_id = ? AND status = 'succeeded'
+       ORDER BY execution_index ASC`,
+      [runRow.id, resultNodeId]
+    );
+    if (steps.length > 1) {
+      const err = new Error(
+        "Callable Result executed more than once; return is ambiguous"
+      );
+      err.code = "SUBWORKFLOW_AMBIGUOUS_OUTPUT";
+      throw err;
+    }
+    if (steps.length === 1) {
+      const stepOut = parseJson(steps[0].output_json, null);
+      if (stepOut && Array.isArray(stepOut.__callableReturnItems)) {
+        return boundaryItems(stepOut.__callableReturnItems);
+      }
+    }
+  }
+
   const output = parseJson(runRow.output_json, null);
   if (output && Array.isArray(output.__subworkflowItems)) {
     return boundaryItems(output.__subworkflowItems);
-  }
-  if (output && Array.isArray(output.items)) {
-    return boundaryItems(output.items);
-  }
-  if (output && Object.prototype.hasOwnProperty.call(output, "result")) {
-    return boundaryItems([{ json: output.result }]);
-  }
-  if (output && typeof output === "object") {
-    return boundaryItems([{ json: output }]);
   }
   return [];
 };
@@ -222,13 +308,13 @@ const getSubworkflowResult = async (childRunId) => {
   if (status === "succeeded") {
     let items = [];
     try {
-      items = extractResultItemsFromRun(row, definition);
+      items = await extractResultItemsFromRun(row, definition);
     } catch (err) {
       return {
         status: "failed",
         items: [],
         error: {
-          code: "SUBWORKFLOW_AMBIGUOUS_OUTPUT",
+          code: err.code || "SUBWORKFLOW_AMBIGUOUS_OUTPUT",
           message: err.message || "Ambiguous child output",
           childRunId,
           childWorkflowId: row.workflow_id,
@@ -916,7 +1002,9 @@ module.exports = {
   CHILD_CANCELLED_CODE,
   CHILD_FAILED_CODE,
   normalizeInvocationItems,
+  validateCallableWorkflow,
   assertCallableChildDefinition,
+  extractResultItemsFromRun,
   getSubworkflowResult,
   getChildRuns,
   invokeSubworkflow,
@@ -930,4 +1018,5 @@ module.exports = {
   assertRecursionAndDepth,
   getRunDepth,
   boundaryItems,
+  isReachableFrom,
 };

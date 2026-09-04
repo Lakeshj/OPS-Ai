@@ -44,6 +44,8 @@ const {
 const {
   claimDueChildDependency,
   notifyParentOfChildTerminal,
+  invokeSubworkflow,
+  buildChildWaitSnapshot,
   WAITING_REASON_CHILD,
   SUBWORKFLOW_SOURCE,
   boundaryItems,
@@ -769,11 +771,13 @@ const executeRun = async (runId, options = {}) => {
     }
 
     const items = Array.isArray(childResult.items) ? childResult.items : [];
-    const output = {
-      childRunId: depClaim.childRunId,
-      items,
-      itemCount: items.length,
-    };
+    const output = attachCanonicalItemsToOutput(
+      {
+        childRunId: depClaim.childRunId,
+        itemCount: items.length,
+      },
+      items
+    );
     context.steps[parentNodeId] = output;
     context.items[parentNodeId] = items;
     if (!context.runData) context.runData = createRunData();
@@ -1197,6 +1201,134 @@ const executeRun = async (runId, options = {}) => {
           };
         }
 
+        // Part 10B — Execute Workflow: durable child invocation via 10A service.
+        if (!failure && result?.invokeChild) {
+          const childWorkflowId = String(result.childWorkflowId || "").trim();
+          const inputItems = Array.isArray(result.items)
+            ? result.items
+            : Array.isArray(context.inputItems)
+              ? context.inputItems
+              : [];
+
+          recordOccurrence(context.runData, {
+            nodeId: node.id,
+            runIndex: executionIndex,
+            status: "waiting",
+            items: inputItems,
+            output: {
+              waiting: true,
+              waitingReason: WAITING_REASON_CHILD,
+              childWorkflowId,
+            },
+            inputSources,
+            stepId,
+            startedAt: new Date().toISOString(),
+          });
+          applyLatestView(context);
+
+          const snapshot = buildChildWaitSnapshot({
+            parentNodeId: node.id,
+            parentExecutionIndex: executionIndex,
+            parentStepId: stepId,
+            childRunId: null,
+            waitInputItems: inputItems,
+            context,
+            scheduler,
+            finalOutput,
+            runErrors,
+          });
+
+          const authUser = {
+            userId: run.created_by,
+            role: "system",
+          };
+
+          let inv;
+          try {
+            inv = await invokeSubworkflow({
+              parentRunId: runId,
+              parentNodeId: node.id,
+              parentExecutionIndex: executionIndex,
+              parentStepId: stepId,
+              childWorkflowId,
+              inputItems,
+              parentSnapshot: snapshot,
+              authUser,
+              jobId: options.jobId || null,
+            });
+          } catch (err) {
+            const message =
+              err instanceof Error ? err.message : String(err);
+            await updateStep(stepId, {
+              status: "failed",
+              attempts,
+              error: message,
+              finished_at: new Date(),
+            });
+            throw err;
+          }
+
+          // Child already terminal (reuse) — claim/resume path will apply result.
+          if (inv.terminal && !inv.waiting) {
+            const {
+              getSubworkflowResult,
+            } = require("./workflowSubworkflow.service");
+            const childResult = await getSubworkflowResult(inv.childRunId);
+            if (childResult.status !== "succeeded") {
+              const code =
+                childResult.error?.code ||
+                (childResult.status === "cancelled"
+                  ? CHILD_CANCELLED_CODE
+                  : CHILD_FAILED_CODE);
+              const message =
+                childResult.error?.message ||
+                `Child workflow run ${childResult.status || "failed"}`;
+              const failErr = new Error(message);
+              failErr.code = code;
+              throw failErr;
+            }
+            const items = Array.isArray(childResult.items)
+              ? childResult.items
+              : [];
+            const output = attachCanonicalItemsToOutput(
+              {
+                childRunId: inv.childRunId,
+                childWorkflowId,
+                itemCount: items.length,
+              },
+              items
+            );
+            context.steps[node.id] = output;
+            context.items[node.id] = items;
+            recordOccurrence(context.runData, {
+              nodeId: node.id,
+              runIndex: executionIndex,
+              status: "succeeded",
+              items,
+              output,
+              inputSources,
+              stepId,
+              completedAt: new Date().toISOString(),
+            });
+            applyLatestView(context);
+            await updateStep(stepId, {
+              status: "succeeded",
+              attempts,
+              output_json: JSON.stringify(output),
+              finished_at: new Date(),
+            });
+            scheduler.complete(node, null);
+            continue;
+          }
+
+          return {
+            status: "waiting",
+            waitingReason: WAITING_REASON_CHILD,
+            waitingNodeId: node.id,
+            childRunId: inv.childRunId,
+          };
+        }
+
         if (!failure) {
           let items;
           const occurrenceInputSources = result.inputSources || inputSources;
@@ -1223,14 +1355,37 @@ const executeRun = async (runId, options = {}) => {
             result.output = attachCanonicalItemsToOutput(output, items);
             result.items = items;
           }
-          context.steps[node.id] = output;
+
+          // Part 10B.1 — Result node keeps historical occurrence items (derived
+          // from output.result). Callable return is the *incoming* WorkflowItem[]
+          // at Result, persisted separately so it cannot be confused with the
+          // mapFrom scalar wrapper.
+          let persistedOutput = result.output ?? output;
+          if (nodeType === "result") {
+            const callableReturnItems = boundaryItems(
+              Array.isArray(context.inputItems) ? context.inputItems : []
+            );
+            persistedOutput = {
+              ...(persistedOutput && typeof persistedOutput === "object"
+                ? persistedOutput
+                : { result: persistedOutput }),
+              __callableReturnItems: callableReturnItems,
+            };
+            result.output = persistedOutput;
+            context.__callableReturnItems = callableReturnItems;
+            context.__callableReturnResultNodeId = node.id;
+            context.__callableReturnOccurrenceCount =
+              (Number(context.__callableReturnOccurrenceCount) || 0) + 1;
+          }
+
+          context.steps[node.id] = persistedOutput;
 
           recordOccurrence(context.runData, {
             nodeId: node.id,
             runIndex: executionIndex,
             status: "succeeded",
             items,
-            output,
+            output: persistedOutput,
             portOutputs: context.portOutputs?.[node.id] || null,
             inputSources: occurrenceInputSources,
             stepId,
@@ -1248,12 +1403,12 @@ const executeRun = async (runId, options = {}) => {
               resolved: compactValue(result.resolved ?? null),
               loopMeta: result.loopMeta || null,
             }),
-            output_json: JSON.stringify(output),
+            output_json: JSON.stringify(persistedOutput),
             finished_at: new Date(),
           });
 
           if (result.terminal || nodeType === "result") {
-            finalOutput = output;
+            finalOutput = persistedOutput;
           }
 
           scheduler.complete(node, result.nextHandle, {
@@ -1316,8 +1471,16 @@ const executeRun = async (runId, options = {}) => {
         (n) => (n.type || n.data?.nodeType) === "result"
       );
       if (resultNodes.length === 1) {
-        const rid = resultNodes[0].id;
-        const items = context.items?.[rid];
+        // Mirror of Result step __callableReturnItems — compatibility cache only.
+        // Authoritative read path is getSubworkflowResult → Result step row.
+        if (Number(context.__callableReturnOccurrenceCount) > 1) {
+          throw new Error(
+            "Callable Result executed more than once; return is ambiguous"
+          );
+        }
+        const items = Array.isArray(context.__callableReturnItems)
+          ? context.__callableReturnItems
+          : null;
         if (Array.isArray(items)) {
           outputPayload = {
             ...finalOutput,
@@ -2017,6 +2180,14 @@ const executeGraphInMemory = async (definition, options = {}) => {
     if (result?.suspend) {
       const err = new Error("Wait suspension is not supported in executeGraphInMemory");
       err.code = "WAIT_IN_MEMORY_UNSUPPORTED";
+      throw err;
+    }
+
+    if (result?.invokeChild) {
+      const err = new Error(
+        "Execute Workflow requires a durable parent run and is not supported in-memory"
+      );
+      err.code = "EXECUTE_WORKFLOW_IN_MEMORY_UNSUPPORTED";
       throw err;
     }
 

@@ -117,7 +117,7 @@ const defaultEdgeOptions = {
   reconnectable: true,
 };
 
-const START_TYPES = new Set(["trigger", "schedule", "webhook"]);
+const START_TYPES = new Set(["trigger", "schedule", "webhook", "workflowTrigger"]);
 
 type PickerTarget =
   | { kind: "insert"; edgeId: string }
@@ -448,6 +448,23 @@ const defaultDataForType = (type: WorkflowNodeType): WorkflowNodeData => {
         timeoutMs: 2000,
         code: "// items = the incoming rows, input = Run input, steps = earlier outputs\nreturn items;",
       };
+    case "wait":
+      return {
+        label: "Wait",
+        nodeType: "wait",
+        resumeMode: "time",
+        waitAmount: 5,
+        waitUnit: "minutes",
+      };
+    case "executeWorkflow":
+      return {
+        label: "Execute Workflow",
+        nodeType: "executeWorkflow",
+        workflowId: "",
+        workflowName: "",
+      };
+    case "workflowTrigger":
+      return { label: "Workflow Trigger", nodeType: "workflowTrigger" };
     case "result":
       return { label: "Result", nodeType: "result", mapFrom: "{{input}}" };
     case "noop":
@@ -564,12 +581,24 @@ const emailTemplateDefinition = (): WorkflowDefinition => ({
   ],
 });
 
+const normalizeFlowPosition = (
+  position: { x?: number; y?: number } | null | undefined,
+  index = 0
+): { x: number; y: number } => {
+  const x = Number(position?.x);
+  const y = Number(position?.y);
+  return {
+    x: Number.isFinite(x) ? x : 40 + index * 36,
+    y: Number.isFinite(y) ? y : 120 + index * 28,
+  };
+};
+
 const toFlowNodes = (
   definition: WorkflowDefinition,
   latestRun?: WorkflowRun | null
 ): Node[] => {
   const stepByNode = new Map((latestRun?.steps || []).map((s) => [s.nodeId, s]));
-  return (definition.nodes || []).map((n) => {
+  return (definition.nodes || []).map((n, index) => {
     const step = stepByNode.get(n.id);
     const preview = step?.output != null ? formatStepOutput(step.output) : "";
     const rawData = (n.data || {}) as WorkflowNodeData;
@@ -578,7 +607,7 @@ const toFlowNodes = (
     return {
       id: n.id,
       type: n.type,
-      position: n.position,
+      position: normalizeFlowPosition(n.position, index),
       data: {
         ...normalizedData,
         label: normalizedData.label || n.type,
@@ -952,7 +981,7 @@ function WorkflowCanvasInner({
         return {
           id: n.id,
           type: (n.type || "ai") as WorkflowNodeType,
-          position: n.position,
+          position: normalizeFlowPosition(n.position),
           data,
         };
       }),
@@ -1266,10 +1295,18 @@ function WorkflowCanvasInner({
       // One undo entry for the whole Tidy (positions only).
       pushHistory();
       setNodes((prev) =>
-        prev.map((n) => {
+        prev.map((n, index) => {
           const pos = result.positions[n.id];
-          if (!pos) return n;
-          return { ...n, position: { x: pos.x, y: pos.y } };
+          if (!pos) {
+            return {
+              ...n,
+              position: normalizeFlowPosition(n.position, index),
+            };
+          }
+          return {
+            ...n,
+            position: normalizeFlowPosition(pos, index),
+          };
         })
       );
 
@@ -1675,7 +1712,12 @@ function WorkflowCanvasInner({
         e.preventDefault();
         const prev = history.undo({ nodes, edges });
         if (prev) {
-          setNodes(prev.nodes);
+          setNodes(
+            prev.nodes.map((n, index) => ({
+              ...n,
+              position: normalizeFlowPosition(n.position, index),
+            }))
+          );
           setEdges(prev.edges);
         }
         return;
@@ -1684,7 +1726,12 @@ function WorkflowCanvasInner({
         e.preventDefault();
         const next = history.redo({ nodes, edges });
         if (next) {
-          setNodes(next.nodes);
+          setNodes(
+            next.nodes.map((n, index) => ({
+              ...n,
+              position: normalizeFlowPosition(n.position, index),
+            }))
+          );
           setEdges(next.edges);
         }
         return;

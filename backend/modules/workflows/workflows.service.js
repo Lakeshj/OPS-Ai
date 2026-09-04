@@ -16,8 +16,9 @@ const ALLOWED_NODE_TYPES = new Set([
   "trigger",
   "schedule",
   "webhook",
-  // Part 10A internal entry — library stays unavailable until 10B
+  // Part 10A/10B callable entry
   "workflowTrigger",
+  "executeWorkflow",
   "ai",
   "bot",
   "http",
@@ -180,6 +181,57 @@ const listByWorkspace = async (workspaceId, authUser) => {
     [workspaceId]
   );
   return rows.map(formatWorkflow);
+};
+
+/**
+ * Lightweight picker metadata for Execute Workflow (Part 10B).
+ * No definition blobs / credentials — callability computed from definition.
+ */
+const listCallableTargets = async (
+  workspaceId,
+  authUser,
+  { excludeWorkflowId = null } = {}
+) => {
+  await assertWorkspaceAccess(authUser, workspaceId);
+  const {
+    validateCallableWorkflow,
+  } = require("../../services/workflowSubworkflow.service");
+  const [rows] = await pool.execute(
+    `SELECT id, name, status, definition_json, updated_at
+     FROM workflows
+     WHERE workspace_id = ?
+     ORDER BY updated_at DESC`,
+    [workspaceId]
+  );
+  return rows.map((row) => {
+    const definition = parseJson(row.definition_json, {
+      version: 1,
+      nodes: [],
+      edges: [],
+    });
+    const callability = validateCallableWorkflow(definition);
+    const isSelf =
+      excludeWorkflowId != null && String(row.id) === String(excludeWorkflowId);
+    return {
+      id: row.id,
+      name: row.name,
+      status: row.status,
+      updatedAt: row.updated_at,
+      callable: callability.valid && !isSelf,
+      isSelf,
+      callability: {
+        valid: callability.valid,
+        errors: callability.errors,
+        workflowTriggerNodeId: callability.workflowTriggerNodeId,
+        resultNodeId: callability.resultNodeId,
+      },
+      disabledReason: isSelf
+        ? "Workflow cannot call itself."
+        : !callability.valid
+          ? "Add a Workflow Trigger and one Result node to make this workflow callable."
+          : null,
+    };
+  });
 };
 
 const listAll = async (authUser) => {
@@ -876,6 +928,7 @@ const resumeByExternalToken = async (rawToken) => {
 module.exports = {
   listAll,
   listByWorkspace,
+  listCallableTargets,
   getById,
   create,
   update,

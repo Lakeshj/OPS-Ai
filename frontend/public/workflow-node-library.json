@@ -70,13 +70,13 @@
     {
       "id": "execute-workflow",
       "name": "Execute Workflow",
-      "category": "Triggers",
+      "category": "Core",
       "type": "Action",
-      "description": "Start another workflow from this one",
+      "description": "Run another workflow and use its Result output.",
       "icon": "workflow",
       "provider": null,
-      "available": false,
-      "engineType": null
+      "available": true,
+      "engineType": "executeWorkflow"
     },
     {
       "id": "execute-sub-workflow-trigger",
@@ -90,15 +90,15 @@
       "engineType": null
     },
     {
-      "id": "when-executed-by-another-workflow",
-      "name": "When Executed by Another Workflow",
+      "id": "workflow-trigger",
+      "name": "Workflow Trigger",
       "category": "Triggers",
       "type": "Trigger",
-      "description": "Trigger when another workflow invokes this one",
+      "description": "Start this workflow when called by another workflow.",
       "icon": "link",
       "provider": null,
-      "available": false,
-      "engineType": null
+      "available": true,
+      "engineType": "workflowTrigger"
     },
     {
       "id": "error-trigger",

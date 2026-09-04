@@ -25,7 +25,7 @@ const NODE_GAP = 100;
 const nodeTypeOf = (node: Node) =>
   String(node.type || (node.data as { nodeType?: string } | undefined)?.nodeType || "");
 
-const START_TYPES = new Set(["trigger", "schedule", "webhook"]);
+const START_TYPES = new Set(["trigger", "schedule", "webhook", "workflowTrigger"]);
 
 function hasForwardCycle(nodes: Node[], forwardEdges: Edge[]): boolean {
   const outgoing = new Map<string, string[]>();

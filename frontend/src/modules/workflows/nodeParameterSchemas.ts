@@ -76,6 +76,8 @@ export const NODE_PARAMETER_SCHEMAS: Record<WorkflowNodeType, ParamDescriptor[]>
       },
     ],
 
+    workflowTrigger: [],
+
     ai: [
       {
         name: "provider",
@@ -589,6 +591,16 @@ export const NODE_PARAMETER_SCHEMAS: Record<WorkflowNodeType, ParamDescriptor[]>
       },
     ],
 
+    executeWorkflow: [
+      {
+        name: "workflowId",
+        displayName: "Workflow",
+        type: "string",
+        required: true,
+        customRenderer: "workflowPicker",
+      },
+    ],
+
     loop: [
       {
         name: "batchSize",
@@ -612,6 +624,7 @@ export const NODE_PARAMETERS_PANEL: Partial<
   trigger: "trigger",
   schedule: "trigger",
   webhook: "trigger",
+  workflowTrigger: "trigger",
   integration: "placeholder",
   noop: "placeholder",
 };

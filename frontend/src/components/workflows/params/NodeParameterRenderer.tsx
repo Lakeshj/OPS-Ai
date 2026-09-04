@@ -24,6 +24,7 @@ import { ScheduleRulesEditor } from "../ScheduleRulesEditor";
 import { BotAssistantField } from "./special/BotAssistantField";
 import { DocumentPickerField } from "./special/DocumentPickerField";
 import { SpreadsheetPickerField } from "./special/SpreadsheetPickerField";
+import { WorkflowPickerField } from "./special/WorkflowPickerField";
 import type { KeywordAssistant, WorkspaceDocument } from "@/modules/shared/types";
 
 export type ParameterRenderContext = {
@@ -127,6 +128,17 @@ function renderSpecial(
           uploading={context.uploadingSpreadsheet}
           onUpload={context.onUploadSpreadsheet}
           onChange={onChange}
+        />
+      );
+    case "workflowPicker":
+      return (
+        <WorkflowPickerField
+          key={param.name}
+          data={values}
+          onChange={onChange}
+          workspaceId={context.workspaceId}
+          currentWorkflowId={context.workflowId}
+          nodeId={context.nodeId}
         />
       );
     default:

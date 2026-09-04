@@ -2,6 +2,7 @@ const express = require("express");
 const validate = require("../../middleware/validate");
 const {
   list,
+  listCallableTargets,
   getById,
   create,
   update,
@@ -37,6 +38,9 @@ const router = express.Router();
 router.get("/credentials", listCredentials);
 router.post("/credentials", validate(validateCredential), createCredential);
 router.delete("/credentials/:credentialId", removeCredential);
+
+// Callable picker metadata (Part 10B) — before /:id
+router.get("/callable-targets", listCallableTargets);
 
 router.get("/", list);
 router.post("/", validate(validateCreate), create);
