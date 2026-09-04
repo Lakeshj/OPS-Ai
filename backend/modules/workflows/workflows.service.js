@@ -43,6 +43,15 @@ const ALLOWED_NODE_TYPES = new Set([
   "integration",
   // Part 11A — Error Trigger (library remains unavailable until 11B)
   "errorTrigger",
+  // Part 12A — internal typed-port test fixtures (runtime disabled)
+  "aiModelProviderTest",
+  "aiToolProviderTest",
+  "aiMemoryProviderTest",
+  "aiAgentTest",
+  // Part 12B — Agent + model/tool runtime
+  "aiAgent",
+  "aiChatModel",
+  "aiCalculatorTool",
 ]);
 
 const parseJson = (value, fallback = null) => {
@@ -160,6 +169,13 @@ const validateDefinition = (definition) => {
   const switchErrors = validateSwitchEdges(definition);
   if (switchErrors.length > 0) {
     throw new AppError(switchErrors[0], 400, "VALIDATION_ERROR");
+  }
+  const {
+    validateDefinitionConnections,
+  } = require("../../services/workflowConnection.service");
+  const connectionCheck = validateDefinitionConnections(definition);
+  if (!connectionCheck.ok) {
+    throw new AppError(connectionCheck.errors[0], 400, "VALIDATION_ERROR");
   }
   const { buildGraph } = require("../../services/workflowEngine.service");
   const {
@@ -594,10 +610,37 @@ const getRunById = async (runId, authUser, options = {}) => {
     [runId]
   );
 
+  const [dispatchRows] = await pool.execute(
+    `SELECT source_run_id, error_run_id, status
+     FROM workflow_error_dispatches
+     WHERE source_run_id = ? OR error_run_id = ?
+     LIMIT 2`,
+    [runId, runId]
+  );
+  let hasErrorDispatch = false;
+  let isErrorHandler = false;
+  let errorDispatchStatus = null;
+  let errorRunId = null;
+  for (const d of dispatchRows) {
+    if (d.source_run_id === runId) {
+      hasErrorDispatch = true;
+      errorDispatchStatus = d.status;
+      errorRunId = d.error_run_id || null;
+    }
+    if (d.error_run_id === runId) {
+      isErrorHandler = true;
+      errorDispatchStatus = d.status;
+    }
+  }
+
   return {
     ...run,
     isSubworkflow: Boolean(run.parentRunId),
     childRunCount: Number(childCountRows[0]?.c) || 0,
+    hasErrorDispatch,
+    isErrorHandler,
+    errorDispatchStatus,
+    errorRunId,
     steps: steps.map(formatStep),
     wait: waitInfo,
   };
@@ -631,6 +674,28 @@ const getChildInvocationForStep = async (
   );
 };
 
+/**
+ * Part 11C — safe Error Workflow routing lineage for a run.
+ */
+const getErrorRoutingForRun = async (workflowId, runId, authUser) => {
+  const run = await getRunById(runId, authUser, { workflowId });
+  const {
+    buildErrorRoutingSummary,
+  } = require("../../services/workflowErrorRouting.service");
+  // Load raw row for workspace join fields used by summary builder.
+  const [rows] = await pool.execute(
+    `SELECT r.*, w.workspace_id, w.name AS workflow_live_name, w.deleted_at
+     FROM workflow_runs r
+     INNER JOIN workflows w ON w.id = r.workflow_id
+     WHERE r.id = ?`,
+    [run.id]
+  );
+  if (!rows.length) {
+    throw new AppError("Workflow run not found", 404, "NOT_FOUND");
+  }
+  return buildErrorRoutingSummary(rows[0], authUser);
+};
+
 const listRuns = async (workflowId, authUser) => {
   // Allow listing runs for soft-deleted workflows (historical retention).
   await getById(workflowId, authUser, { allowDeleted: true });
@@ -658,11 +723,47 @@ const listRuns = async (workflowId, authUser) => {
   const countMap = new Map(
     counts.map((c) => [c.parentRunId, Number(c.childCount) || 0])
   );
-  return runs.map((r) => ({
-    ...r,
-    isSubworkflow: Boolean(r.parentRunId),
-    childRunCount: countMap.get(r.id) || 0,
-  }));
+
+  // Part 11C — lightweight Error Workflow badges (one batch query).
+  const [dispatchRows] = await pool.execute(
+    `SELECT source_run_id, error_run_id, status, outcome_code
+     FROM workflow_error_dispatches
+     WHERE source_run_id IN (${placeholders})
+        OR error_run_id IN (${placeholders})`,
+    [...ids, ...ids]
+  );
+  const asSource = new Map();
+  const asHandler = new Map();
+  for (const d of dispatchRows) {
+    if (d.source_run_id) {
+      asSource.set(d.source_run_id, {
+        status: d.status,
+        outcomeCode: d.outcome_code || null,
+        errorRunId: d.error_run_id || null,
+      });
+    }
+    if (d.error_run_id) {
+      asHandler.set(d.error_run_id, {
+        status: d.status,
+        outcomeCode: d.outcome_code || null,
+        sourceRunId: d.source_run_id,
+      });
+    }
+  }
+
+  return runs.map((r) => {
+    const src = asSource.get(r.id);
+    const handler = asHandler.get(r.id);
+    return {
+      ...r,
+      isSubworkflow: Boolean(r.parentRunId),
+      childRunCount: countMap.get(r.id) || 0,
+      hasErrorDispatch: Boolean(src),
+      isErrorHandler: Boolean(handler),
+      errorDispatchStatus: src?.status || handler?.status || null,
+      errorRunId: src?.errorRunId || null,
+    };
+  });
 };
 
 const {
@@ -1144,6 +1245,7 @@ module.exports = {
   getRunById,
   getRunLineage,
   getChildInvocationForStep,
+  getErrorRoutingForRun,
   listRuns,
   cancelRun,
   resumeRun,

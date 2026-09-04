@@ -92,12 +92,13 @@ const findLoopMembership = (graph, nodeId) => {
 
 const collectAncestorIds = (graph, targetNodeId) => {
   const ancestors = new Set();
-  const stack = [...(graph.incoming.get(targetNodeId) || []).map((e) => e.source)];
+  const incomingMap = graph.executionIncoming || graph.incoming;
+  const stack = [...(incomingMap.get(targetNodeId) || []).map((e) => e.source)];
   while (stack.length > 0) {
     const id = stack.pop();
     if (ancestors.has(id)) continue;
     ancestors.add(id);
-    for (const e of graph.incoming.get(id) || []) stack.push(e.source);
+    for (const e of incomingMap.get(id) || []) stack.push(e.source);
   }
   return ancestors;
 };
@@ -187,17 +188,46 @@ const buildGraph = (definition) => {
   const nodes = Array.isArray(definition?.nodes) ? definition.nodes : [];
   const edges = Array.isArray(definition?.edges) ? definition.edges : [];
   const byId = new Map(nodes.map((n) => [n.id, n]));
+  const {
+    isExecutionEdge,
+    isAuxiliaryOnlyProvider,
+    nodeTypeOf,
+  } = require("./workflowConnection.service");
 
   const outgoing = new Map();
   const incoming = new Map();
+  const executionOutgoing = new Map();
+  const executionIncoming = new Map();
   for (const edge of edges) {
     if (!outgoing.has(edge.source)) outgoing.set(edge.source, []);
     outgoing.get(edge.source).push(edge);
     if (!incoming.has(edge.target)) incoming.set(edge.target, []);
     incoming.get(edge.target).push(edge);
+
+    if (isExecutionEdge(edge, byId)) {
+      if (!executionOutgoing.has(edge.source)) {
+        executionOutgoing.set(edge.source, []);
+      }
+      executionOutgoing.get(edge.source).push(edge);
+      if (!executionIncoming.has(edge.target)) {
+        executionIncoming.set(edge.target, []);
+      }
+      executionIncoming.get(edge.target).push(edge);
+    }
   }
 
-  return { nodes, edges, byId, outgoing, incoming };
+  return {
+    nodes,
+    edges,
+    byId,
+    outgoing,
+    incoming,
+    executionOutgoing,
+    executionIncoming,
+    definition,
+    isAuxiliaryOnlyProvider: (node) =>
+      isAuxiliaryOnlyProvider(nodeTypeOf(node)),
+  };
 };
 
 const isStartType = (n) => {
@@ -206,15 +236,30 @@ const isStartType = (n) => {
     type === "trigger" ||
     type === "schedule" ||
     type === "webhook" ||
-    type === "workflowTrigger"
+    type === "workflowTrigger" ||
+    type === "errorTrigger"
   );
 };
 
 const findStartNodes = (graph) => {
-  const targets = new Set(graph.edges.map((e) => e.target));
-  const starts = graph.nodes.filter((n) => isStartType(n) && !targets.has(n.id));
+  // Part 12A: only execution edges create start/target relationships.
+  const targets = new Set();
+  for (const edges of (graph.executionIncoming || graph.incoming).values()) {
+    for (const e of edges) targets.add(e.target);
+  }
+
+  const starts = graph.nodes.filter(
+    (n) =>
+      isStartType(n) &&
+      !targets.has(n.id) &&
+      !(graph.isAuxiliaryOnlyProvider && graph.isAuxiliaryOnlyProvider(n))
+  );
   if (starts.length > 0) return starts;
-  return graph.nodes.filter((n) => !targets.has(n.id));
+  return graph.nodes.filter(
+    (n) =>
+      !targets.has(n.id) &&
+      !(graph.isAuxiliaryOnlyProvider && graph.isAuxiliaryOnlyProvider(n))
+  );
 };
 
 const edgeKey = (edge) =>
@@ -222,7 +267,9 @@ const edgeKey = (edge) =>
 
 /** Outgoing edges the node actually activated, given the handle it chose. */
 const pickActiveEdges = (graph, fromNodeId, nextHandle) => {
-  const edges = graph.outgoing.get(fromNodeId) || [];
+  // Part 12A: only execution edges activate downstream WorkflowItem flow.
+  const edges =
+    (graph.executionOutgoing || graph.outgoing).get(fromNodeId) || [];
   if (nextHandle) {
     const matching = edges.filter(
       (e) => String(e.sourceHandle || "") === String(nextHandle)
@@ -249,13 +296,15 @@ const pickNextNodes = (graph, fromNodeId, nextHandle) =>
 const findBackEdges = (graph) => {
   const color = new Map();
   const back = new Set();
+  // Part 12A: cycle detection uses execution edges only.
+  const outgoingMap = graph.executionOutgoing || graph.outgoing;
 
   const visit = (startId) => {
     const stack = [{ id: startId, index: 0 }];
     color.set(startId, 1);
     while (stack.length > 0) {
       const frame = stack[stack.length - 1];
-      const edges = graph.outgoing.get(frame.id) || [];
+      const edges = outgoingMap.get(frame.id) || [];
       if (frame.index >= edges.length) {
         color.set(frame.id, 2);
         stack.pop();
@@ -348,7 +397,8 @@ const applyPortOutputsToContext = (nodeId, portOutputs, context) => {
 
 /** Outputs of the upstream nodes that fed this one — "what entered this node". */
 const buildIncomingSnapshot = (graph, nodeId, context) => {
-  const edges = graph.incoming.get(nodeId) || [];
+  const edges =
+    (graph.executionIncoming || graph.incoming).get(nodeId) || [];
   const snapshot = {};
   for (const edge of edges) {
     if (!(edge.source in context.steps)) continue;
@@ -359,7 +409,9 @@ const buildIncomingSnapshot = (graph, nodeId, context) => {
 
 /** Items from upstream nodes connected to this node (respects sourceHandle routing). */
 const collectIncomingItems = (graph, nodeId, context) => {
-  const edges = graph.incoming.get(nodeId) || [];
+  // Part 12A: auxiliary bindings never contribute WorkflowItems.
+  const edges =
+    (graph.executionIncoming || graph.incoming).get(nodeId) || [];
   const items = [];
   for (const edge of edges) {
     items.push(...getUpstreamItemsForEdge(edge, context));
@@ -446,14 +498,16 @@ const createScheduler = (graph, restored = null) => {
   );
 
   const staticIncoming = (nodeId) =>
-    (graph.incoming.get(nodeId) || []).filter((e) => !backEdges.has(edgeKey(e)));
+    ((graph.executionIncoming || graph.incoming).get(nodeId) || []).filter(
+      (e) => !backEdges.has(edgeKey(e))
+    );
 
   const isReady = (node) =>
     staticIncoming(node.id).every((e) => edgeState.has(edgeKey(e)));
 
   const isActivated = (node) =>
     startIds.has(node.id) ||
-    (graph.incoming.get(node.id) || []).some(
+    ((graph.executionIncoming || graph.incoming).get(node.id) || []).some(
       (e) => edgeState.get(edgeKey(e)) === "active"
     );
 
@@ -466,7 +520,8 @@ const createScheduler = (graph, restored = null) => {
   };
 
   const settleOutgoing = (node, nextHandle, skipAll = false, activeHandles = null, pendingHandles = null) => {
-    const outgoing = graph.outgoing.get(node.id) || [];
+    const outgoing =
+      (graph.executionOutgoing || graph.outgoing).get(node.id) || [];
     const pending = new Set(
       Array.isArray(pendingHandles) ? pendingHandles.map(String) : []
     );
@@ -1699,7 +1754,9 @@ const executePartial = async ({
   const visit = (id) => {
     if (visited.has(id)) return;
     visited.add(id);
-    for (const e of graph.incoming.get(id) || []) visit(e.source);
+    for (const e of (graph.executionIncoming || graph.incoming).get(id) || []) {
+      visit(e.source);
+    }
     if (nodesToRun.has(id)) topo.push(graph.byId.get(id));
   };
   visit(targetNodeId);
@@ -1960,7 +2017,8 @@ const getNodeInputPreview = (
     }
   }
 
-  const upstreamEdges = graph.incoming.get(nodeId) || [];
+  const upstreamEdges =
+    (graph.executionIncoming || graph.incoming).get(nodeId) || [];
   if (
     items.length === 0 &&
     upstreamEdges.length === 0 &&

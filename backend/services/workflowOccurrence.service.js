@@ -123,7 +123,9 @@ const applyLatestView = (context) => {
  */
 const buildInputSources = (graph, nodeId, runData) => {
   const sources = {};
-  const edges = graph?.incoming?.get(nodeId) || [];
+  // Part 12A: only execution edges contribute WorkflowItem inputSources.
+  const edges =
+    (graph?.executionIncoming || graph?.incoming)?.get(nodeId) || [];
   for (const edge of edges) {
     const portId = String(edge.targetHandle || "main");
     const latest = getLatestOccurrence(runData, edge.source);

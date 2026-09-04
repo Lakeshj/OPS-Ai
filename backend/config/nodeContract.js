@@ -57,6 +57,24 @@ const NODE_ENGINE_CONTRACTS = {
   integration: { cardinality: "N-to-N", pairedItemPolicy: "identity1to1", mergeInputs: 1 },
   ai: { cardinality: "N-to-N", pairedItemPolicy: "identity1to1", mergeInputs: 1, isSideEffecting: true },
   bot: { cardinality: "N-to-N", pairedItemPolicy: "identity1to1", mergeInputs: 1, isSideEffecting: true, typedPorts: true },
+  aiAgent: {
+    cardinality: "N-to-N",
+    pairedItemPolicy: "identity1to1",
+    mergeInputs: 1,
+    isSideEffecting: true,
+    typedPorts: true,
+  },
+  aiAgentTest: {
+    cardinality: "N-to-N",
+    pairedItemPolicy: "identity1to1",
+    mergeInputs: 1,
+    typedPorts: true,
+  },
+  aiChatModel: { cardinality: "0-to-1", pairedItemPolicy: "none", mergeInputs: 0, isAuxiliaryProvider: true },
+  aiCalculatorTool: { cardinality: "0-to-1", pairedItemPolicy: "none", mergeInputs: 0, isAuxiliaryProvider: true },
+  aiModelProviderTest: { cardinality: "0-to-1", pairedItemPolicy: "none", mergeInputs: 0, isAuxiliaryProvider: true },
+  aiToolProviderTest: { cardinality: "0-to-1", pairedItemPolicy: "none", mergeInputs: 0, isAuxiliaryProvider: true },
+  aiMemoryProviderTest: { cardinality: "0-to-1", pairedItemPolicy: "none", mergeInputs: 0, isAuxiliaryProvider: true },
 };
 
 const getEngineContract = (nodeType) =>

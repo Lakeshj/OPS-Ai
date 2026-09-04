@@ -664,6 +664,159 @@ const getDispatchForErrorRun = async (errorRunId) => {
   return rows[0] || null;
 };
 
+/**
+ * Safe bidirectional Error Workflow lineage for Part 11C.
+ * Auth is enforced by the caller via getRunById first.
+ */
+const buildErrorRoutingSummary = async (runRow, authUser) => {
+  const {
+    formatLineageRun,
+    resolveWorkflowNames,
+  } = require("./workflowSubworkflow.service");
+  const { assertWorkspaceAccess } = require("./authorization.service");
+
+  const runId = runRow.id;
+  let dispatch = await getDispatchForSourceRun(runId);
+  let role = "none";
+  if (dispatch) {
+    role = "source";
+  } else {
+    dispatch = await getDispatchForErrorRun(runId);
+    if (dispatch) role = "handler";
+  }
+
+  if (!dispatch) {
+    return {
+      role: "none",
+      dispatch: null,
+      sourceRun: null,
+      errorRun: null,
+      targetWorkflow: null,
+      openSourceRunPath: null,
+      openErrorRunPath: null,
+      openSourceWorkflowPath: null,
+      openErrorWorkflowPath: null,
+    };
+  }
+
+  // Load peer runs in same workspace only.
+  const [srcRows] = await pool.execute(
+    `SELECT r.*, w.workspace_id, w.name AS workflow_live_name, w.deleted_at
+     FROM workflow_runs r
+     INNER JOIN workflows w ON w.id = r.workflow_id
+     WHERE r.id = ?`,
+    [dispatch.source_run_id]
+  );
+  const sourceRow = srcRows[0] || null;
+  if (sourceRow) {
+    await assertWorkspaceAccess(authUser, sourceRow.workspace_id);
+  }
+
+  let errorRow = null;
+  if (dispatch.error_run_id) {
+    const [errRows] = await pool.execute(
+      `SELECT r.*, w.workspace_id, w.name AS workflow_live_name, w.deleted_at
+       FROM workflow_runs r
+       INNER JOIN workflows w ON w.id = r.workflow_id
+       WHERE r.id = ?`,
+      [dispatch.error_run_id]
+    );
+    errorRow = errRows[0] || null;
+    if (errorRow) {
+      await assertWorkspaceAccess(authUser, errorRow.workspace_id);
+      if (
+        sourceRow &&
+        errorRow.workspace_id !== sourceRow.workspace_id
+      ) {
+        throw new AppError("Forbidden", 403, "FORBIDDEN");
+      }
+    }
+  }
+
+  const targetWorkflowId =
+    dispatch.error_workflow_id ||
+    errorRow?.workflow_id ||
+    null;
+  const nameIds = [
+    sourceRow?.workflow_id,
+    errorRow?.workflow_id,
+    targetWorkflowId,
+  ].filter(Boolean);
+  const names = await resolveWorkflowNames(nameIds);
+
+  const sourceRun = sourceRow
+    ? formatLineageRun(sourceRow, names.get(sourceRow.workflow_id))
+    : null;
+  const errorRun = errorRow
+    ? formatLineageRun(errorRow, names.get(errorRow.workflow_id))
+    : null;
+
+  let targetWorkflow = null;
+  if (targetWorkflowId) {
+    const info = names.get(targetWorkflowId) || {
+      name: null,
+      deleted: true,
+    };
+    // Prefer historical name from error run snapshot when target deleted.
+    const historicalName =
+      errorRun?.workflowName ||
+      sourceRun?.workflowName ||
+      null;
+    targetWorkflow = {
+      id: targetWorkflowId,
+      name: info.deleted
+        ? errorRow?.workflow_name_snapshot ||
+          info.name ||
+          historicalName ||
+          "Deleted workflow"
+        : info.name ||
+          errorRow?.workflow_name_snapshot ||
+          "Untitled workflow",
+      deleted: Boolean(info.deleted),
+    };
+  }
+
+  const openSourceRunPath = sourceRun
+    ? `/workflows/${sourceRun.workflowId}?runId=${encodeURIComponent(sourceRun.runId)}`
+    : null;
+  const openErrorRunPath = errorRun
+    ? `/workflows/${errorRun.workflowId}?runId=${encodeURIComponent(errorRun.runId)}`
+    : null;
+  const openSourceWorkflowPath =
+    sourceRun && !sourceRun.workflowDeleted
+      ? `/workflows/${sourceRun.workflowId}`
+      : null;
+  const openErrorWorkflowPath =
+    targetWorkflow && !targetWorkflow.deleted
+      ? `/workflows/${targetWorkflow.id}`
+      : null;
+
+  return {
+    role,
+    dispatch: {
+      id: dispatch.id,
+      status: dispatch.status,
+      outcomeCode: dispatch.outcome_code || null,
+      errorWorkflowId: dispatch.error_workflow_id || null,
+      sourceRunId: dispatch.source_run_id,
+      errorRunId: dispatch.error_run_id || null,
+      createdAt: dispatch.created_at || null,
+      dispatchedAt: dispatch.dispatched_at || null,
+      // Safe truncated note only — never event_json / claim_token.
+      lastError: dispatch.last_error
+        ? String(dispatch.last_error).slice(0, 300)
+        : null,
+    },
+    sourceRun,
+    errorRun,
+    targetWorkflow,
+    openSourceRunPath,
+    openErrorRunPath,
+    openSourceWorkflowPath,
+    openErrorWorkflowPath,
+  };
+};
+
 module.exports = {
   ERROR_WORKFLOW_SOURCE,
   DISPATCH_STATUSES,
@@ -682,6 +835,7 @@ module.exports = {
   reconcileMissingErrorDispatches,
   getDispatchForSourceRun,
   getDispatchForErrorRun,
+  buildErrorRoutingSummary,
   sanitizeMessage,
   sanitizeCode,
 };

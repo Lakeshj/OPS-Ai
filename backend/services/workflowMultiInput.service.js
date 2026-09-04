@@ -48,11 +48,12 @@ const stableEdgeSort = (a, b) => {
  */
 const normalizeMergeIncomingEdges = (graph, nodeId) => {
   const node = graph.byId.get(nodeId);
+  const incomingMap = graph.executionIncoming || graph.incoming;
   if (!node || nodeTypeOf(node) !== "merge") {
-    return (graph.incoming.get(nodeId) || []).map((e) => ({ ...e }));
+    return (incomingMap.get(nodeId) || []).map((e) => ({ ...e }));
   }
 
-  const edges = [...(graph.incoming.get(nodeId) || [])].map((e) => ({ ...e }));
+  const edges = [...(incomingMap.get(nodeId) || [])].map((e) => ({ ...e }));
   const legacy = edges
     .filter((e) => !e.targetHandle)
     .sort(stableEdgeSort);
@@ -287,7 +288,8 @@ const prepareNodeExecutionInputs = (graph, nodeId, context, options = {}) => {
   }
 
   if (!isMultiInputNode(node)) {
-    const edges = graph.incoming.get(nodeId) || [];
+    const edges =
+      (graph.executionIncoming || graph.incoming).get(nodeId) || [];
     const items = [];
     for (const edge of edges) {
       const upstream = context.items?.[edge.source];

@@ -893,6 +893,44 @@ const handlers = {
 
   bot: async (node, context) => runLlmNode(node, context, { requireBot: true }),
 
+  // Part 12B — AI Agent (normal execution node)
+  aiAgent: async (node, context) => {
+    const { executeAiAgent } = require("./workflowAiAgent.service");
+    return executeAiAgent(node, context, {
+      interpolate,
+      resolveExpression,
+    });
+  },
+
+  // Part 12A fixtures — agent is structural passthrough; providers must not run.
+  aiAgentTest: async (node, context) => {
+    const items = Array.isArray(context.inputItems) ? context.inputItems : [];
+    return {
+      output: { items, passthrough: true, kind: "aiAgentTest" },
+      items,
+    };
+  },
+  aiModelProviderTest: async (node) => {
+    const { assertNotProviderRunStep } = require("./workflowAiResources.service");
+    assertNotProviderRunStep(node);
+  },
+  aiToolProviderTest: async (node) => {
+    const { assertNotProviderRunStep } = require("./workflowAiResources.service");
+    assertNotProviderRunStep(node);
+  },
+  aiMemoryProviderTest: async (node) => {
+    const { assertNotProviderRunStep } = require("./workflowAiResources.service");
+    assertNotProviderRunStep(node);
+  },
+  aiChatModel: async (node) => {
+    const { assertNotProviderRunStep } = require("./workflowAiResources.service");
+    assertNotProviderRunStep(node);
+  },
+  aiCalculatorTool: async (node) => {
+    const { assertNotProviderRunStep } = require("./workflowAiResources.service");
+    assertNotProviderRunStep(node);
+  },
+
   http: async (node, context) => {
     const data = node.data || {};
     const method = String(data.method || "GET").toUpperCase();

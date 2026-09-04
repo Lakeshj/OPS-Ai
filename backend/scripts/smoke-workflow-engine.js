@@ -9311,6 +9311,21 @@ require("./smoke-workflow-error-11b").registerPart11BTests({
   section,
   assert,
 });
+require("./smoke-workflow-error-11c").registerPart11CTests({
+  check,
+  section,
+  assert,
+});
+require("./smoke-workflow-aux-ports-12a").registerPart12ATests({
+  check,
+  section,
+  assert,
+});
+require("./smoke-workflow-ai-12b").registerPart12BTests({
+  check,
+  section,
+  assert,
+});
 
 (async () => {
   for (const task of queue) await task();

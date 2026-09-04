@@ -11,7 +11,12 @@ const { LOOP_PORTS } = require("./workflowLoopGraph.service");
 
 /** Incoming edges for item thread-walking — exclude Loop.continue control edges. */
 const normalizeExpressionIncoming = (graph, nodeId) => {
-  const incoming = normalizeMergeIncomingEdges(graph, nodeId);
+  // Prefer execution-only adjacency when Part 12A projections exist.
+  const baseGraph =
+    graph.executionIncoming != null
+      ? { ...graph, incoming: graph.executionIncoming }
+      : graph;
+  const incoming = normalizeMergeIncomingEdges(baseGraph, nodeId);
   return incoming.filter(
     (e) => String(e.targetHandle || "") !== LOOP_PORTS.CONTINUE
   );
@@ -96,6 +101,7 @@ const resolveIncomingPredecessor = (graph, nodeId, pairedItem) => {
 /** True when targetNodeId is upstream of nodeId in the execution graph. */
 const isUpstreamNode = (graph, targetNodeId, nodeId) => {
   if (!graph?.incoming || targetNodeId === nodeId) return targetNodeId === nodeId;
+  const incomingMap = graph.executionIncoming || graph.incoming;
   const visited = new Set();
   const stack = [nodeId];
   while (stack.length > 0) {
@@ -103,7 +109,7 @@ const isUpstreamNode = (graph, targetNodeId, nodeId) => {
     if (id === targetNodeId) return true;
     if (visited.has(id)) continue;
     visited.add(id);
-    for (const edge of graph.incoming.get(id) || []) {
+    for (const edge of incomingMap.get(id) || []) {
       stack.push(edge.source);
     }
   }

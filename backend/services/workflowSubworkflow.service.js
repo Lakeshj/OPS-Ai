@@ -1241,4 +1241,6 @@ module.exports = {
   isReachableFrom,
   buildRunLineage,
   getChildInvocationSummary,
+  formatLineageRun,
+  resolveWorkflowNames,
 };

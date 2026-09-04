@@ -135,6 +135,16 @@ const getRunLineage = asyncHandler(async (req, res) => {
   );
 });
 
+const getErrorRouting = asyncHandler(async (req, res) => {
+  res.json(
+    await workflowsService.getErrorRoutingForRun(
+      req.params.id,
+      req.params.runId,
+      req.user
+    )
+  );
+});
+
 const getChildInvocation = asyncHandler(async (req, res) => {
   const executionIndex = Number(req.query.executionIndex);
   res.json(
@@ -274,6 +284,7 @@ module.exports = {
   listRuns,
   getRun,
   getRunLineage,
+  getErrorRouting,
   getChildInvocation,
   cancelRun,
   resumeRun,

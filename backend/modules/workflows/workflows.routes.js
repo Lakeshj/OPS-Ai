@@ -14,6 +14,7 @@ const {
   listRuns,
   getRun,
   getRunLineage,
+  getErrorRouting,
   getChildInvocation,
   cancelRun,
   resumeRun,
@@ -51,6 +52,7 @@ router.get("/", list);
 router.post("/", validate(validateCreate), create);
 router.get("/:id/runs", listRuns);
 router.get("/:id/runs/:runId/lineage", getRunLineage);
+router.get("/:id/runs/:runId/error-routing", getErrorRouting);
 router.get(
   "/:id/runs/:runId/nodes/:nodeId/child-invocation",
   getChildInvocation

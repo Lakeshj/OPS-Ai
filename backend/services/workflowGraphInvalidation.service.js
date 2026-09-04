@@ -76,16 +76,43 @@ const computeNodeExecutionSignature = (node, graph) => {
 const getDownstreamIds = (graph, fromNodeId, includeSelf = false) => {
   const visited = new Set();
   const stack = [fromNodeId];
+  const outgoingMap = graph.executionOutgoing || graph.outgoing;
   while (stack.length > 0) {
     const id = stack.pop();
     if (visited.has(id)) continue;
     visited.add(id);
-    for (const edge of graph.outgoing.get(id) || []) {
+    for (const edge of outgoingMap.get(id) || []) {
       stack.push(edge.target);
     }
   }
   if (!includeSelf) visited.delete(fromNodeId);
   return [...visited];
+};
+
+/**
+ * Invalidation seeds: execution children + auxiliary consumers of this node.
+ * Distinct from scheduler graph (auxiliary edges do not schedule).
+ */
+const getInvalidationNeighborIds = (graph, fromNodeId) => {
+  const ids = new Set();
+  for (const edge of (graph.executionOutgoing || graph.outgoing).get(fromNodeId) || []) {
+    ids.add(edge.target);
+  }
+  const definition =
+    graph.definition ||
+    ({
+      nodes: graph.nodes || [],
+      edges: graph.edges || [],
+    });
+  try {
+    const { getAuxiliaryConsumers } = require("./workflowConnection.service");
+    for (const consumerId of getAuxiliaryConsumers(definition, fromNodeId)) {
+      ids.add(consumerId);
+    }
+  } catch {
+    /* connection service unavailable */
+  }
+  return [...ids];
 };
 
 const ensureDirtyMap = (session) => {
@@ -126,6 +153,8 @@ const removeNodeCache = (session, nodeId) => {
 /**
  * Walk downstream from startNodeId. When stopAtPinned is true, pinned nodes act as
  * barriers — they and their descendants are not marked dirty.
+ * Part 12A: hops follow execution edges; auxiliary provider→consumer is a one-hop
+ * invalidation edge only (via getInvalidationNeighborIds at each visited node).
  */
 const propagateDownstreamDirty = (
   session,
@@ -138,7 +167,7 @@ const propagateDownstreamDirty = (
   const visited = new Set();
   const stack = includeStart
     ? [startNodeId]
-    : [...(graph.outgoing.get(startNodeId) || []).map((e) => e.target)];
+    : [...getInvalidationNeighborIds(graph, startNodeId)];
 
   while (stack.length > 0) {
     const id = stack.pop();
@@ -149,8 +178,8 @@ const propagateDownstreamDirty = (
     if (stopAtPinned && node && isPinnedNode(node)) continue;
 
     marked.push(id);
-    for (const edge of graph.outgoing.get(id) || []) {
-      stack.push(edge.target);
+    for (const nextId of getInvalidationNeighborIds(graph, id)) {
+      stack.push(nextId);
     }
   }
 
@@ -363,7 +392,22 @@ const reconcileSessionWithDefinition = (session, definition) => {
 const collectUpstreamDirtyNodeIds = (session, graph, nodeId, definition) => {
   const dirty = new Set();
   const visited = new Set();
-  const stack = [...(graph.incoming.get(nodeId) || []).map((e) => e.source)];
+  const incomingMap = graph.executionIncoming || graph.incoming;
+  const stack = [...(incomingMap.get(nodeId) || []).map((e) => e.source)];
+  try {
+    const { getAuxiliaryEdges } = require("./workflowConnection.service");
+    const def =
+      definition ||
+      graph.definition || {
+        nodes: graph.nodes || [],
+        edges: graph.edges || [],
+      };
+    for (const e of getAuxiliaryEdges(def).filter((edge) => edge.target === nodeId)) {
+      stack.push(e.source);
+    }
+  } catch {
+    /* ignore */
+  }
 
   while (stack.length > 0) {
     const id = stack.pop();
@@ -375,7 +419,7 @@ const collectUpstreamDirtyNodeIds = (session, graph, nodeId, definition) => {
     if (status === "dirty") dirty.add(id);
     if (status === "pinned") continue;
 
-    for (const edge of graph.incoming.get(id) || []) {
+    for (const edge of incomingMap.get(id) || []) {
       stack.push(edge.source);
     }
   }
@@ -386,10 +430,19 @@ const collectUpstreamDirtyNodeIds = (session, graph, nodeId, definition) => {
 module.exports = {
   computeNodeExecutionSignature,
   getDownstreamIds,
+  getInvalidationNeighborIds,
   markNodesDirty,
   markNodeClean,
   removeNodeCache,
   propagateDownstreamDirty,
+  invalidateConfigChange,
+  invalidateEdgeTarget,
+  invalidateEdgeReconnect,
+  invalidateNodeDelete,
+  invalidatePinSet,
+  invalidatePinContentChange,
+  invalidateUnpin,
+  invalidateInsertNode,
   applyInvalidationEvent,
   isPinnedNode,
   isNodeDirty,
@@ -397,7 +450,6 @@ module.exports = {
   isCacheUsableForExecution,
   reconcileSessionWithDefinition,
   collectUpstreamDirtyNodeIds,
-  invalidateEdgeReconnect,
   edgeEndpoints,
   endpointsEqual,
 };

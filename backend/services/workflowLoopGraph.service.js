@@ -43,11 +43,25 @@ const buildAdjacency = (edges) => {
 
 /**
  * Forward DAG projection: full graph minus sanctioned loop-back edges.
+ * Part 12A: auxiliary resource edges are excluded from cycle topology.
  */
 const projectForwardDag = (graph) => {
+  let isExecutionEdge = null;
+  try {
+    ({ isExecutionEdge } = require("./workflowConnection.service"));
+  } catch {
+    isExecutionEdge = null;
+  }
   const loopBackEdges = [];
   const forwardEdges = [];
   for (const edge of graph.edges || []) {
+    if (
+      isExecutionEdge &&
+      graph.byId &&
+      !isExecutionEdge(edge, graph.byId)
+    ) {
+      continue;
+    }
     if (isLoopBackEdge(graph, edge)) loopBackEdges.push(edge);
     else forwardEdges.push(edge);
   }
