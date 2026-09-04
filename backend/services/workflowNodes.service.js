@@ -764,10 +764,62 @@ const handlers = {
       };
     }
 
-    // Safe empty canonical item — not Manual Trigger semantics.
     return {
-      output: { triggered: true, kind: "workflowTrigger", itemCount: 1 },
+      output: {
+        triggered: true,
+        kind: "workflowTrigger",
+        itemCount: 0,
+      },
       items: [{ json: {} }],
+    };
+  },
+
+  // Part 11A — Error Workflow entry (library hidden until 11B).
+  errorTrigger: async (node, context) => {
+    const input = context.input || {};
+    if (input.source === "error_workflow" && input.errorEvent) {
+      const event =
+        input.errorEvent && typeof input.errorEvent === "object"
+          ? input.errorEvent
+          : {};
+      return {
+        output: {
+          triggered: true,
+          kind: "error_workflow",
+        },
+        items: [{ json: event }],
+      };
+    }
+    // Manual execute of a workflow that contains Error Trigger — empty safe event.
+    return {
+      output: {
+        triggered: true,
+        kind: "errorTrigger",
+        empty: true,
+      },
+      items: [
+        {
+          json: {
+            event: "workflow_failed",
+            workflow: { id: null, name: null },
+            execution: {
+              runId: null,
+              rootRunId: null,
+              triggerSource: "manual",
+              startedAt: null,
+              failedAt: null,
+            },
+            failure: {
+              nodeId: null,
+              nodeName: null,
+              nodeType: null,
+              executionIndex: null,
+              code: "NO_EVENT",
+              message: "No failure event (manual Error Trigger execution)",
+            },
+          },
+        },
+      ],
     };
   },
 

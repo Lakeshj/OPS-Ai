@@ -12,6 +12,7 @@ export type WorkflowNodeType =
   | "schedule"
   | "webhook"
   | "workflowTrigger"
+  | "errorTrigger"
   | "ai"
   | "bot"
   | "http"

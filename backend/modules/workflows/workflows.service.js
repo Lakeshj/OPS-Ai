@@ -41,6 +41,8 @@ const ALLOWED_NODE_TYPES = new Set([
   "loop",
   "noop",
   "integration",
+  // Part 11A — Error Trigger (library remains unavailable until 11B)
+  "errorTrigger",
 ]);
 
 const parseJson = (value, fallback = null) => {
@@ -434,18 +436,26 @@ const startRun = async (workflowId, input, authUser, idempotencyKey = null) => {
   const jobId = uuidv4();
   const definitionSnapshot = workflow.definition || emptyDefinition();
 
+  // Part 11A: freeze Error Workflow routing target at run start.
+  const [liveRows] = await pool.execute(
+    `SELECT error_workflow_id FROM workflows WHERE id = ?`,
+    [workflowId]
+  );
+  const errorWorkflowIdSnapshot = liveRows[0]?.error_workflow_id || null;
+
   const connection = await pool.getConnection();
   try {
     await connection.beginTransaction();
     await connection.execute(
       `INSERT INTO workflow_runs
-        (id, workflow_id, workflow_name_snapshot, status, idempotency_key,
-         input_json, definition_snapshot_json, created_by)
-       VALUES (?, ?, ?, 'queued', ?, ?, ?, ?)`,
+        (id, workflow_id, workflow_name_snapshot, error_workflow_id_snapshot,
+         status, idempotency_key, input_json, definition_snapshot_json, created_by)
+       VALUES (?, ?, ?, ?, 'queued', ?, ?, ?, ?)`,
       [
         runId,
         workflowId,
         workflow.name || null,
+        errorWorkflowIdSnapshot,
         idempotencyKey,
         JSON.stringify(input ?? {}),
         JSON.stringify(definitionSnapshot),

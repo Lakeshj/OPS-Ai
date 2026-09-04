@@ -841,6 +841,10 @@ const invokeSubworkflow = async ({
     parentNodeId,
     parentExecutionIndex: execIndex,
   };
+  const suppressErrorRouting = Number(parent.suppress_error_routing) === 1 ? 1 : 0;
+  const childErrorSnapshot = suppressErrorRouting
+    ? null
+    : childWf.error_workflow_id || null;
 
   const connection = await pool.getConnection();
   try {
@@ -854,14 +858,17 @@ const invokeSubworkflow = async ({
     try {
       await connection.execute(
         `INSERT INTO workflow_runs
-          (id, workflow_id, workflow_name_snapshot, parent_run_id, parent_node_id,
+          (id, workflow_id, workflow_name_snapshot, error_workflow_id_snapshot,
+           suppress_error_routing, parent_run_id, parent_node_id,
            parent_execution_index, root_run_id, status, input_json,
            definition_snapshot_json, created_by)
-         VALUES (?, ?, ?, ?, ?, ?, ?, 'queued', ?, ?, ?)`,
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'queued', ?, ?, ?)`,
         [
           childRunId,
           childWorkflowId,
           childWf.name || null,
+          childErrorSnapshot,
+          suppressErrorRouting,
           parentRunId,
           parentNodeId,
           execIndex,

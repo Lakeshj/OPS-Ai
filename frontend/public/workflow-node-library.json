@@ -109,7 +109,7 @@
       "icon": "alert",
       "provider": null,
       "available": false,
-      "engineType": null
+      "engineType": "errorTrigger"
     },
     {
       "id": "telegram-trigger",

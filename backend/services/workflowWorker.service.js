@@ -46,6 +46,18 @@ const reclaimStaleLockedJobs = async (
 const reclaimStaleWork = async (now = new Date()) => {
   await reclaimStaleLockedJobs(JOB_LOCK_LEASE_MS, now);
   await reclaimStaleClaimedWaits(WAIT_CLAIM_LEASE_MS, now);
+  try {
+    const {
+      reclaimStaleErrorDispatchClaims,
+      reconcileMissingErrorDispatches,
+      processPendingErrorDispatches,
+    } = require("./workflowErrorRouting.service");
+    await reclaimStaleErrorDispatchClaims(undefined, now);
+    await reconcileMissingErrorDispatches(10);
+    await processPendingErrorDispatches(5, WORKER_ID);
+  } catch {
+    // Non-fatal — next poll retries.
+  }
 };
 
 const claimNextJob = async () => {
@@ -100,14 +112,21 @@ const markJobFailedOrRetry = async (job, errorMessage) => {
       `UPDATE workflow_jobs SET status = 'failed', locked_at = NULL WHERE id = ?`,
       [job.id]
     );
-    await pool.execute(
-      `UPDATE workflow_runs
-       SET status = 'failed',
-           error = COALESCE(error, ?),
-           finished_at = CURRENT_TIMESTAMP
-       WHERE id = ? AND status IN ('queued', 'running')`,
-      [errorMessage, job.run_id]
-    );
+    try {
+      const {
+        markRunFailedAndEnsureDispatch,
+      } = require("./workflowErrorRouting.service");
+      await markRunFailedAndEnsureDispatch(job.run_id, errorMessage);
+    } catch {
+      await pool.execute(
+        `UPDATE workflow_runs
+         SET status = 'failed',
+             error = COALESCE(error, ?),
+             finished_at = CURRENT_TIMESTAMP
+         WHERE id = ? AND status IN ('queued', 'running', 'waiting')`,
+        [errorMessage, job.run_id]
+      );
+    }
     return;
   }
 

@@ -692,7 +692,12 @@ const executeRun = async (runId, options = {}) => {
   const isProductionRun =
     input?.source === "schedule" || input?.source === "webhook";
 
+  const {
+    markRunFailedAndEnsureDispatch,
+    ERROR_WORKFLOW_SOURCE,
+  } = require("./workflowErrorRouting.service");
   const isSubworkflowInvocation = input?.source === SUBWORKFLOW_SOURCE;
+  const isErrorWorkflowInvocation = input?.source === ERROR_WORKFLOW_SOURCE;
 
   let scheduler;
   let context;
@@ -767,6 +772,9 @@ const executeRun = async (runId, options = {}) => {
       const err = new Error(message);
       err.code = code;
       err.childRunId = depClaim.childRunId;
+      err.failedNodeId = parentNodeId;
+      err.failedExecutionIndex = execIndex;
+      err.failedNodeType = "executeWorkflow";
       throw err;
     }
 
@@ -1033,7 +1041,8 @@ const executeRun = async (runId, options = {}) => {
           isSubworkflowInvocation &&
           (nodeType === "schedule" ||
             nodeType === "webhook" ||
-            nodeType === "trigger")
+            nodeType === "trigger" ||
+            nodeType === "errorTrigger")
         ) {
           const skipIndex = nextRunIndex(context.runData, node.id);
           scheduler.skip(node);
@@ -1049,6 +1058,31 @@ const executeRun = async (runId, options = {}) => {
             status: "skipped",
             items: [],
             output: { skipped: true, reason: "subworkflow_entry" },
+          });
+          continue;
+        }
+
+        if (
+          isErrorWorkflowInvocation &&
+          (nodeType === "schedule" ||
+            nodeType === "webhook" ||
+            nodeType === "trigger" ||
+            nodeType === "workflowTrigger")
+        ) {
+          const skipIndex = nextRunIndex(context.runData, node.id);
+          scheduler.skip(node);
+          await pool.execute(
+            `INSERT INTO workflow_run_steps
+              (id, run_id, node_id, execution_index, node_type, status, started_at, finished_at)
+             VALUES (?, ?, ?, ?, ?, 'skipped', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
+            [uuidv4(), runId, node.id, skipIndex, nodeType]
+          );
+          recordOccurrence(context.runData, {
+            nodeId: node.id,
+            runIndex: skipIndex,
+            status: "skipped",
+            items: [],
+            output: { skipped: true, reason: "error_workflow_entry" },
           });
           continue;
         }
@@ -1431,7 +1465,14 @@ const executeRun = async (runId, options = {}) => {
           finished_at: new Date(),
         });
 
-        if (policy.onError === "stop") throw failure;
+        if (policy.onError === "stop") {
+          if (failure && typeof failure === "object") {
+            failure.failedNodeId = node.id;
+            failure.failedExecutionIndex = executionIndex;
+            failure.failedNodeType = nodeType;
+          }
+          throw failure;
+        }
 
         const errorOutput = { error: message, failed: true, nodeId: node.id };
         context.steps[node.id] = errorOutput;
@@ -1526,13 +1567,18 @@ const executeRun = async (runId, options = {}) => {
     };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    await pool.execute(
-      `UPDATE workflow_runs
-       SET status = 'failed', error = ?, finished_at = CURRENT_TIMESTAMP,
-           waiting_node_id = NULL, waiting_reason = NULL, resume_at = NULL
-       WHERE id = ? AND status = 'running'`,
-      [message, runId]
-    );
+    try {
+      await markRunFailedAndEnsureDispatch(runId, message, { err });
+    } catch {
+      // Fallback: at least mark failed if dispatch helper fails.
+      await pool.execute(
+        `UPDATE workflow_runs
+         SET status = 'failed', error = ?, finished_at = CURRENT_TIMESTAMP,
+             waiting_node_id = NULL, waiting_reason = NULL, resume_at = NULL
+         WHERE id = ? AND status IN ('queued', 'running', 'waiting')`,
+        [message, runId]
+      );
+    }
     if (run.parent_run_id) {
       try {
         await notifyParentOfChildTerminal(runId);

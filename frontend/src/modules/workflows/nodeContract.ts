@@ -575,6 +575,35 @@ export const NODE_CONTRACTS: Record<WorkflowNodeType, NodeContract> = {
     ],
   },
 
+  // Part 11A — hidden until 11B UI
+  errorTrigger: {
+    type: "errorTrigger",
+    version: 1,
+    category: "Triggers",
+    label: "Error Trigger",
+    inputs: [],
+    outputs: [mainOut],
+    cardinality: "0-to-1",
+    pairedItemPolicy: "none",
+    settings: SETTINGS_TRIGGER,
+    capabilities: CAP_TRIGGER,
+    isTrigger: true,
+    params: [],
+    outputSchema: {
+      event: "workflow_failed",
+      workflow: { id: "", name: "" },
+      execution: {},
+      failure: {},
+    },
+    dirtyTriggers: ["pin"],
+    edgeCases: [
+      "Starts when another workflow reaches terminal FAILED",
+      "Exactly one Error Trigger required on Error Workflows",
+      "Result node not required",
+      "Library unavailable until Part 11B",
+    ],
+  },
+
   // ---- DATA / TRANSFORM ----
   set: {
     type: "set",
