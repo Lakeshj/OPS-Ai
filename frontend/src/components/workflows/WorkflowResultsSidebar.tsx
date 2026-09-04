@@ -265,8 +265,22 @@ export function WorkflowResultsPanel({
                         : "rounded-full bg-muted px-2 py-0.5 text-muted-foreground"
                 }
               >
-                {latestRun.status}
+                {latestRun.status === "waiting" &&
+                latestRun.waitingReason === "child_run"
+                  ? "Waiting for child"
+                  : latestRun.status}
               </span>
+              {latestRun.isSubworkflow && (
+                <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] text-muted-foreground">
+                  Sub-workflow
+                </span>
+              )}
+              {(latestRun.childRunCount ?? 0) > 0 && (
+                <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] text-muted-foreground">
+                  {latestRun.childRunCount} child run
+                  {latestRun.childRunCount === 1 ? "" : "s"}
+                </span>
+              )}
               {waitingLabel && (
                 <span className="text-xs text-muted-foreground">
                   {waitingLabel}

@@ -172,7 +172,8 @@ const assertCallableChildDefinition = (definition) => {
 
 const loadRunRow = async (runId, connection = pool) => {
   const [rows] = await connection.execute(
-    `SELECT r.*, w.workspace_id, w.definition_json AS live_definition_json
+    `SELECT r.*, w.workspace_id, w.definition_json AS live_definition_json,
+            w.name AS workflow_live_name, w.deleted_at
      FROM workflow_runs r
      INNER JOIN workflows w ON w.id = r.workflow_id
      WHERE r.id = ?`,
@@ -188,6 +189,16 @@ const loadWorkflowRow = async (workflowId, connection = pool) => {
   );
   return rows[0] || null;
 };
+
+const isLiveWorkflowRow = (row) =>
+  row && (row.deleted_at == null || row.deleted_at === undefined);
+
+const childWorkflowNotFound = () =>
+  new AppError(
+    "Child workflow not found",
+    404,
+    "CHILD_WORKFLOW_NOT_FOUND"
+  );
 
 const getRunDepth = async (runId, connection = pool) => {
   let depth = 0;
@@ -364,7 +375,7 @@ const getSubworkflowResult = async (childRunId) => {
 
 const getChildRuns = async (parentRunId) => {
   const [rows] = await pool.execute(
-    `SELECT id, workflow_id, status, parent_run_id, parent_node_id,
+    `SELECT id, workflow_id, workflow_name_snapshot, status, parent_run_id, parent_node_id,
             parent_execution_index, root_run_id, error, started_at, finished_at, created_at
      FROM workflow_runs
      WHERE parent_run_id = ?
@@ -374,6 +385,7 @@ const getChildRuns = async (parentRunId) => {
   return rows.map((r) => ({
     id: r.id,
     workflowId: r.workflow_id,
+    workflowNameSnapshot: r.workflow_name_snapshot || null,
     status: r.status,
     parentRunId: r.parent_run_id,
     parentNodeId: r.parent_node_id,
@@ -401,6 +413,205 @@ const findChildByInvocation = async (
     [parentRunId, parentNodeId, Number(parentExecutionIndex) || 0]
   );
   return rows[0] || null;
+};
+
+/**
+ * Part 10C — Safe run lineage for workspace UX.
+ * No credentials, tokens, snapshots, or dependency row dumps.
+ */
+const resolveWorkflowNames = async (workflowIds) => {
+  const ids = [...new Set((workflowIds || []).filter(Boolean))];
+  const map = new Map();
+  if (ids.length === 0) return map;
+  const placeholders = ids.map(() => "?").join(",");
+  const [rows] = await pool.execute(
+    `SELECT id, name, status, deleted_at FROM workflows WHERE id IN (${placeholders})`,
+    ids
+  );
+  for (const row of rows) {
+    map.set(row.id, {
+      name: row.name,
+      status: row.status,
+      deleted: row.deleted_at != null,
+    });
+  }
+  for (const id of ids) {
+    if (!map.has(id)) {
+      map.set(id, { name: null, status: null, deleted: true });
+    }
+  }
+  return map;
+};
+
+const formatLineageRun = (row, nameInfo) => {
+  const deleted = Boolean(nameInfo?.deleted);
+  const snapshotName = row.workflow_name_snapshot || row.workflowNameSnapshot || null;
+  const liveName = nameInfo?.name || null;
+  let workflowName;
+  if (deleted) {
+    workflowName = snapshotName || liveName || "Deleted workflow";
+  } else {
+    workflowName = liveName || snapshotName || "Untitled workflow";
+  }
+  return {
+    runId: row.id || row.runId,
+    workflowId: row.workflow_id || row.workflowId,
+    workflowName,
+    workflowDeleted: deleted,
+    status: row.status,
+    waitingReason: row.waiting_reason || row.waitingReason || null,
+    waitingNodeId: row.waiting_node_id || row.waitingNodeId || null,
+    resumeAt: row.resume_at || row.resumeAt || null,
+    parentRunId: row.parent_run_id || row.parentRunId || null,
+    parentNodeId: row.parent_node_id || row.parentNodeId || null,
+    parentExecutionIndex:
+      row.parent_execution_index == null && row.parentExecutionIndex == null
+        ? null
+        : Number(row.parent_execution_index ?? row.parentExecutionIndex) || 0,
+    rootRunId: row.root_run_id || row.rootRunId || null,
+    startedAt: row.started_at || row.startedAt || null,
+    finishedAt: row.finished_at || row.finishedAt || null,
+    createdAt: row.created_at || row.createdAt || null,
+    error: row.error ? String(row.error).slice(0, 500) : null,
+  };
+};
+
+/**
+ * Authorized lineage for a run. Walks ancestors via parent_run_id (≤ depth)
+ * and lists direct children in created order.
+ */
+const buildRunLineage = async (runId, authUser) => {
+  const row = await loadRunRow(runId);
+  if (!row) {
+    throw new AppError("Workflow run not found", 404, "NOT_FOUND");
+  }
+  await assertWorkspaceAccess(authUser, row.workspace_id);
+
+  const ancestors = [];
+  let currentParentId = row.parent_run_id;
+  const seen = new Set([runId]);
+  for (let depth = 0; depth < MAX_SUBWORKFLOW_DEPTH && currentParentId; depth += 1) {
+    if (seen.has(currentParentId)) break;
+    seen.add(currentParentId);
+    const parent = await loadRunRow(currentParentId);
+    if (!parent) break;
+    if (parent.workspace_id !== row.workspace_id) break;
+    ancestors.unshift(parent);
+    currentParentId = parent.parent_run_id;
+  }
+
+  const childrenRaw = await getChildRuns(runId);
+  const workflowIds = [
+    row.workflow_id,
+    ...ancestors.map((a) => a.workflow_id),
+    ...childrenRaw.map((c) => c.workflowId),
+  ];
+  const names = await resolveWorkflowNames(workflowIds);
+
+  const self = formatLineageRun(row, names.get(row.workflow_id));
+  const ancestorRuns = ancestors.map((a) =>
+    formatLineageRun(a, names.get(a.workflow_id))
+  );
+  const children = childrenRaw.map((c) =>
+    formatLineageRun(
+      {
+        id: c.id,
+        workflow_id: c.workflowId,
+        workflow_name_snapshot: c.workflowNameSnapshot,
+        status: c.status,
+        parent_run_id: c.parentRunId,
+        parent_node_id: c.parentNodeId,
+        parent_execution_index: c.parentExecutionIndex,
+        root_run_id: c.rootRunId,
+        error: c.error,
+        started_at: c.startedAt,
+        finished_at: c.finishedAt,
+        created_at: c.createdAt,
+      },
+      names.get(c.workflowId)
+    )
+  );
+
+  const breadcrumb = [...ancestorRuns, self].map((r) => ({
+    runId: r.runId,
+    workflowId: r.workflowId,
+    workflowName: r.workflowName,
+    workflowDeleted: r.workflowDeleted,
+    status: r.status,
+  }));
+
+  return {
+    run: self,
+    ancestors: ancestorRuns,
+    children,
+    breadcrumb,
+    rootRunId: self.rootRunId || self.runId,
+  };
+};
+
+/**
+ * Safe summary for one Execute Workflow occurrence (parent step → child).
+ */
+const getChildInvocationSummary = async (
+  parentRunId,
+  parentNodeId,
+  parentExecutionIndex,
+  authUser
+) => {
+  const parent = await loadRunRow(parentRunId);
+  if (!parent) {
+    throw new AppError("Workflow run not found", 404, "NOT_FOUND");
+  }
+  await assertWorkspaceAccess(authUser, parent.workspace_id);
+
+  const child = await findChildByInvocation(
+    parentRunId,
+    parentNodeId,
+    parentExecutionIndex
+  );
+  if (!child) return null;
+
+  const childFull = await loadRunRow(child.id);
+  if (!childFull) return null;
+  if (childFull.workspace_id !== parent.workspace_id) {
+    throw new AppError("Forbidden", 403, "FORBIDDEN");
+  }
+
+  const names = await resolveWorkflowNames([childFull.workflow_id]);
+  const summary = formatLineageRun(
+    childFull,
+    names.get(childFull.workflow_id)
+  );
+
+  let childWait = null;
+  if (childFull.status === "waiting") {
+    try {
+      const { getActiveWaitForRun } = require("./workflowWait.service");
+      const active = await getActiveWaitForRun(childFull.id);
+      if (active) {
+        childWait = {
+          resumeMode: active.resumeMode || null,
+          waitStatus: active.status || null,
+          resumeAt: active.resumeAt || null,
+        };
+      }
+    } catch {
+      childWait = null;
+    }
+  }
+
+  return {
+    ...summary,
+    parentRunId,
+    parentNodeId,
+    parentExecutionIndex: Number(parentExecutionIndex) || 0,
+    childWait,
+    // Soft-deleted child: open historical run; hide live definition.
+    openRunPath: `/workflows/${summary.workflowId}?runId=${encodeURIComponent(summary.runId)}`,
+    openWorkflowPath: summary.workflowDeleted
+      ? null
+      : `/workflows/${summary.workflowId}`,
+  };
 };
 
 const parkParentJob = async (parentRunId, jobId, connection) => {
@@ -567,8 +778,8 @@ const invokeSubworkflow = async ({
   await assertWorkspaceAccess(authUser, parent.workspace_id);
 
   const childWf = await loadWorkflowRow(childWorkflowId);
-  if (!childWf) {
-    throw new AppError("Child workflow not found", 404, "NOT_FOUND");
+  if (!childWf || !isLiveWorkflowRow(childWf)) {
+    throw childWorkflowNotFound();
   }
   if (childWf.workspace_id !== parent.workspace_id) {
     throw new AppError(
@@ -643,12 +854,14 @@ const invokeSubworkflow = async ({
     try {
       await connection.execute(
         `INSERT INTO workflow_runs
-          (id, workflow_id, parent_run_id, parent_node_id, parent_execution_index,
-           root_run_id, status, input_json, definition_snapshot_json, created_by)
-         VALUES (?, ?, ?, ?, ?, ?, 'queued', ?, ?, ?)`,
+          (id, workflow_id, workflow_name_snapshot, parent_run_id, parent_node_id,
+           parent_execution_index, root_run_id, status, input_json,
+           definition_snapshot_json, created_by)
+         VALUES (?, ?, ?, ?, ?, ?, ?, 'queued', ?, ?, ?)`,
         [
           childRunId,
           childWorkflowId,
+          childWf.name || null,
           parentRunId,
           parentNodeId,
           execIndex,
@@ -1019,4 +1232,6 @@ module.exports = {
   getRunDepth,
   boundaryItems,
   isReachableFrom,
+  buildRunLineage,
+  getChildInvocationSummary,
 };

@@ -20,7 +20,10 @@ import {
 import { NodeInspector } from "./NodeInspector";
 import { NodeInputPanel } from "./NodeInputPanel";
 import { NodeOutputPanel } from "./NodeOutputPanel";
+import { SubworkflowRunSummary } from "./SubworkflowRunSummary";
+import { RunNavigationLink } from "./RunNavigationLink";
 import type {
+  WorkflowChildInvocationSummary,
   WorkflowEditorNodeResult,
   WorkflowEditorSession,
   WorkflowItem,
@@ -47,6 +50,7 @@ import {
 } from "@/modules/workflows/occurrenceView";
 import { toast } from "sonner";
 import type { Node as FlowNode, Edge as FlowEdge } from "@xyflow/react";
+import { subworkflowErrorMessage } from "@/modules/workflows/subworkflowUx";
 
 type Props = {
   open: boolean;
@@ -111,6 +115,15 @@ export function WorkflowNodeDialog({
   const [selectedInputItemIndex, setSelectedInputItemIndex] = useState(0);
   const [selectedRunIndex, setSelectedRunIndex] = useState<number | null>(null);
   const [loopPortView, setLoopPortView] = useState<LoopPortView>("done");
+  const [childInvocation, setChildInvocation] =
+    useState<WorkflowChildInvocationSummary | null>(null);
+  const [childInvocationLoading, setChildInvocationLoading] = useState(false);
+  const [parentLineageHref, setParentLineageHref] = useState<string | null>(
+    null
+  );
+  const [parentLineageLabel, setParentLineageLabel] = useState<string | null>(
+    null
+  );
   const [inputPreview, setInputPreview] = useState<{
     incoming?: Record<string, unknown>;
     items?: WorkflowItem[];
@@ -240,6 +253,106 @@ export function WorkflowNodeDialog({
   useEffect(() => {
     setSelectedInputItemIndex(0);
   }, [selectedId]);
+
+  // Part 10C — occurrence-scoped child invocation for Execute Workflow
+  useEffect(() => {
+    if (
+      !open ||
+      !workflowId ||
+      !selectedId ||
+      selectedType !== "executeWorkflow" ||
+      !latestRun?.id
+    ) {
+      setChildInvocation(null);
+      return;
+    }
+    let cancelled = false;
+    const executionIndex =
+      selectedRunIndex != null
+        ? selectedRunIndex
+        : nodeResult?.executionIndex ?? 0;
+    setChildInvocationLoading(true);
+    workflowsApi
+      .getChildInvocation(
+        workflowId,
+        latestRun.id,
+        selectedId,
+        Number(executionIndex) || 0
+      )
+      .then((summary) => {
+        if (!cancelled) setChildInvocation(summary);
+      })
+      .catch(() => {
+        if (!cancelled) setChildInvocation(null);
+      })
+      .finally(() => {
+        if (!cancelled) setChildInvocationLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    open,
+    workflowId,
+    selectedId,
+    selectedType,
+    latestRun?.id,
+    latestRun?.status,
+    latestRun?.waitingReason,
+    selectedRunIndex,
+    nodeResult?.executionIndex,
+    nodeResult?.status,
+  ]);
+
+  // Part 10C — parent link when viewing a child run's Workflow Trigger
+  useEffect(() => {
+    if (
+      !open ||
+      !workflowId ||
+      selectedType !== "workflowTrigger" ||
+      !latestRun?.parentRunId ||
+      !latestRun?.id
+    ) {
+      setParentLineageHref(null);
+      setParentLineageLabel(null);
+      return;
+    }
+    let cancelled = false;
+    workflowsApi
+      .getRunLineage(workflowId, latestRun.id)
+      .then((lineage) => {
+        if (cancelled) return;
+        const parent = lineage.ancestors[lineage.ancestors.length - 1];
+        if (!parent) {
+          setParentLineageHref(null);
+          setParentLineageLabel(null);
+          return;
+        }
+        setParentLineageLabel(
+          parent.workflowDeleted
+            ? `${parent.workflowName} (deleted)`
+            : parent.workflowName
+        );
+        setParentLineageHref(
+          `/workflows/${parent.workflowId}?runId=${encodeURIComponent(parent.runId)}`
+        );
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setParentLineageHref(null);
+          setParentLineageLabel(null);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    open,
+    workflowId,
+    selectedType,
+    latestRun?.id,
+    latestRun?.parentRunId,
+  ]);
 
   useEffect(() => {
     const count = inputPreview.items?.length ?? 0;
@@ -539,6 +652,41 @@ export function WorkflowNodeDialog({
                         : undefined
                     }
                   />
+                  {selectedType === "executeWorkflow" && (
+                    <SubworkflowRunSummary
+                      summary={childInvocation}
+                      loading={childInvocationLoading}
+                      returnedItemCount={
+                        Array.isArray(nodeResult?.items)
+                          ? nodeResult.items.length
+                          : null
+                      }
+                    />
+                  )}
+                  {selectedType === "executeWorkflow" &&
+                    nodeResult?.status === "failed" &&
+                    nodeResult?.error &&
+                    !childInvocation && (
+                      <p className="mt-2 text-[11px] text-destructive">
+                        {subworkflowErrorMessage(nodeResult.error)}
+                      </p>
+                    )}
+                  {selectedType === "workflowTrigger" &&
+                    (parentLineageHref || parentLineageLabel) && (
+                      <div className="mt-3 rounded-md border border-border/70 bg-muted/30 p-3 text-xs">
+                        <div className="text-muted-foreground">Called from</div>
+                        <div className="mt-1 font-medium text-foreground">
+                          {parentLineageLabel || "Parent workflow"}
+                        </div>
+                        <div className="mt-2">
+                          <RunNavigationLink
+                            href={parentLineageHref}
+                            label="Open parent run"
+                            disabledReason="Parent run unavailable"
+                          />
+                        </div>
+                      </div>
+                    )}
                   <Button
                     type="button"
                     variant="outline"

@@ -29,6 +29,7 @@ const ALLOWED_NODE_TYPES = new Set([
   "removeDuplicates",
   "aggregate",
   "merge",
+  "switch",
   "code",
   "condition",
   "set",
@@ -52,6 +53,9 @@ const parseJson = (value, fallback = null) => {
   }
 };
 
+const isWorkflowDeleted = (row) =>
+  row?.deleted_at != null && row.deleted_at !== undefined;
+
 const formatWorkflow = (row) => ({
   id: row.id,
   workspaceId: row.workspace_id,
@@ -59,32 +63,51 @@ const formatWorkflow = (row) => ({
   description: row.description,
   definition: parseJson(row.definition_json, { version: 1, nodes: [], edges: [] }),
   status: row.status,
+  isDeleted: isWorkflowDeleted(row),
+  deletedAt: row.deleted_at || null,
   createdBy: row.created_by,
   createdAt: row.created_at,
   updatedAt: row.updated_at,
 });
 
-const formatRun = (row) => ({
-  id: row.id,
-  workflowId: row.workflow_id,
-  status: row.status,
-  input: parseJson(row.input_json, null),
-  output: parseJson(row.output_json, null),
-  error: row.error,
-  waitingNodeId: row.waiting_node_id || null,
-  waitingReason: row.waiting_reason || null,
-  resumeAt: row.resume_at || null,
-  parentRunId: row.parent_run_id || null,
-  parentNodeId: row.parent_node_id || null,
-  parentExecutionIndex:
-    row.parent_execution_index == null ? null : Number(row.parent_execution_index),
-  rootRunId: row.root_run_id || null,
-  hasDefinitionSnapshot: row.definition_snapshot_json != null,
-  startedAt: row.started_at,
-  finishedAt: row.finished_at,
-  createdBy: row.created_by,
-  createdAt: row.created_at,
-});
+const formatRun = (row) => {
+  const deleted = isWorkflowDeleted(row);
+  const nameSnapshot = row.workflow_name_snapshot || null;
+  const liveName = row.workflow_live_name || null;
+  return {
+    id: row.id,
+    workflowId: row.workflow_id,
+    workspaceId: row.workspace_id || null,
+    workflowName: deleted
+      ? nameSnapshot || liveName || "Deleted workflow"
+      : liveName || nameSnapshot || null,
+    workflowNameSnapshot: nameSnapshot,
+    workflowDeleted: deleted,
+    status: row.status,
+    input: parseJson(row.input_json, null),
+    output: parseJson(row.output_json, null),
+    error: row.error,
+    waitingNodeId: row.waiting_node_id || null,
+    waitingReason: row.waiting_reason || null,
+    resumeAt: row.resume_at || null,
+    parentRunId: row.parent_run_id || null,
+    parentNodeId: row.parent_node_id || null,
+    parentExecutionIndex:
+      row.parent_execution_index == null
+        ? null
+        : Number(row.parent_execution_index),
+    rootRunId: row.root_run_id || null,
+    hasDefinitionSnapshot: row.definition_snapshot_json != null,
+    // Historical canvas only — never sent via lineage APIs.
+    historicalDefinition: deleted
+      ? parseJson(row.definition_snapshot_json, null)
+      : undefined,
+    startedAt: row.started_at,
+    finishedAt: row.finished_at,
+    createdBy: row.created_by,
+    createdAt: row.created_at,
+  };
+};
 
 const formatStep = (row) => ({
   id: row.id,
@@ -177,6 +200,7 @@ const listByWorkspace = async (workspaceId, authUser) => {
   const [rows] = await pool.execute(
     `SELECT * FROM workflows
      WHERE workspace_id = ?
+       AND deleted_at IS NULL
      ORDER BY updated_at DESC`,
     [workspaceId]
   );
@@ -200,6 +224,7 @@ const listCallableTargets = async (
     `SELECT id, name, status, definition_json, updated_at
      FROM workflows
      WHERE workspace_id = ?
+       AND deleted_at IS NULL
      ORDER BY updated_at DESC`,
     [workspaceId]
   );
@@ -237,7 +262,9 @@ const listCallableTargets = async (
 const listAll = async (authUser) => {
   if (authUser.role === "Admin" || authUser.role === "Project Manager") {
     const [rows] = await pool.execute(
-      `SELECT * FROM workflows ORDER BY updated_at DESC`
+      `SELECT * FROM workflows
+       WHERE deleted_at IS NULL
+       ORDER BY updated_at DESC`
     );
     return rows.map(formatWorkflow);
   }
@@ -247,18 +274,27 @@ const listAll = async (authUser) => {
      FROM workflows w
      INNER JOIN workspace_users wu
        ON wu.workspace_id = w.workspace_id AND wu.user_id = ?
+     WHERE w.deleted_at IS NULL
      ORDER BY w.updated_at DESC`,
     [authUser.userId]
   );
   return rows.map(formatWorkflow);
 };
 
-const getById = async (id, authUser) => {
+/**
+ * @param {{ allowDeleted?: boolean }} [options]
+ * Soft-deleted definitions stay for run history FK identity but are hidden
+ * from live editor/lists unless allowDeleted is set.
+ */
+const getById = async (id, authUser, options = {}) => {
   const [rows] = await pool.execute(`SELECT * FROM workflows WHERE id = ?`, [id]);
   if (rows.length === 0) {
     throw new AppError("Workflow not found", 404, "NOT_FOUND");
   }
   await assertWorkspaceAccess(authUser, rows[0].workspace_id);
+  if (isWorkflowDeleted(rows[0]) && !options.allowDeleted) {
+    throw new AppError("Workflow not found", 404, "NOT_FOUND");
+  }
   return formatWorkflow(rows[0]);
 };
 
@@ -335,13 +371,47 @@ const update = async (id, payload, authUser) => {
 
 const remove = async (id, authUser) => {
   await getById(id, authUser);
+
+  // Active-run policy (V1): block deletion while queued/running/waiting runs exist.
+  // Avoids orphaning in-flight jobs or mid-flight cancel→parent-wake races.
+  const [activeRows] = await pool.execute(
+    `SELECT id, status FROM workflow_runs
+     WHERE workflow_id = ?
+       AND status IN ('queued', 'running', 'waiting')
+     LIMIT 5`,
+    [id]
+  );
+  if (activeRows.length > 0) {
+    throw new AppError(
+      `Cannot delete workflow while ${activeRows.length} active run(s) exist (status: ${activeRows
+        .map((r) => r.status)
+        .join(", ")}). Cancel or wait for them to finish first.`,
+      409,
+      "WORKFLOW_HAS_ACTIVE_RUNS"
+    );
+  }
+
   try {
     const { unregisterWorkflow } = require("../../services/workflowScheduler.service");
     unregisterWorkflow(id);
   } catch {
     // scheduler optional
   }
-  await pool.execute(`DELETE FROM workflows WHERE id = ?`, [id]);
+
+  // Soft-delete: retain row so workflow_runs FK + historical identity survive.
+  // Hard DELETE remains only for workspace teardown / test cleanup (CASCADE).
+  const [result] = await pool.execute(
+    `UPDATE workflows
+     SET deleted_at = CURRENT_TIMESTAMP,
+         status = 'archived',
+         updated_at = CURRENT_TIMESTAMP
+     WHERE id = ?
+       AND deleted_at IS NULL`,
+    [id]
+  );
+  if (result.affectedRows === 0) {
+    throw new AppError("Workflow not found", 404, "NOT_FOUND");
+  }
   return { success: true };
 };
 
@@ -369,11 +439,13 @@ const startRun = async (workflowId, input, authUser, idempotencyKey = null) => {
     await connection.beginTransaction();
     await connection.execute(
       `INSERT INTO workflow_runs
-        (id, workflow_id, status, idempotency_key, input_json, definition_snapshot_json, created_by)
-       VALUES (?, ?, 'queued', ?, ?, ?, ?)`,
+        (id, workflow_id, workflow_name_snapshot, status, idempotency_key,
+         input_json, definition_snapshot_json, created_by)
+       VALUES (?, ?, ?, 'queued', ?, ?, ?, ?)`,
       [
         runId,
         workflowId,
+        workflow.name || null,
         idempotencyKey,
         JSON.stringify(input ?? {}),
         JSON.stringify(definitionSnapshot),
@@ -405,9 +477,9 @@ const startRun = async (workflowId, input, authUser, idempotencyKey = null) => {
   return getRunById(runId, authUser);
 };
 
-const getRunById = async (runId, authUser) => {
+const getRunById = async (runId, authUser, options = {}) => {
   const [rows] = await pool.execute(
-    `SELECT r.*, w.workspace_id
+    `SELECT r.*, w.workspace_id, w.name AS workflow_live_name, w.deleted_at
      FROM workflow_runs r
      INNER JOIN workflows w ON w.id = r.workflow_id
      WHERE r.id = ?`,
@@ -417,6 +489,9 @@ const getRunById = async (runId, authUser) => {
     throw new AppError("Workflow run not found", 404, "NOT_FOUND");
   }
   await assertWorkspaceAccess(authUser, rows[0].workspace_id);
+  if (options.workflowId && rows[0].workflow_id !== options.workflowId) {
+    throw new AppError("Run does not belong to this workflow", 404, "NOT_FOUND");
+  }
   const run = formatRun(rows[0]);
   const [steps] = await pool.execute(
     `SELECT * FROM workflow_run_steps WHERE run_id = ? ORDER BY created_at ASC`,
@@ -441,23 +516,80 @@ const getRunById = async (runId, authUser) => {
       }
     : null;
 
+  const [childCountRows] = await pool.execute(
+    `SELECT COUNT(*) AS c FROM workflow_runs WHERE parent_run_id = ?`,
+    [runId]
+  );
+
   return {
     ...run,
+    isSubworkflow: Boolean(run.parentRunId),
+    childRunCount: Number(childCountRows[0]?.c) || 0,
     steps: steps.map(formatStep),
     wait: waitInfo,
   };
 };
 
+const getRunLineage = async (workflowId, runId, authUser) => {
+  // Soft-deleted definitions remain readable via run path (historical view).
+  const run = await getRunById(runId, authUser, { workflowId });
+  const {
+    buildRunLineage,
+  } = require("../../services/workflowSubworkflow.service");
+  return buildRunLineage(run.id, authUser);
+};
+
+const getChildInvocationForStep = async (
+  workflowId,
+  runId,
+  parentNodeId,
+  parentExecutionIndex,
+  authUser
+) => {
+  await getRunById(runId, authUser, { workflowId });
+  const {
+    getChildInvocationSummary,
+  } = require("../../services/workflowSubworkflow.service");
+  return getChildInvocationSummary(
+    runId,
+    parentNodeId,
+    parentExecutionIndex,
+    authUser
+  );
+};
+
 const listRuns = async (workflowId, authUser) => {
-  await getById(workflowId, authUser);
+  // Allow listing runs for soft-deleted workflows (historical retention).
+  await getById(workflowId, authUser, { allowDeleted: true });
   const [rows] = await pool.execute(
-    `SELECT * FROM workflow_runs
-     WHERE workflow_id = ?
-     ORDER BY created_at DESC
+    `SELECT r.*, w.name AS workflow_live_name, w.deleted_at
+     FROM workflow_runs r
+     INNER JOIN workflows w ON w.id = r.workflow_id
+     WHERE r.workflow_id = ?
+     ORDER BY r.created_at DESC
      LIMIT 100`,
     [workflowId]
   );
-  return rows.map(formatRun);
+  const runs = rows.map(formatRun);
+  // Lightweight child counts for history badges (same-workspace parent runs).
+  if (runs.length === 0) return runs;
+  const ids = runs.map((r) => r.id);
+  const placeholders = ids.map(() => "?").join(",");
+  const [counts] = await pool.execute(
+    `SELECT parent_run_id AS parentRunId, COUNT(*) AS childCount
+     FROM workflow_runs
+     WHERE parent_run_id IN (${placeholders})
+     GROUP BY parent_run_id`,
+    ids
+  );
+  const countMap = new Map(
+    counts.map((c) => [c.parentRunId, Number(c.childCount) || 0])
+  );
+  return runs.map((r) => ({
+    ...r,
+    isSubworkflow: Boolean(r.parentRunId),
+    childRunCount: countMap.get(r.id) || 0,
+  }));
 };
 
 const {
@@ -935,6 +1067,8 @@ module.exports = {
   remove,
   startRun,
   getRunById,
+  getRunLineage,
+  getChildInvocationForStep,
   listRuns,
   cancelRun,
   resumeRun,

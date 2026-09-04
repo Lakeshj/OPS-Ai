@@ -354,7 +354,11 @@ const registerPart10BTests = ({ check, section, assert }) => {
     );
     await assert.rejects(() => executeRun(runId), (err) => {
       const msg = String(err.message || err);
-      return /not found|Child workflow/i.test(msg) || err.code === "NOT_FOUND";
+      return (
+        /not found|Child workflow/i.test(msg) ||
+        err.code === "NOT_FOUND" ||
+        err.code === "CHILD_WORKFLOW_NOT_FOUND"
+      );
     });
     await cleanup();
   });

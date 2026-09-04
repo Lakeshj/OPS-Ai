@@ -4,6 +4,7 @@
  */
 
 import type { WorkflowEditorNodeResult, WorkflowItem } from "./types";
+import { redactOrchestrationOutput } from "./subworkflowUx";
 
 export type NodeOutputPortMap = Record<string, WorkflowItem[]>;
 
@@ -126,7 +127,7 @@ export function formatOutputMetadataSummary(metadata: unknown): string | null {
   if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) {
     return null;
   }
-  const record = metadata as Record<string, unknown>;
+  const record = redactOrchestrationOutput(metadata) as Record<string, unknown>;
   const parts: string[] = [];
   if (typeof record.count === "number") parts.push(`${record.count} item(s)`);
   if (typeof record.droppedCount === "number") {

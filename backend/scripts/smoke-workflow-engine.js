@@ -9291,6 +9291,17 @@ require("./smoke-workflow-subworkflow-10b1").registerPart10B1Tests({
   assert,
 });
 
+require("./smoke-workflow-subworkflow-10c").registerPart10CTests({
+  check,
+  section,
+  assert,
+});
+require("./smoke-workflow-subworkflow-10c1").registerPart10C1Tests({
+  check,
+  section,
+  assert,
+});
+
 (async () => {
   for (const task of queue) await task();
   console.log(`\n${passed} checks passed`);

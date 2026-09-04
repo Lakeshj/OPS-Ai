@@ -32,6 +32,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { CircleDot, LayoutGrid, Plus, Settings2 } from "lucide-react";
+import { redactOrchestrationOutput } from "@/modules/workflows/subworkflowUx";
 import type {
   EditorInvalidationEvent,
   WorkflowDefinition,
@@ -209,6 +210,8 @@ type Props = {
   onPublish?: () => Promise<void>;
   onResumeRun?: () => void | Promise<void>;
   resuming?: boolean;
+  /** Soft-deleted definition — inspect historical run only. */
+  historicalView?: boolean;
 };
 
 function formatStepOutput(output: unknown): string {
@@ -216,7 +219,8 @@ function formatStepOutput(output: unknown): string {
   if (typeof output === "string") return unwrapMessageJson(output);
   if (typeof output !== "object") return String(output);
 
-  const obj = output as Record<string, unknown>;
+  const cleaned = redactOrchestrationOutput(output);
+  const obj = cleaned as Record<string, unknown>;
   if (typeof obj.text === "string") return obj.text;
 
   if (obj.result != null) {
@@ -767,6 +771,7 @@ function WorkflowCanvasInner({
   onPublish,
   onResumeRun,
   resuming,
+  historicalView = false,
 }: Props) {
   const { fitView } = useReactFlow();
   const [nodes, setNodes, onNodesChange] = useNodesState(
@@ -1929,22 +1934,49 @@ function WorkflowCanvasInner({
 
   return (
     <div className="flex h-full min-h-[520px] flex-col gap-3">
+      {historicalView && (
+        <div
+          className="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-950 dark:text-amber-100"
+          data-testid="historical-run-banner"
+        >
+          Historical run view — live workflow was deleted. Editing and new
+          executions are disabled.
+        </div>
+      )}
       <div className="flex flex-wrap items-end gap-2">
         <div className="min-w-[180px] flex-1">
           <Label>Workflow name</Label>
-          <Input value={name} onChange={(e) => onNameChange(e.target.value)} />
+          <Input
+            value={name}
+            onChange={(e) => onNameChange(e.target.value)}
+            disabled={historicalView}
+          />
         </div>
-        <Button type="button" variant="outline" onClick={handleSave} disabled={saving}>
+        <Button
+          type="button"
+          variant="outline"
+          onClick={handleSave}
+          disabled={saving || historicalView}
+        >
           {saving ? "Saving..." : "Save"}
         </Button>
-        <Button type="button" onClick={handleRun} disabled={running || saving}>
+        <Button
+          type="button"
+          onClick={handleRun}
+          disabled={running || saving || historicalView}
+        >
           {running ? "Executing..." : "Execute"}
         </Button>
         {onPublish && (
           <Button
             type="button"
             variant={workflowStatus === "active" ? "secondary" : "default"}
-            disabled={publishing || saving || workflowStatus === "active"}
+            disabled={
+              publishing ||
+              saving ||
+              workflowStatus === "active" ||
+              historicalView
+            }
             onClick={() => void handlePublish()}
             title={
               hasScheduleTrigger

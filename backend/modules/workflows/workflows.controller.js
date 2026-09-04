@@ -93,7 +93,34 @@ const listRuns = asyncHandler(async (req, res) => {
 });
 
 const getRun = asyncHandler(async (req, res) => {
-  res.json(await workflowsService.getRunById(req.params.runId, req.user));
+  res.json(
+    await workflowsService.getRunById(req.params.runId, req.user, {
+      workflowId: req.params.id,
+    })
+  );
+});
+
+const getRunLineage = asyncHandler(async (req, res) => {
+  res.json(
+    await workflowsService.getRunLineage(
+      req.params.id,
+      req.params.runId,
+      req.user
+    )
+  );
+});
+
+const getChildInvocation = asyncHandler(async (req, res) => {
+  const executionIndex = Number(req.query.executionIndex);
+  res.json(
+    await workflowsService.getChildInvocationForStep(
+      req.params.id,
+      req.params.runId,
+      req.params.nodeId,
+      Number.isFinite(executionIndex) ? executionIndex : 0,
+      req.user
+    )
+  );
 });
 
 const cancelRun = asyncHandler(async (req, res) => {
@@ -219,6 +246,8 @@ module.exports = {
   webhookTrigger,
   listRuns,
   getRun,
+  getRunLineage,
+  getChildInvocation,
   cancelRun,
   resumeRun,
   resumeByExternalToken,

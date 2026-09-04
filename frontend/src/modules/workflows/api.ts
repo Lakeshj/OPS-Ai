@@ -42,6 +42,21 @@ export const workflowsApi = {
   getRun: (workflowId: string, runId: string) =>
     apiClient.get<WorkflowRun>(`/workflows/${workflowId}/runs/${runId}`),
 
+  getRunLineage: (workflowId: string, runId: string) =>
+    apiClient.get<import("./types").WorkflowRunLineage>(
+      `/workflows/${workflowId}/runs/${runId}/lineage`
+    ),
+
+  getChildInvocation: (
+    workflowId: string,
+    runId: string,
+    nodeId: string,
+    executionIndex = 0
+  ) =>
+    apiClient.get<import("./types").WorkflowChildInvocationSummary | null>(
+      `/workflows/${workflowId}/runs/${runId}/nodes/${encodeURIComponent(nodeId)}/child-invocation?executionIndex=${executionIndex}`
+    ),
+
   cancelRun: (workflowId: string, runId: string) =>
     apiClient.post<WorkflowRun>(`/workflows/${workflowId}/runs/${runId}/cancel`, {}),
 

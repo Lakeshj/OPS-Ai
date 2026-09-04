@@ -1,0 +1,170 @@
+{
+  "name": "comparison list",
+  "description": "Demo comparison list: split candidates, keep score >= threshold (optional region), sort, return matches.",
+  "definition": {
+    "version": 1,
+    "nodes": [
+      {
+        "id": "trigger",
+        "type": "trigger",
+        "position": {
+          "x": 60,
+          "y": 240
+        },
+        "data": {
+          "label": "Manual Trigger",
+          "note": "Execute empty for demo data, or pass { threshold, items }"
+        }
+      },
+      {
+        "id": "seed",
+        "type": "set",
+        "position": {
+          "x": 300,
+          "y": 240
+        },
+        "data": {
+          "label": "Capture run input",
+          "keepOnlySet": false,
+          "mappings": [
+            {
+              "key": "threshold",
+              "value": "{{input.threshold}}"
+            },
+            {
+              "key": "items",
+              "value": "{{input.items}}"
+            },
+            {
+              "key": "regionFilter",
+              "value": "{{input.region}}"
+            }
+          ]
+        }
+      },
+      {
+        "id": "normalize",
+        "type": "code",
+        "position": {
+          "x": 560,
+          "y": 240
+        },
+        "data": {
+          "label": "Build comparison list",
+          "mode": "all",
+          "code": "const unwrap = (it) => {\n  if (!it || typeof it !== \"object\") return {};\n  if (it.json && typeof it.json === \"object\" && !Array.isArray(it.json)) return it.json;\n  const { pairedItem, binary, json, ...rest } = it;\n  return Object.keys(rest).length ? rest : {};\n};\n\nconst incoming = unwrap(items[0]);\nconst demoList = [\n  { id: \"A1\", name: \"Alpha Store\", score: 92, status: \"active\", region: \"west\" },\n  { id: \"B2\", name: \"Beta Market\", score: 74, status: \"active\", region: \"east\" },\n  { id: \"C3\", name: \"Gamma Hub\", score: 88, status: \"paused\", region: \"west\" },\n  { id: \"D4\", name: \"Delta Shop\", score: 61, status: \"active\", region: \"north\" },\n  { id: \"E5\", name: \"Epsilon Co\", score: 95, status: \"active\", region: \"south\" },\n  { id: \"F6\", name: \"Zeta Retail\", score: 80, status: \"active\", region: \"east\" },\n];\n\nlet list = Array.isArray(incoming.items) ? incoming.items : null;\nif (!list || list.length === 0) list = demoList;\n\nlet threshold = 80;\nconst rawThreshold = incoming.threshold;\nif (rawThreshold !== undefined && rawThreshold !== null && rawThreshold !== \"\") {\n  const n = Number(rawThreshold);\n  if (Number.isFinite(n)) threshold = n;\n}\n\nconst regionFilter =\n  incoming.regionFilter === undefined ||\n  incoming.regionFilter === null ||\n  incoming.regionFilter === \"\"\n    ? null\n    : String(incoming.regionFilter);\n\nconst prepared = list.map((row, index) => {\n  const base =\n    row && typeof row === \"object\" && !Array.isArray(row) ? { ...row } : { value: row };\n  return {\n    ...base,\n    threshold,\n    regionFilter,\n    listIndex: index,\n  };\n});\n\nreturn [\n  {\n    json: {\n      threshold,\n      regionFilter,\n      totalCandidates: prepared.length,\n      list: prepared,\n      source: \"comparison-list-demo\",\n    },\n  },\n];"
+        }
+      },
+      {
+        "id": "split",
+        "type": "splitOut",
+        "position": {
+          "x": 820,
+          "y": 240
+        },
+        "data": {
+          "label": "Split candidates",
+          "fieldName": "list",
+          "includeOtherFields": true
+        }
+      },
+      {
+        "id": "compare",
+        "type": "code",
+        "position": {
+          "x": 1080,
+          "y": 240
+        },
+        "data": {
+          "label": "Compare score ≥ threshold",
+          "mode": "all",
+          "code": "const unwrap = (it) => {\n  if (!it || typeof it !== \"object\") return {};\n  if (it.json && typeof it.json === \"object\" && !Array.isArray(it.json)) return it.json;\n  const { pairedItem, binary, json, ...rest } = it;\n  return Object.keys(rest).length ? rest : {};\n};\n\nconst matches = [];\nfor (const raw of items) {\n  const item = unwrap(raw);\n  const score = Number(item.score);\n  const threshold = Number(item.threshold);\n  if (!Number.isFinite(score) || !Number.isFinite(threshold)) continue;\n  if (score < threshold) continue;\n  if (item.regionFilter && String(item.region) !== String(item.regionFilter)) {\n    continue;\n  }\n  matches.push({\n    json: {\n      ...item,\n      passed: true,\n      margin: score - threshold,\n    },\n  });\n}\nreturn matches;"
+        }
+      },
+      {
+        "id": "sort",
+        "type": "sort",
+        "position": {
+          "x": 1340,
+          "y": 240
+        },
+        "data": {
+          "label": "Sort by score (desc)",
+          "fieldName": "score",
+          "direction": "desc"
+        }
+      },
+      {
+        "id": "label",
+        "type": "set",
+        "position": {
+          "x": 1600,
+          "y": 240
+        },
+        "data": {
+          "label": "Label match rows",
+          "keepOnlySet": false,
+          "mappings": [
+            {
+              "key": "verdict",
+              "value": "above_threshold"
+            },
+            {
+              "key": "listName",
+              "value": "comparison list"
+            }
+          ]
+        }
+      },
+      {
+        "id": "result",
+        "type": "result",
+        "position": {
+          "x": 1860,
+          "y": 240
+        },
+        "data": {
+          "label": "Result — match list",
+          "mapFrom": "{{steps.compare.count}} matches above threshold"
+        }
+      }
+    ],
+    "edges": [
+      {
+        "id": "e1",
+        "source": "trigger",
+        "target": "seed"
+      },
+      {
+        "id": "e2",
+        "source": "seed",
+        "target": "normalize"
+      },
+      {
+        "id": "e3",
+        "source": "normalize",
+        "target": "split"
+      },
+      {
+        "id": "e4",
+        "source": "split",
+        "target": "compare"
+      },
+      {
+        "id": "e5",
+        "source": "compare",
+        "target": "sort"
+      },
+      {
+        "id": "e6",
+        "source": "sort",
+        "target": "label"
+      },
+      {
+        "id": "e7",
+        "source": "label",
+        "target": "result"
+      }
+    ]
+  }
+}

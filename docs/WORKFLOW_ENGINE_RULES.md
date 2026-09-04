@@ -191,3 +191,22 @@ Two concepts (do not conflate):
 `run.output.__subworkflowItems` is a **compatibility mirror** written once from the same array at child success — not a second source of truth.
 
 Multiple succeeded Result occurrences on one child run → `SUBWORKFLOW_AMBIGUOUS_OUTPUT` (never silently pick latest).
+
+## Sub-workflow workspace UX (Part 10C)
+
+- Lineage: `GET /workflows/:id/runs/:runId/lineage` — safe metadata only (names, status, parent/child ids). No credentials, tokens, or snapshots.
+- Occurrence child link: `GET .../runs/:runId/nodes/:nodeId/child-invocation?executionIndex=`
+- Editor: `?runId=` deep-link; breadcrumb `RunLineageBadge`; Execute Workflow inspector `SubworkflowRunSummary`.
+- Display names use **current** workflow name when live; soft-deleted workflows use `workflow_name_snapshot` / retained row name, else “Deleted workflow”.
+- Partial execution (Run Step / Run To / Execute Previous) for Execute Workflow remains **unsupported**.
+- UI never shows `__callableReturnItems` / `__subworkflowItems` as business fields.
+
+## Historical run retention (Part 10C.1)
+
+- Live workflow **delete** is soft-delete (`workflows.deleted_at`). Hard `DELETE` remains for workspace teardown (CASCADE) only.
+- Deleting a live definition does **not** cascade-erase `workflow_runs` / steps / dependencies for that workflow.
+- Active-run policy: **block** delete while `queued` / `running` / `waiting` runs exist (`WORKFLOW_HAS_ACTIVE_RUNS`).
+- Soft-deleted workflows are absent from lists and callable picker; new Execute Workflow → `CHILD_WORKFLOW_NOT_FOUND`.
+- Historical runs remain readable via `getRun` / lineage (workspace-authorized). Open run works; Open workflow is hidden.
+- Run identity: `workflow_id` FK retained + optional `workflow_name_snapshot` at run start.
+- Explicit run retention/cleanup (if any) is separate from definition soft-delete.

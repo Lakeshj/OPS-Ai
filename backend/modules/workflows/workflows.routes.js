@@ -11,6 +11,8 @@ const {
   webhookTrigger,
   listRuns,
   getRun,
+  getRunLineage,
+  getChildInvocation,
   cancelRun,
   resumeRun,
   executeNodeStep,
@@ -45,6 +47,11 @@ router.get("/callable-targets", listCallableTargets);
 router.get("/", list);
 router.post("/", validate(validateCreate), create);
 router.get("/:id/runs", listRuns);
+router.get("/:id/runs/:runId/lineage", getRunLineage);
+router.get(
+  "/:id/runs/:runId/nodes/:nodeId/child-invocation",
+  getChildInvocation
+);
 router.get("/:id/runs/:runId", getRun);
 router.post("/:id/runs/:runId/cancel", cancelRun);
 router.post("/:id/runs/:runId/resume", resumeRun);

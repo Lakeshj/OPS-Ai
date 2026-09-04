@@ -397,6 +397,9 @@ export interface Workflow {
   description?: string | null;
   definition: WorkflowDefinition;
   status: WorkflowStatus;
+  /** Soft-deleted live definition (Part 10C.1 historical retention). */
+  isDeleted?: boolean;
+  deletedAt?: string | null;
   createdBy: string;
   createdAt: string;
   updatedAt: string;
@@ -448,6 +451,11 @@ export interface WorkflowRunWaitInfo {
 export interface WorkflowRun {
   id: string;
   workflowId: string;
+  workspaceId?: string | null;
+  /** Display name (live or historical). */
+  workflowName?: string | null;
+  workflowNameSnapshot?: string | null;
+  workflowDeleted?: boolean;
   status: WorkflowRunStatus;
   input?: unknown;
   output?: unknown;
@@ -455,11 +463,66 @@ export interface WorkflowRun {
   waitingNodeId?: string | null;
   waitingReason?: string | null;
   resumeAt?: string | null;
+  parentRunId?: string | null;
+  parentNodeId?: string | null;
+  parentExecutionIndex?: number | null;
+  rootRunId?: string | null;
   hasDefinitionSnapshot?: boolean;
+  /** Present only when live workflow is soft-deleted — for historical canvas. */
+  historicalDefinition?: WorkflowDefinition | null;
+  isSubworkflow?: boolean;
+  childRunCount?: number;
   startedAt?: string | null;
   finishedAt?: string | null;
   createdBy: string;
   createdAt: string;
   steps?: WorkflowRunStep[];
   wait?: WorkflowRunWaitInfo | null;
+}
+
+/** Part 10C — safe lineage node (no secrets / snapshots). */
+export interface WorkflowLineageRun {
+  runId: string;
+  workflowId: string;
+  workflowName: string;
+  workflowDeleted?: boolean;
+  status: string;
+  waitingReason?: string | null;
+  waitingNodeId?: string | null;
+  resumeAt?: string | null;
+  parentRunId?: string | null;
+  parentNodeId?: string | null;
+  parentExecutionIndex?: number | null;
+  rootRunId?: string | null;
+  startedAt?: string | null;
+  finishedAt?: string | null;
+  createdAt?: string | null;
+  error?: string | null;
+}
+
+export interface WorkflowRunLineage {
+  run: WorkflowLineageRun;
+  ancestors: WorkflowLineageRun[];
+  children: WorkflowLineageRun[];
+  breadcrumb: Array<{
+    runId: string;
+    workflowId: string;
+    workflowName: string;
+    workflowDeleted?: boolean;
+    status: string;
+  }>;
+  rootRunId: string;
+}
+
+export interface WorkflowChildInvocationSummary extends WorkflowLineageRun {
+  parentRunId: string;
+  parentNodeId: string;
+  parentExecutionIndex: number;
+  childWait?: {
+    resumeMode?: string | null;
+    waitStatus?: string | null;
+    resumeAt?: string | null;
+  } | null;
+  openRunPath?: string | null;
+  openWorkflowPath?: string | null;
 }
