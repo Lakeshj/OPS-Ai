@@ -330,8 +330,17 @@ Future 14D floating button + right drawer will call a **stateless** planning tur
 - LLM is never authoritative. Planning never creates `workflow_run` / steps / jobs.
 - Production without provider keys returns `COPILOT_PROVIDER_UNAVAILABLE` (no silent test-planner fallback).
 - Multi-turn clarification via client-supplied `recentConversation` + `clarification` (no server chat DB in V1).
-- CREATE / MODIFY planning in 14B; DEBUG / FIX return structured deferral until 14C.
+- CREATE / MODIFY planning in 14B; DEBUG / FIX handled in Part 14C (diagnosis + validated fix proposals).
 - No floating button / drawer UI in 14B (14D).
+
+## Workflow Copilot diagnosis + fixes (Part 14C)
+
+- DEBUG / FIX intents on the same `POST /workflows/:id/copilot/plan` surface.
+- Deterministic facts first (`diagnoseWorkflow`, run occurrence, structured codes, lineage) via `workflowCopilotDiagnostics.service.js`.
+- Confidence: `confirmed` | `likely` | `uncertain` — never invent root causes.
+- FIX proposes constrained 14A operations only; validate → preview; **never** auto-apply / run / activate.
+- Historical runs use definition snapshots for diagnosis; fixes target/validate the **current** draft + `revisionHash`.
+- Waiting ≠ failed; empty Filter output ≠ failure; Error Workflow success does not rewrite source FAILED.
 
 - Agent card shows Model required / Model label + Tools count (via `getAiAgentReadiness`).
 - Auxiliary edges labeled Model / Tool (not generic “Resource” when type known).

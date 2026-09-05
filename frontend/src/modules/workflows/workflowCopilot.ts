@@ -87,6 +87,18 @@ export interface CopilotPlanResponse {
   /** Always false for planning — Copilot never creates workflow_runs. */
   createdWorkflowRun: false;
   repairRounds?: number;
+  /** Part 14C */
+  diagnosis?: Record<string, unknown>;
+  evidence?: unknown[];
+  fixPlan?: {
+    summary?: string | null;
+    plan?: CopilotPlanEnvelope | null;
+    preview?: unknown;
+    unresolvedInputs?: CopilotPlanEnvelope["unresolvedInputs"];
+    warnings?: Array<{ code?: string; message?: string } | string>;
+    destructive?: boolean;
+    applicable?: boolean;
+  } | null;
 }
 
 export interface WorkflowDraftDefinition {

@@ -174,6 +174,14 @@ const classifyPlanningIntent = (
       text
     )
   ) {
+    // Explicit fix/connect-model requests are FIX even if they contain "connect"
+    if (
+      /\b(fix\s+this|can\s+you\s+(fix|repair)|repair\s+this|connect\s+the\s+missing\s+model)\b/.test(
+        text
+      )
+    ) {
+      return "FIX";
+    }
     if (
       !hasGraph &&
       /\b(create|build|new\s+workflow|every\s+weekday|use\s+ai|call\s+my|send\s+every|let\s+the\s+ai)\b/.test(
@@ -187,7 +195,16 @@ const classifyPlanningIntent = (
   }
 
   if (
-    /\b(explain\s+this\s+workflow|describe\s+this\s+workflow|what\s+does\s+this\s+workflow)\b/.test(
+    /\b(why\s+(can'?t|cannot)\s+i\s+run|what('?s|\s+is)\s+wrong|why\s+is\s+(this|it)\s+(failing|stuck)|why\s+didn'?t|why\s+did\s+nothing)\b/.test(
+      text
+    ) ||
+    /\b(how\s+do\s+i\s+fix)\b/.test(text)
+  ) {
+    return "DEBUG";
+  }
+
+  if (
+    /\b(explain\s+this\s+workflow|describe\s+this\s+workflow|what\s+does\s+this\s+workflow|what\s+does\s+this\b)\b/.test(
       text
     ) ||
     (/^\s*explain\b/.test(text) && !/\b(add|create|use|build)\b/.test(text))
@@ -227,6 +244,9 @@ const buildPlanResponse = ({
   validation,
   repairRounds,
   providerMeta,
+  diagnosis,
+  evidence,
+  fixPlan,
 }) => ({
   intent,
   assistantMessage: assistantMessage || summary || "",
@@ -245,6 +265,9 @@ const buildPlanResponse = ({
   validationIssues: validation?.issues || undefined,
   repairRounds: repairRounds ?? 0,
   providerMeta: providerMeta || undefined,
+  diagnosis: diagnosis || undefined,
+  evidence: evidence || undefined,
+  fixPlan: fixPlan === undefined ? undefined : fixPlan,
 });
 
 const buildCatalogBrief = () => {
@@ -315,6 +338,7 @@ const planCopilotTurn = async ({
   planner: injectedPlanner,
   forceMode,
   forceInvalidFirst,
+  forceFixOps,
   signal,
 } = {}) => {
   const started = Date.now();
@@ -369,27 +393,92 @@ const planCopilotTurn = async ({
   const planIntent = intent === "CREATE" ? "BUILD" : intent;
 
   if (intent === "DEBUG" || intent === "FIX") {
+    const {
+      runDiagnosticTurn,
+    } = require("./workflowCopilotDiagnostics.service");
+
+    const exec = execution || null;
+    if (req.runId && exec && exec.runId && exec.runId !== req.runId) {
+      return buildPlanResponse({
+        intent,
+        assistantMessage:
+          "The provided run does not match this request. Use the authorized run for this workflow.",
+        summary: "Unauthorized or mismatched runId",
+        plan: emptyPlan(intent, "Run mismatch"),
+        preview: null,
+        unresolvedInputs: [],
+        clarifyingQuestions: [],
+        assumptions: [],
+        warnings: [
+          {
+            code: "COPILOT_RUN_MISMATCH",
+            message: "runId does not match execution payload",
+          },
+        ],
+        revisionHash: liveHash,
+        createdWorkflowRun: false,
+      });
+    }
+    if (exec?.unauthorized) {
+      return buildPlanResponse({
+        intent,
+        assistantMessage: "You are not authorized to inspect that run.",
+        summary: "Unauthorized run",
+        plan: emptyPlan(intent, "Unauthorized"),
+        preview: null,
+        unresolvedInputs: [],
+        clarifyingQuestions: [],
+        assumptions: [],
+        warnings: [
+          { code: "COPILOT_RUN_FORBIDDEN", message: "Unauthorized runId" },
+        ],
+        revisionHash: liveHash,
+        createdWorkflowRun: false,
+      });
+    }
+
+    const diagnosisSourceDefinition =
+      exec?.definitionSnapshot ||
+      exec?.diagnosisSourceDefinition ||
+      null;
+
+    const diag = runDiagnosticTurn({
+      intent,
+      definition: def,
+      selectedNodeId: req.selectedNodeId,
+      execution: exec,
+      workflow: workflow || { id: workflowId },
+      diagnosisSourceDefinition,
+      clarification: req.clarification,
+      forceFixOps,
+    });
+
+    logCopilotSafe({
+      workflowId,
+      intent,
+      provider: "diagnostics",
+      model: "deterministic",
+      durationMs: Date.now() - started,
+      repairRounds: 0,
+      validationValid: diag.fixPlan?.applicable ?? true,
+    });
+
     return buildPlanResponse({
       intent,
-      assistantMessage:
-        intent === "DEBUG"
-          ? "Debugging and failure analysis land in Part 14C. I can still help with CREATE/MODIFY now."
-          : "Automatic fix proposals land in Part 14C. For now I can help CREATE or MODIFY with an explicit plan.",
-      summary: `${intent} deferred to Part 14C`,
-      plan: emptyPlan(planIntent, `${intent} not implemented in 14B`),
-      preview: null,
-      unresolvedInputs: [],
-      clarifyingQuestions: [],
-      assumptions: [],
-      warnings: [
-        {
-          code: PLAN_ERROR.INTENT_UNSUPPORTED,
-          message: `${intent} planning is not available in Part 14B`,
-        },
-      ],
+      assistantMessage: diag.assistantMessage,
+      summary: diag.summary,
+      plan: diag.plan,
+      preview: diag.preview,
+      unresolvedInputs: diag.unresolvedInputs,
+      clarifyingQuestions: diag.clarifyingQuestions,
+      assumptions: diag.assumptions || [],
+      warnings: diag.warnings || [],
       revisionHash: liveHash,
-      needsClarification: false,
+      needsClarification: diag.needsClarification,
       createdWorkflowRun: false,
+      diagnosis: diag.diagnosis,
+      evidence: diag.evidence,
+      fixPlan: diag.fixPlan,
     });
   }
 
@@ -401,13 +490,36 @@ const planCopilotTurn = async ({
       execution: execution || (req.runId ? { runId: req.runId } : null),
       intent: "EXPLAIN",
     });
-    const lines = (ctx.workflow?.skeleton || []).map(
-      (n) => `${n.label || n.type} (${n.id})`
-    );
-    const assistantMessage =
-      lines.length > 0
-        ? `This workflow has ${lines.length} nodes: ${lines.join(" → ")}.`
-        : "This workflow has no nodes yet.";
+
+    let assistantMessage;
+    if (req.selectedNodeId && ctx.selectedNode) {
+      const sn = ctx.selectedNode;
+      const outs = (def.edges || [])
+        .filter((e) => e.source === sn.nodeId)
+        .map((e) => e.target);
+      const inns = (def.edges || [])
+        .filter((e) => e.target === sn.nodeId)
+        .map((e) => e.source);
+      const isAux = ["aiChatModel", "aiCalculatorTool", "aiHttpTool"].includes(
+        sn.nodeType
+      );
+      assistantMessage = isAux
+        ? `${sn.nodeType} is an AI resource for an Agent — it does not execute as a normal workflow step. Connected from: ${inns.join(", ") || "none"}; into: ${outs.join(", ") || "none"}.`
+        : `${sn.nodeType} (${sn.nodeId}) — incoming: ${inns.join(", ") || "none"}; outgoing: ${outs.join(", ") || "none"}. Key parameters: ${JSON.stringify(sn.parameters || {}).slice(0, 240)}`;
+    } else {
+      const lines = (ctx.workflow?.skeleton || []).map((n) => {
+        const aux = ["aiChatModel", "aiCalculatorTool", "aiHttpTool"].includes(
+          n.type
+        );
+        return aux
+          ? `${n.label || n.type} (resource)`
+          : `${n.label || n.type} (${n.id})`;
+      });
+      assistantMessage =
+        lines.length > 0
+          ? `This workflow has ${lines.length} nodes: ${lines.join(" → ")}.`
+          : "This workflow has no nodes yet.";
+    }
     return buildPlanResponse({
       intent: "EXPLAIN",
       assistantMessage,

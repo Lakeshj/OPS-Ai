@@ -141,13 +141,8 @@ const registerPart14BTests = ({ check, section, assert: a }) => {
     assertX.equal(res.intent, "DEBUG");
     assertX.equal(res.plan.operations.length, 0);
     assertX.equal(res.createdWorkflowRun, false);
-    assertX.ok(
-      res.warnings.some(
-        (w) =>
-          (w.code || w) === planSvc().PLAN_ERROR.INTENT_UNSUPPORTED ||
-          String(w.message || w).includes("14C")
-      )
-    );
+    // Part 14C: DEBUG is live (diagnosis), not deferred
+    assertX.ok(res.diagnosis);
   });
 
   check("TEST 14B-8 FIX intent deferred without workflow_run", async () => {
@@ -160,6 +155,7 @@ const registerPart14BTests = ({ check, section, assert: a }) => {
     });
     assertX.equal(res.intent, "FIX");
     assertX.equal(res.createdWorkflowRun, false);
+    assertX.ok(res.diagnosis || res.fixPlan);
   });
 
   check("TEST 14B-9 EXPLAIN returns read-only message and no ops", async () => {
