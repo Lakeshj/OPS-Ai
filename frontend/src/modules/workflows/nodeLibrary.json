@@ -1201,6 +1201,17 @@
       "engineType": "aiCalculatorTool"
     },
     {
+      "id": "http-request-tool",
+      "name": "HTTP Tool",
+      "category": "AI",
+      "type": "Tool",
+      "description": "Let an AI Agent call a configured HTTP API.",
+      "icon": "http",
+      "provider": "OpsAi",
+      "available": true,
+      "engineType": "aiHttpTool"
+    },
+    {
       "id": "ai-bot",
       "name": "Bot (@assistant)",
       "category": "AI",
@@ -1460,17 +1471,6 @@
       "type": "Tool",
       "description": "Call another workflow as an agent tool",
       "icon": "workflow",
-      "provider": null,
-      "available": false,
-      "engineType": null
-    },
-    {
-      "id": "http-request-tool",
-      "name": "HTTP Request Tool",
-      "category": "AI Agents",
-      "type": "Tool",
-      "description": "Let an agent call HTTP APIs",
-      "icon": "http",
       "provider": null,
       "available": false,
       "engineType": null

@@ -82,6 +82,7 @@ export const isAiMemoryRuntimeSupported = (): boolean => false;
 export const AI_RESOURCE_PROVIDER_TYPES = new Set([
   "aiChatModel",
   "aiCalculatorTool",
+  "aiHttpTool",
   "aiModelProviderTest",
   "aiToolProviderTest",
   "aiMemoryProviderTest",
@@ -164,6 +165,17 @@ export function getAiResourceDisplay(
     return {
       role: "tool",
       title: "Calculator Tool",
+      subtitle: "Provides tool to Agent",
+      toolName,
+    };
+  }
+
+  if (type === "aiHttpTool") {
+    const toolName =
+      String(d.toolName || d.name || "http_tool").trim() || "http_tool";
+    return {
+      role: "tool",
+      title: "HTTP Tool",
       subtitle: "Provides tool to Agent",
       toolName,
     };

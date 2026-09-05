@@ -149,6 +149,10 @@ export const NODE_SEARCH_META: Record<string, NodeSearchMeta> = {
     aliases: ["calculator", "math", "tool", "ai tool"],
     keywords: ["arithmetic", "add", "divide"],
   },
+  "http-request-tool": {
+    aliases: ["http tool", "api tool", "rest tool", "http request tool"],
+    keywords: ["agent", "tool", "api", "http"],
+  },
 };
 
 /** Display labels for category chips (canonical category id unchanged). */

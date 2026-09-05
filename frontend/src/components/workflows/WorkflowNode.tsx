@@ -38,6 +38,7 @@ const typeStyles: Record<string, string> = {
   aiAgent: "border-blue-600/70",
   aiChatModel: "border-dashed border-blue-500/50",
   aiCalculatorTool: "border-dashed border-sky-600/50",
+  aiHttpTool: "border-dashed border-amber-600/50",
   http: "border-amber-500/60",
   condition: "border-violet-500/60",
   set: "border-sky-500/60",
@@ -80,6 +81,7 @@ const TYPE_LABEL: Record<string, string> = {
   aiAgent: "Basic AI Agent",
   aiChatModel: "Chat Model",
   aiCalculatorTool: "Calculator",
+  aiHttpTool: "HTTP Tool",
   bot: "Bot",
   ai: "AI Model",
 };

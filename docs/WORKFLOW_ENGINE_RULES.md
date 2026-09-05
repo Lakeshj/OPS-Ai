@@ -279,11 +279,19 @@ Authoritative services:
 - Bounded tool loop: `MAX_AGENT_TOOL_ROUNDS = 8`.
 - Tool side effects are **at-least-once** under node retries (same `executionIndex`).
 - Descriptors are serializable; runtime clients are ephemeral and rebuilt after Wait/resume.
-- HTTP Tool deferred to Part 13; Code-as-tool remains unavailable.
+- **HTTP Tool (`aiHttpTool`)** — Part 13A: auxiliary `ai-tool` provider; reuses HTTP fetch/credentials; `{{tool.*}}` arg mapping scoped to tool request resolution; model cannot override method/URL host/credentials; no `workflow_run_steps`; Code-as-tool remains unavailable.
 
 ## AI workspace UX (Part 12C)
 
-UI-only polish on top of 12A/12B. No new AI capabilities (no Memory/RAG/HTTP Tool/streaming).
+UI-only polish on top of 12A/12B. No Memory/RAG/streaming in 12C.
+
+## HTTP Tool (Part 13A)
+
+- Library: **HTTP Tool** (`http-request-tool` → `aiHttpTool`), distinct from Core **HTTP Request** (`http`).
+- Tool-argument syntax: `{{tool.<arg>}}` only inside HTTP Tool URL/query/headers/body resolution (does not change global `{{input}}` / `{{steps.*}}`).
+- Failures (4xx/5xx/timeout) → tool failure → Agent failure (12B semantics).
+- Redirects not followed; metadata hosts blocked. Broader private-network SSRF remains a known limitation shared with HTTP Request.
+- POST/PUT/PATCH/DELETE may repeat under Agent/node at-least-once retries.
 
 - Agent card shows Model required / Model label + Tools count (via `getAiAgentReadiness`).
 - Auxiliary edges labeled Model / Tool (not generic “Resource” when type known).

@@ -9336,6 +9336,11 @@ require("./smoke-workflow-post-12c-ui").registerPost12CUiTests({
   section,
   assert,
 });
+require("./smoke-workflow-ai-13a").registerPart13ATests({
+  check,
+  section,
+  assert,
+});
 
 (async () => {
   for (const task of queue) await task();

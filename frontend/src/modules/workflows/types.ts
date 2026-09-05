@@ -44,7 +44,8 @@ export type WorkflowNodeType =
   // Part 12B runtime
   | "aiAgent"
   | "aiChatModel"
-  | "aiCalculatorTool";
+  | "aiCalculatorTool"
+  | "aiHttpTool";
 
 export interface WorkflowSetMapping {
   key: string;

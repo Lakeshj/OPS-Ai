@@ -210,6 +210,11 @@ const NODE_PORT_CONTRACTS = {
     outputs: [auxOut("tool", DATA_TYPE.AI_TOOL, "Tool")],
     isAuxiliaryProvider: true,
   },
+  aiHttpTool: {
+    inputs: [],
+    outputs: [auxOut("tool", DATA_TYPE.AI_TOOL, "Tool")],
+    isAuxiliaryProvider: true,
+  },
   aiChatModel: {
     inputs: [],
     outputs: [auxOut("model", DATA_TYPE.AI_MODEL, "Model")],

@@ -660,7 +660,7 @@ const parseRetryAfter = (value) => {
 const fetchWithRateLimitRetry = async (
   url,
   { method, headers, body },
-  { timeoutMs, resolved, attempts = 2 }
+  { timeoutMs, resolved, attempts = 2, redirect } = {}
 ) => {
   const maxAttempts = Math.min(Math.max(attempts, 0), 5) + 1;
 
@@ -673,6 +673,7 @@ const fetchWithRateLimitRetry = async (
         headers,
         body,
         signal: controller.signal,
+        ...(redirect ? { redirect } : {}),
       });
 
       const retryable = res.status === 429 || res.status >= 500;
@@ -927,6 +928,10 @@ const handlers = {
     assertNotProviderRunStep(node);
   },
   aiCalculatorTool: async (node) => {
+    const { assertNotProviderRunStep } = require("./workflowAiResources.service");
+    assertNotProviderRunStep(node);
+  },
+  aiHttpTool: async (node) => {
     const { assertNotProviderRunStep } = require("./workflowAiResources.service");
     assertNotProviderRunStep(node);
   },
@@ -2124,4 +2129,8 @@ module.exports = {
   getItemPayload,
   getByPath,
   ExpressionReferenceError,
+  // Shared HTTP primitives (Part 13A HTTP Tool reuses these)
+  buildUrl,
+  applyCredential,
+  fetchWithRateLimitRetry,
 };

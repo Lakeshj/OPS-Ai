@@ -711,6 +711,104 @@ export const NODE_PARAMETER_SCHEMAS: Record<WorkflowNodeType, ParamDescriptor[]>
         default: "Add, subtract, multiply, or divide two numbers.",
       },
     ],
+
+    aiHttpTool: [
+      {
+        name: "toolName",
+        displayName: "Tool name",
+        type: "string",
+        required: true,
+        default: "http_tool",
+        placeholder: "lookup_customer",
+        description: "Stable model-facing name (letters, numbers, underscore).",
+      },
+      {
+        name: "description",
+        displayName: "Description",
+        type: "string",
+        multiline: true,
+        default: "Call a configured HTTP API.",
+        description: "Tells the model when to use this tool.",
+      },
+      {
+        name: "method",
+        displayName: "Method",
+        type: "options",
+        default: "GET",
+        options: HTTP_METHODS,
+      },
+      {
+        name: "url",
+        displayName: "URL",
+        type: "string",
+        required: true,
+        placeholder: "https://api.example.com/customers/{{tool.id}}",
+        description:
+          "Author-configured URL. Use {{tool.argName}} for tool arguments only (not {{input}} / {{steps.*}}).",
+      },
+      {
+        name: "credentialId",
+        displayName: "Authentication",
+        type: "credential",
+        customRenderer: "credential",
+      },
+      {
+        name: "queryParams",
+        displayName: "Query parameters",
+        type: "fixedCollection",
+        customRenderer: "queryParams",
+        default: [],
+        fields: [
+          { name: "key", displayName: "Key", type: "string" },
+          {
+            name: "value",
+            displayName: "Value",
+            type: "string",
+            placeholder: "{{tool.id}}",
+          },
+        ],
+      },
+      {
+        name: "headers",
+        displayName: "Headers",
+        type: "fixedCollection",
+        customRenderer: "queryParams",
+        default: [],
+        fields: [
+          { name: "key", displayName: "Key", type: "string" },
+          { name: "value", displayName: "Value", type: "string" },
+        ],
+      },
+      {
+        name: "body",
+        displayName: "Body",
+        type: "json",
+        multiline: true,
+        placeholder: '{"id":"{{tool.id}}"}',
+      },
+      {
+        name: "inputSchema",
+        displayName: "Input schema",
+        type: "json",
+        multiline: true,
+        default:
+          '{\n  "type": "object",\n  "properties": {\n    "id": { "type": "string" }\n  },\n  "required": ["id"]\n}',
+        description: "Provider-independent JSON Schema (type: object).",
+      },
+      {
+        name: "timeoutMs",
+        displayName: "Timeout (ms)",
+        type: "number",
+        default: 30000,
+      },
+      {
+        name: "toolArgNotice",
+        displayName: "Tool arguments",
+        type: "notice",
+        description:
+          "Map tool-call args with {{tool.field}}. Method, URL host, and credentials are fixed by this node — the model cannot override them.",
+      },
+    ],
   };
 
 export const NODE_PARAMETERS_PANEL: Partial<

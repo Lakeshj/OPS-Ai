@@ -139,6 +139,7 @@ const nodeTypes = {
   aiAgent: WorkflowNode,
   aiChatModel: WorkflowNode,
   aiCalculatorTool: WorkflowNode,
+  aiHttpTool: WorkflowNode,
 };
 
 const edgeTypes = {
@@ -484,6 +485,23 @@ const defaultDataForType = (type: WorkflowNodeType): WorkflowNodeData => {
         nodeType: "aiCalculatorTool",
         toolName: "calculator",
         description: "Add, subtract, multiply, or divide two numbers.",
+      };
+    case "aiHttpTool":
+      return {
+        label: "HTTP Tool",
+        nodeType: "aiHttpTool",
+        toolName: "http_tool",
+        description: "Call a configured HTTP API.",
+        method: "GET",
+        url: "",
+        inputSchema: {
+          type: "object",
+          properties: { id: { type: "string" } },
+          required: ["id"],
+        },
+        queryParams: [],
+        headers: [],
+        timeoutMs: 30000,
       };
     case "result":
       return { label: "Result", nodeType: "result", mapFrom: "{{input}}" };
@@ -1797,6 +1815,7 @@ function WorkflowCanvasInner({
             "aiMemoryProviderTest",
             "aiChatModel",
             "aiCalculatorTool",
+            "aiHttpTool",
           ].includes(String(node.type))
         ) {
           toast.message("Connect this resource to an AI Agent auxiliary port.");

@@ -132,6 +132,35 @@ const buildToolDescriptor = (node) => {
       toolKind: "calculator",
     };
   }
+  if (type === "aiHttpTool") {
+    const {
+      validateHttpToolName,
+      parseInputSchema,
+    } = require("./workflowAiHttpTool.service");
+    const name = validateHttpToolName(data.toolName || data.name || "http_tool");
+    return {
+      kind: DATA_TYPE.AI_TOOL,
+      nodeId: node.id,
+      name,
+      description:
+        data.description ||
+        "Call a configured HTTP API. Arguments fill {{tool.*}} placeholders only.",
+      inputSchema: parseInputSchema(data.inputSchema),
+      toolKind: "http",
+      // Author-fixed request config — never includes decrypted secrets
+      httpConfig: stripSecrets({
+        method: String(data.method || "GET").toUpperCase(),
+        url: String(data.url || ""),
+        credentialId: data.credentialId || null,
+        headers: data.headers || [],
+        queryParams: data.queryParams || [],
+        body: data.body ?? null,
+        timeoutMs: data.timeoutMs,
+        failOnHttpError: data.failOnHttpError,
+        rateLimitRetries: data.rateLimitRetries,
+      }),
+    };
+  }
   throw new AiRuntimeError(
     `Unsupported tool provider node type: ${type}`,
     AI_ERROR.PROVIDER_UNSUPPORTED,
@@ -367,6 +396,48 @@ const createTestModelAdapter = (descriptor) => {
           };
         }
 
+        if (script === "http-tool-demo") {
+          const httpTool =
+            (tools || []).find((t) => t.name === "lookup_customer") ||
+            (tools || [])[0];
+          const toolName = httpTool?.name || "lookup_customer";
+          if (toolTurns === 0) {
+            return {
+              message: { role: "assistant", content: null },
+              toolCalls: [
+                {
+                  id: "call_http_1",
+                  name: toolName,
+                  arguments: { id: "123" },
+                },
+              ],
+              usage: { inputTokens: 10, outputTokens: 5, totalTokens: 15 },
+              finishReason: "tool_calls",
+            };
+          }
+          const lastTool = [...messages].reverse().find((m) => m.role === "tool");
+          let summary = "Customer found";
+          try {
+            const parsed = JSON.parse(String(lastTool?.content || "{}"));
+            const body = parsed?.data?.data ?? parsed?.data ?? parsed;
+            summary =
+              typeof body === "object"
+                ? JSON.stringify(body)
+                : String(body ?? summary);
+          } catch {
+            /* keep */
+          }
+          return {
+            message: {
+              role: "assistant",
+              content: `Looked up customer 123: ${summary}`,
+            },
+            toolCalls: [],
+            usage: { inputTokens: 12, outputTokens: 8, totalTokens: 20 },
+            finishReason: "stop",
+          };
+        }
+
         if (script === "multi-tool") {
           if (toolTurns === 0) {
             return {
@@ -582,6 +653,35 @@ const attachToolExecutor = (descriptor) => {
       },
     };
   }
+  if (descriptor.toolKind === "http") {
+    const { executeHttpTool } = require("./workflowAiHttpTool.service");
+    const nodeData = {
+      ...(descriptor.httpConfig || {}),
+      toolName: descriptor.name,
+      description: descriptor.description,
+      inputSchema: descriptor.inputSchema,
+    };
+    return {
+      ...descriptor,
+      async execute(args, ctx) {
+        // Re-assert author controls — ignore model-supplied overrides if present
+        const safeArgs =
+          args && typeof args === "object" && !Array.isArray(args)
+            ? { ...args }
+            : {};
+        delete safeArgs.method;
+        delete safeArgs.url;
+        delete safeArgs.credentialId;
+        delete safeArgs.headers;
+        delete safeArgs.authorization;
+        return executeHttpTool({
+          nodeData,
+          args: safeArgs,
+          context: ctx || {},
+        });
+      },
+    };
+  }
   throw new AiRuntimeError(
     `No tool executor for kind "${descriptor.toolKind}"`,
     AI_ERROR.PROVIDER_UNSUPPORTED
@@ -660,9 +760,14 @@ const materializeAgentRuntime = (resolved) => {
 
 const assertNotProviderRunStep = (node) => {
   const type = nodeTypeOf(node);
-  if (isAuxiliaryOnlyProvider(type) || type === "aiChatModel" || type === "aiCalculatorTool") {
+  if (
+    isAuxiliaryOnlyProvider(type) ||
+    type === "aiChatModel" ||
+    type === "aiCalculatorTool" ||
+    type === "aiHttpTool"
+  ) {
     const err = new AiRuntimeError(
-      "This node provides an AI resource to another node.",
+      "This node provides an AI resource to an Agent and does not run by itself.",
       AI_ERROR.PROVIDER_UNSUPPORTED,
       { nodeType: type }
     );

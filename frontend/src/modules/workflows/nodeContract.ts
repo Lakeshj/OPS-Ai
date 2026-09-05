@@ -1713,6 +1713,35 @@ export const NODE_CONTRACTS: Record<WorkflowNodeType, NodeContract> = {
     dirtyTriggers: ["params", "edges", "typedPorts"],
     edgeCases: ["Auxiliary provider — invoked only by AI Agent"],
   },
+
+  aiHttpTool: {
+    type: "aiHttpTool",
+    version: 1,
+    category: "AI",
+    label: "HTTP Tool",
+    inputs: [],
+    outputs: [
+      {
+        id: "tool",
+        kind: "ai_tool",
+        direction: "out",
+        label: "Tool",
+        connectionKind: "auxiliary",
+        dataType: "ai-tool",
+        description: "HTTP API tool resource for an AI Agent",
+      },
+    ],
+    cardinality: "0-to-1",
+    pairedItemPolicy: "none",
+    settings: SETTINGS_LOGIC,
+    capabilities: ["notes"],
+    params: [],
+    dirtyTriggers: ["params", "edges", "typedPorts"],
+    edgeCases: [
+      "Auxiliary provider — not a scheduled WorkflowItem step",
+      "POST/PUT/PATCH/DELETE may repeat under at-least-once Agent retries",
+    ],
+  },
 };
 
 // ---------------------------------------------------------------------------
