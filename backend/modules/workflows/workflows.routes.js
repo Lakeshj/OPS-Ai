@@ -11,6 +11,7 @@ const {
   remove,
   startRun,
   webhookTrigger,
+  webhookTestTrigger,
   listRuns,
   getRun,
   getRunLineage,
@@ -69,6 +70,7 @@ router.post("/:id/nodes/:nodeId/execute-previous", executePrevious);
 router.get("/:id/nodes/:nodeId/input", getNodeInput);
 router.post("/:id/nodes/:nodeId/expression-preview", previewExpression);
 router.post("/:id/nodes/:nodeId/schedule-preview", previewScheduleOccurrences);
+router.post("/:id/webhook/test", webhookTestTrigger);
 router.post("/:id/webhook", webhookTrigger);
 router.patch("/:id/error-workflow", setErrorWorkflow);
 router.get("/:id", getById);

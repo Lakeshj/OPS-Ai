@@ -655,42 +655,74 @@ const parseRetryAfter = (value) => {
 
 /**
  * One request with a timeout, backing off on 429 and 5xx while honouring
- * Retry-After. Returns the parsed body alongside the status.
+ * Retry-After. Uses shared SSRF + redirect revalidation (Part 13B).
  */
 const fetchWithRateLimitRetry = async (
   url,
   { method, headers, body },
   { timeoutMs, resolved, attempts = 2, redirect } = {}
 ) => {
+  const {
+    secureHttpFetch,
+    HttpSecurityError,
+  } = require("./workflowHttpSecurity.service");
   const maxAttempts = Math.min(Math.max(attempts, 0), 5) + 1;
 
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), timeoutMs);
     try {
-      const res = await fetch(url, {
-        method,
-        headers,
-        body,
-        signal: controller.signal,
-        ...(redirect ? { redirect } : {}),
-      });
-
-      const retryable = res.status === 429 || res.status >= 500;
-      if (retryable && attempt < maxAttempts) {
-        const wait =
-          parseRetryAfter(res.headers.get("retry-after")) ?? 1000 * attempt;
-        await new Promise((r) => setTimeout(r, wait));
-        continue;
+      // redirect: "manual" without follow is only for callers that refuse 3xx
+      // (HTTP Tool). Default path uses secureHttpFetch which revalidates hops.
+      if (redirect === "manual") {
+        await require("./workflowHttpSecurity.service").assertSafeHttpUrl(url);
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), timeoutMs);
+        try {
+          const res = await fetch(url, {
+            method,
+            headers,
+            body,
+            signal: controller.signal,
+            redirect: "manual",
+          });
+          const retryable = res.status === 429 || res.status >= 500;
+          if (retryable && attempt < maxAttempts && res.status < 300) {
+            const wait =
+              parseRetryAfter(res.headers.get("retry-after")) ?? 1000 * attempt;
+            await new Promise((r) => setTimeout(r, wait));
+            continue;
+          }
+          if (res.status >= 300 && res.status < 400) {
+            return { status: res.status, ok: false, body: null, redirect: true };
+          }
+          const contentType = res.headers.get("content-type") || "";
+          const parsed = contentType.includes("application/json")
+            ? await res.json().catch(() => null)
+            : await res.text();
+          return { status: res.status, ok: res.ok, body: parsed };
+        } finally {
+          clearTimeout(timer);
+        }
       }
 
-      const contentType = res.headers.get("content-type") || "";
-      const parsed = contentType.includes("application/json")
-        ? await res.json().catch(() => null)
-        : await res.text();
-
-      return { status: res.status, ok: res.ok, body: parsed };
+      const res = await secureHttpFetch(
+        url,
+        { method, headers, body },
+        { timeoutMs }
+      );
+      const retryable = res.status === 429 || res.status >= 500;
+      if (retryable && attempt < maxAttempts) {
+        await new Promise((r) => setTimeout(r, 1000 * attempt));
+        continue;
+      }
+      return { status: res.status, ok: res.ok, body: res.body, url: res.url };
     } catch (err) {
+      if (err instanceof HttpSecurityError) {
+        throw failWith(err.message, {
+          ...(resolved || {}),
+          url,
+          code: err.code,
+        });
+      }
       const aborted = err instanceof Error && err.name === "AbortError";
       if (!aborted && attempt < maxAttempts) {
         await new Promise((r) => setTimeout(r, 1000 * attempt));
@@ -704,8 +736,6 @@ const fetchWithRateLimitRetry = async (
             : String(err),
         { ...resolved, url }
       );
-    } finally {
-      clearTimeout(timer);
     }
   }
 
@@ -934,6 +964,80 @@ const handlers = {
   aiHttpTool: async (node) => {
     const { assertNotProviderRunStep } = require("./workflowAiResources.service");
     assertNotProviderRunStep(node);
+  },
+
+  respondToWebhook: async (node, context) => {
+    const {
+      RESPOND_ERROR,
+      validateStatusCode,
+      sanitizeResponseHeaders,
+    } = require("./workflowWebhookRespond.service");
+    const channel = context.webhookResponse;
+    if (!channel) {
+      const err = new Error(
+        "Respond to Webhook requires a live webhook request context."
+      );
+      err.code = RESPOND_ERROR.CONTEXT_REQUIRED;
+      throw err;
+    }
+    const data = node.data || {};
+    const statusCode = validateStatusCode(
+      data.statusCode != null ? data.statusCode : 200
+    );
+    const responseType = String(data.responseType || "json").toLowerCase();
+    const scope = {
+      input: context.input,
+      steps: context.steps,
+      item: getItemPayload(context.inputItems?.[0]),
+      items: context.inputItems,
+    };
+    let body;
+    if (data.body != null) {
+      if (typeof data.body === "string") {
+        body = interpolate(data.body, scope);
+        if (responseType === "json") {
+          try {
+            body = JSON.parse(body);
+          } catch {
+            // keep string if not valid JSON
+          }
+        }
+      } else {
+        // Object/array bodies: interpolate string leaves (expressions).
+        const walk = (value) => {
+          if (typeof value === "string") return interpolate(value, scope);
+          if (Array.isArray(value)) return value.map(walk);
+          if (value && typeof value === "object") {
+            const out = {};
+            for (const [k, v] of Object.entries(value)) out[k] = walk(v);
+            return out;
+          }
+          return value;
+        };
+        body = walk(data.body);
+      }
+    } else {
+      body = responseType === "json" ? {} : "";
+    }
+    const headers = sanitizeResponseHeaders(
+      (Array.isArray(data.responseHeaders) ? data.responseHeaders : []).map(
+        (row) => ({
+          key: row?.key,
+          value: interpolate(String(row?.value ?? ""), scope),
+        })
+      )
+    );
+    channel.send({ statusCode, body, headers, responseType });
+    const items = Array.isArray(context.inputItems) ? context.inputItems : [];
+    return {
+      output: {
+        responded: true,
+        statusCode,
+        responseType,
+        // Never persist response body secrets beyond compact status
+      },
+      items,
+    };
   },
 
   http: async (node, context) => {

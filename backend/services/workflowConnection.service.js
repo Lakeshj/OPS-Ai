@@ -128,6 +128,7 @@ const NODE_PORT_CONTRACTS = {
   webhook: { inputs: [], outputs: [mainOut()] },
   workflowTrigger: { inputs: [], outputs: [mainOut()] },
   errorTrigger: { inputs: [], outputs: [mainOut()] },
+  respondToWebhook: { inputs: [mainIn()], outputs: [mainOut()] },
   set: { inputs: [mainIn()], outputs: [mainOut()] },
   splitOut: { inputs: [mainIn()], outputs: [mainOut()] },
   filter: { inputs: [mainIn()], outputs: [mainOut()] },

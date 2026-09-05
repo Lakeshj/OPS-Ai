@@ -293,6 +293,14 @@ UI-only polish on top of 12A/12B. No Memory/RAG/streaming in 12C.
 - Redirects not followed; metadata hosts blocked. Broader private-network SSRF remains a known limitation shared with HTTP Request.
 - POST/PUT/PATCH/DELETE may repeat under Agent/node at-least-once retries.
 
+## Webhook Respond + HTTP security (Part 13B)
+
+- Default webhook mode remains **immediate**: enqueue run → `201` + run JSON (caller does not wait).
+- **Respond to Webhook** (`respondToWebhook`): bounded **synchronous** execute in the HTTP process; no Express `res` serialization; no worker job for that delivery.
+- Respond mode rejects reachable Wait, Execute Workflow, multiple Respond nodes, and Respond inside Loop body.
+- Shared `workflowHttpSecurity.service.js`: http(s) only; default-deny loopback/private/link-local/metadata after DNS; redirects followed manually with per-hop revalidation; strip Authorization on cross-origin redirect.
+- Tests inject `withHttpSecurityTestPolicy({ allowLoopback: true })` — production defaults stay deny.
+
 - Agent card shows Model required / Model label + Tools count (via `getAiAgentReadiness`).
 - Auxiliary edges labeled Model / Tool (not generic “Resource” when type known).
 - Memory handle hidden until a production memory provider is Available.

@@ -55,11 +55,16 @@ const registerPart13ATests = ({ check, section, assert: a }) => {
   const libraryNodes = catalog.nodes || [];
 
   const withMockServer = async (handler, fn) => {
+    const {
+      withHttpSecurityTestPolicy,
+    } = require("../services/workflowHttpSecurity.service");
     const server = http.createServer((req, res) => handler(req, res));
     await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
     const { port } = server.address();
     try {
-      return await fn(`http://127.0.0.1:${port}`);
+      return await withHttpSecurityTestPolicy({ allowLoopback: true }, () =>
+        fn(`http://127.0.0.1:${port}`)
+      );
     } finally {
       await new Promise((resolve) => server.close(resolve));
     }

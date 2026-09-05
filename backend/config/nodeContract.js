@@ -73,6 +73,7 @@ const NODE_ENGINE_CONTRACTS = {
   aiChatModel: { cardinality: "0-to-1", pairedItemPolicy: "none", mergeInputs: 0, isAuxiliaryProvider: true },
   aiCalculatorTool: { cardinality: "0-to-1", pairedItemPolicy: "none", mergeInputs: 0, isAuxiliaryProvider: true },
   aiHttpTool: { cardinality: "0-to-1", pairedItemPolicy: "none", mergeInputs: 0, isAuxiliaryProvider: true },
+  respondToWebhook: { cardinality: "N-to-N", pairedItemPolicy: "identity1to1", mergeInputs: 1, isSideEffecting: true },
   aiModelProviderTest: { cardinality: "0-to-1", pairedItemPolicy: "none", mergeInputs: 0, isAuxiliaryProvider: true },
   aiToolProviderTest: { cardinality: "0-to-1", pairedItemPolicy: "none", mergeInputs: 0, isAuxiliaryProvider: true },
   aiMemoryProviderTest: { cardinality: "0-to-1", pairedItemPolicy: "none", mergeInputs: 0, isAuxiliaryProvider: true },

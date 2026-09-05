@@ -64,8 +64,7 @@ export const NODE_PARAMETER_SCHEMAS: Record<WorkflowNodeType, ParamDescriptor[]>
         default: "immediate",
         options: [
           { name: "Immediately", value: "immediate" },
-          { name: "When last node finishes", value: "lastNode" },
-          { name: "Respond node", value: "respondNode" },
+          { name: "Using Respond to Webhook node", value: "respondNode" },
         ],
       },
       {
@@ -73,6 +72,44 @@ export const NODE_PARAMETER_SCHEMAS: Record<WorkflowNodeType, ParamDescriptor[]>
         displayName: "Authentication",
         type: "credential",
         customRenderer: "credential",
+      },
+    ],
+
+    respondToWebhook: [
+      {
+        name: "statusCode",
+        displayName: "Status code",
+        type: "number",
+        default: 200,
+      },
+      {
+        name: "responseType",
+        displayName: "Response type",
+        type: "options",
+        default: "json",
+        options: [
+          { name: "JSON", value: "json" },
+          { name: "Text", value: "text" },
+        ],
+      },
+      {
+        name: "body",
+        displayName: "Response body",
+        type: "json",
+        multiline: true,
+        expression: true,
+        default: '{\n  "ok": true\n}',
+      },
+      {
+        name: "responseHeaders",
+        displayName: "Headers",
+        type: "fixedCollection",
+        customRenderer: "queryParams",
+        default: [],
+        fields: [
+          { name: "key", displayName: "Key", type: "string" },
+          { name: "value", displayName: "Value", type: "string", expression: true },
+        ],
       },
     ],
 

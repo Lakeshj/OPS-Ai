@@ -140,6 +140,7 @@ const nodeTypes = {
   aiChatModel: WorkflowNode,
   aiCalculatorTool: WorkflowNode,
   aiHttpTool: WorkflowNode,
+  respondToWebhook: WorkflowNode,
 };
 
 const edgeTypes = {
@@ -391,6 +392,8 @@ const defaultDataForType = (type: WorkflowNodeType): WorkflowNodeData => {
       return {
         label: "Webhook",
         nodeType: "webhook",
+        method: "POST",
+        responseMode: "immediate",
       };
     case "splitOut":
       return {
@@ -502,6 +505,15 @@ const defaultDataForType = (type: WorkflowNodeType): WorkflowNodeData => {
         queryParams: [],
         headers: [],
         timeoutMs: 30000,
+      };
+    case "respondToWebhook":
+      return {
+        label: "Respond to Webhook",
+        nodeType: "respondToWebhook",
+        statusCode: 200,
+        responseType: "json",
+        body: '{"ok":true}',
+        responseHeaders: [],
       };
     case "result":
       return { label: "Result", nodeType: "result", mapFrom: "{{input}}" };
@@ -2270,7 +2282,20 @@ function WorkflowCanvasInner({
       const def = buildDefinition();
       setNodes(toFlowNodes(def, latestRun));
       await onSave(def);
-      await onRun({ ...input, source: "manual" });
+      const webhookNode = def.nodes?.find(
+        (n) => (n.type || n.data?.nodeType) === "webhook"
+      );
+      const responseMode = String(
+        (webhookNode?.data as { responseMode?: string } | undefined)
+          ?.responseMode || "immediate"
+      );
+      await onRun({
+        ...input,
+        source: responseMode === "respondNode" ? "webhook" : "manual",
+        ...(responseMode === "respondNode"
+          ? { __opsaiWebhookRespondTest: true }
+          : {}),
+      });
     } catch (error) {
       const message =
         error instanceof Error ? error.message : "Failed to run workflow";

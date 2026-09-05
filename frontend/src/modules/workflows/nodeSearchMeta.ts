@@ -153,6 +153,16 @@ export const NODE_SEARCH_META: Record<string, NodeSearchMeta> = {
     aliases: ["http tool", "api tool", "rest tool", "http request tool"],
     keywords: ["agent", "tool", "api", "http"],
   },
+  "respond-to-webhook": {
+    aliases: [
+      "respond webhook",
+      "webhook response",
+      "response",
+      "return response",
+      "http response",
+    ],
+    keywords: ["webhook", "status", "json"],
+  },
 };
 
 /** Display labels for category chips (canonical category id unchanged). */

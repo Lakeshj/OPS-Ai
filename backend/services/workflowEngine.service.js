@@ -265,6 +265,12 @@ const findStartNodes = (graph) => {
 const edgeKey = (edge) =>
   edge.id || `${edge.source}->${edge.target}#${edge.sourceHandle || ""}`;
 
+/** True for the primary execution output (canvas often labels it "main"). */
+const isPrimaryExecutionHandle = (sourceHandle) => {
+  const h = String(sourceHandle || "").trim();
+  return !h || h === "default" || h === "main";
+};
+
 /** Outgoing edges the node actually activated, given the handle it chose. */
 const pickActiveEdges = (graph, fromNodeId, nextHandle) => {
   // Part 12A: only execution edges activate downstream WorkflowItem flow.
@@ -274,14 +280,12 @@ const pickActiveEdges = (graph, fromNodeId, nextHandle) => {
     const matching = edges.filter(
       (e) => String(e.sourceHandle || "") === String(nextHandle)
     );
-    // Fall back to unlabelled edges when the graph has no handle-specific wiring.
+    // Fall back to primary main edges when the graph has no handle-specific wiring.
     return matching.length > 0
       ? matching
-      : edges.filter((e) => !e.sourceHandle || e.sourceHandle === "default");
+      : edges.filter((e) => isPrimaryExecutionHandle(e.sourceHandle));
   }
-  return edges.filter(
-    (e) => !e.sourceHandle || e.sourceHandle === "default"
-  );
+  return edges.filter((e) => isPrimaryExecutionHandle(e.sourceHandle));
 };
 
 const pickNextNodes = (graph, fromNodeId, nextHandle) =>
@@ -376,8 +380,21 @@ const nodeTypeOf = (node) => node?.type || node?.data?.nodeType || "noop";
 const getUpstreamItemsForEdge = (edge, context) => {
   const portOutputs = context.portOutputs?.[edge.source];
   if (portOutputs && edge.sourceHandle) {
-    const portItems = portOutputs[String(edge.sourceHandle)];
-    return Array.isArray(portItems) ? portItems.map((item) => cloneItem(item)) : [];
+    const handle = String(edge.sourceHandle);
+    const portItems = portOutputs[handle];
+    if (Array.isArray(portItems)) {
+      return portItems.map((item) => cloneItem(item));
+    }
+    // Canvas primary edges use "main"; some nodes only store flat items.
+    if (isPrimaryExecutionHandle(handle)) {
+      const primary =
+        portOutputs.main || portOutputs.default || Object.values(portOutputs)[0];
+      if (Array.isArray(primary)) {
+        return primary.map((item) => cloneItem(item));
+      }
+    } else {
+      return [];
+    }
   }
   const upstream = context.items?.[edge.source];
   if (!Array.isArray(upstream)) return [];
@@ -539,9 +556,10 @@ const createScheduler = (graph, restored = null) => {
         pickActiveEdges(graph, node.id, nextHandle).map(edgeKey)
       );
     } else {
+      // Canvas edges commonly set sourceHandle: "main" — treat like unlabelled primary out.
       activeKeys = new Set(
         outgoing
-          .filter((e) => !e.sourceHandle || e.sourceHandle === "default")
+          .filter((e) => isPrimaryExecutionHandle(e.sourceHandle))
           .map(edgeKey)
       );
     }
@@ -1041,6 +1059,11 @@ const executeRun = async (runId, options = {}) => {
     return { status: run.status };
   }
 
+  if (context) {
+    context.webhookResponse = options.webhookResponse || null;
+    context.rejectDurableWebhook = Boolean(options.rejectDurableWebhook);
+  }
+
   scheduler.setReopenClearPort((nodeId) => {
     if (context.portOutputs) delete context.portOutputs[nodeId];
   });
@@ -1226,6 +1249,13 @@ const executeRun = async (runId, options = {}) => {
 
         // Durable Wait suspension — persist and release worker.
         if (!failure && result?.suspend) {
+          if (context.rejectDurableWebhook) {
+            const err = new Error(
+              "Respond to Webhook mode cannot Wait — durable suspension is not allowed."
+            );
+            err.code = "RESPOND_WEBHOOK_WAIT_FORBIDDEN";
+            throw err;
+          }
           const mode = resolveWaitMode({
             resumeMode: result.resumeMode || node.data?.resumeMode,
           });
@@ -1292,6 +1322,13 @@ const executeRun = async (runId, options = {}) => {
 
         // Part 10B — Execute Workflow: durable child invocation via 10A service.
         if (!failure && result?.invokeChild) {
+          if (context.rejectDurableWebhook) {
+            const err = new Error(
+              "Respond to Webhook mode cannot Execute Workflow — durable child wait is not allowed."
+            );
+            err.code = "RESPOND_WEBHOOK_SUBWORKFLOW_FORBIDDEN";
+            throw err;
+          }
           const childWorkflowId = String(result.childWorkflowId || "").trim();
           const inputItems = Array.isArray(result.items)
             ? result.items
@@ -2218,6 +2255,8 @@ const executeGraphInMemory = async (definition, options = {}) => {
     useProductionPins: true,
     graph,
     now,
+    webhookResponse: options.webhookResponse || null,
+    rejectDurableWebhook: Boolean(options.rejectDurableWebhook),
   };
 
   const scheduler = createScheduler(graph);

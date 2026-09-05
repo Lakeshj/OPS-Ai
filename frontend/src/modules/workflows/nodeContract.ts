@@ -560,7 +560,6 @@ export const NODE_CONTRACTS: Record<WorkflowNodeType, NodeContract> = {
         default: "immediate",
         options: [
           { name: "Immediately", value: "immediate" },
-          { name: "When last node finishes", value: "lastNode" },
           { name: "Using Respond to Webhook node", value: "respondNode" },
         ],
       },
@@ -571,6 +570,27 @@ export const NODE_CONTRACTS: Record<WorkflowNodeType, NodeContract> = {
       "No INPUT panel",
       "Pin ignored in production — real request body wins",
       "Test URL vs production URL are distinct UI states",
+      "Respond mode runs synchronously and rejects Wait / Execute Workflow on the path",
+    ],
+  },
+
+  respondToWebhook: {
+    type: "respondToWebhook",
+    version: 1,
+    category: "Core",
+    label: "Respond to Webhook",
+    inputs: [mainIn()],
+    outputs: [mainOut],
+    cardinality: "N-to-N",
+    pairedItemPolicy: "identity1to1",
+    settings: SETTINGS_LOGIC,
+    capabilities: ["notes"],
+    params: [],
+    dirtyTriggers: ["params"],
+    edgeCases: [
+      "Requires live webhook Respond mode context",
+      "Exactly one reachable Respond node per webhook Respond-mode trigger",
+      "Not a Trigger",
     ],
   },
 

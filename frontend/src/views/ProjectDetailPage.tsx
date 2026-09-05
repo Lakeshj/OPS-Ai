@@ -10,7 +10,6 @@ import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   Dialog,
   DialogContent,
@@ -64,7 +63,6 @@ import {
   X,
   Sparkles,
   Workflow,
-  Trash2
 } from "lucide-react";
 
 import Sidebar from "@/components/Sidebar";
@@ -105,6 +103,7 @@ const ProjectDetailPage = () => {
   // Rename states
   const [editingFolder, setEditingFolder] = useState<string | null>(null);
   const [editingThread, setEditingThread] = useState<string | null>(null);
+  const [editingWorkflow, setEditingWorkflow] = useState<string | null>(null);
   const [editingName, setEditingName] = useState("");
 
   // Generate auto thread name based on first message
@@ -252,7 +251,6 @@ const ProjectDetailPage = () => {
   };
 
   const handleDeleteWorkflow = async (id: string) => {
-    if (!confirm("Delete this workflow?")) return;
     try {
       await workflowsApi.remove(id);
       setWorkflows((prev) => prev.filter((w) => w.id !== id));
@@ -261,6 +259,29 @@ const ProjectDetailPage = () => {
     } catch (error) {
       console.error(error);
       toast.error("Failed to delete workflow");
+    }
+  };
+
+  const handleRenameWorkflow = async (id: string, newName: string) => {
+    const trimmed = newName.trim();
+    if (!trimmed) {
+      toast.error("Name cannot be empty");
+      return;
+    }
+    try {
+      const updated = await workflowsApi.update(id, { name: trimmed });
+      setWorkflows((prev) =>
+        prev.map((w) => (w.id === id ? { ...w, name: updated.name } : w))
+      );
+      setSelectedWorkflow((prev) =>
+        prev?.id === id ? { ...prev, name: updated.name } : prev
+      );
+      setEditingWorkflow(null);
+      setEditingName("");
+      toast.success("Workflow renamed");
+    } catch (error) {
+      console.error(error);
+      toast.error("Failed to rename workflow");
     }
   };
 
@@ -507,7 +528,7 @@ const ProjectDetailPage = () => {
     return (
       <SidebarProvider className="workspace-shell h-svh overflow-hidden">
         <div className="workspace-frame flex h-full w-full overflow-hidden">
-          <Sidebar />
+          <Sidebar collapsible="icon" />
         <SidebarInset className="workspace-main !min-h-0 h-full overflow-hidden">
             <div className="flex h-full items-center justify-center">
               <div className="h-12 w-12 animate-spin rounded-full border-t-2 border-b-2 border-blue-600" />
@@ -522,7 +543,7 @@ const ProjectDetailPage = () => {
     return (
       <SidebarProvider className="workspace-shell h-svh overflow-hidden">
         <div className="workspace-frame flex h-full w-full overflow-hidden">
-          <Sidebar />
+          <Sidebar collapsible="icon" />
           <SidebarInset className="workspace-main !min-h-0 h-full overflow-hidden">
             <div className="flex h-full flex-col items-center justify-center p-6 text-center">
               <h2 className="text-2xl font-bold text-foreground">Workspace not found</h2>
@@ -539,7 +560,7 @@ const ProjectDetailPage = () => {
   return (
     <SidebarProvider className="workspace-shell h-svh overflow-hidden">
       <div className="workspace-frame flex h-full w-full overflow-hidden bg-gray-50 dark:bg-gray-900">
-        <Sidebar />
+        <Sidebar collapsible="icon" />
         <SidebarInset className="workspace-main !min-h-0 h-full overflow-hidden">
           <div className="workspace-content flex h-full min-h-0">
             {/* Thread Sidebar */}
@@ -652,41 +673,118 @@ const ProjectDetailPage = () => {
               </div>
 
               {/* Thread / Workflow list */}
-              <ScrollArea className="workspace-thread-list min-h-0 flex-1">
+              <div className="workspace-thread-list min-h-0 flex-1 overflow-y-auto overflow-x-hidden">
                 {workspaceMode === "workflow" ? (
-                  <div className="space-y-1 p-3">
+                  <div className="box-border space-y-1 p-3">
                     {workflows.map((wf) => (
                       <div
                         key={wf.id}
                         className={cn(
-                          "group flex cursor-pointer items-center justify-between rounded-xl p-3 text-sm transition-all hover:bg-gray-50 dark:hover:bg-gray-700",
+                          "group flex w-full min-w-0 max-w-full cursor-pointer items-start gap-2 rounded-xl p-2.5 text-sm transition-all hover:bg-gray-50 dark:hover:bg-gray-700",
                           selectedWorkflow?.id === wf.id
                             ? "bg-gray-100 dark:bg-gray-700"
                             : "bg-white dark:bg-gray-800"
                         )}
-                        onClick={() => setSelectedWorkflow(wf)}
+                        onClick={() =>
+                          editingWorkflow !== wf.id && setSelectedWorkflow(wf)
+                        }
                       >
-                        <div className="flex min-w-0 flex-1 items-center">
-                          <Workflow className="mr-3 h-4 w-4 shrink-0 text-gray-500 dark:text-gray-400" />
-                          <div className="min-w-0">
-                            <div className="truncate font-medium text-gray-700 dark:text-gray-200">
-                              {wf.name}
-                            </div>
-                            <div className="text-[11px] text-muted-foreground">
-                              {wf.definition?.nodes?.length || 0} nodes · {wf.status}
-                            </div>
+                        <Workflow className="mt-0.5 h-4 w-4 shrink-0 text-gray-500 dark:text-gray-400" />
+                        {editingWorkflow === wf.id ? (
+                          <div
+                            className="flex min-w-0 flex-1 items-center gap-1"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <Input
+                              value={editingName}
+                              onChange={(e) => setEditingName(e.target.value)}
+                              className="h-7 min-w-0 flex-1 text-xs"
+                              autoFocus
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter") {
+                                  void handleRenameWorkflow(wf.id, editingName);
+                                } else if (e.key === "Escape") {
+                                  setEditingWorkflow(null);
+                                  setEditingName("");
+                                }
+                              }}
+                            />
+                            <Button size="icon" variant="ghost" className="h-7 w-7 shrink-0" onClick={() => void handleRenameWorkflow(wf.id, editingName)}>
+                              <Check className="h-3 w-3" />
+                            </Button>
+                            <Button size="icon" variant="ghost" className="h-7 w-7 shrink-0" onClick={() => { setEditingWorkflow(null); setEditingName(""); }}>
+                              <X className="h-3 w-3" />
+                            </Button>
                           </div>
-                        </div>
-                        <button
-                          type="button"
-                          className="flex h-6 w-6 items-center justify-center rounded-md opacity-0 hover:bg-gray-100 group-hover:opacity-100 dark:hover:bg-gray-600"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            void handleDeleteWorkflow(wf.id);
-                          }}
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </button>
+                        ) : (
+                          <>
+                            <div className="min-w-0 flex-1 overflow-hidden">
+                              <div className="line-clamp-2 break-words font-medium leading-snug text-gray-700 dark:text-gray-200">
+                                {wf.name}
+                              </div>
+                              <div className="mt-0.5 truncate text-[11px] text-muted-foreground">
+                                {wf.definition?.nodes?.length || 0} nodes ·{" "}
+                                {wf.status}
+                              </div>
+                            </div>
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button
+                                  type="button"
+                                  size="icon"
+                                  variant="ghost"
+                                  className="mt-0.5 h-8 w-8 shrink-0 text-muted-foreground hover:bg-transparent hover:text-foreground"
+                                  aria-label="Workflow actions"
+                                  onClick={(e) => e.stopPropagation()}
+                                >
+                                  <MoreHorizontal className="h-4 w-4" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end" className="z-50">
+                                <DropdownMenuItem
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setEditingWorkflow(wf.id);
+                                    setEditingName(wf.name);
+                                  }}
+                                >
+                                  <Edit className="mr-2 h-4 w-4" />
+                                  Rename
+                                </DropdownMenuItem>
+                                <DropdownMenuSeparator />
+                                <AlertDialog>
+                                  <AlertDialogTrigger asChild>
+                                    <DropdownMenuItem
+                                      className="text-destructive"
+                                      onSelect={(e) => e.preventDefault()}
+                                      onClick={(e) => e.stopPropagation()}
+                                    >
+                                      <Trash className="mr-2 h-4 w-4" />
+                                      Delete
+                                    </DropdownMenuItem>
+                                  </AlertDialogTrigger>
+                                  <AlertDialogContent>
+                                    <AlertDialogHeader>
+                                      <AlertDialogTitle>Delete Workflow</AlertDialogTitle>
+                                      <AlertDialogDescription>
+                                        Are you sure you want to delete &quot;{wf.name}&quot;? This cannot be undone.
+                                      </AlertDialogDescription>
+                                    </AlertDialogHeader>
+                                    <AlertDialogFooter>
+                                      <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                      <AlertDialogAction
+                                        onClick={() => void handleDeleteWorkflow(wf.id)}
+                                        className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                                      >
+                                        Delete
+                                      </AlertDialogAction>
+                                    </AlertDialogFooter>
+                                  </AlertDialogContent>
+                                </AlertDialog>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </>
+                        )}
                       </div>
                     ))}
                     {workflows.length === 0 && (
@@ -760,8 +858,8 @@ const ProjectDetailPage = () => {
                       {!editingThread && (
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
-                            <button className="h-6 w-6 rounded-md hover:bg-gray-100 dark:hover:bg-gray-600 flex items-center justify-center opacity-0 group-hover:opacity-100">
-                              <MoreHorizontal className="h-3.5 w-3.5" />
+                            <button className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-gray-500 opacity-100 hover:bg-gray-100 hover:text-gray-800 dark:text-gray-300 dark:hover:bg-gray-600 dark:hover:text-gray-100">
+                              <MoreHorizontal className="h-4 w-4" />
                             </button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
@@ -880,8 +978,8 @@ const ProjectDetailPage = () => {
                         {!editingFolder && (
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
-                              <button className="h-6 w-6 rounded-md hover:bg-gray-100 dark:hover:bg-gray-600 flex items-center justify-center opacity-0 group-hover:opacity-100">
-                                <MoreHorizontal className="h-3.5 w-3.5" />
+                              <button className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-gray-500 opacity-100 hover:bg-gray-100 hover:text-gray-800 dark:text-gray-300 dark:hover:bg-gray-600 dark:hover:text-gray-100">
+                                <MoreHorizontal className="h-4 w-4" />
                               </button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
@@ -993,8 +1091,8 @@ const ProjectDetailPage = () => {
                                 {!editingThread && (
                                   <DropdownMenu>
                                     <DropdownMenuTrigger asChild>
-                                      <button className="h-6 w-6 rounded-md hover:bg-gray-100 dark:hover:bg-gray-600 flex items-center justify-center opacity-0 group-hover:opacity-100">
-                                        <MoreHorizontal className="h-3.5 w-3.5" />
+                                      <button className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-gray-500 opacity-100 hover:bg-gray-100 hover:text-gray-800 dark:text-gray-300 dark:hover:bg-gray-600 dark:hover:text-gray-100">
+                                        <MoreHorizontal className="h-4 w-4" />
                                       </button>
                                     </DropdownMenuTrigger>
                                     <DropdownMenuContent align="end">
@@ -1064,7 +1162,7 @@ const ProjectDetailPage = () => {
                   )}
                 </div>
                 )}
-              </ScrollArea>
+              </div>
             </div>
 
             {/* Main chat / workflow area */}

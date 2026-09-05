@@ -45,7 +45,8 @@ export type WorkflowNodeType =
   | "aiAgent"
   | "aiChatModel"
   | "aiCalculatorTool"
-  | "aiHttpTool";
+  | "aiHttpTool"
+  | "respondToWebhook";
 
 export interface WorkflowSetMapping {
   key: string;

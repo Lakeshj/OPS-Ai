@@ -127,8 +127,21 @@ export function TriggerNodePanel({
       {nodeType === "webhook" && (
         <>
           <div className="rounded-md border border-blue-500/25 bg-blue-500/10 px-3 py-2 text-xs text-muted-foreground">
-            POST JSON to the URL below in production. Use Test trigger for manual
-            testing.
+            POST JSON to the URL below in production. Use{" "}
+            <span className="font-medium text-foreground">Test trigger</span>{" "}
+            {data.responseMode === "respondNode"
+              ? "to run Respond mode in-editor (returns the custom HTTP body)."
+              : "for a manual editor run."}
+          </div>
+          <div>
+            <Label className="text-xs">Test request body (JSON)</Label>
+            <Textarea
+              value={runInput}
+              onChange={(e) => onRunInputChange(e.target.value)}
+              rows={3}
+              className="mt-1.5 bg-background font-mono text-[11px]"
+              placeholder='{"customerId":"cust_42"}'
+            />
           </div>
           <div>
             <Label className="text-xs">Webhook URL</Label>

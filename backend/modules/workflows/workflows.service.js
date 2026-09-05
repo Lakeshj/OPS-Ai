@@ -52,6 +52,8 @@ const ALLOWED_NODE_TYPES = new Set([
   "aiAgent",
   "aiChatModel",
   "aiCalculatorTool",
+  "aiHttpTool",
+  "respondToWebhook",
 ]);
 
 const parseJson = (value, fallback = null) => {
@@ -184,6 +186,13 @@ const validateDefinition = (definition) => {
   const cycleCheck = validateControlledCycles(buildGraph(definition));
   if (!cycleCheck.ok) {
     throw new AppError(cycleCheck.errors[0], 400, "VALIDATION_ERROR");
+  }
+  const {
+    validateWebhookRespondDefinition,
+  } = require("../../services/workflowWebhookRespond.service");
+  const respondCheck = validateWebhookRespondDefinition(definition);
+  if (!respondCheck.ok) {
+    throw new AppError(respondCheck.message, 400, respondCheck.code);
   }
 };
 
@@ -564,6 +573,153 @@ const startRun = async (workflowId, input, authUser, idempotencyKey = null) => {
   }
 
   return getRunById(runId, authUser);
+};
+
+const WEBHOOK_RESPOND_TIMEOUT_MS = 30000;
+
+/**
+ * Part 13B — webhook delivery.
+ * immediate (default): enqueue + 201 run (unchanged).
+ * respondNode: bounded sync execute in HTTP process; no worker job.
+ */
+const startWebhookDelivery = async (workflowId, payload, authUser, idempotencyKey = null) => {
+  const workflow = await getById(workflowId, authUser);
+  const definition = workflow.definition || emptyDefinition();
+  const {
+    getWebhookResponseMode,
+    validateWebhookRespondDefinition,
+    createWebhookResponseChannel,
+    RESPOND_ERROR,
+  } = require("../../services/workflowWebhookRespond.service");
+
+  const webhookNode = (definition.nodes || []).find(
+    (n) => (n.type || n.data?.nodeType) === "webhook"
+  );
+  const mode = webhookNode
+    ? getWebhookResponseMode(webhookNode)
+    : "immediate";
+
+  const input =
+    payload && typeof payload === "object" && !Array.isArray(payload)
+      ? { ...payload, source: "webhook" }
+      : { source: "webhook", payload };
+
+  if (mode !== "respondNode") {
+    const run = await startRun(workflowId, input, authUser, idempotencyKey);
+    return { mode: "immediate", run };
+  }
+
+  const check = validateWebhookRespondDefinition(definition);
+  if (!check.ok) {
+    throw new AppError(check.message, 400, check.code);
+  }
+
+  if (idempotencyKey) {
+    const [existing] = await pool.execute(
+      `SELECT id, status FROM workflow_runs WHERE workflow_id = ? AND idempotency_key = ?`,
+      [workflowId, idempotencyKey]
+    );
+    if (existing.length > 0) {
+      const run = await getRunById(existing[0].id, authUser);
+      return {
+        mode: "respond",
+        run,
+        httpResponse: {
+          statusCode: existing[0].status === "succeeded" ? 200 : 500,
+          body:
+            existing[0].status === "succeeded"
+              ? { ok: true, idempotent: true, runId: existing[0].id }
+              : { ok: false, error: "Previous webhook delivery failed." },
+          headers: { "Content-Type": "application/json" },
+          responseType: "json",
+        },
+      };
+    }
+  }
+
+  const runId = uuidv4();
+  const [liveRows] = await pool.execute(
+    `SELECT error_workflow_id FROM workflows WHERE id = ?`,
+    [workflowId]
+  );
+  const errorWorkflowIdSnapshot = liveRows[0]?.error_workflow_id || null;
+
+  await pool.execute(
+    `INSERT INTO workflow_runs
+      (id, workflow_id, workflow_name_snapshot, error_workflow_id_snapshot,
+       status, idempotency_key, input_json, definition_snapshot_json, created_by)
+     VALUES (?, ?, ?, ?, 'queued', ?, ?, ?, ?)`,
+    [
+      runId,
+      workflowId,
+      workflow.name || null,
+      errorWorkflowIdSnapshot,
+      idempotencyKey,
+      JSON.stringify(input ?? {}),
+      JSON.stringify(definition),
+      authUser.userId,
+    ]
+  );
+
+  const channel = createWebhookResponseChannel();
+  const { executeRun } = require("../../services/workflowEngine.service");
+
+  try {
+    await Promise.race([
+      executeRun(runId, {
+        webhookResponse: channel,
+        rejectDurableWebhook: true,
+      }),
+      new Promise((_, reject) => {
+        setTimeout(() => {
+          const err = new Error("Webhook respond mode timed out.");
+          err.code = RESPOND_ERROR.TIMEOUT;
+          reject(err);
+        }, WEBHOOK_RESPOND_TIMEOUT_MS);
+      }),
+    ]);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    const code = err?.code || "WEBHOOK_FAILED";
+    try {
+      await pool.execute(
+        `UPDATE workflow_runs
+         SET status = 'failed', error = ?, finished_at = CURRENT_TIMESTAMP
+         WHERE id = ? AND status NOT IN ('succeeded', 'cancelled')`,
+        [message.slice(0, 1900), runId]
+      );
+    } catch {
+      /* ignore */
+    }
+    const run = await getRunById(runId, authUser);
+    return {
+      mode: "respond",
+      run,
+      httpResponse: {
+        statusCode: code === RESPOND_ERROR.TIMEOUT ? 504 : 500,
+        body: { ok: false, error: "Webhook workflow failed." },
+        headers: { "Content-Type": "application/json" },
+        responseType: "json",
+      },
+    };
+  }
+
+  const snap = channel.snapshot();
+  const run = await getRunById(runId, authUser);
+  if (!snap) {
+    return {
+      mode: "respond",
+      run,
+      httpResponse: {
+        statusCode: 500,
+        body: { ok: false, error: "Webhook workflow did not send a response." },
+        headers: { "Content-Type": "application/json" },
+        responseType: "json",
+      },
+    };
+  }
+
+  return { mode: "respond", run, httpResponse: snap };
 };
 
 const getRunById = async (runId, authUser, options = {}) => {
@@ -1259,6 +1415,7 @@ module.exports = {
   update,
   remove,
   startRun,
+  startWebhookDelivery,
   getRunById,
   getRunLineage,
   getChildInvocationForStep,

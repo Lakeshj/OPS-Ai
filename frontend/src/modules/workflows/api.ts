@@ -37,6 +37,19 @@ export const workflowsApi = {
   startRun: (id: string, input?: Record<string, unknown>) =>
     apiClient.post<WorkflowRun>(`/workflows/${id}/runs`, { input: input ?? {} }),
 
+  /** Editor test for webhook workflows (returns run + simulated HTTP response). */
+  testWebhook: (id: string, body?: Record<string, unknown>) =>
+    apiClient.post<{
+      mode: "immediate" | "respond";
+      run: WorkflowRun;
+      httpResponse: {
+        statusCode: number;
+        body: unknown;
+        headers?: Record<string, string>;
+        responseType?: string;
+      } | null;
+    }>(`/workflows/${id}/webhook/test`, body ?? {}),
+
   listRuns: (id: string) => apiClient.get<WorkflowRun[]>(`/workflows/${id}/runs`),
 
   getRun: (workflowId: string, runId: string) =>

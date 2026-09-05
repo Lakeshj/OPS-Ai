@@ -89,13 +89,47 @@ const webhookTrigger = asyncHandler(async (req, res) => {
     (typeof payload.idempotencyKey === "string"
       ? payload.idempotencyKey
       : null);
-  const run = await workflowsService.startRun(
+  const delivery = await workflowsService.startWebhookDelivery(
     req.params.id,
     payload,
     req.user,
     idempotencyKey ? String(idempotencyKey).slice(0, 190) : null
   );
-  res.status(201).json(run);
+  if (delivery.mode === "respond" && delivery.httpResponse) {
+    const hr = delivery.httpResponse;
+    for (const [k, v] of Object.entries(hr.headers || {})) {
+      res.setHeader(k, v);
+    }
+    if (hr.responseType === "text") {
+      res.status(hr.statusCode).send(hr.body == null ? "" : String(hr.body));
+      return;
+    }
+    res.status(hr.statusCode).json(hr.body);
+    return;
+  }
+  res.status(201).json(delivery.run);
+});
+
+/**
+ * Editor Test trigger for webhooks — always returns run + httpResponse envelope
+ * so Respond-mode UIs can show the custom reply without losing run history.
+ */
+const webhookTestTrigger = asyncHandler(async (req, res) => {
+  const payload =
+    req.body && typeof req.body === "object" && !Array.isArray(req.body)
+      ? req.body
+      : { payload: req.body };
+  const delivery = await workflowsService.startWebhookDelivery(
+    req.params.id,
+    payload,
+    req.user,
+    null
+  );
+  res.status(200).json({
+    mode: delivery.mode,
+    run: delivery.run,
+    httpResponse: delivery.httpResponse || null,
+  });
 });
 
 const listCredentials = asyncHandler(async (req, res) => {
@@ -281,6 +315,7 @@ module.exports = {
   remove,
   startRun,
   webhookTrigger,
+  webhookTestTrigger,
   listRuns,
   getRun,
   getRunLineage,

@@ -39,6 +39,7 @@ const typeStyles: Record<string, string> = {
   aiChatModel: "border-dashed border-blue-500/50",
   aiCalculatorTool: "border-dashed border-sky-600/50",
   aiHttpTool: "border-dashed border-amber-600/50",
+  respondToWebhook: "border-cyan-600/60",
   http: "border-amber-500/60",
   condition: "border-violet-500/60",
   set: "border-sky-500/60",
@@ -82,6 +83,7 @@ const TYPE_LABEL: Record<string, string> = {
   aiChatModel: "Chat Model",
   aiCalculatorTool: "Calculator",
   aiHttpTool: "HTTP Tool",
+  respondToWebhook: "Respond",
   bot: "Bot",
   ai: "AI Model",
 };
@@ -326,6 +328,20 @@ function WorkflowNodeComponent({ id, data, type, selected }: NodeProps) {
         />
       </div>
       <div className="font-medium text-foreground">{label}</div>
+      {nodeType === "respondToWebhook" && (
+        <div className="mt-0.5 text-[10px] text-muted-foreground">
+          Status: {Number(nodeData.statusCode) || 200}
+          {" · "}
+          {String(nodeData.responseType || "json").toLowerCase() === "text"
+            ? "Text"
+            : "JSON"}
+        </div>
+      )}
+      {nodeType === "webhook" && nodeData.responseMode === "respondNode" && (
+        <div className="mt-0.5 text-[10px] text-muted-foreground">
+          Respond via node
+        </div>
+      )}
       {isResourceProvider && (
         <div className="mt-0.5 text-[10px] text-muted-foreground">
           {resourceDisplay.subtitle}

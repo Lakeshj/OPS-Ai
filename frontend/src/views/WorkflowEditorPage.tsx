@@ -318,6 +318,37 @@ export default function WorkflowEditorPage({
     if (!workflow || workflow.isDeleted) return;
     setRunning(true);
     try {
+      const useWebhookDelivery = Boolean(input.__opsaiWebhookRespondTest);
+      const {
+        source: _source,
+        __opsaiWebhookRespondTest: _flag,
+        ...body
+      } = input;
+
+      if (useWebhookDelivery) {
+        const delivery = await workflowsApi.testWebhook(
+          workflow.id,
+          Object.keys(body).length ? body : { ping: true }
+        );
+        setLatestRun(delivery.run);
+        const params = new URLSearchParams(searchParams.toString());
+        params.set("runId", delivery.run.id);
+        router.replace(`/workflows/${workflow.id}?${params.toString()}`);
+        const hr = delivery.httpResponse;
+        if (hr) {
+          const preview =
+            typeof hr.body === "string"
+              ? hr.body.slice(0, 120)
+              : JSON.stringify(hr.body).slice(0, 120);
+          toast.success(`Webhook response ${hr.statusCode}: ${preview}`);
+        } else if (delivery.run.status === "succeeded") {
+          toast.success("Webhook run succeeded");
+        } else {
+          toast.error(delivery.run.error || "Webhook run failed");
+        }
+        return;
+      }
+
       const run = await workflowsApi.startRun(workflow.id, input);
       setLatestRun(run);
       const params = new URLSearchParams(searchParams.toString());

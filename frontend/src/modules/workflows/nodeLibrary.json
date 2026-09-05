@@ -59,13 +59,13 @@
     {
       "id": "respond-to-webhook",
       "name": "Respond to Webhook",
-      "category": "Triggers",
+      "category": "Core",
       "type": "Action",
-      "description": "Send a response back to an incoming webhook",
+      "description": "Send a custom response to the incoming webhook request.",
       "icon": "reply",
-      "provider": null,
-      "available": false,
-      "engineType": null
+      "provider": "OpsAi",
+      "available": true,
+      "engineType": "respondToWebhook"
     },
     {
       "id": "execute-workflow",

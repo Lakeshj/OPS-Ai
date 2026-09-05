@@ -265,6 +265,22 @@ const executeHttpTool = async ({ nodeData, args, context }) => {
 
   const requestUrl = buildUrl(resolvedPath, query);
   assertUrlOriginPreserved(urlTemplate, requestUrl);
+  // Shared SSRF policy (Part 13B) — origin lock above remains HTTP Tool–specific
+  const {
+    assertSafeHttpUrl,
+    HttpSecurityError,
+  } = require("./workflowHttpSecurity.service");
+  try {
+    await assertSafeHttpUrl(requestUrl);
+  } catch (err) {
+    if (err instanceof HttpSecurityError) {
+      throw new AiRuntimeError(err.message, AI_ERROR.TOOL_FAILED, {
+        toolName,
+        code: err.code,
+      });
+    }
+    throw err;
+  }
 
   let body;
   if (data.body != null && method !== "GET" && method !== "HEAD") {
