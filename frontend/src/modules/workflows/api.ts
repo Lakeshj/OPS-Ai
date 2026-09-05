@@ -47,6 +47,11 @@ export const workflowsApi = {
       `/workflows/${workflowId}/runs/${runId}/lineage`
     ),
 
+  getErrorRouting: (workflowId: string, runId: string) =>
+    apiClient.get<import("./types").WorkflowErrorRouting>(
+      `/workflows/${workflowId}/runs/${runId}/error-routing`
+    ),
+
   getChildInvocation: (
     workflowId: string,
     runId: string,

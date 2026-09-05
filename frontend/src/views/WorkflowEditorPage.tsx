@@ -13,10 +13,12 @@ import { workflowsApi } from "@/modules/workflows/api";
 import type {
   Workflow,
   WorkflowDefinition,
+  WorkflowErrorRouting,
   WorkflowRun,
   WorkflowRunLineage,
 } from "@/modules/workflows/types";
 import { subworkflowErrorMessage } from "@/modules/workflows/subworkflowUx";
+import { isErrorRoutingTerminal } from "@/modules/workflows/errorRoutingUx";
 
 type Props = {
   focusMode?: boolean;
@@ -39,6 +41,8 @@ export default function WorkflowEditorPage({
   const [running, setRunning] = useState(false);
   const [latestRun, setLatestRun] = useState<WorkflowRun | null>(null);
   const [lineage, setLineage] = useState<WorkflowRunLineage | null>(null);
+  const [errorRouting, setErrorRouting] =
+    useState<WorkflowErrorRouting | null>(null);
   const [resuming, setResuming] = useState(false);
   const pollAbortRef = useRef(0);
 
@@ -53,6 +57,22 @@ export default function WorkflowEditorPage({
         setLineage(lin);
       } catch {
         setLineage(null);
+      }
+    },
+    [workflowId]
+  );
+
+  const refreshErrorRouting = useCallback(
+    async (run: WorkflowRun | null) => {
+      if (!workflowId || !run?.id) {
+        setErrorRouting(null);
+        return;
+      }
+      try {
+        const routing = await workflowsApi.getErrorRouting(workflowId, run.id);
+        setErrorRouting(routing.role === "none" ? null : routing);
+      } catch {
+        setErrorRouting(null);
       }
     },
     [workflowId]
@@ -91,6 +111,7 @@ export default function WorkflowEditorPage({
         setWorkflow(wf);
         setName(wf.name);
         await refreshLineage(historical);
+        await refreshErrorRouting(historical);
         return;
       }
       setWorkflow(wf);
@@ -114,6 +135,7 @@ export default function WorkflowEditorPage({
       }
       setLatestRun(detailed);
       await refreshLineage(detailed);
+      await refreshErrorRouting(detailed);
     } catch (error) {
       console.error(error);
       toast.error("Failed to load workflow");
@@ -121,7 +143,7 @@ export default function WorkflowEditorPage({
     } finally {
       setLoading(false);
     }
-  }, [workflowId, runIdParam, refreshLineage]);
+  }, [workflowId, runIdParam, refreshLineage, refreshErrorRouting]);
 
   useEffect(() => {
     load();
@@ -136,11 +158,26 @@ export default function WorkflowEditorPage({
       last = run;
       setLatestRun(run);
       void refreshLineage(run);
+      void refreshErrorRouting(run);
       if (
         run.status === "succeeded" ||
         run.status === "failed" ||
         run.status === "cancelled"
       ) {
+        // After source terminal, keep following Error Workflow briefly.
+        if (run.status === "failed") {
+          for (let j = 0; j < 40; j++) {
+            if (token !== pollAbortRef.current) return last;
+            await new Promise((r) => setTimeout(r, 1500));
+            const routing = await workflowsApi
+              .getErrorRouting(workflowId, run.id)
+              .catch(() => null);
+            if (routing) {
+              setErrorRouting(routing.role === "none" ? null : routing);
+              if (isErrorRoutingTerminal(routing)) break;
+            }
+          }
+        }
         return run;
       }
       if (run.status === "waiting" && i === 0) {
@@ -182,6 +219,7 @@ export default function WorkflowEditorPage({
         if (cancelled) return;
         setLatestRun(run);
         void refreshLineage(run);
+        void refreshErrorRouting(run);
       } catch {
         // ignore transient poll errors
       }
@@ -198,6 +236,47 @@ export default function WorkflowEditorPage({
     running,
     resuming,
     refreshLineage,
+    refreshErrorRouting,
+  ]);
+
+  // Part 11C — follow Error Workflow dispatch after source is terminal failed/handler waiting
+  useEffect(() => {
+    if (!workflowId || !latestRun?.id) return;
+    if (running || resuming) return;
+    if (!errorRouting || isErrorRoutingTerminal(errorRouting)) return;
+    let cancelled = false;
+    const tick = async () => {
+      try {
+        const routing = await workflowsApi.getErrorRouting(
+          workflowId,
+          latestRun.id
+        );
+        if (cancelled) return;
+        setErrorRouting(routing.role === "none" ? null : routing);
+        // If handler is waiting on this same run (handler role), also refresh run.
+        if (routing.role === "handler") {
+          const run = await workflowsApi.getRun(workflowId, latestRun.id);
+          if (!cancelled) setLatestRun(run);
+        }
+      } catch {
+        // ignore
+      }
+    };
+    const id = window.setInterval(() => void tick(), 2000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(id);
+    };
+    // Depend on routing identity fields, not the whole object (avoids interval thrash).
+  }, [
+    workflowId,
+    latestRun?.id,
+    errorRouting?.role,
+    errorRouting?.dispatch?.status,
+    errorRouting?.dispatch?.errorRunId,
+    errorRouting?.errorRun?.status,
+    running,
+    resuming,
   ]);
 
   const handleSave = async (definition: WorkflowDefinition) => {
@@ -356,6 +435,7 @@ export default function WorkflowEditorPage({
           saving={saving}
           running={running}
           latestRun={latestRun}
+          errorRouting={errorRouting}
           workflowStatus={workflow.status}
           errorWorkflowId={workflow.errorWorkflowId ?? null}
           onErrorWorkflowChange={(nextId) => {

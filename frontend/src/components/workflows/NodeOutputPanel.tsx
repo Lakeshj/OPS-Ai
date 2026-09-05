@@ -20,6 +20,7 @@ import {
 } from "@/modules/workflows/occurrenceView";
 import { Zap } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { parseAiErrorFromUnknown } from "@/modules/workflows/aiAgentUx";
 
 type PortOutputPreview = Record<string, WorkflowItem[]>;
 
@@ -45,6 +46,8 @@ type Props = {
   onSelectedRunIndexChange?: (runIndex: number | null) => void;
   loopPortView?: LoopPortView;
   onLoopPortViewChange?: (view: LoopPortView) => void;
+  /** Part 12C — auxiliary provider empty OUTPUT copy */
+  resourceProviderMessage?: string | null;
 };
 
 function occurrenceToResult(
@@ -81,6 +84,7 @@ export function NodeOutputPanel({
   onSelectedRunIndexChange,
   loopPortView = "done",
   onLoopPortViewChange,
+  resourceProviderMessage = null,
 }: Props) {
   const batchOccs = useMemo(
     () => (isLoopNode ? loopBatchOccurrences(result) : []),
@@ -330,11 +334,25 @@ export function NodeOutputPanel({
 
       {effectiveResult?.status === "failed" && (
         <div className="rounded border border-destructive/40 bg-destructive/10 p-2 text-[10px] text-destructive">
-          {effectiveResult.error || "Execution failed"}
+          {
+            parseAiErrorFromUnknown(effectiveResult.error).message ||
+            effectiveResult.error ||
+            "Execution failed"
+          }
         </div>
       )}
 
-      {!hasOutput ? (
+      {resourceProviderMessage ? (
+        <div className="space-y-2 rounded border border-dashed p-3 text-center">
+          <p className="text-xs text-muted-foreground">
+            {resourceProviderMessage}
+          </p>
+          <p className="text-[10px] text-muted-foreground">
+            This node provides a resource to an AI Agent and does not run by
+            itself.
+          </p>
+        </div>
+      ) : !hasOutput ? (
         <div className="space-y-3 rounded border border-dashed p-3 text-center">
           {isTrigger ? (
             <>

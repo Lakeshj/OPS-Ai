@@ -463,7 +463,7 @@ const validateTypedConnection = ({
         code: "MAX_CONNECTIONS",
         message:
           inn.dataType === DATA_TYPE.AI_MODEL
-            ? "Only one model can be connected."
+            ? "Only one Chat Model can be connected."
             : inn.dataType === DATA_TYPE.AI_MEMORY
               ? "Only one memory can be connected."
               : `Only one connection allowed on ${label}.`,
@@ -523,7 +523,7 @@ const validateDefinitionConnections = (definition) => {
     if (port?.maxConnections != null && count > port.maxConnections) {
       errors.push(
         port.dataType === DATA_TYPE.AI_MODEL
-          ? "Only one model can be connected."
+          ? "Only one Chat Model can be connected."
           : `Port ${port.label || port.id} exceeds max connections.`
       );
     }

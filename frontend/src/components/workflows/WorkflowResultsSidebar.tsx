@@ -1,14 +1,27 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 import { Check, ChevronDown, ChevronRight, Copy, Pin, PinOff, X } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import type { WorkflowRun, WorkflowRunStep } from "@/modules/workflows/types";
+import { sortWorkflowRunSteps } from "@/modules/workflows/runStepDisplay";
+import type {
+  WorkflowDefinition,
+  WorkflowErrorRouting,
+  WorkflowRun,
+  WorkflowRunStep,
+} from "@/modules/workflows/types";
+import {
+  ErrorRoutingSummary,
+  ErrorRunBadge,
+} from "./ErrorRoutingSummary";
 
 export type WorkflowResultsPanelProps = {
   latestRun?: WorkflowRun | null;
+  /** Optional graph for timestamp-tie ordering (not canvas position). */
+  definition?: WorkflowDefinition | null;
+  errorRouting?: WorkflowErrorRouting | null;
   formatStepOutput: (output: unknown) => string;
   onSelectStepNode?: (nodeId: string) => void;
   onTogglePin?: (nodeId: string) => void;
@@ -205,6 +218,8 @@ function StepDetails({
 /** Shared results body — used by the centered dialog and legacy sidebar. */
 export function WorkflowResultsPanel({
   latestRun,
+  definition,
+  errorRouting,
   formatStepOutput,
   onSelectStepNode,
   onTogglePin,
@@ -215,6 +230,14 @@ export function WorkflowResultsPanel({
   const [expanded, setExpanded] = useState<string | null>(null);
   const waitMode = latestRun?.wait?.resumeMode;
   const externalToken = latestRun?.wait?.externalResumeToken;
+
+  const orderedSteps = useMemo(
+    () =>
+      sortWorkflowRunSteps(latestRun?.steps || [], {
+        definition: definition ?? null,
+      }),
+    [latestRun?.steps, definition]
+  );
 
   const waitingLabel = (() => {
     if (!latestRun || latestRun.status !== "waiting") return null;
@@ -275,6 +298,10 @@ export function WorkflowResultsPanel({
                   Sub-workflow
                 </span>
               )}
+              <ErrorRunBadge
+                hasErrorDispatch={latestRun.hasErrorDispatch}
+                isErrorHandler={latestRun.isErrorHandler}
+              />
               {(latestRun.childRunCount ?? 0) > 0 && (
                 <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] text-muted-foreground">
                   {latestRun.childRunCount} child run
@@ -331,6 +358,8 @@ export function WorkflowResultsPanel({
               </div>
             )}
 
+            <ErrorRoutingSummary routing={errorRouting} />
+
             {latestRun.output != null && latestRun.status === "succeeded" && (
               <div className="rounded-md border border-emerald-500/20 bg-emerald-500/5 p-3">
                 <div className="mb-1 text-[11px] font-semibold uppercase text-muted-foreground">
@@ -342,12 +371,12 @@ export function WorkflowResultsPanel({
               </div>
             )}
 
-            {latestRun.steps && latestRun.steps.length > 0 && (
+            {orderedSteps.length > 0 && (
               <div className="space-y-2">
                 <div className="text-[11px] font-semibold uppercase text-muted-foreground">
                   Steps
                 </div>
-                {latestRun.steps.map((step, index) => {
+                {orderedSteps.map((step, index) => {
                   const isOpen = expanded === step.id;
                   return (
                     <div

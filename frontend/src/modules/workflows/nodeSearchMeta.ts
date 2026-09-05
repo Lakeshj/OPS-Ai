@@ -123,12 +123,31 @@ export const NODE_SEARCH_META: Record<string, NodeSearchMeta> = {
     keywords: ["extract", "upload"],
   },
   "ai-model": {
-    aliases: ["llm", "gpt", "openai", "model", "ai"],
+    aliases: ["llm", "gpt", "openai", "model", "ai", "legacy model"],
     keywords: ["prompt", "chat", "completion"],
   },
   "ai-bot": {
-    aliases: ["assistant", "bot", "agent"],
-    keywords: ["keyword", "chat"],
+    aliases: ["assistant", "bot", "keyword assistant"],
+    keywords: ["keyword", "chat", "legacy"],
+  },
+  "ai-agent": {
+    aliases: ["agent", "ai agent", "basic ai agent", "llm", "chat", "assistant"],
+    keywords: ["tools", "model", "prompt", "basic"],
+  },
+  "ai-chat-model": {
+    aliases: [
+      "model",
+      "chat model",
+      "llm",
+      "openai",
+      "gemini",
+      "deepseek",
+    ],
+    keywords: ["provider", "temperature", "resource"],
+  },
+  "ai-calculator-tool": {
+    aliases: ["calculator", "math", "tool", "ai tool"],
+    keywords: ["arithmetic", "add", "divide"],
   },
 };
 

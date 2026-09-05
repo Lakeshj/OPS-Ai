@@ -26,6 +26,7 @@ import type {
   WorkflowChildInvocationSummary,
   WorkflowEditorNodeResult,
   WorkflowEditorSession,
+  WorkflowErrorRouting,
   WorkflowItem,
   WorkflowNodeData,
   WorkflowNodeType,
@@ -37,6 +38,7 @@ import {
   hasInputPanel,
   isTriggerNode,
   getStaticOutputSchema,
+  nodeSupports,
 } from "@/modules/workflows/nodeRegistry";
 import { workflowsApi } from "@/modules/workflows/api";
 import type { WorkflowDefinition } from "@/modules/workflows/types";
@@ -51,6 +53,16 @@ import {
 import { toast } from "sonner";
 import type { Node as FlowNode, Edge as FlowEdge } from "@xyflow/react";
 import { subworkflowErrorMessage } from "@/modules/workflows/subworkflowUx";
+import { ErrorRoutingSummary } from "./ErrorRoutingSummary";
+import { AiAgentInspectorExtras } from "./AiAgentInspectorExtras";
+import {
+  getAiAgentReadiness,
+  isAiAgentType,
+  isAiResourceProviderType,
+  mapAiErrorCodeToMessage,
+  parseAiErrorFromUnknown,
+  providerResourceExplanation,
+} from "@/modules/workflows/aiAgentUx";
 
 type Props = {
   open: boolean;
@@ -69,6 +81,7 @@ type Props = {
   editorSession?: WorkflowEditorSession | null;
   onEditorSessionChange?: (session: WorkflowEditorSession) => void;
   latestRun?: WorkflowRun | null;
+  errorRouting?: WorkflowErrorRouting | null;
   onTogglePin?: (nodeId: string) => void;
   workflowStatus?: WorkflowStatus;
   onExecuteWorkflow?: () => void;
@@ -104,6 +117,7 @@ export function WorkflowNodeDialog({
   editorSession,
   onEditorSessionChange,
   latestRun,
+  errorRouting = null,
   onTogglePin,
   workflowStatus,
   onExecuteWorkflow,
@@ -393,6 +407,25 @@ export function WorkflowNodeDialog({
       toast.error("Save the workflow first");
       return;
     }
+    if (isAiResourceProviderType(selectedType) && mode === "step") {
+      toast.message(providerResourceExplanation(selectedType));
+      return;
+    }
+    if (isAiAgentType(selectedType) && mode === "step") {
+      const readiness = getAiAgentReadiness(
+        selectedId,
+        definition.edges || [],
+        (definition.nodes || []).map((n) => ({
+          id: n.id,
+          type: n.type,
+          data: (n.data || {}) as Record<string, unknown>,
+        }))
+      );
+      if (readiness.missingModel) {
+        toast.error(mapAiErrorCodeToMessage("AI_MODEL_REQUIRED"));
+        return;
+      }
+    }
     if (isLoopNode || insideLoop) {
       toast.error(
         isLoopNode
@@ -418,14 +451,16 @@ export function WorkflowNodeDialog({
       if (mode === "upstream") {
         toast.success("Upstream steps executed");
       } else if (result?.status === "failed") {
-        toast.error(result.error || "Node execution failed");
+        const mapped = parseAiErrorFromUnknown(result.error);
+        toast.error(mapped.message || result.error || "Node execution failed");
       } else {
         toast.success(
           mode === "run-to" ? "Ran chain to this node" : "Node executed"
         );
       }
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Execution failed");
+      const mapped = parseAiErrorFromUnknown(err);
+      toast.error(mapped.message || (err instanceof Error ? err.message : "Execution failed"));
     } finally {
       setExecuting(false);
     }
@@ -437,8 +472,15 @@ export function WorkflowNodeDialog({
       ? selectedType.charAt(0).toUpperCase() + selectedType.slice(1)
       : "Node");
 
-  const showInputPanel = selectedType ? hasInputPanel(selectedType) : false;
+  const showInputPanel = selectedType
+    ? hasInputPanel(selectedType) &&
+      !isAiResourceProviderType(selectedType)
+    : false;
   const isTrigger = selectedType ? isTriggerNode(selectedType) : false;
+  const canExecuteStep =
+    Boolean(selectedType) &&
+    nodeSupports(selectedType as WorkflowNodeType, "execute_step") &&
+    !isAiResourceProviderType(selectedType);
   const triggerOutputSchema = selectedType
     ? getStaticOutputSchema(selectedType)
     : undefined;
@@ -529,8 +571,13 @@ export function WorkflowNodeDialog({
                         type="button"
                         size="sm"
                         className="ml-auto h-7 text-xs"
-                        disabled={executing}
+                        disabled={executing || !canExecuteStep}
                         onClick={() => void runPartial("step")}
+                        title={
+                          isAiResourceProviderType(selectedType)
+                            ? providerResourceExplanation(selectedType)
+                            : undefined
+                        }
                       >
                         Run step
                       </Button>
@@ -577,6 +624,29 @@ export function WorkflowNodeDialog({
                           onExecuteWorkflow={onExecuteWorkflow}
                           executing={executing}
                         />
+                        {isAiAgentType(selectedType) && definition && (
+                          <AiAgentInspectorExtras
+                            nodeId={selectedId}
+                            nodeType={selectedType}
+                            data={selectedData}
+                            definition={definition}
+                            mode="resources"
+                          />
+                        )}
+                        {isAiResourceProviderType(selectedType) && (
+                          <AiAgentInspectorExtras
+                            nodeId={selectedId}
+                            nodeType={selectedType}
+                            data={selectedData}
+                            mode="resources"
+                          />
+                        )}
+                        {isAiResourceProviderType(selectedType) && (
+                          <p className="mt-3 text-[11px] text-muted-foreground">
+                            {providerResourceExplanation(selectedType)} This
+                            node does not run by itself.
+                          </p>
+                        )}
                       </TabsContent>
                       <TabsContent value="settings" className="mt-0">
                         <NodeInspector
@@ -642,7 +712,11 @@ export function WorkflowNodeDialog({
                     onSelectedRunIndexChange={setSelectedRunIndex}
                     loopPortView={loopPortView}
                     onLoopPortViewChange={setLoopPortView}
-                    onExecuteStep={() => void runPartial("step")}
+                    onExecuteStep={
+                      canExecuteStep
+                        ? () => void runPartial("step")
+                        : undefined
+                    }
                     onTestTrigger={
                       isTrigger ? () => void runPartial("step") : undefined
                     }
@@ -651,6 +725,27 @@ export function WorkflowNodeDialog({
                         ? () => onTogglePin(selectedId)
                         : undefined
                     }
+                    resourceProviderMessage={
+                      isAiResourceProviderType(selectedType)
+                        ? providerResourceExplanation(selectedType)
+                        : null
+                    }
+                  />
+                  <AiAgentInspectorExtras
+                    nodeId={selectedId}
+                    nodeType={selectedType}
+                    data={selectedData}
+                    definition={definition}
+                    stepOutput={nodeResult?.output}
+                    stepError={
+                      nodeResult?.status === "failed" ? nodeResult.error : null
+                    }
+                    itemIndex={
+                      selectedRunIndex != null
+                        ? selectedRunIndex
+                        : selectedInputItemIndex
+                    }
+                    mode="execution"
                   />
                   {selectedType === "executeWorkflow" && (
                     <SubworkflowRunSummary
@@ -686,6 +781,13 @@ export function WorkflowNodeDialog({
                           />
                         </div>
                       </div>
+                    )}
+                  {selectedType === "errorTrigger" &&
+                    errorRouting?.role === "handler" && (
+                      <ErrorRoutingSummary
+                        routing={errorRouting}
+                        className="mt-3"
+                      />
                     )}
                   <Button
                     type="button"

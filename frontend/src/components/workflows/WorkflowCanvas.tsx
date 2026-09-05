@@ -34,10 +34,14 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { CircleDot, LayoutGrid, Plus, Settings2 } from "lucide-react";
 import { redactOrchestrationOutput } from "@/modules/workflows/subworkflowUx";
+import {
+  formatStepOutput as formatStepOutputRaw,
+} from "@/modules/workflows/runStepDisplay";
 import type {
   EditorInvalidationEvent,
   WorkflowDefinition,
   WorkflowEditorSession,
+  WorkflowErrorRouting,
   WorkflowNodeData,
   WorkflowNodeType,
   WorkflowRun,
@@ -74,8 +78,24 @@ import {
   writeClipboard,
 } from "@/modules/workflows/workflowClipboard";
 import { workflowsApi } from "@/modules/workflows/api";
+import {
+  isAuxiliaryEdge,
+  validateTypedConnection,
+  enrichPort,
+  type PortDataType,
+} from "@/modules/workflows/connectionPorts";
+import {
+  isAiMemoryRuntimeSupported,
+  resourceEdgeLabelForDataType,
+} from "@/modules/workflows/aiAgentUx";
 
-const UI_ONLY_DATA_KEYS = new Set(["label", "runStatus", "runPreview", "cacheDirty"]);
+const UI_ONLY_DATA_KEYS = new Set([
+  "label",
+  "runStatus",
+  "runPreview",
+  "cacheDirty",
+  "needsNaming",
+]);
 
 function isExecutionAffectingPatch(patch: WorkflowNodeData): boolean {
   return Object.keys(patch).some((key) => !UI_ONLY_DATA_KEYS.has(key));
@@ -112,6 +132,13 @@ const nodeTypes = {
   loop: WorkflowNode,
   noop: WorkflowNode,
   integration: WorkflowNode,
+  aiModelProviderTest: WorkflowNode,
+  aiToolProviderTest: WorkflowNode,
+  aiMemoryProviderTest: WorkflowNode,
+  aiAgentTest: WorkflowNode,
+  aiAgent: WorkflowNode,
+  aiChatModel: WorkflowNode,
+  aiCalculatorTool: WorkflowNode,
 };
 
 const edgeTypes = {
@@ -134,7 +161,13 @@ const START_TYPES = new Set([
 
 type PickerTarget =
   | { kind: "insert"; edgeId: string }
-  | { kind: "append"; sourceId: string; sourceHandle?: string | null };
+  | { kind: "append"; sourceId: string; sourceHandle?: string | null }
+  | {
+      kind: "resource";
+      targetId: string;
+      targetHandle: string;
+      dataType: PortDataType;
+    };
 
 const isValidWorkflowConnection = (
   connection: Connection,
@@ -179,6 +212,17 @@ const isValidWorkflowConnection = (
     if (!connection.sourceHandle) return false;
   }
 
+  const typed = validateTypedConnection({
+    sourceType,
+    targetType,
+    sourceHandle: connection.sourceHandle,
+    targetHandle: connection.targetHandle,
+    existingEdges: edges,
+    sourceId: connection.source,
+    targetId: connection.target,
+  });
+  if (!typed.ok) return false;
+
   if (connection.targetHandle) {
     const contract = getNodeContract(
       targetType as import("@/modules/workflows/types").WorkflowNodeType
@@ -204,8 +248,25 @@ const getConnectionRejectMessage = (
   connection: Connection,
   nodes: Node[],
   edges: Edge[]
-): string =>
-  getLoopConnectionError(connection, nodes, edges) || "Invalid connection";
+): string => {
+  const loopMsg = getLoopConnectionError(connection, nodes, edges);
+  if (loopMsg) return loopMsg;
+  const sourceNode = nodes.find((n) => n.id === connection.source);
+  const targetNode = nodes.find((n) => n.id === connection.target);
+  if (sourceNode && targetNode) {
+    const typed = validateTypedConnection({
+      sourceType: String(sourceNode.type),
+      targetType: String(targetNode.type),
+      sourceHandle: connection.sourceHandle,
+      targetHandle: connection.targetHandle,
+      existingEdges: edges,
+      sourceId: connection.source || undefined,
+      targetId: connection.target || undefined,
+    });
+    if (!typed.ok) return typed.message;
+  }
+  return "Invalid connection";
+};
 
 type Props = {
   name: string;
@@ -216,6 +277,7 @@ type Props = {
   saving?: boolean;
   running?: boolean;
   latestRun?: WorkflowRun | null;
+  errorRouting?: WorkflowErrorRouting | null;
   workspaceId?: string;
   workflowId?: string;
   workflowStatus?: WorkflowStatus;
@@ -229,96 +291,10 @@ type Props = {
 };
 
 function formatStepOutput(output: unknown): string {
-  if (output == null) return "";
-  if (typeof output === "string") return unwrapMessageJson(output);
-  if (typeof output !== "object") return String(output);
-
-  const cleaned = redactOrchestrationOutput(output);
-  const obj = cleaned as Record<string, unknown>;
-  if (typeof obj.text === "string") return obj.text;
-
-  if (obj.result != null) {
-    if (typeof obj.result === "string") return unwrapMessageJson(obj.result);
-    if (typeof obj.result === "object") {
-      const nested = obj.result as Record<string, unknown>;
-      if (nested.message != null) return String(nested.message);
-      if (typeof nested.text === "string") return nested.text;
-      try {
-        return JSON.stringify(obj.result, null, 2);
-      } catch {
-        return String(obj.result);
-      }
-    }
-    return String(obj.result);
+  if (output != null && typeof output === "object") {
+    return formatStepOutputRaw(redactOrchestrationOutput(output));
   }
-
-  if (obj.message != null && Object.keys(obj).length <= 2) {
-    return String(obj.message);
-  }
-
-  if (obj.body != null) {
-    if (typeof obj.body === "string") {
-      return `HTTP ${obj.status ?? ""} — ${obj.body}`.trim();
-    }
-    return `HTTP ${obj.status ?? ""}\n${JSON.stringify(obj.body, null, 2)}`.trim();
-  }
-
-  if (typeof obj.pass === "boolean") {
-    return `Condition ${obj.pass ? "passed" : "failed"} (${obj.operator ?? "equals"})`;
-  }
-
-  if (obj.fields && typeof obj.fields === "object") {
-    try {
-      return JSON.stringify(obj.fields, null, 2);
-    } catch {
-      return "Set fields";
-    }
-  }
-
-  if (Array.isArray(obj.rows) && obj.rowCount != null) {
-    return `Spreadsheet “${String(obj.name || obj.sheet || "file")}”: ${obj.rowCount} row(s)${
-      obj.truncated ? " (truncated)" : ""
-    }`;
-  }
-
-  if (obj.sent != null) {
-    return `Email ${obj.sent ? "sent" : "skipped"} → ${String(obj.to || "")}`;
-  }
-
-  if (obj.triggered) {
-    const input = obj.input;
-    if (typeof input === "string") return `Triggered with: ${input}`;
-    if (input && typeof input === "object" && "message" in (input as object)) {
-      return `Triggered with: ${String((input as { message?: unknown }).message ?? "")}`;
-    }
-    return `Triggered (${String(obj.kind || "manual")})`;
-  }
-
-  try {
-    return JSON.stringify(output, null, 2);
-  } catch {
-    return String(output);
-  }
-}
-
-function unwrapMessageJson(value: string): string {
-  const trimmed = value.trim();
-  if (!trimmed.startsWith("{") || !trimmed.endsWith("}")) return value;
-  try {
-    const parsed = JSON.parse(trimmed) as { message?: unknown };
-    if (
-      parsed &&
-      typeof parsed === "object" &&
-      !Array.isArray(parsed) &&
-      parsed.message != null &&
-      Object.keys(parsed).length <= 2
-    ) {
-      return String(parsed.message);
-    }
-  } catch {
-    // keep original
-  }
-  return value;
+  return formatStepOutputRaw(output);
 }
 
 const defaultDataForType = (type: WorkflowNodeType): WorkflowNodeData => {
@@ -485,6 +461,30 @@ const defaultDataForType = (type: WorkflowNodeType): WorkflowNodeData => {
       return { label: "Workflow Trigger", nodeType: "workflowTrigger" };
     case "errorTrigger":
       return { label: "Error Trigger", nodeType: "errorTrigger" };
+    case "aiAgent":
+      return {
+        label: "Basic AI Agent",
+        nodeType: "aiAgent",
+        prompt: "{{item}}",
+        systemInstruction: "",
+        needsNaming: true,
+      };
+    case "aiChatModel":
+      return {
+        label: "Chat Model",
+        nodeType: "aiChatModel",
+        provider: "openai",
+        model: "gpt-4o-mini",
+        temperature: 0.4,
+        maxTokens: 1200,
+      };
+    case "aiCalculatorTool":
+      return {
+        label: "Calculator Tool",
+        nodeType: "aiCalculatorTool",
+        toolName: "calculator",
+        description: "Add, subtract, multiply, or divide two numbers.",
+      };
     case "result":
       return { label: "Result", nodeType: "result", mapFrom: "{{input}}" };
     case "noop":
@@ -512,6 +512,7 @@ const dataFromLibraryNode = (node: LibraryNode): WorkflowNodeData => {
     libraryCategory: node.category,
     libraryProvider: node.provider || undefined,
     available: node.available,
+    ...(engineType === "aiAgent" ? { needsNaming: true } : {}),
     ...(engineType === "ai" && node.provider
       ? {
           provider:
@@ -781,6 +782,7 @@ function WorkflowCanvasInner({
   saving,
   running,
   latestRun,
+  errorRouting = null,
   workspaceId,
   workflowId,
   workflowStatus = "draft",
@@ -820,6 +822,8 @@ function WorkflowCanvasInner({
   const [pickerTarget, setPickerTarget] = useState<PickerTarget | null>(null);
   const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null);
   const [renameNodeId, setRenameNodeId] = useState<string | null>(null);
+  const [renameOpensDialog, setRenameOpensDialog] = useState(false);
+  const [renameDraft, setRenameDraft] = useState("");
   const prevRunningRef = useRef(false);
   const history = useWorkflowHistory({ nodes, edges });
   const historyPushedRef = useRef(false);
@@ -830,13 +834,49 @@ function WorkflowCanvasInner({
     setNodeDialogOpen(true);
   }, []);
 
-  const togglePanel = useCallback((panel: Exclude<RightPanel, null>) => {
-    setRightPanel((prev) => (prev === panel ? null : panel));
-  }, []);
-
   const setSelected = useCallback((id: string | null) => {
     selectedIdRef.current = id;
     setSelectedIds(id ? new Set([id]) : new Set());
+  }, []);
+
+  const promptNameNode = useCallback(
+    (nodeId: string, opts?: { openDialogAfter?: boolean }) => {
+      const node = nodes.find((n) => n.id === nodeId);
+      setSelected(nodeId);
+      setRenameDraft(String(node?.data?.label || "Basic AI Agent"));
+      setRenameOpensDialog(Boolean(opts?.openDialogAfter));
+      setRenameNodeId(nodeId);
+    },
+    [nodes, setSelected]
+  );
+
+  const commitRename = useCallback(
+    (nodeId: string, rawValue?: string) => {
+      const val = String(rawValue ?? renameDraft).trim();
+      const shouldOpenDialog = renameOpensDialog;
+      setNodes((prev) =>
+        prev.map((n) =>
+          n.id === nodeId
+            ? {
+                ...n,
+                data: {
+                  ...n.data,
+                  ...(val ? { label: val } : {}),
+                  needsNaming: false,
+                },
+              }
+            : n
+        )
+      );
+      setRenameNodeId(null);
+      setRenameOpensDialog(false);
+      if (shouldOpenDialog) openNodeDialog();
+    },
+    [renameDraft, renameOpensDialog, setNodes, openNodeDialog]
+  );
+
+  const togglePanel = useCallback((panel: Exclude<RightPanel, null>) => {
+    setRightPanel((prev) => (prev === panel ? null : panel));
   }, []);
 
   const pushHistory = useCallback(() => {
@@ -1410,9 +1450,23 @@ function WorkflowCanvasInner({
         newNodeId: id,
         downstreamTargets: [edge.target],
       });
-      openNodeDialog();
+      if (engineType === "aiAgent") {
+        promptNameNode(id, { openDialogAfter: true });
+      } else {
+        openNodeDialog();
+      }
     },
-    [edges, nodes, pushHistory, setNodes, setEdges, setSelected, openNodeDialog, invalidateEditorCache]
+    [
+      edges,
+      nodes,
+      pushHistory,
+      setNodes,
+      setEdges,
+      setSelected,
+      openNodeDialog,
+      promptNameNode,
+      invalidateEditorCache,
+    ]
   );
 
   const appendNodeAfter = useCallback(
@@ -1444,9 +1498,83 @@ function WorkflowCanvasInner({
       setSelected(id);
       setPickerTarget(null);
       toast.success(`Added ${libraryNode.name}`);
-      openNodeDialog();
+      if (engineType === "aiAgent") {
+        promptNameNode(id, { openDialogAfter: true });
+      } else {
+        openNodeDialog();
+      }
     },
-    [nodes, pushHistory, setNodes, setEdges, setSelected, openNodeDialog]
+    [
+      nodes,
+      pushHistory,
+      setNodes,
+      setEdges,
+      setSelected,
+      openNodeDialog,
+      promptNameNode,
+    ]
+  );
+
+  const appendResourceToAgent = useCallback(
+    (
+      targetId: string,
+      targetHandle: string,
+      libraryNode: LibraryNode
+    ) => {
+      const target = nodes.find((n) => n.id === targetId);
+      if (!target) return;
+      const engineType = resolveEngineType(libraryNode);
+      const contract = getNodeContract(engineType);
+      const outPort =
+        (contract.outputs || []).find((p) => enrichPort(p).connectionKind === "auxiliary") ||
+        contract.outputs?.[0];
+      const sourceHandle = outPort?.id || "model";
+      const typed = validateTypedConnection({
+        sourceType: engineType,
+        targetType: String(target.type),
+        sourceHandle,
+        targetHandle,
+        existingEdges: edges,
+        sourceId: "new",
+        targetId,
+      });
+      if (!typed.ok) {
+        toast.error(typed.message);
+        return;
+      }
+      pushHistory();
+      const id = `${engineType}-${Date.now()}`;
+      const position = {
+        x: target.position.x + (targetHandle === "tools" ? 40 : -40),
+        y: target.position.y - 120,
+      };
+      const data = dataFromLibraryNode(libraryNode);
+      setNodes((prev) => [...prev, { id, type: engineType, position, data }]);
+      setEdges((prev) => [
+        ...prev,
+        {
+          id: uniqueEdgeId(id, targetId, `${sourceHandle}->${targetHandle}`),
+          source: id,
+          target: targetId,
+          sourceHandle,
+          targetHandle,
+          type: "workflow",
+        },
+      ]);
+      setSelected(id);
+      setPickerTarget(null);
+      toast.success(`Connected ${libraryNode.name}`);
+      void invalidateEditorCache({ type: "edge", targetNodeId: targetId });
+    },
+    [
+      nodes,
+      edges,
+      pushHistory,
+      setNodes,
+      setEdges,
+      setSelected,
+      invalidateEditorCache,
+    ]
   );
 
   const handlePickerPick = useCallback(
@@ -1454,6 +1582,12 @@ function WorkflowCanvasInner({
       if (!pickerTarget) return;
       if (pickerTarget.kind === "insert") {
         insertNodeOnEdge(pickerTarget.edgeId, libraryNode);
+      } else if (pickerTarget.kind === "resource") {
+        appendResourceToAgent(
+          pickerTarget.targetId,
+          pickerTarget.targetHandle,
+          libraryNode
+        );
       } else {
         appendNodeAfter(
           pickerTarget.sourceId,
@@ -1462,24 +1596,52 @@ function WorkflowCanvasInner({
         );
       }
     },
-    [pickerTarget, insertNodeOnEdge, appendNodeAfter]
+    [pickerTarget, insertNodeOnEdge, appendNodeAfter, appendResourceToAgent]
   );
 
   const flowEdges = useMemo(
     () =>
-      edges.map((e) => ({
-        ...e,
-        type: "workflow",
-        className: "group",
-        data: {
-          ...(e.data || {}),
-          onDelete: deleteEdge,
-          onInsert: (id: string) =>
-            setPickerTarget({ kind: "insert", edgeId: id }),
-        },
-        selected: e.id === selectedEdgeId,
-      })),
-    [edges, deleteEdge, selectedEdgeId]
+      edges.map((e) => {
+        const auxiliary = isAuxiliaryEdge(e, nodes);
+        let resourceLabel: string | undefined;
+        if (auxiliary) {
+          const target = nodes.find((n) => n.id === e.target);
+          if (target) {
+            try {
+              const ports = getNodeContract(
+                String(target.type) as WorkflowNodeType
+              ).inputs;
+              const port = ports.find(
+                (p) => p.id === (e.targetHandle || "main")
+              );
+              if (port) {
+                resourceLabel = resourceEdgeLabelForDataType(
+                  enrichPort(port).dataType
+                );
+              }
+            } catch {
+              resourceLabel = "Resource";
+            }
+          }
+        }
+        return {
+          ...e,
+          type: "workflow",
+          className: "group",
+          data: {
+            ...(e.data || {}),
+            auxiliary,
+            resourceLabel,
+            onDelete: deleteEdge,
+            onInsert: auxiliary
+              ? undefined
+              : (id: string) =>
+                  setPickerTarget({ kind: "insert", edgeId: id }),
+          },
+          selected: e.id === selectedEdgeId,
+        };
+      }),
+    [edges, nodes, deleteEdge, selectedEdgeId]
   );
 
   const insertAiBetween = useCallback(
@@ -1593,7 +1755,12 @@ function WorkflowCanvasInner({
         },
         onDuplicate: duplicateSelection,
         onCopy: () => void copySelection(),
-        onRename: () => setRenameNodeId(nodeId),
+        onRename: () => {
+          const node = nodes.find((n) => n.id === nodeId);
+          setRenameDraft(String(node?.data?.label || ""));
+          setRenameOpensDialog(false);
+          setRenameNodeId(nodeId);
+        },
         onOpen: () => {
           setSelected(nodeId);
           openNodeDialog();
@@ -1603,7 +1770,84 @@ function WorkflowCanvasInner({
         onClearSelection: () => setSelectedIds(new Set()),
       }),
       onAddNextStep: (nodeId: string, sourceHandle?: string | null) => {
+        const node = nodes.find((n) => n.id === nodeId);
+        if (!node) return;
+        const data = (node.data || {}) as WorkflowNodeData;
+        if (node.type === "aiAgent" && data.needsNaming) {
+          toast.message("Name this Basic AI Agent before adding the next step.");
+          promptNameNode(nodeId, { openDialogAfter: false });
+          return;
+        }
+        const typed = validateTypedConnection({
+          sourceType: String(node.type),
+          targetType: "set",
+          sourceHandle: sourceHandle || "main",
+          targetHandle: "main",
+        });
+        // Part 12A: do not open execution node picker from auxiliary outputs.
+        if (typed.ok && typed.connectionKind === "auxiliary") {
+          toast.message("Connect this resource to an AI Agent auxiliary port.");
+          return;
+        }
+        if (
+          String(node.type).endsWith("ProviderTest") ||
+          [
+            "aiModelProviderTest",
+            "aiToolProviderTest",
+            "aiMemoryProviderTest",
+            "aiChatModel",
+            "aiCalculatorTool",
+          ].includes(String(node.type))
+        ) {
+          toast.message("Connect this resource to an AI Agent auxiliary port.");
+          return;
+        }
         setPickerTarget({ kind: "append", sourceId: nodeId, sourceHandle });
+      },
+      onAddResource: (nodeId: string, targetHandle: string) => {
+        if (!isAiMemoryRuntimeSupported() && targetHandle === "memory") {
+          toast.message("Memory is not supported yet.");
+          return;
+        }
+        const node = nodes.find((n) => n.id === nodeId);
+        if (!node) return;
+        try {
+          const port = getNodeContract(
+            String(node.type) as WorkflowNodeType
+          ).inputs.find((p) => p.id === targetHandle);
+          if (!port) {
+            toast.error("Unknown resource port");
+            return;
+          }
+          const dataType = enrichPort(port).dataType;
+          if (dataType === "workflow-items") {
+            toast.error("That port is for workflow data, not AI resources.");
+            return;
+          }
+          if (port.maxConnections === 1) {
+            const taken = edges.some(
+              (e) =>
+                e.target === nodeId &&
+                String(e.targetHandle || "") === String(targetHandle)
+            );
+            if (taken) {
+              toast.error(
+                dataType === "ai-model"
+                  ? "Only one Chat Model can be connected."
+                  : `Only one connection allowed on ${port.label || port.id}.`
+              );
+              return;
+            }
+          }
+          setPickerTarget({
+            kind: "resource",
+            targetId: nodeId,
+            targetHandle,
+            dataType,
+          });
+        } catch {
+          toast.error("Could not open resource picker");
+        }
       },
     }),
     [
@@ -1616,6 +1860,8 @@ function WorkflowCanvasInner({
       openNodeDialog,
       tidyWorkflow,
       nodes,
+      edges,
+      promptNameNode,
     ]
   );
 
@@ -1691,9 +1937,70 @@ function WorkflowCanvasInner({
       return;
     }
 
-    // Dropping an AI/Bot into a bare Start → Result flow should splice it in.
-    if ((engineType === "ai" || engineType === "bot") && isSimplePassThrough) {
-      insertAiBetween(engineType);
+    // Dropping an AI/Bot/Agent into a bare Start → Result flow should splice it in.
+    if (
+      (engineType === "ai" ||
+        engineType === "bot" ||
+        engineType === "aiAgent") &&
+      isSimplePassThrough
+    ) {
+      if (engineType === "aiAgent") {
+        // Splice Agent between start and result, then name it.
+        const start = nodes.find((n) =>
+          ["trigger", "schedule", "webhook", "workflowTrigger", "errorTrigger"].includes(
+            String(n.type)
+          )
+        );
+        const result = nodes.find((n) => n.type === "result");
+        if (start && result) {
+          pushHistory();
+          const id = `aiAgent-${Date.now()}`;
+          const data = dataFromLibraryNode(libraryNode);
+          const position = {
+            x: (start.position.x + result.position.x) / 2,
+            y: start.position.y,
+          };
+          setNodes((prev) => [
+            ...prev.map((n) =>
+              n.type === "result"
+                ? {
+                    ...n,
+                    data: {
+                      ...n.data,
+                      mapFrom: `{{steps.${id}.text}}`,
+                    },
+                  }
+                : n
+            ),
+            { id, type: "aiAgent", position, data },
+          ]);
+          setEdges((eds) => {
+            const withoutDirect = eds.filter(
+              (e) => !(e.source === start.id && e.target === result.id)
+            );
+            return [
+              ...withoutDirect,
+              {
+                id: uniqueEdgeId(start.id, id),
+                source: start.id,
+                target: id,
+                type: "workflow",
+              },
+              {
+                id: uniqueEdgeId(id, result.id),
+                source: id,
+                target: result.id,
+                type: "workflow",
+              },
+            ];
+          });
+          setSelected(id);
+          setRightPanel(null);
+          promptNameNode(id, { openDialogAfter: true });
+          return;
+        }
+      }
+      insertAiBetween(engineType as "ai" | "bot");
       setRightPanel(null);
       openNodeDialog();
       return;
@@ -1711,7 +2018,11 @@ function WorkflowCanvasInner({
     ]);
     setSelected(id);
     setRightPanel(null);
-    openNodeDialog();
+    if (engineType === "aiAgent") {
+      promptNameNode(id, { openDialogAfter: true });
+    } else {
+      openNodeDialog();
+    }
     toast.success(`Added ${libraryNode.name}`);
   };
 
@@ -1772,6 +2083,9 @@ function WorkflowCanvasInner({
       }
       if (e.key === "F2" && selectedId) {
         e.preventDefault();
+        const node = nodes.find((n) => n.id === selectedId);
+        setRenameDraft(String(node?.data?.label || ""));
+        setRenameOpensDialog(false);
         setRenameNodeId(selectedId);
         return;
       }
@@ -2252,6 +2566,8 @@ function WorkflowCanvasInner({
         open={resultsDialogOpen}
         onOpenChange={setResultsDialogOpen}
         latestRun={latestRun}
+        definition={buildDefinition()}
+        errorRouting={errorRouting}
         formatStepOutput={formatStepOutput}
         onSelectStepNode={(nodeId) => {
           setSelected(nodeId);
@@ -2286,6 +2602,7 @@ function WorkflowCanvasInner({
         editorSession={editorSession}
         onEditorSessionChange={setEditorSession}
         latestRun={latestRun}
+        errorRouting={errorRouting}
         onTogglePin={togglePin}
         workflowStatus={workflowStatus}
         onExecuteWorkflow={() => void handleRun()}
@@ -2299,14 +2616,26 @@ function WorkflowCanvasInner({
         title={
           pickerTarget?.kind === "insert"
             ? "Insert step on connection"
-            : "Add next step"
+            : pickerTarget?.kind === "resource"
+              ? pickerTarget.dataType === "ai-model"
+                ? "Connect Chat Model"
+                : pickerTarget.dataType === "ai-tool"
+                  ? "Connect Tool"
+                  : "Connect AI resource"
+              : "Add next step"
         }
         description={
           pickerTarget?.kind === "insert"
             ? "The new step will sit between the connected nodes."
-            : "A new branch will be created from this output."
+            : pickerTarget?.kind === "resource"
+              ? "Choose a resource provider. It will connect to this Agent automatically."
+              : "A new branch will be created from this output."
         }
         excludeTriggers
+        excludeAuxiliaryProviders={pickerTarget?.kind !== "resource"}
+        requiredDataType={
+          pickerTarget?.kind === "resource" ? pickerTarget.dataType : null
+        }
         onPick={handlePickerPick}
       />
 
@@ -2329,16 +2658,24 @@ function WorkflowCanvasInner({
           <span className="self-center text-xs text-muted-foreground">
             Connection selected
           </span>
-          <Button
-            size="sm"
-            variant="outline"
-            className="h-7 text-xs"
-            onClick={() =>
-              setPickerTarget({ kind: "insert", edgeId: selectedEdgeId })
-            }
-          >
-            Insert step
-          </Button>
+          {!isAuxiliaryEdge(
+            edges.find((e) => e.id === selectedEdgeId) || {
+              source: "",
+              target: "",
+            },
+            nodes
+          ) && (
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-7 text-xs"
+              onClick={() =>
+                setPickerTarget({ kind: "insert", edgeId: selectedEdgeId })
+              }
+            >
+              Insert step
+            </Button>
+          )}
           <Button
             size="sm"
             variant="destructive"
@@ -2359,34 +2696,42 @@ function WorkflowCanvasInner({
       )}
 
       {renameNodeId && (
-        <div className="fixed left-1/2 top-24 z-50 w-72 -translate-x-1/2 rounded-lg border bg-card p-3 shadow-lg">
-          <Label className="text-xs">Rename node</Label>
+        <div className="fixed left-1/2 top-24 z-50 w-80 -translate-x-1/2 rounded-lg border bg-card p-3 shadow-lg">
+          <Label className="text-xs">
+            {nodes.find((n) => n.id === renameNodeId)?.type === "aiAgent"
+              ? "Name this Basic AI Agent"
+              : "Rename node"}
+          </Label>
           <Input
             autoFocus
             className="mt-1 h-8"
-            defaultValue={String(
-              nodes.find((n) => n.id === renameNodeId)?.data?.label || ""
-            )}
+            value={renameDraft}
+            placeholder="e.g. Summarize leads"
+            onChange={(e) => setRenameDraft(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === "Enter") {
-                const val = (e.target as HTMLInputElement).value.trim();
-                if (val) {
-                  setNodes((prev) =>
-                    prev.map((n) =>
-                      n.id === renameNodeId
-                        ? { ...n, data: { ...n.data, label: val } }
-                        : n
-                    )
-                  );
-                }
-                setRenameNodeId(null);
+                e.preventDefault();
+                commitRename(renameNodeId);
               }
-              if (e.key === "Escape") setRenameNodeId(null);
+              if (e.key === "Escape") {
+                setRenameNodeId(null);
+                setRenameOpensDialog(false);
+              }
             }}
           />
-          <p className="mt-1 text-[10px] text-muted-foreground">
-            Expressions using step IDs are unaffected; display name only.
-          </p>
+          <div className="mt-2 flex items-center justify-between gap-2">
+            <p className="text-[10px] leading-snug text-muted-foreground">
+              Name it before adding the next step.
+            </p>
+            <Button
+              type="button"
+              size="sm"
+              className="h-7 shrink-0 text-xs"
+              onClick={() => commitRename(renameNodeId)}
+            >
+              Continue
+            </Button>
+          </div>
         </div>
       )}
     </div>

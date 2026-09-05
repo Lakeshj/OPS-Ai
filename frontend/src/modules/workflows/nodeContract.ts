@@ -35,6 +35,16 @@ export interface NodePortDef {
   label?: string;
   /** Short helper for tooltips / inspector */
   description?: string;
+  /**
+   * Part 12A — connection class. Derived authoritatively from kind when omitted.
+   * execution = WorkflowItem flow; auxiliary = resource binding (model/tool/memory).
+   */
+  connectionKind?: "execution" | "auxiliary";
+  /**
+   * Part 12A — semantic data type for typed connections.
+   * Stable IDs: model / tools / memory port ids must not be casually renamed.
+   */
+  dataType?: "workflow-items" | "ai-model" | "ai-tool" | "ai-memory";
 }
 
 // ---------------------------------------------------------------------------
@@ -214,6 +224,8 @@ const mainIn = (label = "Input", maxConnections = 1): NodePortDef => ({
   direction: "in",
   maxConnections,
   label,
+  connectionKind: "execution",
+  dataType: "workflow-items",
 });
 
 const mainOut: NodePortDef = {
@@ -221,6 +233,8 @@ const mainOut: NodePortDef = {
   kind: "main",
   direction: "out",
   label: "Output",
+  connectionKind: "execution",
+  dataType: "workflow-items",
 };
 
 const errorOut: NodePortDef = {
@@ -228,6 +242,8 @@ const errorOut: NodePortDef = {
   kind: "error",
   direction: "out",
   label: "Error",
+  connectionKind: "execution",
+  dataType: "workflow-items",
 };
 
 const trueOut: NodePortDef = {
@@ -235,6 +251,8 @@ const trueOut: NodePortDef = {
   kind: "true",
   direction: "out",
   label: "True",
+  connectionKind: "execution",
+  dataType: "workflow-items",
 };
 
 const falseOut: NodePortDef = {
@@ -242,6 +260,8 @@ const falseOut: NodePortDef = {
   kind: "false",
   direction: "out",
   label: "False",
+  connectionKind: "execution",
+  dataType: "workflow-items",
 };
 
 const mergeInput = (index: number): NodePortDef => ({
@@ -250,6 +270,8 @@ const mergeInput = (index: number): NodePortDef => ({
   direction: "in",
   maxConnections: 1,
   label: `Input ${index}`,
+  connectionKind: "execution",
+  dataType: "workflow-items",
 });
 
 const SETTINGS_ACTION: NodeSettingsMatrix = {
@@ -1383,7 +1405,7 @@ export const NODE_CONTRACTS: Record<WorkflowNodeType, NodeContract> = {
     type: "bot",
     version: 1,
     category: "AI",
-    label: "AI Agent",
+    label: "Bot",
     inputs: [
       mainIn(),
       {
@@ -1393,6 +1415,9 @@ export const NODE_CONTRACTS: Record<WorkflowNodeType, NodeContract> = {
         maxConnections: 1,
         required: true,
         label: "Chat Model",
+        connectionKind: "auxiliary",
+        dataType: "ai-model",
+        description: "Connect an AI model provider",
       },
       {
         id: "ai_memory",
@@ -1401,6 +1426,9 @@ export const NODE_CONTRACTS: Record<WorkflowNodeType, NodeContract> = {
         maxConnections: 1,
         required: false,
         label: "Memory",
+        connectionKind: "auxiliary",
+        dataType: "ai-memory",
+        description: "Connect an AI memory provider",
       },
       {
         id: "ai_tool",
@@ -1409,6 +1437,9 @@ export const NODE_CONTRACTS: Record<WorkflowNodeType, NodeContract> = {
         maxConnections: undefined,
         required: false,
         label: "Tool",
+        connectionKind: "auxiliary",
+        dataType: "ai-tool",
+        description: "Connect one or more AI tools",
       },
     ],
     outputs: [mainOut, errorOut],
@@ -1430,6 +1461,258 @@ export const NODE_CONTRACTS: Record<WorkflowNodeType, NodeContract> = {
       "Memory is persistent across runs — not editor cache",
     ],
   },
+
+  // Part 12A — internal typed-port fixtures (runtime disabled; not library Available)
+  aiModelProviderTest: {
+    type: "aiModelProviderTest",
+    version: 1,
+    category: "AI",
+    label: "Model Provider (test)",
+    inputs: [],
+    outputs: [
+      {
+        id: "model",
+        kind: "ai_languageModel",
+        direction: "out",
+        label: "Model",
+        connectionKind: "auxiliary",
+        dataType: "ai-model",
+        description: "AI model resource",
+      },
+    ],
+    cardinality: "0-to-1",
+    pairedItemPolicy: "none",
+    settings: SETTINGS_LOGIC,
+    capabilities: ["notes"],
+    params: [
+      { name: "temperature", displayName: "Temperature", type: "number", default: 0.2 },
+    ],
+    dirtyTriggers: ["params", "edges", "typedPorts"],
+    edgeCases: ["Part 12A fixture — not a scheduled WorkflowItem step"],
+    parametersPanel: "placeholder",
+    placeholderKind: "stub",
+  },
+
+  aiToolProviderTest: {
+    type: "aiToolProviderTest",
+    version: 1,
+    category: "AI",
+    label: "Tool Provider (test)",
+    inputs: [],
+    outputs: [
+      {
+        id: "tool",
+        kind: "ai_tool",
+        direction: "out",
+        label: "Tool",
+        connectionKind: "auxiliary",
+        dataType: "ai-tool",
+        description: "AI tool resource",
+      },
+    ],
+    cardinality: "0-to-1",
+    pairedItemPolicy: "none",
+    settings: SETTINGS_LOGIC,
+    capabilities: ["notes"],
+    params: [{ name: "name", displayName: "Name", type: "string", default: "tool" }],
+    dirtyTriggers: ["params", "edges", "typedPorts"],
+    edgeCases: ["Part 12A fixture — not a scheduled WorkflowItem step"],
+    parametersPanel: "placeholder",
+    placeholderKind: "stub",
+  },
+
+  aiMemoryProviderTest: {
+    type: "aiMemoryProviderTest",
+    version: 1,
+    category: "AI",
+    label: "Memory Provider (test)",
+    inputs: [],
+    outputs: [
+      {
+        id: "memory",
+        kind: "ai_memory",
+        direction: "out",
+        label: "Memory",
+        connectionKind: "auxiliary",
+        dataType: "ai-memory",
+        description: "AI memory resource",
+      },
+    ],
+    cardinality: "0-to-1",
+    pairedItemPolicy: "none",
+    settings: SETTINGS_LOGIC,
+    capabilities: ["notes"],
+    params: [{ name: "sessionKey", displayName: "Session Key", type: "string" }],
+    dirtyTriggers: ["params", "edges", "typedPorts"],
+    edgeCases: ["Part 12A fixture — not a scheduled WorkflowItem step"],
+    parametersPanel: "placeholder",
+    placeholderKind: "stub",
+  },
+
+  aiAgentTest: {
+    type: "aiAgentTest",
+    version: 1,
+    category: "AI",
+    label: "AI Agent (test)",
+    inputs: [
+      mainIn(),
+      {
+        id: "model",
+        kind: "ai_languageModel",
+        direction: "in",
+        maxConnections: 1,
+        required: true,
+        label: "Chat Model",
+        connectionKind: "auxiliary",
+        dataType: "ai-model",
+        description: "Connect an AI model provider",
+      },
+      {
+        id: "tools",
+        kind: "ai_tool",
+        direction: "in",
+        maxConnections: undefined,
+        required: false,
+        label: "Tools",
+        connectionKind: "auxiliary",
+        dataType: "ai-tool",
+        description: "Connect one or more AI tools",
+      },
+      {
+        id: "memory",
+        kind: "ai_memory",
+        direction: "in",
+        maxConnections: 1,
+        required: false,
+        label: "Memory",
+        connectionKind: "auxiliary",
+        dataType: "ai-memory",
+        description: "Connect an AI memory provider",
+      },
+    ],
+    outputs: [mainOut],
+    cardinality: "N-to-N",
+    pairedItemPolicy: "identity1to1",
+    pairedItemNotes: "Auxiliary ports are bindings only — not item provenance",
+    settings: SETTINGS_ACTION,
+    capabilities: CAP_ACTION,
+    params: [],
+    dirtyTriggers: ["params", "edges", "pin", "disabled", "typedPorts"],
+    edgeCases: [
+      "Part 12A fixture — structural agent only; runtime in Part 12B",
+    ],
+    parametersPanel: "placeholder",
+    placeholderKind: "stub",
+  },
+
+  aiAgent: {
+    type: "aiAgent",
+    version: 1,
+    category: "AI",
+    label: "Basic AI Agent",
+    inputs: [
+      mainIn(),
+      {
+        id: "model",
+        kind: "ai_languageModel",
+        direction: "in",
+        maxConnections: 1,
+        required: true,
+        label: "Chat Model",
+        connectionKind: "auxiliary",
+        dataType: "ai-model",
+        description: "Connect a Chat Model",
+      },
+      {
+        id: "tools",
+        kind: "ai_tool",
+        direction: "in",
+        maxConnections: undefined,
+        required: false,
+        label: "Tools",
+        connectionKind: "auxiliary",
+        dataType: "ai-tool",
+        description: "Connect one or more tools",
+      },
+      {
+        id: "memory",
+        kind: "ai_memory",
+        direction: "in",
+        maxConnections: 1,
+        required: false,
+        label: "Memory",
+        connectionKind: "auxiliary",
+        dataType: "ai-memory",
+        description: "Not supported yet",
+      },
+    ],
+    outputs: [mainOut],
+    cardinality: "N-to-N",
+    pairedItemPolicy: "identity1to1",
+    pairedItemNotes: "One Agent interaction per input item; auxiliary bindings are not provenance",
+    settings: SETTINGS_ACTION,
+    capabilities: CAP_ACTION,
+    isSideEffecting: true,
+    params: [],
+    dirtyTriggers: ["params", "edges", "pin", "disabled", "typedPorts"],
+    edgeCases: [
+      "Requires exactly one model binding at execution time",
+      "Memory binding fails with AI_MEMORY_NOT_SUPPORTED",
+      "Tool providers are not scheduled workflow steps",
+    ],
+  },
+
+  aiChatModel: {
+    type: "aiChatModel",
+    version: 1,
+    category: "AI",
+    label: "Chat Model",
+    inputs: [],
+    outputs: [
+      {
+        id: "model",
+        kind: "ai_languageModel",
+        direction: "out",
+        label: "Model",
+        connectionKind: "auxiliary",
+        dataType: "ai-model",
+        description: "AI model resource",
+      },
+    ],
+    cardinality: "0-to-1",
+    pairedItemPolicy: "none",
+    settings: SETTINGS_LOGIC,
+    capabilities: ["notes"],
+    params: [],
+    dirtyTriggers: ["params", "edges", "typedPorts"],
+    edgeCases: ["Auxiliary provider — not a scheduled WorkflowItem step"],
+  },
+
+  aiCalculatorTool: {
+    type: "aiCalculatorTool",
+    version: 1,
+    category: "AI",
+    label: "Calculator Tool",
+    inputs: [],
+    outputs: [
+      {
+        id: "tool",
+        kind: "ai_tool",
+        direction: "out",
+        label: "Tool",
+        connectionKind: "auxiliary",
+        dataType: "ai-tool",
+        description: "Calculator tool resource",
+      },
+    ],
+    cardinality: "0-to-1",
+    pairedItemPolicy: "none",
+    settings: SETTINGS_LOGIC,
+    capabilities: ["notes"],
+    params: [],
+    dirtyTriggers: ["params", "edges", "typedPorts"],
+    edgeCases: ["Auxiliary provider — invoked only by AI Agent"],
+  },
 };
 
 // ---------------------------------------------------------------------------
@@ -1440,7 +1723,9 @@ export const getNodeContract = (type: WorkflowNodeType): NodeContract =>
   NODE_CONTRACTS[type];
 
 export const hasInputPanel = (type: WorkflowNodeType): boolean =>
-  NODE_CONTRACTS[type].inputs.length > 0;
+  NODE_CONTRACTS[type].inputs.some(
+    (p) => p.direction === "in" && p.kind === "main"
+  );
 
 export const hasOutputPanel = (type: WorkflowNodeType): boolean =>
   NODE_CONTRACTS[type].outputs.length > 0 || Boolean(NODE_CONTRACTS[type].isTrigger);

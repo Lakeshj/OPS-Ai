@@ -189,7 +189,7 @@ const registerPart12ATests = ({ check, section, assert }) => {
       ],
     });
     assert.equal(r.ok, false);
-    assert.match(r.message, /Only one model/i);
+    assert.match(r.message, /Only one (Chat )?model/i);
   });
 
   check("TEST 12A-10 tools accepts multiple connections", () => {

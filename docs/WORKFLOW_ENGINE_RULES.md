@@ -211,13 +211,84 @@ Multiple succeeded Result occurrences on one child run → `SUBWORKFLOW_AMBIGUOU
 - Run identity: `workflow_id` FK retained + optional `workflow_name_snapshot` at run start.
 - Explicit run retention/cleanup (if any) is separate from definition soft-delete.
 
-## Error Workflow (Parts 11A–11B)
+## Error Workflow (Parts 11A–11C)
 
 - Source run terminal `FAILED` may create one durable `workflow_error_dispatches` row (UNIQUE on `source_run_id`).
 - Source remains `FAILED` regardless of Error Workflow outcome; source worker does not await the Error run.
 - `workflows.error_workflow_id` + `workflow_runs.error_workflow_id_snapshot` freeze routing at run start.
 - Configure via workflow settings (`PATCH /workflows/:id/error-workflow`) and picker (`GET /workflows/error-targets`).
+- Lineage: `GET /workflows/:id/runs/:runId/error-routing` — bidirectional source ↔ handler navigation (safe metadata only).
 - `suppress_error_routing` on Error runs (and descendants) prevents recursive error storms.
 - `errorTrigger` node is library-available; emits one safe failure event item.
 - Cancelled / retries / job lease recovery do not dispatch.
-- Failure lineage / Open Error Run UI is Part 11C.
+- Retry Failed Run / node error branches are out of scope.
+
+## Typed auxiliary ports (Part 12A)
+
+Authoritative service: `backend/services/workflowConnection.service.js` (FE mirror: `connectionPorts.ts`).
+
+### Connection classes
+
+- **execution** — WorkflowItem[] dependency / routing (scheduler, provenance, expressions, tidy rank).
+- **auxiliary** — resource/capability binding (model / tool / memory). Not WorkflowItem flow.
+
+`connectionKind` is **derived** from endpoint port contracts. Do not persist a conflicting edge-level kind.
+
+### Port data types (V1)
+
+`workflow-items`, `ai-model`, `ai-tool`, `ai-memory`. Future types (embedding, vector-store, …) may be added without changing this projection model.
+
+### Stable port IDs
+
+Once introduced on production Agent/provider contracts, do **not** casually rename persisted handle IDs such as `model`, `tools`, `memory` (or bot’s `ai_languageModel` / `ai_tool` / `ai_memory`).
+
+### Graph projections
+
+- `getExecutionEdges(definition)` — scheduling / item ancestry / expression reachability / ELK primary rank.
+- `getAuxiliaryEdges(definition)` — bindings + dirty invalidation only.
+- `resolveAuxiliaryBindings({ nodeId, definition })` — graph metadata only (no credentials/clients). Tool order: stable by `edge.id` ascending.
+
+### Dirty invalidation
+
+Auxiliary bindings participate in **invalidation** (provider param / reconnect / delete → consumer + execution downstream dirty) but **not** in the WorkflowItem scheduler.
+
+### Runtime
+
+Part 12A does **not** enable AI Agent / model / tool / memory execution. Test fixtures (`ai*Test`) are structural only.
+
+## AI Agent + Model + Tool runtime (Part 12B)
+
+Authoritative services:
+
+- `backend/services/workflowAiResources.service.js` — descriptors, adapters, tool validation
+- `backend/services/workflowAiAgent.service.js` — per-item Agent loop
+
+### Canonical types
+
+- **aiAgent** — normal WorkflowItem execution node (not a rename of legacy `bot`)
+- **aiChatModel** — auxiliary model provider (OpenAI-compatible adapter)
+- **aiCalculatorTool** — auxiliary calculator tool
+- Legacy **ai** / **bot** handlers unchanged
+
+### Runtime rules
+
+- Providers are **never** scheduled as WorkflowItem steps and produce no `workflow_run_steps`.
+- Agent requires exactly one model binding at execution (`AI_MODEL_REQUIRED`).
+- Connected memory fails with `AI_MEMORY_NOT_SUPPORTED` (memory runtime deferred).
+- Per input item: one independent Agent interaction; `pairedItem` identity 1:1.
+- Bounded tool loop: `MAX_AGENT_TOOL_ROUNDS = 8`.
+- Tool side effects are **at-least-once** under node retries (same `executionIndex`).
+- Descriptors are serializable; runtime clients are ephemeral and rebuilt after Wait/resume.
+- HTTP Tool deferred to Part 13; Code-as-tool remains unavailable.
+
+## AI workspace UX (Part 12C)
+
+UI-only polish on top of 12A/12B. No new AI capabilities (no Memory/RAG/HTTP Tool/streaming).
+
+- Agent card shows Model required / Model label + Tools count (via `getAiAgentReadiness`).
+- Auxiliary edges labeled Model / Tool (not generic “Resource” when type known).
+- Memory handle hidden until a production memory provider is Available.
+- Chat Model / Calculator are resource cards; Run Step is controlled-unsupported.
+- Inspector: Resources summary separate from INPUT items; tool-call trace from safe `agentMeta`.
+- Typed resource picker from Agent Model/Tools handles (filtered NodePickerDialog).
+- Error codes mapped through `mapAiErrorCodeToMessage` / `backend/utils/aiAgentUx.js`.

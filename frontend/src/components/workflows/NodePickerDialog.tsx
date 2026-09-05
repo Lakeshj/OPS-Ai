@@ -31,7 +31,12 @@ import {
   CATEGORY_DISPLAY_LABELS,
   PRIMARY_LIBRARY_CATEGORIES,
 } from "@/modules/workflows/nodeSearchMeta";
-import { isTriggerNode } from "@/modules/workflows/nodeRegistry";
+import { isTriggerNode, getNodeContract } from "@/modules/workflows/nodeRegistry";
+import {
+  enrichPort,
+  type PortDataType,
+} from "@/modules/workflows/connectionPorts";
+import { isExcludedFromExecutionNextStep } from "@/modules/workflows/aiAgentUx";
 
 type Props = {
   open: boolean;
@@ -42,6 +47,10 @@ type Props = {
   filterAvailableOnly?: boolean;
   /** Exclude root triggers (insert-on-edge / add-next-step). */
   excludeTriggers?: boolean;
+  /** Exclude AI resource providers from ordinary execution next-step. */
+  excludeAuxiliaryProviders?: boolean;
+  /** Part 12C — only show providers matching this auxiliary data type. */
+  requiredDataType?: PortDataType | null;
   onPick: (node: LibraryNode) => void;
 };
 
@@ -54,6 +63,8 @@ export function NodePickerDialog({
   description = "Search and select a node to add to your workflow.",
   filterAvailableOnly = true,
   excludeTriggers = false,
+  excludeAuxiliaryProviders = false,
+  requiredDataType = null,
   onPick,
 }: Props) {
   const [query, setQuery] = useState("");
@@ -77,16 +88,36 @@ export function NodePickerDialog({
       availability: filterAvailableOnly ? "available" : "all",
       limit: 80,
     });
-    if (!excludeTriggers) return ranked;
     return ranked.filter((node) => {
       try {
         const engineType = resolveEngineType(node);
-        return !isTriggerNode(engineType);
+        if (excludeTriggers && isTriggerNode(engineType)) return false;
+        if (
+          excludeAuxiliaryProviders &&
+          isExcludedFromExecutionNextStep(engineType)
+        ) {
+          return false;
+        }
+        if (requiredDataType) {
+          const contract = getNodeContract(engineType);
+          const outs = (contract.outputs || []).map(enrichPort);
+          if (!outs.some((p) => p.dataType === requiredDataType)) return false;
+        }
+        return true;
       } catch {
-        return node.type !== "Trigger";
+        if (excludeTriggers && node.type === "Trigger") return false;
+        if (requiredDataType) return false;
+        return true;
       }
     });
-  }, [query, category, filterAvailableOnly, excludeTriggers]);
+  }, [
+    query,
+    category,
+    filterAvailableOnly,
+    excludeTriggers,
+    excludeAuxiliaryProviders,
+    requiredDataType,
+  ]);
 
   useEffect(() => {
     if (open) {

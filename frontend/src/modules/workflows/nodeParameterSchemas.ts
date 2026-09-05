@@ -618,6 +618,99 @@ export const NODE_PARAMETER_SCHEMAS: Record<WorkflowNodeType, ParamDescriptor[]>
     noop: [],
 
     integration: [],
+
+    aiModelProviderTest: [
+      {
+        name: "temperature",
+        displayName: "Temperature",
+        type: "number",
+        default: 0.2,
+      },
+    ],
+    aiToolProviderTest: [
+      {
+        name: "name",
+        displayName: "Name",
+        type: "string",
+        default: "tool",
+      },
+    ],
+    aiMemoryProviderTest: [
+      {
+        name: "sessionKey",
+        displayName: "Session Key",
+        type: "string",
+      },
+    ],
+    aiAgentTest: [],
+
+    aiAgent: [
+      {
+        name: "prompt",
+        displayName: "Prompt",
+        type: "string",
+        expression: true,
+        multiline: true,
+        default: "{{item}}",
+        description: "Resolved per input item via OpsAi expressions.",
+      },
+      {
+        name: "systemInstruction",
+        displayName: "System instruction",
+        type: "string",
+        expression: true,
+        multiline: true,
+        description: "Instructions that guide the Agent's behavior.",
+      },
+    ],
+
+    aiChatModel: [
+      {
+        name: "provider",
+        displayName: "Provider",
+        type: "options",
+        default: "openai",
+        options: [
+          { name: "OpenAI", value: "openai" },
+          { name: "DeepSeek", value: "deepseek" },
+          { name: "Gemini", value: "gemini" },
+        ],
+      },
+      { name: "model", displayName: "Model", type: "string", default: "gpt-4o-mini" },
+      {
+        name: "temperature",
+        displayName: "Temperature",
+        type: "number",
+        default: 0.4,
+      },
+      {
+        name: "maxTokens",
+        displayName: "Max tokens",
+        type: "number",
+        default: 1200,
+      },
+    ],
+
+    aiCalculatorTool: [
+      {
+        name: "toolNameNotice",
+        displayName: "Tool name",
+        type: "notice",
+        description: "Tool name: calculator (fixed for this tool).",
+      },
+      {
+        name: "toolName",
+        displayName: "Tool name",
+        type: "hidden",
+        default: "calculator",
+      },
+      {
+        name: "description",
+        displayName: "Description",
+        type: "string",
+        default: "Add, subtract, multiply, or divide two numbers.",
+      },
+    ],
   };
 
 export const NODE_PARAMETERS_PANEL: Partial<
@@ -630,6 +723,10 @@ export const NODE_PARAMETERS_PANEL: Partial<
   errorTrigger: "trigger",
   integration: "placeholder",
   noop: "placeholder",
+  aiModelProviderTest: "placeholder",
+  aiToolProviderTest: "placeholder",
+  aiMemoryProviderTest: "placeholder",
+  aiAgentTest: "placeholder",
 };
 
 /** Contract-driven placeholder copy (avoids node-type switches in NodeInspector). */
@@ -638,4 +735,8 @@ export const NODE_PLACEHOLDER_KIND: Partial<
 > = {
   integration: "stub",
   noop: "passthrough",
+  aiModelProviderTest: "stub",
+  aiToolProviderTest: "stub",
+  aiMemoryProviderTest: "stub",
+  aiAgentTest: "stub",
 };

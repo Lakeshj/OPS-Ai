@@ -1168,11 +1168,44 @@
       "engineType": "ai"
     },
     {
+      "id": "ai-agent",
+      "name": "Basic AI Agent",
+      "category": "AI Agents",
+      "type": "AI",
+      "description": "Use a connected Chat Model and optional tools to process workflow data.",
+      "icon": "bot",
+      "provider": "OpsAi",
+      "available": true,
+      "engineType": "aiAgent"
+    },
+    {
+      "id": "ai-chat-model",
+      "name": "Chat Model",
+      "category": "AI",
+      "type": "AI",
+      "description": "Provide a chat model to an AI Agent.",
+      "icon": "sparkles",
+      "provider": "OpsAi",
+      "available": true,
+      "engineType": "aiChatModel"
+    },
+    {
+      "id": "ai-calculator-tool",
+      "name": "Calculator Tool",
+      "category": "AI",
+      "type": "Tool",
+      "description": "Let an AI Agent perform arithmetic calculations.",
+      "icon": "calculator",
+      "provider": "OpsAi",
+      "available": true,
+      "engineType": "aiCalculatorTool"
+    },
+    {
       "id": "ai-bot",
       "name": "Bot (@assistant)",
       "category": "AI",
       "type": "AI",
-      "description": "Run one of your Keyword Assistants with its own model and prompt template",
+      "description": "Run one of your Keyword Assistants with its own model and prompt template (legacy; not AI Agent resources).",
       "icon": "bot",
       "provider": "OpsAi",
       "available": true,
@@ -1388,11 +1421,11 @@
       "engineType": null
     },
     {
-      "id": "ai-agent",
-      "name": "AI Agent",
+      "id": "ai-agent-soon",
+      "name": "AI Agent (Soon)",
       "category": "AI Agents",
       "type": "AI",
-      "description": "Autonomous agent that uses tools to complete tasks",
+      "description": "Placeholder for future agent variants",
       "icon": "bot",
       "provider": null,
       "available": false,

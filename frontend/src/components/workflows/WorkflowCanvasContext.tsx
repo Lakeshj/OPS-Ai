@@ -7,6 +7,8 @@ import type { NodeContextMenuActions } from "./WorkflowNodeContextMenu";
 export type WorkflowCanvasActions = {
   getNodeActions: (nodeId: string) => NodeToolbarActions & NodeContextMenuActions;
   onAddNextStep?: (nodeId: string, sourceHandle?: string | null) => void;
+  /** Part 12C — typed resource picker for Agent auxiliary inputs */
+  onAddResource?: (nodeId: string, targetHandle: string) => void;
 };
 
 const WorkflowCanvasContext = createContext<WorkflowCanvasActions | null>(null);

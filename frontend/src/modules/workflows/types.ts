@@ -35,7 +35,16 @@ export type WorkflowNodeType =
   | "executeWorkflow"
   | "loop"
   | "noop"
-  | "integration";
+  | "integration"
+  // Part 12A typed-port fixtures (internal / test only)
+  | "aiModelProviderTest"
+  | "aiToolProviderTest"
+  | "aiMemoryProviderTest"
+  | "aiAgentTest"
+  // Part 12B runtime
+  | "aiAgent"
+  | "aiChatModel"
+  | "aiCalculatorTool";
 
 export interface WorkflowSetMapping {
   key: string;
@@ -274,6 +283,8 @@ export const OPERATOR_LABELS: Record<WorkflowOperator, string> = {
 export interface WorkflowNodeData {
   label?: string;
   nodeType?: WorkflowNodeType;
+  /** UI-only: prompt rename after adding Basic AI Agent before next step */
+  needsNaming?: boolean;
   /** Library catalog metadata */
   libraryId?: string;
   libraryCategory?: string;
@@ -491,12 +502,47 @@ export interface WorkflowRun {
   historicalDefinition?: WorkflowDefinition | null;
   isSubworkflow?: boolean;
   childRunCount?: number;
+  /** Part 11C — this run created an Error Workflow dispatch. */
+  hasErrorDispatch?: boolean;
+  /** Part 11C — this run is an Error Workflow handler run. */
+  isErrorHandler?: boolean;
+  errorDispatchStatus?: string | null;
+  errorRunId?: string | null;
   startedAt?: string | null;
   finishedAt?: string | null;
   createdBy: string;
   createdAt: string;
   steps?: WorkflowRunStep[];
   wait?: WorkflowRunWaitInfo | null;
+}
+
+/** Part 11C — safe Error Workflow routing lineage. */
+export interface WorkflowErrorRoutingDispatch {
+  id: string;
+  status: string;
+  outcomeCode?: string | null;
+  errorWorkflowId?: string | null;
+  sourceRunId: string;
+  errorRunId?: string | null;
+  createdAt?: string | null;
+  dispatchedAt?: string | null;
+  lastError?: string | null;
+}
+
+export interface WorkflowErrorRouting {
+  role: "source" | "handler" | "none";
+  dispatch: WorkflowErrorRoutingDispatch | null;
+  sourceRun: WorkflowLineageRun | null;
+  errorRun: WorkflowLineageRun | null;
+  targetWorkflow: {
+    id: string;
+    name: string;
+    deleted: boolean;
+  } | null;
+  openSourceRunPath?: string | null;
+  openErrorRunPath?: string | null;
+  openSourceWorkflowPath?: string | null;
+  openErrorWorkflowPath?: string | null;
 }
 
 /** Part 10C — safe lineage node (no secrets / snapshots). */

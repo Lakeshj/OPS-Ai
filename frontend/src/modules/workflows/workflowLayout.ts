@@ -9,6 +9,7 @@ import { getNodeContract } from "./nodeContract";
 import { resolveNodeOutputPorts } from "./dynamicPorts";
 import type { WorkflowNodeData, WorkflowNodeType } from "./types";
 import { LOOP_PORTS, isLoopContinueEdge } from "./loopValidation";
+import { isAuxiliaryEdge } from "./connectionPorts";
 
 export type LayoutPositionMap = Record<string, { x: number; y: number }>;
 
@@ -57,18 +58,24 @@ function hasForwardCycle(nodes: Node[], forwardEdges: Edge[]): boolean {
   return false;
 }
 
-/** Forward edges = all edges except sanctioned Loop.continue back-edges. */
+/**
+ * Forward edges for ELK ranking = execution DAG only.
+ * Excludes Loop.continue and Part 12A auxiliary resource edges.
+ */
 export function projectForwardEdges(nodes: Node[], edges: Edge[]): {
   forwardEdges: Edge[];
   loopBackEdges: Edge[];
+  auxiliaryEdges: Edge[];
 } {
   const forwardEdges: Edge[] = [];
   const loopBackEdges: Edge[] = [];
+  const auxiliaryEdges: Edge[] = [];
   for (const e of edges) {
     if (isLoopContinueEdge(e, nodes)) loopBackEdges.push(e);
+    else if (isAuxiliaryEdge(e, nodes)) auxiliaryEdges.push(e);
     else forwardEdges.push(e);
   }
-  return { forwardEdges, loopBackEdges };
+  return { forwardEdges, loopBackEdges, auxiliaryEdges };
 }
 
 function measureNode(node: Node): LayoutNodeSize {
@@ -258,7 +265,7 @@ export async function layoutWorkflowGraph(options: {
     return { ok: true, positions: {} };
   }
 
-  const { forwardEdges } = projectForwardEdges(nodes, edges);
+  const { forwardEdges, auxiliaryEdges } = projectForwardEdges(nodes, edges);
 
   if (hasForwardCycle(nodes, forwardEdges)) {
     return {
@@ -303,6 +310,26 @@ export async function layoutWorkflowGraph(options: {
         };
       }
     }
+
+    // Part 12A: place auxiliary providers near their consumer (not in execution rank).
+    const byConsumer = new Map<string, string[]>();
+    for (const e of auxiliaryEdges) {
+      if (!byConsumer.has(e.target)) byConsumer.set(e.target, []);
+      byConsumer.get(e.target)!.push(e.source);
+    }
+    for (const [consumerId, providerIds] of byConsumer) {
+      const consumerPos = positions[consumerId];
+      if (!consumerPos) continue;
+      const unique = [...new Set(providerIds)].sort();
+      unique.forEach((providerId, index) => {
+        const size = measureNode(nodes.find((n) => n.id === providerId)! || { id: providerId } as Node);
+        positions[providerId] = {
+          x: Math.round(consumerPos.x + index * (size.width + 24) - ((unique.length - 1) * (size.width + 24)) / 2),
+          y: Math.round(consumerPos.y - (size.height + 56)),
+        };
+      });
+    }
+
     return { ok: true, positions };
   } catch {
     return { ok: false, message: "Couldn't tidy this workflow." };

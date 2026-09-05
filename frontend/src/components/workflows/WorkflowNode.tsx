@@ -1,12 +1,25 @@
 "use client";
 
-import React, { memo, useState } from "react";
-import { Handle, NodeToolbar, Position, type NodeProps } from "@xyflow/react";
+import React, { memo, useMemo, useState } from "react";
+import {
+  Handle,
+  NodeToolbar,
+  Position,
+  useStore,
+  type NodeProps,
+} from "@xyflow/react";
 import { AlertCircle, Check, Pin, Plus, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { nodeHasMissingConfig } from "@/modules/workflows/nodeValidation";
 import { getNodeContract } from "@/modules/workflows/nodeRegistry";
 import { resolveNodeOutputPorts } from "@/modules/workflows/dynamicPorts";
+import {
+  getAiAgentReadiness,
+  getAiResourceDisplay,
+  getVisibleAiAuxiliaryInputPorts,
+  isAiAgentType,
+  isAiResourceProviderType,
+} from "@/modules/workflows/aiAgentUx";
 import type { WorkflowNodeData } from "@/modules/workflows/types";
 import { WorkflowNodeToolbar } from "./WorkflowNodeToolbar";
 import { WorkflowNodeContextMenu } from "./WorkflowNodeContextMenu";
@@ -22,6 +35,9 @@ const typeStyles: Record<string, string> = {
   webhook: "border-cyan-500/60",
   ai: "border-blue-500/60",
   bot: "border-fuchsia-500/60",
+  aiAgent: "border-blue-600/70",
+  aiChatModel: "border-dashed border-blue-500/50",
+  aiCalculatorTool: "border-dashed border-sky-600/50",
   http: "border-amber-500/60",
   condition: "border-violet-500/60",
   set: "border-sky-500/60",
@@ -59,6 +75,14 @@ const START_TYPES = new Set([
   "workflowTrigger",
   "errorTrigger",
 ]);
+
+const TYPE_LABEL: Record<string, string> = {
+  aiAgent: "Basic AI Agent",
+  aiChatModel: "Chat Model",
+  aiCalculatorTool: "Calculator",
+  bot: "Bot",
+  ai: "AI Model",
+};
 
 function StatusBadge({
   runStatus,
@@ -121,20 +145,32 @@ function StatusBadge({
 
 function WorkflowNodeComponent({ id, data, type, selected }: NodeProps) {
   const canvas = useWorkflowCanvasActions();
+  const edges = useStore((s) => s.edges);
+  const nodes = useStore((s) => s.nodes);
   const [hovered, setHovered] = useState(false);
   const nodeType = String(type || data?.nodeType || "ai");
-  const label = String(data?.label || nodeType);
+  const label = String(data?.label || TYPE_LABEL[nodeType] || nodeType);
   const runStatus = data?.runStatus ? String(data.runStatus) : "";
   const preview = data?.runPreview ? String(data.runPreview) : "";
   const nodeData = (data || {}) as WorkflowNodeData;
-  const missingConfig =
+  const resourceDisplay = useMemo(
+    () => getAiResourceDisplay(nodeType, nodeData as Record<string, unknown>),
+    [nodeType, nodeData]
+  );
+  const agentReadiness = useMemo(() => {
+    if (!isAiAgentType(nodeType)) return null;
+    return getAiAgentReadiness(id, edges, nodes);
+  }, [id, nodeType, edges, nodes]);
+  const paramMissing =
     !runStatus || runStatus === "pending"
       ? nodeHasMissingConfig(nodeType, nodeData)
       : false;
+  const missingConfig =
+    paramMissing || Boolean(agentReadiness?.missingModel);
   const isPlaceholder =
     nodeType === "integration" || nodeData.available === false;
+  const isResourceProvider = isAiResourceProviderType(nodeType);
   const actions = canvas?.getNodeActions(id) ?? {};
-  const hasOutput = nodeType !== "result";
   const showToolbar = hovered && !selected;
   const contract = getNodeContract(
     nodeType as import("@/modules/workflows/types").WorkflowNodeType
@@ -142,6 +178,16 @@ function WorkflowNodeComponent({ id, data, type, selected }: NodeProps) {
   const mainInputPorts = contract.inputs.filter(
     (p) => p.direction === "in" && p.kind === "main"
   );
+  const auxiliaryInputPorts = isAiAgentType(nodeType)
+    ? getVisibleAiAuxiliaryInputPorts(nodeType)
+    : contract.inputs.filter(
+        (p) =>
+          p.direction === "in" &&
+          (p.connectionKind === "auxiliary" ||
+            p.kind === "ai_languageModel" ||
+            p.kind === "ai_tool" ||
+            p.kind === "ai_memory")
+      );
   const outputPorts = resolveNodeOutputPorts(
     nodeType as import("@/modules/workflows/types").WorkflowNodeType,
     nodeData,
@@ -152,6 +198,16 @@ function WorkflowNodeComponent({ id, data, type, selected }: NodeProps) {
       p.direction === "out" &&
       (p.kind === "main" || p.kind === "true" || p.kind === "false" || p.kind === "fallback")
   );
+  const auxiliaryOutputPorts = outputPorts.filter(
+    (p) =>
+      p.direction === "out" &&
+      (p.connectionKind === "auxiliary" ||
+        p.kind === "ai_languageModel" ||
+        p.kind === "ai_tool" ||
+        p.kind === "ai_memory")
+  );
+  const hasMainOutput = mainOutputPorts.length > 0;
+  const typeChip = TYPE_LABEL[nodeType] || nodeType;
 
   const nodeBody = (
     <div
@@ -176,6 +232,7 @@ function WorkflowNodeComponent({ id, data, type, selected }: NodeProps) {
         actions={actions}
       />
       {!START_TYPES.has(nodeType) &&
+        mainInputPorts.length > 0 &&
         (mainInputPorts.length > 1 ? (
           <>
             {mainInputPorts.map((port, index) => (
@@ -200,12 +257,59 @@ function WorkflowNodeComponent({ id, data, type, selected }: NodeProps) {
           <Handle
             type="target"
             position={Position.Left}
+            id={mainInputPorts[0]?.id || "main"}
             className="!h-3 !w-3 !border-2 !bg-background !border-muted-foreground"
           />
         ))}
+      {auxiliaryInputPorts.map((port, index) => (
+        <Handle
+          key={port.id}
+          type="target"
+          position={Position.Top}
+          id={port.id}
+          title={
+            port.description
+              ? `${port.label || port.id}: ${port.description}`
+              : port.label || "Auxiliary input"
+          }
+          aria-label={port.label || port.id}
+          style={{
+            left: `${((index + 1) / (auxiliaryInputPorts.length + 1)) * 100}%`,
+          }}
+          className="!h-2.5 !w-2.5 !rounded-sm !border-2 !border-foreground/50 !bg-muted"
+          onClick={(e) => {
+            e.stopPropagation();
+            if (isAiAgentType(nodeType) && canvas?.onAddResource) {
+              canvas.onAddResource(id, port.id);
+            }
+          }}
+        />
+      ))}
+      {auxiliaryInputPorts.length > 0 && (
+        <div className="absolute -top-4 left-0 right-0 flex justify-around px-1 text-[8px] text-muted-foreground">
+          {auxiliaryInputPorts.map((port) => (
+            <button
+              key={port.id}
+              type="button"
+              className="nodrag nopan truncate max-w-[40%] hover:text-foreground"
+              title={
+                port.description
+                  ? `${port.label}: ${port.description}`
+                  : `Connect ${port.label || port.id}`
+              }
+              onClick={(e) => {
+                e.stopPropagation();
+                canvas?.onAddResource?.(id, port.id);
+              }}
+            >
+              {port.label || port.id}
+            </button>
+          ))}
+        </div>
+      )}
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-1 text-[10px] uppercase tracking-wide text-muted-foreground">
-          {nodeType}
+          {typeChip}
           {nodeData.disabled && (
             <span className="normal-case text-destructive">off</span>
           )}
@@ -220,6 +324,52 @@ function WorkflowNodeComponent({ id, data, type, selected }: NodeProps) {
         />
       </div>
       <div className="font-medium text-foreground">{label}</div>
+      {isResourceProvider && (
+        <div className="mt-0.5 text-[10px] text-muted-foreground">
+          {resourceDisplay.subtitle}
+          {resourceDisplay.role === "model" &&
+            (resourceDisplay.providerLabel || resourceDisplay.modelLabel) && (
+              <span className="block truncate">
+                {[resourceDisplay.providerLabel, resourceDisplay.modelLabel]
+                  .filter(Boolean)
+                  .join(" / ")}
+              </span>
+            )}
+          {resourceDisplay.role === "tool" && resourceDisplay.toolName && (
+            <span className="block truncate">{resourceDisplay.toolName}</span>
+          )}
+        </div>
+      )}
+      {agentReadiness && (
+        <div className="mt-1 space-y-0.5 text-[10px] leading-snug text-muted-foreground">
+          <div
+            className={cn(
+              agentReadiness.missingModel &&
+                "font-medium text-amber-700 dark:text-amber-300"
+            )}
+            title={
+              agentReadiness.modelConnected
+                ? agentReadiness.modelLabel || "Model connected"
+                : "Connect a Chat Model"
+            }
+          >
+            {agentReadiness.missingModel
+              ? "Model required"
+              : agentReadiness.modelLabel
+                ? `Model: ${agentReadiness.modelLabel}`
+                : "Model connected"}
+          </div>
+          <div
+            title={
+              agentReadiness.toolNames.length
+                ? agentReadiness.toolNames.join(", ")
+                : "No tools connected"
+            }
+          >
+            Tools: {agentReadiness.toolCount}
+          </div>
+        </div>
+      )}
       {nodeData.notesInFlow && nodeData.notes && (
         <div className="mt-1 line-clamp-2 text-[10px] italic text-muted-foreground">
           {nodeData.notes}
@@ -248,7 +398,7 @@ function WorkflowNodeComponent({ id, data, type, selected }: NodeProps) {
           ))}
         </div>
       )}
-      {missingConfig && !preview && !isPlaceholder && (
+      {paramMissing && !preview && !isPlaceholder && !agentReadiness?.missingModel && (
         <div className="mt-1 text-[10px] text-amber-700 dark:text-amber-300">
           Needs configuration
         </div>
@@ -275,7 +425,7 @@ function WorkflowNodeComponent({ id, data, type, selected }: NodeProps) {
             <span>false</span>
           </div>
         </>
-      ) : hasOutput && mainOutputPorts.length > 1 ? (
+      ) : hasMainOutput && mainOutputPorts.length > 1 ? (
         <>
           {mainOutputPorts.map((port, index) => (
             <Handle
@@ -306,12 +456,12 @@ function WorkflowNodeComponent({ id, data, type, selected }: NodeProps) {
             ))}
           </div>
         </>
-      ) : hasOutput ? (
+      ) : hasMainOutput ? (
         <>
           <Handle
             type="source"
             position={Position.Right}
-            id="default"
+            id={mainOutputPorts[0]?.id || "main"}
             className="!h-3 !w-3 !border-2 !bg-background !border-muted-foreground"
             style={nodeData.onError === "route" ? { top: "38%" } : undefined}
           />
@@ -331,12 +481,35 @@ function WorkflowNodeComponent({ id, data, type, selected }: NodeProps) {
           )}
         </>
       ) : null}
+      {auxiliaryOutputPorts.map((port, index) => (
+        <Handle
+          key={port.id}
+          type="source"
+          position={Position.Bottom}
+          id={port.id}
+          title={
+            port.description
+              ? `${port.label || port.id}: ${port.description}`
+              : port.label || "Resource output"
+          }
+          aria-label={port.label || port.id}
+          style={{
+            left: `${((index + 1) / (auxiliaryOutputPorts.length + 1)) * 100}%`,
+          }}
+          className="!h-2.5 !w-2.5 !rounded-sm !border-2 !border-foreground/50 !bg-muted"
+        />
+      ))}
+      {auxiliaryOutputPorts.length > 0 && (
+        <div className="mt-1 text-center text-[9px] text-muted-foreground">
+          {auxiliaryOutputPorts.map((p) => p.label || p.id).join(" · ")}
+        </div>
+      )}
     </div>
   );
 
   return (
     <>
-      {hasOutput && selected && canvas?.onAddNextStep && (
+      {hasMainOutput && selected && canvas?.onAddNextStep && (
         <NodeToolbar position={Position.Right} offset={12} align="center">
           <Button
             type="button"
@@ -346,7 +519,7 @@ function WorkflowNodeComponent({ id, data, type, selected }: NodeProps) {
             title="Add next step"
             onClick={(e) => {
               e.stopPropagation();
-              canvas.onAddNextStep?.(id, "default");
+              canvas.onAddNextStep?.(id, mainOutputPorts[0]?.id || "main");
             }}
           >
             <Plus className="h-3.5 w-3.5" />

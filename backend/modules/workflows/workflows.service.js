@@ -568,7 +568,8 @@ const startRun = async (workflowId, input, authUser, idempotencyKey = null) => {
 
 const getRunById = async (runId, authUser, options = {}) => {
   const [rows] = await pool.execute(
-    `SELECT r.*, w.workspace_id, w.name AS workflow_live_name, w.deleted_at
+    `SELECT r.*, w.workspace_id, w.name AS workflow_live_name, w.deleted_at,
+            w.definition_json AS live_definition_json
      FROM workflow_runs r
      INNER JOIN workflows w ON w.id = r.workflow_id
      WHERE r.id = ?`,
@@ -582,10 +583,24 @@ const getRunById = async (runId, authUser, options = {}) => {
     throw new AppError("Run does not belong to this workflow", 404, "NOT_FOUND");
   }
   const run = formatRun(rows[0]);
+  // Prefer start/finish timestamps over created_at alone — same-second inserts
+  // are common and UUID primary keys do not preserve execution order.
   const [steps] = await pool.execute(
-    `SELECT * FROM workflow_run_steps WHERE run_id = ? ORDER BY created_at ASC`,
+    `SELECT * FROM workflow_run_steps
+     WHERE run_id = ?
+     ORDER BY
+       COALESCE(started_at, created_at) ASC,
+       COALESCE(finished_at, started_at, created_at) ASC,
+       execution_index ASC,
+       created_at ASC,
+       id ASC`,
     [runId]
   );
+
+  const { sortWorkflowRunSteps } = require("../../utils/runStepDisplay");
+  const definitionForOrder =
+    parseJson(rows[0].definition_snapshot_json, null) ||
+    parseJson(rows[0].live_definition_json, null);
 
   const { getActiveWaitForRun } = require("../../services/workflowWait.service");
   const activeWait = await getActiveWaitForRun(runId);
@@ -641,7 +656,9 @@ const getRunById = async (runId, authUser, options = {}) => {
     isErrorHandler,
     errorDispatchStatus,
     errorRunId,
-    steps: steps.map(formatStep),
+    steps: sortWorkflowRunSteps(steps.map(formatStep), {
+      definition: definitionForOrder,
+    }),
     wait: waitInfo,
   };
 };
