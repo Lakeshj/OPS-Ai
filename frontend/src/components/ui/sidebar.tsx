@@ -24,6 +24,19 @@ const SIDEBAR_WIDTH_MOBILE = "18rem"
 const SIDEBAR_WIDTH_ICON = "3.5rem"
 const SIDEBAR_KEYBOARD_SHORTCUT = "b"
 
+const readSidebarOpenCookie = (): boolean | null => {
+  if (typeof document === "undefined") return null
+  const match = document.cookie.match(
+    new RegExp(
+      `(?:^|; )${SIDEBAR_COOKIE_NAME.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}=([^;]*)`
+    )
+  )
+  if (!match) return null
+  if (match[1] === "true") return true
+  if (match[1] === "false") return false
+  return null
+}
+
 type SidebarContext = {
   state: "expanded" | "collapsed"
   open: boolean
@@ -68,9 +81,12 @@ const SidebarProvider = React.forwardRef<
     const isMobile = useIsMobile()
     const [openMobile, setOpenMobile] = React.useState(false)
 
-    // This is the internal state of the sidebar.
-    // We use openProp and setOpenProp for control from outside the component.
-    const [_open, _setOpen] = React.useState(defaultOpen)
+    // Prefer the persisted cookie so navigating between layouts (e.g. workflow
+    // editor ↔ workspace) does not force-expand a previously collapsed sidebar.
+    const [_open, _setOpen] = React.useState(() => {
+      const fromCookie = readSidebarOpenCookie()
+      return fromCookie ?? defaultOpen
+    })
     const open = openProp ?? _open
     const setOpen = React.useCallback(
       (value: boolean | ((value: boolean) => boolean)) => {

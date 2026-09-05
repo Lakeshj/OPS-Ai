@@ -27,12 +27,26 @@ import { NodeLibrarySidebar } from "./NodeLibrarySidebar";
 import { WorkflowResultsDialog } from "./WorkflowResultsDialog";
 import { WorkflowNodeDialog } from "./WorkflowNodeDialog";
 import { NodePickerDialog } from "./NodePickerDialog";
-import { WorkflowErrorSettingsDialog } from "./WorkflowErrorSettingsDialog";
+import { WorkflowSettingsDialog } from "./WorkflowSettingsDialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { CircleDot, LayoutGrid, Plus, Settings2 } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  CircleDot,
+  LayoutGrid,
+  MoreHorizontal,
+  PanelRight,
+  Plus,
+  Settings2,
+} from "lucide-react";
 import { redactOrchestrationOutput } from "@/modules/workflows/subworkflowUx";
 import {
   formatStepOutput as formatStepOutputRaw,
@@ -285,6 +299,12 @@ type Props = {
   workflowStatus?: WorkflowStatus;
   errorWorkflowId?: string | null;
   onErrorWorkflowChange?: (errorWorkflowId: string | null) => void;
+  description?: string | null;
+  onSaveWorkflowSettings?: (payload: {
+    description: string;
+    timezone: string;
+    definition: WorkflowDefinition;
+  }) => Promise<void>;
   onPublish?: () => Promise<void>;
   onResumeRun?: () => void | Promise<void>;
   resuming?: boolean;
@@ -818,6 +838,8 @@ function WorkflowCanvasInner({
   workflowStatus = "draft",
   errorWorkflowId = null,
   onErrorWorkflowChange,
+  description = "",
+  onSaveWorkflowSettings,
   onPublish,
   onResumeRun,
   resuming,
@@ -828,6 +850,9 @@ function WorkflowCanvasInner({
     toFlowNodes(definition, latestRun)
   );
   const [edges, setEdges, onEdgesChange] = useEdgesState(toFlowEdges(definition));
+  const [workflowSettings, setWorkflowSettings] = useState(
+    () => definition.settings || { timezone: "UTC" }
+  );
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const selectedIdRef = useRef<string | null>(null);
   const [runInput, setRunInput] = useState("");
@@ -970,6 +995,7 @@ function WorkflowCanvasInner({
   useEffect(() => {
     setNodes(toFlowNodes(definition, latestRun));
     setEdges(toFlowEdges(definition));
+    setWorkflowSettings(definition.settings || { timezone: "UTC" });
   }, [definition, setNodes, setEdges]);
 
   useEffect(() => {
@@ -1065,6 +1091,10 @@ function WorkflowCanvasInner({
     const normalizedNodes = normalizeDefinitionSwitchNodes(wired);
     return {
       version: 1,
+      settings: {
+        ...(workflowSettings || {}),
+        timezone: workflowSettings?.timezone || "UTC",
+      },
       nodes: normalizedNodes.map((n) => {
         const data = { ...(n.data || {}) } as WorkflowNodeData & {
           runStatus?: unknown;
@@ -1087,7 +1117,7 @@ function WorkflowCanvasInner({
         targetHandle: e.targetHandle,
       })),
     };
-  }, [nodes, edges]);
+  }, [nodes, edges, workflowSettings]);
 
   const invalidateEditorCache = useCallback(
     async (event: EditorInvalidationEvent) => {
@@ -2378,31 +2408,6 @@ function WorkflowCanvasInner({
                 : "Publish"}
           </Button>
         )}
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          className="h-9 gap-1"
-          onClick={tidyWorkflow}
-          title="Tidy workflow (Shift+Alt+T)"
-        >
-          <LayoutGrid className="h-4 w-4" />
-          <span className="hidden sm:inline">Tidy</span>
-        </Button>
-        {workflowId && workspaceId && (
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            className="h-9 gap-1"
-            disabled={historicalView}
-            onClick={() => setSettingsOpen(true)}
-            title="Workflow settings"
-          >
-            <Settings2 className="h-4 w-4" />
-            <span className="hidden sm:inline">Settings</span>
-          </Button>
-        )}
         <div className="flex items-center gap-1 rounded-lg border bg-card p-0.5">
           <Button
             type="button"
@@ -2415,31 +2420,55 @@ function WorkflowCanvasInner({
             <Plus className="h-4 w-4" />
             <span className="hidden sm:inline">Nodes</span>
           </Button>
-          <Button
-            type="button"
-            size="sm"
-            variant={resultsDialogOpen ? "secondary" : "ghost"}
-            className="h-8 gap-1.5"
-            onClick={() => setResultsDialogOpen((v) => !v)}
-            title="Results"
-          >
-            <CircleDot className="h-4 w-4" />
-            <span className="hidden sm:inline">Results</span>
-          </Button>
-          <Button
-            type="button"
-            size="sm"
-            variant={nodeDialogOpen ? "secondary" : "ghost"}
-            className="h-8 gap-1.5"
-            onClick={() => {
-              if (selectedId) openNodeDialog();
-              else toast.message("Select a node on the canvas first");
-            }}
-            title="Node settings"
-          >
-            <Settings2 className="h-4 w-4" />
-            <span className="hidden sm:inline">Node</span>
-          </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                className="h-8 gap-1.5"
+                title="More actions"
+              >
+                <MoreHorizontal className="h-4 w-4" />
+                <span className="hidden sm:inline">More</span>
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-48">
+              <DropdownMenuItem
+                onSelect={() => {
+                  tidyWorkflow();
+                }}
+              >
+                <LayoutGrid className="mr-2 h-4 w-4" />
+                Tidy layout
+              </DropdownMenuItem>
+              {workflowId && workspaceId && (
+                <DropdownMenuItem
+                  disabled={historicalView}
+                  onSelect={() => setSettingsOpen(true)}
+                >
+                  <Settings2 className="mr-2 h-4 w-4" />
+                  Workflow settings
+                </DropdownMenuItem>
+              )}
+              <DropdownMenuItem
+                onSelect={() => setResultsDialogOpen(true)}
+              >
+                <CircleDot className="mr-2 h-4 w-4" />
+                Results
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                onSelect={() => {
+                  if (selectedId) openNodeDialog();
+                  else toast.message("Select a node on the canvas first");
+                }}
+              >
+                <PanelRight className="mr-2 h-4 w-4" />
+                Edit selected node
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </div>
 
@@ -2684,15 +2713,37 @@ function WorkflowCanvasInner({
       />
 
       {workflowId && workspaceId && (
-        <WorkflowErrorSettingsDialog
+        <WorkflowSettingsDialog
           open={settingsOpen}
           onOpenChange={setSettingsOpen}
           workflowId={workflowId}
           workspaceId={workspaceId}
           errorWorkflowId={errorWorkflowId}
+          description={description || ""}
+          timezone={workflowSettings?.timezone || "UTC"}
           disabled={historicalView}
-          onSaved={(nextId) => {
+          onErrorWorkflowSaved={(nextId) => {
             onErrorWorkflowChange?.(nextId);
+          }}
+          onSaveGeneral={async ({ description: nextDesc, timezone }) => {
+            const nextSettings = {
+              ...(workflowSettings || {}),
+              timezone: timezone || "UTC",
+            };
+            setWorkflowSettings(nextSettings);
+            const def: WorkflowDefinition = {
+              ...buildDefinition(),
+              settings: nextSettings,
+            };
+            if (onSaveWorkflowSettings) {
+              await onSaveWorkflowSettings({
+                description: nextDesc,
+                timezone: nextSettings.timezone || "UTC",
+                definition: def,
+              });
+            } else {
+              await onSave(def);
+            }
           }}
         />
       )}

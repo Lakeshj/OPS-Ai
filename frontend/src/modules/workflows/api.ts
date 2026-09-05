@@ -228,6 +228,16 @@ export const workflowsApi = {
     apiClient.patch<Workflow>(`/workflows/${id}/error-workflow`, {
       errorWorkflowId,
     }),
+
+  /** Part 14B — planning turn for future Copilot drawer (no workflow_runs). */
+  copilotPlan: (
+    id: string,
+    payload: import("./workflowCopilot").CopilotPlanRequest
+  ) =>
+    apiClient.post<import("./workflowCopilot").CopilotPlanResponse>(
+      `/workflows/${id}/copilot/plan`,
+      payload
+    ),
 };
 
 /** Secrets are write-only: the API never returns a stored secret value. */

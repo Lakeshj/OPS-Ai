@@ -414,7 +414,7 @@ export default function WorkflowEditorPage({
     <div className="flex h-[100dvh] flex-col">
       <div className="flex shrink-0 flex-wrap items-center gap-2 border-b bg-card/60 px-3 py-2 md:px-4">
         <Button asChild variant="ghost" size="sm">
-          <Link href={`/projects/${workflow.workspaceId}`}>
+          <Link href={`/projects/${workflow.workspaceId}?mode=workflow`}>
             <ArrowLeft className="mr-1 h-4 w-4" />
             Workspace
           </Link>
@@ -469,10 +469,25 @@ export default function WorkflowEditorPage({
           errorRouting={errorRouting}
           workflowStatus={workflow.status}
           errorWorkflowId={workflow.errorWorkflowId ?? null}
+          description={workflow.description ?? ""}
           onErrorWorkflowChange={(nextId) => {
             setWorkflow((prev) =>
               prev ? { ...prev, errorWorkflowId: nextId } : prev
             );
+          }}
+          onSaveWorkflowSettings={async ({ description, definition }) => {
+            if (!workflow || workflow.isDeleted) return;
+            setSaving(true);
+            try {
+              const updated = await workflowsApi.update(workflow.id, {
+                name: name.trim() || workflow.name,
+                description: description || null,
+                definition,
+              });
+              setWorkflow(updated);
+            } finally {
+              setSaving(false);
+            }
           }}
           onResumeRun={handleResumeRun}
           resuming={resuming}

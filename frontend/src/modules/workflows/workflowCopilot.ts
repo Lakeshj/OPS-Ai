@@ -1,5 +1,6 @@
 /**
  * Part 14A — Frontend Copilot apply helpers.
+ * Part 14B — Drawer-ready planning API types (UI in 14D).
  * Server validation remains authoritative; this applies a validated plan
  * to the React Flow draft as ONE undoable history transaction.
  */
@@ -19,6 +20,73 @@ export type CopilotOperationType =
 export interface CopilotOperation {
   type: CopilotOperationType;
   [key: string]: unknown;
+}
+
+export type CopilotIntent =
+  | "EXPLAIN"
+  | "BUILD"
+  | "CREATE"
+  | "MODIFY"
+  | "DEBUG"
+  | "FIX";
+
+/** Request body for POST /workflows/:id/copilot/plan (future drawer). */
+export interface CopilotPlanRequest {
+  message: string;
+  workflowId: string;
+  revisionHash: string;
+  selectedNodeId?: string | null;
+  runId?: string | null;
+  recentConversation?: Array<{
+    role: "user" | "assistant";
+    content: string;
+  }>;
+  clarification?: {
+    questionId?: string | null;
+    answer?: string;
+    answers?: Record<string, string>;
+  } | null;
+  /** Optional draft definition override (editor state). */
+  definition?: WorkflowDraftDefinition;
+}
+
+export interface CopilotClarifyingQuestion {
+  id: string;
+  prompt: string;
+  field?: string;
+  required?: boolean;
+}
+
+export interface CopilotPlanEnvelope {
+  intent: CopilotIntent;
+  summary: string;
+  operations: CopilotOperation[];
+  unresolvedInputs: Array<{
+    nodeId?: string;
+    nodeType?: string;
+    field: string;
+    message: string;
+  }>;
+  warnings: unknown[];
+}
+
+/** Response from POST /workflows/:id/copilot/plan */
+export interface CopilotPlanResponse {
+  intent: CopilotIntent;
+  assistantMessage: string;
+  summary: string;
+  plan: CopilotPlanEnvelope;
+  preview: unknown;
+  unresolvedInputs: CopilotPlanEnvelope["unresolvedInputs"];
+  clarifyingQuestions: CopilotClarifyingQuestion[];
+  assumptions: string[];
+  warnings: Array<{ code?: string; message?: string } | string>;
+  unsupportedCapabilities?: Array<{ capability: string; reason?: string }>;
+  revisionHash: string;
+  needsClarification?: boolean;
+  /** Always false for planning — Copilot never creates workflow_runs. */
+  createdWorkflowRun: false;
+  repairRounds?: number;
 }
 
 export interface WorkflowDraftDefinition {

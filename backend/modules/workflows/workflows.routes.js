@@ -34,6 +34,7 @@ const {
   copilotValidatePlan,
   copilotApplyPlan,
   copilotDiagnose,
+  copilotPlan,
 } = require("./workflows.controller");
 const {
   validateCreate,
@@ -80,6 +81,7 @@ router.patch("/:id/error-workflow", setErrorWorkflow);
 
 // Part 14A — Workflow Copilot (before generic /:id)
 router.post("/:id/copilot/context", copilotContext);
+router.post("/:id/copilot/plan", copilotPlan);
 router.post("/:id/copilot/validate-plan", copilotValidatePlan);
 router.post("/:id/copilot/apply-plan", copilotApplyPlan);
 router.post("/:id/copilot/diagnose", copilotDiagnose);

@@ -1,5 +1,5 @@
-import { useState, useEffect } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useState, useEffect, useCallback } from "react";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@/contexts/AuthContext";
 import { Workspace, ChatThread, ChatMessage, KeywordAssistant, ThreadFolder } from "@/lib/types";
 import { projectService, keywordAssistantService } from "@/lib/services";
@@ -72,14 +72,20 @@ import type { Workflow as WorkflowItem } from "@/modules/workflows/types";
 
 type WorkspaceMode = "chat" | "workflow";
 
+const modeFromSearch = (raw: string | null): WorkspaceMode =>
+  raw === "workflow" ? "workflow" : "chat";
+
 const ProjectDetailPage = () => {
   const params = useParams();
+  const searchParams = useSearchParams();
   const projectId = (params?.projectId as string) ?? "";
   const { user: currentUser, hasRole } = useAuth();
   const router = useRouter();
 
   const [workspace, setWorkspace] = useState<Workspace | null>(null);
-  const [workspaceMode, setWorkspaceMode] = useState<WorkspaceMode>("chat");
+  const [workspaceMode, setWorkspaceMode] = useState<WorkspaceMode>(() =>
+    modeFromSearch(searchParams.get("mode"))
+  );
   const [folders, setFolders] = useState<ThreadFolder[]>([]);
   const [threads, setThreads] = useState<ChatThread[]>([]);
   const [workflows, setWorkflows] = useState<WorkflowItem[]>([]);
@@ -121,8 +127,30 @@ const ProjectDetailPage = () => {
     setCurrentThread(null);
     setSelectedWorkflow(null);
     setMessages([]);
-    setWorkspaceMode("chat");
+    setWorkspaceMode(modeFromSearch(searchParams.get("mode")));
+    // Only reset hard state when the workspace id changes — not when ?mode= updates.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional: projectId only
   }, [projectId]);
+
+  // Keep Chat/Workflow tab in sync with the URL (e.g. Back from workflow editor)
+  useEffect(() => {
+    setWorkspaceMode(modeFromSearch(searchParams.get("mode")));
+  }, [searchParams]);
+
+  const setWorkspaceModeAndUrl = useCallback(
+    (mode: WorkspaceMode) => {
+      setWorkspaceMode(mode);
+      if (!projectId) return;
+      const params = new URLSearchParams(searchParams.toString());
+      if (mode === "workflow") params.set("mode", "workflow");
+      else params.delete("mode");
+      const qs = params.toString();
+      router.replace(qs ? `/projects/${projectId}?${qs}` : `/projects/${projectId}`, {
+        scroll: false,
+      });
+    },
+    [projectId, router, searchParams]
+  );
 
   // Load workspace data
   useEffect(() => {
@@ -578,7 +606,7 @@ const ProjectDetailPage = () => {
                     size="sm"
                     variant={workspaceMode === "chat" ? "default" : "ghost"}
                     className="h-8 text-xs"
-                    onClick={() => setWorkspaceMode("chat")}
+                    onClick={() => setWorkspaceModeAndUrl("chat")}
                   >
                     <MessageCircle className="mr-1 h-3.5 w-3.5" />
                     Chat
@@ -588,7 +616,7 @@ const ProjectDetailPage = () => {
                     size="sm"
                     variant={workspaceMode === "workflow" ? "default" : "ghost"}
                     className="h-8 text-xs"
-                    onClick={() => setWorkspaceMode("workflow")}
+                    onClick={() => setWorkspaceModeAndUrl("workflow")}
                   >
                     <Workflow className="mr-1 h-3.5 w-3.5" />
                     Workflow

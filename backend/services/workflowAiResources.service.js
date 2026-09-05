@@ -531,7 +531,7 @@ const createOpenAiCompatAdapter = (descriptor) => {
   return {
     provider: descriptor.provider,
     model: descriptor.config?.model || "gpt-4o-mini",
-    async invoke({ messages, tools, timeoutMs, signal }) {
+    async invoke({ messages, tools, timeoutMs, signal, responseFormat }) {
       const timeout = timeoutMs || DEFAULT_MODEL_TIMEOUT_MS;
       const provider = descriptor.provider || "openai";
       const model = descriptor.config?.model || "gpt-4o-mini";
@@ -577,6 +577,17 @@ const createOpenAiCompatAdapter = (descriptor) => {
             parameters: t.inputSchema || { type: "object", properties: {} },
           },
         }));
+      }
+
+      // Optional JSON mode for product planners (Copilot). Ignored when tools present.
+      if (
+        responseFormat &&
+        (!Array.isArray(tools) || tools.length === 0)
+      ) {
+        options.response_format =
+          typeof responseFormat === "string"
+            ? { type: responseFormat }
+            : responseFormat;
       }
 
       const run = async () => {

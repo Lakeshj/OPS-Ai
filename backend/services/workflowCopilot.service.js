@@ -104,7 +104,16 @@ const PARAM_ALLOWLIST = Object.freeze({
     "queryParams",
     "headers",
   ],
-  filter: ["label", "notes", "conditions", "combinator"],
+  filter: [
+    "label",
+    "notes",
+    "conditions",
+    "combinator",
+    "fieldName",
+    "left",
+    "operator",
+    "right",
+  ],
   limit: ["label", "notes", "maxItems", "keep"],
   sort: ["label", "notes", "sortFields"],
   removeDuplicates: ["label", "notes", "compare", "fields"],
@@ -1479,4 +1488,5 @@ module.exports = {
   normalizePlan,
   collectUnresolvedInputs,
   classifyOperation,
+  loadNodeLibrary,
 };

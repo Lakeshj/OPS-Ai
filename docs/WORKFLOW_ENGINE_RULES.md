@@ -312,6 +312,27 @@ Copilot is an **editor assistant**, not an AI Agent node and not a workflow run.
 - Authoritative graph rules remain `validateDefinition` / connection / Loop / Respond / Error / Subworkflow validators.
 - API: `POST /workflows/:id/copilot/{context,validate-plan,apply-plan,diagnose}`.
 
+## Workflow Copilot planning turn (Part 14B / 14B.2 — drawer contract)
+
+Future 14D floating button + right drawer will call a **stateless** planning turn:
+
+`POST /workflows/:id/copilot/plan`
+
+**Request (drawer → API):** `message`, `workflowId`, `revisionHash`, optional `selectedNodeId`, `runId`, `recentConversation`, `clarification`, optional draft `definition`.
+
+**Response:** `intent`, `assistantMessage`, `summary`, `plan`, `preview`, `unresolvedInputs`, `clarifyingQuestions`, `assumptions`, `warnings`, `unsupportedCapabilities`, `revisionHash`, `needsClarification`, `createdWorkflowRun: false`.
+
+### Part 14B.2 — real NL planner
+
+- Production: `ModelCopilotPlanner` → existing `AI_MODEL_ADAPTERS` (`openai` / `deepseek` / `gemini`) with **server** keys (`COPILOT_PROVIDER` / `COPILOT_MODEL`).
+- Tests: `DeterministicCopilotPlanner` fixtures only — no network.
+- Pipeline: structured JSON plan → strict parse → `validateCopilotOperations` → bounded repair (`MAX_COPILOT_PLAN_REPAIR_ROUNDS=2`) → preview / `COPILOT_PLAN_INVALID`.
+- LLM is never authoritative. Planning never creates `workflow_run` / steps / jobs.
+- Production without provider keys returns `COPILOT_PROVIDER_UNAVAILABLE` (no silent test-planner fallback).
+- Multi-turn clarification via client-supplied `recentConversation` + `clarification` (no server chat DB in V1).
+- CREATE / MODIFY planning in 14B; DEBUG / FIX return structured deferral until 14C.
+- No floating button / drawer UI in 14B (14D).
+
 - Agent card shows Model required / Model label + Tools count (via `getAiAgentReadiness`).
 - Auxiliary edges labeled Model / Tool (not generic “Resource” when type known).
 - Memory handle hidden until a production memory provider is Available.

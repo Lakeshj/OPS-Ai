@@ -585,7 +585,7 @@ const registerPart11BTests = ({ check, section, assert }) => {
     const dialog = fs.readFileSync(
       path.join(
         __dirname,
-        "../../frontend/src/components/workflows/WorkflowErrorSettingsDialog.tsx"
+        "../../frontend/src/components/workflows/WorkflowSettingsDialog.tsx"
       ),
       "utf8"
     );

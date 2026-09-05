@@ -373,6 +373,31 @@ const copilotDiagnose = asyncHandler(async (req, res) => {
   res.json(diagnoseWorkflow(definition));
 });
 
+/**
+ * Part 14B — planning turn for future Copilot drawer.
+ * Accepts message + context; returns plan envelope. Never creates workflow_runs.
+ */
+const copilotPlan = asyncHandler(async (req, res) => {
+  const workflow = await workflowsService.getById(req.params.id, req.user);
+  const {
+    planCopilotTurn,
+  } = require("../../services/workflowCopilotPlan.service");
+  const definition = req.body?.definition || workflow.definition;
+  const result = await planCopilotTurn({
+    message: req.body?.message,
+    workflowId: req.params.id,
+    revisionHash: req.body?.revisionHash,
+    selectedNodeId: req.body?.selectedNodeId,
+    runId: req.body?.runId,
+    recentConversation: req.body?.recentConversation,
+    clarification: req.body?.clarification,
+    definition,
+    workflow,
+    execution: req.body?.execution || null,
+  });
+  res.json(result);
+});
+
 module.exports = {
   list,
   listCallableTargets,
@@ -408,4 +433,5 @@ module.exports = {
   copilotValidatePlan,
   copilotApplyPlan,
   copilotDiagnose,
+  copilotPlan,
 };
