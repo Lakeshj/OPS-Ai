@@ -24,6 +24,8 @@ import { WorkflowNode } from "./WorkflowNode";
 import { WorkflowEdge } from "./WorkflowEdge";
 import { WorkflowCanvasProvider } from "./WorkflowCanvasContext";
 import { NodeLibrarySidebar } from "./NodeLibrarySidebar";
+import { WorkflowCopilotButton } from "./WorkflowCopilotButton";
+import { WorkflowCopilotDrawer } from "./WorkflowCopilotDrawer";
 import { WorkflowResultsDialog } from "./WorkflowResultsDialog";
 import { WorkflowNodeDialog } from "./WorkflowNodeDialog";
 import { NodePickerDialog } from "./NodePickerDialog";
@@ -115,7 +117,8 @@ function isExecutionAffectingPatch(patch: WorkflowNodeData): boolean {
   return Object.keys(patch).some((key) => !UI_ONLY_DATA_KEYS.has(key));
 }
 
-type RightPanel = "library" | null;
+type RightPanel = "library" | "copilot" | null;
+/** Coexistence: only one large right panel (Node Library XOR Copilot). Results stay a dialog. */
 
 const nodeTypes = {
   trigger: WorkflowNode,
@@ -297,6 +300,8 @@ type Props = {
   workspaceId?: string;
   workflowId?: string;
   workflowStatus?: WorkflowStatus;
+  /** Exact ?runId= from URL — do not silently replace with latest. */
+  viewRunId?: string | null;
   errorWorkflowId?: string | null;
   onErrorWorkflowChange?: (errorWorkflowId: string | null) => void;
   description?: string | null;
@@ -836,6 +841,7 @@ function WorkflowCanvasInner({
   workspaceId,
   workflowId,
   workflowStatus = "draft",
+  viewRunId = null,
   errorWorkflowId = null,
   onErrorWorkflowChange,
   description = "",
@@ -868,6 +874,8 @@ function WorkflowCanvasInner({
   );
   const [localError, setLocalError] = useState<string | null>(null);
   const [rightPanel, setRightPanel] = useState<RightPanel>(null);
+  const copilotButtonRef = useRef<HTMLButtonElement>(null);
+  const [copilotFocusToken, setCopilotFocusToken] = useState(0);
   const [nodeDialogOpen, setNodeDialogOpen] = useState(false);
   const [resultsDialogOpen, setResultsDialogOpen] = useState(false);
   const [editorSession, setEditorSession] = useState<WorkflowEditorSession | null>(
@@ -2626,6 +2634,25 @@ function WorkflowCanvasInner({
           </Button>
         )}
 
+        {workflowId ? (
+          <WorkflowCopilotButton
+            buttonRef={copilotButtonRef}
+            open={rightPanel === "copilot"}
+            attention={latestRun?.status === "failed"}
+            onToggle={() => {
+              setRightPanel((prev) => {
+                const next = prev === "copilot" ? null : "copilot";
+                if (next === "copilot") {
+                  setCopilotFocusToken((t) => t + 1);
+                } else {
+                  requestAnimationFrame(() => copilotButtonRef.current?.focus());
+                }
+                return next;
+              });
+            }}
+          />
+        ) : null}
+
         <NodeLibrarySidebar
           open={rightPanel === "library"}
           onClose={() => setRightPanel(null)}
@@ -2633,6 +2660,43 @@ function WorkflowCanvasInner({
           onApplyAiTemplate={applyAiTemplate}
           onApplyEmailTemplate={applyEmailTemplate}
         />
+
+        {workflowId ? (
+          <WorkflowCopilotDrawer
+            open={rightPanel === "copilot"}
+            onClose={() => {
+              setRightPanel(null);
+              requestAnimationFrame(() => copilotButtonRef.current?.focus());
+            }}
+            workflowId={workflowId}
+            workflowName={name}
+            workspaceId={workspaceId}
+            buildDefinition={buildDefinition}
+            selectedNodeId={selectedId}
+            selectedNodeLabel={
+              selectedId
+                ? String(
+                    nodes.find((n) => n.id === selectedId)?.data?.label ||
+                      selectedId
+                  )
+                : null
+            }
+            selectedNodeType={
+              selectedId
+                ? String(nodes.find((n) => n.id === selectedId)?.type || "")
+                : null
+            }
+            onClearSelection={() => setSelected(null)}
+            viewRunId={viewRunId}
+            latestRun={latestRun}
+            setNodes={setNodes}
+            setEdges={setEdges}
+            pushHistory={(n, e) => history.pushTransaction(n, e)}
+            getNodes={() => nodes}
+            getEdges={() => edges}
+            composerFocusToken={copilotFocusToken}
+          />
+        ) : null}
       </div>
 
       <WorkflowResultsDialog

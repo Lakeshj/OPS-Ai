@@ -80,6 +80,7 @@ const COPILOT_PLAN_JSON_SCHEMA_HINT = {
 
 /**
  * Strict parse of model content → structured plan object.
+ * Whole string (after optional ```json fence) must be a JSON object.
  */
 const parseStructuredCopilotPlan = (raw) => {
   if (raw == null) {
@@ -95,8 +96,9 @@ const parseStructuredCopilotPlan = (raw) => {
   }
   // Reject prose + JSON mixtures: require whole string to be JSON object
   if (text.startsWith("```")) {
-    text = text.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "");
+    text = text.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "");
   }
+  text = text.trim();
   if (!text.startsWith("{") || !text.endsWith("}")) {
     throw new AppError(
       "Copilot response must be a pure JSON object",
@@ -202,7 +204,7 @@ class ModelCopilotPlanner {
       config: {
         model: config.model,
         temperature: config.temperature ?? 0.2,
-        maxTokens: config.maxTokens ?? 4000,
+        maxTokens: config.maxTokens ?? 8000,
       },
       credentialRef: null,
     });
@@ -388,6 +390,47 @@ const buildDeterministicFixturePlan = (ctx) => {
     };
   }
 
+  // Clear / reset / empty the canvas (destructive)
+  if (
+    /\b(clear|reset|empty|wipe)\b/.test(text) &&
+    /\b(workflow|worflow|canvas|graph|board|everything|all)\b/.test(text)
+  ) {
+    if (!hasGraph) {
+      return {
+        intent: "EXPLAIN",
+        assistantMessage: "This workflow is already empty — nothing to clear.",
+        summary: "Already empty",
+        operations: [],
+        unresolvedInputs: [],
+        clarifyingQuestions: [],
+        assumptions: [],
+        warnings: [],
+        unsupportedCapabilities: [],
+      };
+    }
+    const ops = nodes.map((n) => ({
+      type: "removeNode",
+      nodeId: n.id,
+      destructive: true,
+    }));
+    return {
+      intent: "MODIFY",
+      assistantMessage: `I'll clear this workflow by removing ${nodes.length} node${nodes.length === 1 ? "" : "s"} and their connections. Confirm Apply — this is destructive and can be undone once.`,
+      summary: `Clear workflow (${nodes.length} nodes)`,
+      operations: ops,
+      unresolvedInputs: [],
+      clarifyingQuestions: [],
+      assumptions: [],
+      warnings: [
+        {
+          code: "DESTRUCTIVE",
+          message: "This removes all nodes and edges from the draft",
+        },
+      ],
+      unsupportedCapabilities: [],
+    };
+  }
+
   // Slack unsupported
   if (/\bslack\b/.test(text)) {
     return {
@@ -409,6 +452,322 @@ const buildDeterministicFixturePlan = (ctx) => {
         {
           capability: "Slack",
           reason: "Slack is not available in this OpsAi version.",
+        },
+      ],
+    };
+  }
+
+  // Manual SEO comparison test (sample data + Code scoring — no APIs/scraping)
+  if (
+    (/\bseo\b/.test(text) || /website\s+comparison/.test(text)) &&
+    (/\b(manual|sample\s+data|test\s+seo|do\s+not\s+use\s+api|don't\s+use\s+api|no\s+api)\b/.test(
+      text
+    ) ||
+      /manually\s+entered/.test(text) ||
+      /rule-?based\s+scoring/.test(text) ||
+      /purenest|merry\s*maids|molly\s*maid/.test(text))
+  ) {
+    const sampleSites = {
+      mySite: {
+        name: "PureNest Cleaning",
+        url: "https://purenestcleaning.com",
+        title: "Professional Home Cleaning Services",
+        meta: "Professional cleaning services for your home",
+        h1: "Professional Cleaning Services",
+        h2Count: 5,
+        wordCount: 900,
+        internalLinks: 12,
+        images: 10,
+        missingAlt: 2,
+        sitemap: true,
+        robotsTxt: true,
+        canonical: true,
+        schema: false,
+        https: true,
+      },
+      competitor1: {
+        name: "Merry Maids",
+        url: "https://www.merrymaids.com",
+        title: "Home Cleaning Services",
+        meta: "Professional home cleaning services",
+        h1: "Home Cleaning Services",
+        h2Count: 8,
+        wordCount: 1800,
+        internalLinks: 35,
+        images: 25,
+        missingAlt: 3,
+        sitemap: true,
+        robotsTxt: true,
+        canonical: true,
+        schema: true,
+        https: true,
+      },
+      competitor2: {
+        name: "Molly Maid",
+        url: "https://www.mollymaid.com",
+        title: "Professional House Cleaning",
+        meta: "Trusted house cleaning services",
+        h1: "House Cleaning Services",
+        h2Count: 7,
+        wordCount: 1500,
+        internalLinks: 28,
+        images: 20,
+        missingAlt: 4,
+        sitemap: true,
+        robotsTxt: true,
+        canonical: true,
+        schema: true,
+        https: true,
+      },
+    };
+
+    const jsCode = `// Manual SEO comparison — rule-based scores (no APIs)
+const root = (items[0] && (items[0].json || items[0])) || {};
+const sites = Array.isArray(root.sites) ? root.sites : [];
+const scoreSite = (s) => {
+  let technical = 0;
+  if (s.https) technical += 25;
+  if (s.sitemap) technical += 25;
+  if (s.robotsTxt) technical += 25;
+  if (s.canonical) technical += 25;
+  let onPage = 0;
+  if (s.title && String(s.title).length >= 20) onPage += 35;
+  if (s.meta && String(s.meta).length >= 20) onPage += 35;
+  if (s.h1) onPage += 30;
+  let content = Math.min(100, Math.round((Number(s.wordCount) || 0) / 20));
+  let internalLinks = Math.min(100, Math.round((Number(s.internalLinks) || 0) * 3));
+  let schema = s.schema ? 100 : 0;
+  const imgs = Number(s.images) || 0;
+  const missing = Number(s.missingAlt) || 0;
+  let images = imgs <= 0 ? 0 : Math.max(0, Math.round(100 - (missing / imgs) * 100));
+  const overall = Math.round((technical + onPage + content + internalLinks + schema + images) / 6);
+  return { technical, onPage, content, internalLinks, schema, images, overall };
+};
+const rows = sites.map((s) => Object.assign({}, s, { scores: scoreSite(s) }));
+const ranked = rows.slice().sort((a, b) => b.scores.overall - a.scores.overall);
+const mine = rows[0];
+const winner = ranked[0];
+const gaps = [];
+if (mine && !mine.schema) gaps.push({ issue: "Missing Schema", why: "Rich results / entity clarity", action: "Add LocalBusiness/Service schema", priority: "High" });
+if (mine && rows[1] && mine.scores.content < rows[1].scores.content) gaps.push({ issue: "Thinner content", why: "Competitors cover topics more deeply", action: "Expand service/FAQ pages", priority: "High" });
+if (mine && rows[1] && mine.scores.internalLinks < rows[1].scores.internalLinks) gaps.push({ issue: "Weaker internal linking", why: "Authority distribution & crawl paths", action: "Add contextual internal links", priority: "Medium" });
+if (mine && (mine.missingAlt || 0) > 0) gaps.push({ issue: "Missing image ALT text", why: "Accessibility + image SEO", action: "Add descriptive ALT on all images", priority: "Medium" });
+const report = {
+  title: "SEO Comparison Report",
+  scorecard: rows.map((r) => ({ name: r.name, url: r.url, technical: r.scores.technical, onPage: r.scores.onPage, content: r.scores.content, internalLinks: r.scores.internalLinks, schema: r.scores.schema, images: r.scores.images, overall: r.scores.overall })),
+  winner: winner ? { name: winner.name, overall: winner.scores.overall } : null,
+  myStrengths: mine ? ["HTTPS/sitemap/robots/canonical present", "Clear service-focused title/H1"] : [],
+  myWeaknesses: mine && !mine.schema ? ["No schema", "Lower content depth vs competitors", "Fewer internal links"] : [],
+  gaps: gaps,
+  topProblems: gaps.slice(0, 3),
+  quickWins: gaps.filter((g) => g.priority !== "Low").slice(0, 3),
+  nextSteps: ["Add schema", "Expand content depth", "Improve internal links", "Fix missing ALT"],
+};
+return [{ sites: rows, report: report }];`;
+
+    const ops = [];
+    if (hasGraph) {
+      for (const n of nodes) {
+        ops.push({ type: "removeNode", nodeId: n.id, destructive: true });
+      }
+    }
+    ops.push(
+      {
+        type: "addNode",
+        tempId: "t1",
+        nodeType: "trigger",
+        parameters: { label: "Manual Trigger" },
+      },
+      {
+        type: "addNode",
+        tempId: "set1",
+        nodeType: "set",
+        parameters: {
+          label: "Test SEO Sample Data",
+          values: {
+            sites: [sampleSites.mySite, sampleSites.competitor1, sampleSites.competitor2],
+            note: "Replace this sample block later with real collected website data",
+          },
+        },
+      },
+      {
+        type: "addNode",
+        tempId: "code1",
+        nodeType: "code",
+        parameters: {
+          label: "SEO Scoring + Comparison",
+          language: "javascript",
+          code: jsCode,
+          jsCode,
+          mode: "all",
+          timeoutMs: 5000,
+        },
+      },
+      {
+        type: "addNode",
+        tempId: "r1",
+        nodeType: "result",
+        parameters: { label: "SEO Comparison Report" },
+      },
+      { type: "connectNodes", sourceNodeId: "t1", targetNodeId: "set1" },
+      { type: "connectNodes", sourceNodeId: "set1", targetNodeId: "code1" },
+      { type: "connectNodes", sourceNodeId: "code1", targetNodeId: "r1" }
+    );
+
+    return {
+      intent: hasGraph ? "MODIFY" : "CREATE",
+      assistantMessage: hasGraph
+        ? "I'll replace the current canvas with a Manual Trigger → Set (PureNest / Merry Maids / Molly Maid sample SEO data) → Code (rule-based scoring + comparison report) → Result workflow. No APIs or scrapers. Apply is destructive to the current draft (one Undo)."
+        : "I'll create a Manual Trigger → Set (sample SEO data for PureNest, Merry Maids, Molly Maid) → Code (rule-based 0–100 scoring + comparison report) → Result workflow. No APIs. Apply adds the draft only — Execute when ready.",
+      summary: hasGraph
+        ? "Replace canvas with manual SEO test workflow"
+        : "Manual Trigger → Set → Code → Result (SEO test)",
+      operations: ops,
+      unresolvedInputs: [],
+      clarifyingQuestions: [],
+      assumptions: [
+        "Sample SEO metrics are embedded for testing and can later be swapped for real collected data",
+        "Scores are rule-based from the provided fields only",
+      ],
+      warnings: hasGraph
+        ? [
+            {
+              code: "DESTRUCTIVE",
+              message: "Existing nodes will be removed before the SEO test workflow is added",
+            },
+          ]
+        : [],
+      unsupportedCapabilities: [],
+    };
+  }
+
+  // Complex SEO / website comparison (AI-assisted — still no dedicated crawler APIs)
+  if (
+    /\bseo\b/.test(text) ||
+    /website\s+comparison/.test(text) ||
+    /competitor\s+url/.test(text) ||
+    (/manual\s+trigger/.test(text) &&
+      /\b(audit|scorecard|content\s+gap|on-?page)\b/.test(text))
+  ) {
+    const systemPrompt = [
+      "You are an SEO analyst. Compare the user's website against competitors using ONLY publicly accessible page data the workflow can fetch.",
+      "Never invent rankings, traffic, backlinks, or search volume.",
+      "Clearly label: observed data, calculated scores (0-100), estimates, and recommendations.",
+      "Produce sections: Website Audit, Technical SEO, On-Page SEO, Content Gap, Keyword Comparison (if keyword provided), Competitor Analysis, Scorecard, Final Report + 30-day roadmap.",
+      "Use Good / Needs Work / Critical markers in the scorecard.",
+    ].join(" ");
+    const userPrompt = [
+      "Inputs from the manual run (use {{input}} / {{items}} fields when present):",
+      "myWebsiteUrl, competitorUrl1, competitorUrl2, competitorUrl3 (optional),",
+      "targetCountry, targetLanguage, primaryKeyword (optional), industry (optional).",
+      "Analyze each provided URL and return the full comparison report.",
+      "Original request summary: build a reusable SEO Website Comparison Workflow.",
+    ].join(" ");
+    const ops = [];
+    if (hasGraph) {
+      for (const n of nodes) {
+        ops.push({ type: "removeNode", nodeId: n.id, destructive: true });
+      }
+    }
+    ops.push(
+      {
+        type: "addNode",
+        tempId: "t1",
+        nodeType: "trigger",
+        parameters: { label: "Manual Trigger" },
+      },
+      {
+        type: "addNode",
+        tempId: "set1",
+        nodeType: "set",
+        parameters: {
+          label: "Comparison Inputs",
+          values: {
+            myWebsiteUrl: "{{input.myWebsiteUrl}}",
+            competitorUrl1: "{{input.competitorUrl1}}",
+            competitorUrl2: "{{input.competitorUrl2}}",
+            competitorUrl3: "{{input.competitorUrl3}}",
+            targetCountry: "{{input.targetCountry}}",
+            targetLanguage: "{{input.targetLanguage}}",
+            primaryKeyword: "{{input.primaryKeyword}}",
+            industry: "{{input.industry}}",
+          },
+        },
+      },
+      {
+        type: "addNode",
+        tempId: "agent1",
+        nodeType: "aiAgent",
+        parameters: {
+          label: "SEO Comparison Agent",
+          systemMessage: systemPrompt,
+          prompt: userPrompt,
+        },
+      },
+      {
+        type: "addNode",
+        tempId: "model1",
+        nodeType: "aiChatModel",
+        parameters: { label: "Chat Model" },
+      },
+      {
+        type: "addNode",
+        tempId: "r1",
+        nodeType: "result",
+        parameters: { label: "SEO Report" },
+      },
+      { type: "connectNodes", sourceNodeId: "t1", targetNodeId: "set1" },
+      { type: "connectNodes", sourceNodeId: "set1", targetNodeId: "agent1" },
+      {
+        type: "connectNodes",
+        sourceNodeId: "model1",
+        sourceHandle: "model",
+        targetNodeId: "agent1",
+        targetHandle: "model",
+      },
+      { type: "connectNodes", sourceNodeId: "agent1", targetNodeId: "r1" }
+    );
+    return {
+      intent: hasGraph ? "MODIFY" : "CREATE",
+      assistantMessage: hasGraph
+        ? "I'll replace the current canvas with Manual Trigger → Set → AI Agent → Result for SEO comparison. No dedicated SEO crawler/rankings APIs. Connect a Chat Model after Apply. This replaces existing nodes (one Undo)."
+        : "I'll scaffold Manual Trigger → Set (inputs) → AI Agent → Result for SEO comparison. OpsAi has no dedicated SEO crawler/rankings APIs — configure the Chat Model after Apply. Draft only; not auto-run.",
+      summary: hasGraph
+        ? "Replace canvas with AI SEO comparison scaffold"
+        : "Manual Trigger → Set → AI Agent → Result (SEO comparison)",
+      operations: ops,
+      unresolvedInputs: [
+        {
+          field: "provider",
+          message: "Chat Model provider/credential must be selected",
+          nodeType: "aiChatModel",
+        },
+      ],
+      clarifyingQuestions: [],
+      assumptions: [
+        "Manual Execute supplies URLs and optional keyword/industry as run input",
+        "Scores are Agent-calculated from observable page content, not search-console rankings",
+      ],
+      warnings: [
+        ...(hasGraph
+          ? [
+              {
+                code: "DESTRUCTIVE",
+                message: "Existing nodes will be removed before the new scaffold is added",
+              },
+            ]
+          : []),
+        {
+          code: "CAPABILITY_LIMIT",
+          message:
+            "No dedicated SEO crawler, backlink, ranking, or Core Web Vitals integration in this OpsAi version",
+        },
+      ],
+      unsupportedCapabilities: [
+        {
+          capability: "SEO crawler / SERP rankings / backlinks / CWV APIs",
+          reason:
+            "Not available as native nodes. Use AI Agent + public page content only; do not invent ranking or traffic data.",
         },
       ],
     };
@@ -1051,23 +1410,16 @@ const buildDeterministicFixturePlan = (ctx) => {
     };
   }
 
-  // Fallback clarification
+  // Fallback — conversational help, no fake quick-reply chips
   return {
     intent: hasGraph ? "MODIFY" : "CREATE",
-    assistantMessage:
-      "Tell me what to change — for example: schedule an API call, filter items with email, or add an AI Agent.",
+    assistantMessage: hasGraph
+      ? "I can help with this workflow. Try: \"clear this workflow\", \"explain this workflow\", \"add an AI Agent\", or paste a full build request (for example a Manual SEO test workflow)."
+      : "I can help you build this. Try: \"Every weekday at 9 AM call my API\", \"Manual SEO website comparison with sample data\", or \"Add an AI Agent\".",
     summary: "Need a clearer CREATE/MODIFY instruction",
     operations: [],
     unresolvedInputs: [],
-    clarifyingQuestions: [
-      {
-        id: "intentDetail",
-        prompt:
-          "Tell me what to change — for example: schedule an API call, filter items with email, or add an AI Agent.",
-        field: "intentDetail",
-        required: true,
-      },
-    ],
+    clarifyingQuestions: [],
     assumptions: [],
     warnings: [],
     unsupportedCapabilities: [],

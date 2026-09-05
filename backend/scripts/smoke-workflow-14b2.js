@@ -18,7 +18,11 @@ const registerPart14B2Tests = ({ check, section, assert: a }) => {
 
   const emptyDef = () => ({ version: 1, nodes: [], edges: [], settings: {} });
   const turn = (opts) =>
-    planSvc().planCopilotTurn({ forceMode: "deterministic", ...opts });
+    planSvc().planCopilotTurn({
+      forceMode: "deterministic",
+      allowClientExecution: true,
+      ...opts,
+    });
 
   const webhookHttpResult = () => ({
     version: 1,

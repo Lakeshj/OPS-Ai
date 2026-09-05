@@ -487,7 +487,10 @@ const ProjectDetailPage = () => {
     ));
   };
 
-  const handleSendMessage = async (userPrompt: string) => {
+  const handleSendMessage = async (
+    userPrompt: string,
+    opts?: { workflowReferences?: Array<{ workflowId: string }> }
+  ) => {
     if (!userPrompt.trim() || !currentUser) return;
 
     let thread = currentThread;
@@ -523,6 +526,7 @@ const ProjectDetailPage = () => {
         prompt: userPrompt,
         threadId: thread.id,
         assistantId: selectedAssistant?.id,
+        workflowReferences: opts?.workflowReferences,
       });
 
       const aiMessage = await chatMessageApiService.create({
@@ -1259,6 +1263,7 @@ const ProjectDetailPage = () => {
                       selectedAssistant={selectedAssistant}
                       onAssistantSelect={handleAssistantSelect}
                       availableAssistants={keywordAssistants}
+                      workspaceId={projectId}
                     />
                   </div>
                 </>

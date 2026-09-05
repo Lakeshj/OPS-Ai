@@ -466,6 +466,7 @@ export default function WorkflowEditorPage({
           saving={saving}
           running={running}
           latestRun={latestRun}
+          viewRunId={runIdParam}
           errorRouting={errorRouting}
           workflowStatus={workflow.status}
           errorWorkflowId={workflow.errorWorkflowId ?? null}

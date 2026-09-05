@@ -20,10 +20,12 @@ export const chatService = {
     prompt,
     threadId,
     assistantId,
+    workflowReferences,
   }: {
     prompt: string;
     threadId: string;
     assistantId?: string;
+    workflowReferences?: Array<{ workflowId: string }>;
   }): Promise<{ response: string; meta?: GenerateResponseMeta }> => {
     const token = localStorage.getItem("token");
     const headers: HeadersInit = { "Content-Type": "application/json" };
@@ -39,6 +41,7 @@ export const chatService = {
         prompt,
         threadId,
         assistantId,
+        workflowReferences,
       }),
     });
 

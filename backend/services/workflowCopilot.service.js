@@ -120,7 +120,7 @@ const PARAM_ALLOWLIST = Object.freeze({
   aggregate: ["label", "notes", "aggregate", "fields"],
   merge: ["label", "notes", "mode", "mergeByFields"],
   switch: ["label", "notes", "rules", "fallbackOutput"],
-  code: ["label", "notes", "jsCode", "language"],
+  code: ["label", "notes", "jsCode", "code", "language", "mode", "timeoutMs"],
   condition: ["label", "notes", "conditions", "combinator"],
   splitOut: ["label", "notes", "fieldToSplitOut"],
   document: ["label", "notes", "documentId", "operation"],

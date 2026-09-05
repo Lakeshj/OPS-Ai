@@ -17,6 +17,13 @@ const validateGenerate = (req) => {
     errors.push("assistantId must be a string when provided");
   }
 
+  if (
+    req.body?.workflowReferences != null &&
+    !Array.isArray(req.body.workflowReferences)
+  ) {
+    errors.push("workflowReferences must be an array when provided");
+  }
+
   return errors;
 };
 

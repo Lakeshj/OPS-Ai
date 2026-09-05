@@ -382,7 +382,9 @@ const copilotPlan = asyncHandler(async (req, res) => {
   const {
     planCopilotTurn,
   } = require("../../services/workflowCopilotPlan.service");
-  const definition = req.body?.definition || workflow.definition;
+  // Prefer unsaved draft; never trust client execution as authoritative.
+  const draft =
+    req.body?.currentDraftDefinition || req.body?.definition || null;
   const result = await planCopilotTurn({
     message: req.body?.message,
     workflowId: req.params.id,
@@ -391,9 +393,11 @@ const copilotPlan = asyncHandler(async (req, res) => {
     runId: req.body?.runId,
     recentConversation: req.body?.recentConversation,
     clarification: req.body?.clarification,
-    definition,
+    currentDraftDefinition: draft,
     workflow,
-    execution: req.body?.execution || null,
+    workflowReferences: req.body?.workflowReferences,
+    authUser: req.user,
+    allowClientExecution: false,
   });
   res.json(result);
 });

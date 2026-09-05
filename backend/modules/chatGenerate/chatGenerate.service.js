@@ -61,7 +61,10 @@ const logUsageEvent = async ({
   }
 };
 
-const generate = async ({ threadId, prompt, assistantId }, authUser) => {
+const generate = async (
+  { threadId, prompt, assistantId, workflowReferences: rawRefs },
+  authUser
+) => {
   if (!threadId || typeof threadId !== "string") {
     throw new AppError("threadId is required", 400, "VALIDATION_ERROR");
   }
@@ -77,10 +80,43 @@ const generate = async ({ threadId, prompt, assistantId }, authUser) => {
     assistant = await assistantsService.getById(assistantId);
   }
 
+  // Optional #workflow references — same hydration as Copilot, separate chat state
+  let workflowContextBlock = "";
+  try {
+    const hydration = require("../../services/workflowCopilotHydration.service");
+    const workflowsService = require("../workflows/workflows.service");
+    const refIds = hydration.normalizeWorkflowReferenceIds(rawRefs);
+    if (refIds.length > 0) {
+      const resolved = await hydration.resolveWorkflowReferences({
+        ids: refIds,
+        workspaceId,
+        authUser,
+        loadWorkflow: (id, user) => workflowsService.getById(id, user),
+        loadLatestRun: async (wfId, user) => {
+          const runs = await workflowsService.listRuns(wfId, user);
+          const latest = Array.isArray(runs) && runs.length ? runs[0] : null;
+          if (!latest?.id) return null;
+          return workflowsService.getRunById(latest.id, user, {
+            workflowId: wfId,
+          });
+        },
+      });
+      workflowContextBlock = hydration.formatWorkflowReferencesForChat(
+        resolved.references || []
+      );
+    }
+  } catch (err) {
+    console.error("[chat] workflow reference hydration failed:", err.message);
+  }
+
+  const enrichedPrompt = workflowContextBlock
+    ? `${prompt.trim()}\n\n${workflowContextBlock}`
+    : prompt.trim();
+
   const assembled = await assemblePrompt({
     workspaceId,
     threadId,
-    prompt: prompt.trim(),
+    prompt: enrichedPrompt,
     assistant,
   });
 
@@ -90,7 +126,7 @@ const generate = async ({ threadId, prompt, assistantId }, authUser) => {
     const generated = await generateByCapability({
       assembled,
       assistant,
-      userPrompt: prompt.trim(),
+      userPrompt: enrichedPrompt,
       context: {
         workspaceId,
         threadId,

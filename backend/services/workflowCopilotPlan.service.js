@@ -112,11 +112,17 @@ const normalizePlanRequest = (body = {}) => {
     }
   }
 
+  const workflowReferences = Array.isArray(body.workflowReferences)
+    ? body.workflowReferences
+    : [];
+
   return {
     message,
     workflowId: body.workflowId != null ? String(body.workflowId) : null,
     revisionHash:
-      typeof body.revisionHash === "string" ? body.revisionHash : null,
+      typeof body.revisionHash === "string" && body.revisionHash.trim()
+        ? body.revisionHash.trim()
+        : null,
     selectedNodeId:
       typeof body.selectedNodeId === "string" && body.selectedNodeId
         ? body.selectedNodeId
@@ -125,8 +131,10 @@ const normalizePlanRequest = (body = {}) => {
       typeof body.runId === "string" && body.runId ? body.runId : null,
     recentConversation,
     clarification,
-    definition: body.definition || null,
+    definition:
+      body.currentDraftDefinition || body.definition || null,
     execution: body.execution || null,
+    workflowReferences,
   };
 };
 
@@ -158,13 +166,36 @@ const classifyPlanningIntent = (
     return "FIX";
   }
 
+  // Normal chat: greetings / thanks — no mutation, no revision concerns
+  if (
+    /^(hi|hello|hey|yo|sup|thanks|thank\s+you|ok|okay|cool|great)\b[.!?]*$/i.test(
+      text.trim()
+    )
+  ) {
+    return "EXPLAIN";
+  }
+
+  // Read-only questions about referenced / current results
+  if (
+    /\bwhat\s+did\b.+\b(return|return|output|result)\b/.test(text) ||
+    /\b(latest\s+result|what\s+was\s+returned)\b/.test(text)
+  ) {
+    return "EXPLAIN";
+  }
+  if (
+    /\b(compar|while\s+#|whereas|but\s+#|vs\.?|versus)\b/.test(text) &&
+    /#/.test(text)
+  ) {
+    return "EXPLAIN";
+  }
+
   // Construction / mutation actions win over "summarize/explain" words
   if (
     /\b(use\s+ai|add\s+an?\s+ai|ai\s+agent|let\s+the\s+ai)\b/.test(text) ||
     /\b(create|build|scaffold|make\s+(me\s+)?a\s+workflow|new\s+workflow)\b/.test(
       text
     ) ||
-    /\b(add|insert|connect|remove|delete|change|update|set|rename|move)\b/.test(
+    /\b(add|insert|connect|remove|delete|change|update|set|rename|move|clear|reset|empty)\b/.test(
       text
     ) ||
     /\b(every\s+weekday|schedule|call\s+my|send\s+every|filter|wait\s+\d|batch|loop)\b/.test(
@@ -247,6 +278,7 @@ const buildPlanResponse = ({
   diagnosis,
   evidence,
   fixPlan,
+  workflowReferences,
 }) => ({
   intent,
   assistantMessage: assistantMessage || summary || "",
@@ -268,6 +300,7 @@ const buildPlanResponse = ({
   diagnosis: diagnosis || undefined,
   evidence: evidence || undefined,
   fixPlan: fixPlan === undefined ? undefined : fixPlan,
+  workflowReferences: workflowReferences || undefined,
 });
 
 const buildCatalogBrief = () => {
@@ -333,8 +366,17 @@ const planCopilotTurn = async ({
   recentConversation,
   clarification,
   definition,
+  currentDraftDefinition,
   workflow,
   execution,
+  workflowReferences: rawWorkflowReferences,
+  authUser,
+  /** Tests / internal only — production HTTP path must leave false. */
+  allowClientExecution = false,
+  /** Optional override for run loading (tests inject fixtures). */
+  loadPersistedRun = null,
+  /** Optional override for reference resolution (tests). */
+  resolveReferencesFn = null,
   planner: injectedPlanner,
   forceMode,
   forceInvalidFirst,
@@ -342,6 +384,8 @@ const planCopilotTurn = async ({
   signal,
 } = {}) => {
   const started = Date.now();
+  const hydration = require("./workflowCopilotHydration.service");
+
   const req = normalizePlanRequest({
     message,
     workflowId,
@@ -350,14 +394,114 @@ const planCopilotTurn = async ({
     runId,
     recentConversation,
     clarification,
+    currentDraftDefinition: currentDraftDefinition || definition,
+    workflowReferences: rawWorkflowReferences,
   });
 
-  const def = cloneJson(
-    definition || workflow?.definition || { version: 1, nodes: [], edges: [] }
-  );
+  let def;
+  try {
+    if (req.definition) {
+      // Planning/apply target = editor draft (clone). Do not remap the graph for
+      // hashing — that would always diverge from the FE apply path.
+      def = cloneJson(req.definition);
+      if (def.settings && typeof def.settings === "object") {
+        for (const k of [
+          "workspaceId",
+          "workspace_id",
+          "ownerId",
+          "owner_id",
+          "createdBy",
+          "created_by",
+          "userId",
+          "user_id",
+          "tenantId",
+          "organizationId",
+        ]) {
+          delete def.settings[k];
+        }
+      }
+      if (!Array.isArray(def.nodes) || !Array.isArray(def.edges)) {
+        throw Object.assign(new Error("Invalid draft definition"), {
+          code: "VALIDATION_ERROR",
+          statusCode: 400,
+        });
+      }
+    } else {
+      def = cloneJson(
+        workflow?.definition || { version: 1, nodes: [], edges: [] }
+      );
+    }
+  } catch (err) {
+    return buildPlanResponse({
+      intent: "MODIFY",
+      assistantMessage: "The draft workflow definition looks invalid.",
+      summary: "Invalid draft",
+      plan: emptyPlan("MODIFY", "Invalid draft"),
+      preview: null,
+      unresolvedInputs: [],
+      clarifyingQuestions: [],
+      assumptions: [],
+      warnings: [
+        {
+          code: err.code || "VALIDATION_ERROR",
+          message: err.message || "Invalid draft definition",
+        },
+      ],
+      revisionHash: null,
+      createdWorkflowRun: false,
+    });
+  }
+
   const liveHash = hashDefinition(def);
 
-  if (req.revisionHash != null && req.revisionHash !== liveHash) {
+  // Resolve #workflow references (server-authoritative; ignore client payloads)
+  let resolvedRefs = [];
+  let refWarnings = [];
+  const refIds = hydration.normalizeWorkflowReferenceIds(
+    req.workflowReferences
+  );
+  if (refIds.length > 0) {
+    if (typeof resolveReferencesFn === "function") {
+      const resolved = await resolveReferencesFn(refIds);
+      resolvedRefs = resolved.references || [];
+      refWarnings = resolved.warnings || [];
+    } else if (authUser && workflow?.workspaceId) {
+      const workflowsService = require("../modules/workflows/workflows.service");
+      const resolved = await hydration.resolveWorkflowReferences({
+        ids: refIds,
+        workspaceId: workflow.workspaceId,
+        authUser,
+        loadWorkflow: (id, user) => workflowsService.getById(id, user),
+        loadLatestRun: async (wfId, user) => {
+          const runs = await workflowsService.listRuns(wfId, user);
+          const latest = Array.isArray(runs) && runs.length ? runs[0] : null;
+          if (!latest?.id) return null;
+          return workflowsService.getRunById(latest.id, user, {
+            workflowId: wfId,
+          });
+        },
+      });
+      resolvedRefs = resolved.references || [];
+      refWarnings = resolved.warnings || [];
+    } else if (refIds.length) {
+      // No auth context — mark unavailable (tests should inject resolveReferencesFn)
+      resolvedRefs = refIds.map((id) => ({
+        workflowId: id,
+        available: false,
+        reason: "no_auth_context",
+      }));
+    }
+  }
+
+  const refResponse =
+    hydration.summarizeReferencesForResponse(resolvedRefs);
+
+  // Ignore non-server hashes (e.g. legacy FE fe-* hashes) — they never match.
+  const clientHash =
+    req.revisionHash && !String(req.revisionHash).startsWith("fe-")
+      ? req.revisionHash
+      : null;
+  if (clientHash != null && clientHash !== liveHash) {
     return buildPlanResponse({
       intent: "MODIFY",
       assistantMessage:
@@ -373,10 +517,12 @@ const planCopilotTurn = async ({
           code: PLAN_ERROR.PLAN_STALE,
           message: "Workflow changed since this Copilot plan was created",
         },
+        ...refWarnings,
       ],
       revisionHash: liveHash,
       needsClarification: false,
       createdWorkflowRun: false,
+      workflowReferences: refResponse,
     });
   }
 
@@ -392,15 +538,13 @@ const planCopilotTurn = async ({
   // Map CREATE → BUILD for normalizePlan compatibility when needed
   const planIntent = intent === "CREATE" ? "BUILD" : intent;
 
-  if (intent === "DEBUG" || intent === "FIX") {
-    const {
-      runDiagnosticTurn,
-    } = require("./workflowCopilotDiagnostics.service");
-
-    const exec = execution || null;
+  // --- Server-authoritative run hydration (14D) ---
+  let exec = null;
+  if (allowClientExecution) {
+    exec = execution || null;
     if (req.runId && exec && exec.runId && exec.runId !== req.runId) {
       return buildPlanResponse({
-        intent,
+        intent: intent === "FIX" ? "FIX" : "DEBUG",
         assistantMessage:
           "The provided run does not match this request. Use the authorized run for this workflow.",
         summary: "Unauthorized or mismatched runId",
@@ -414,14 +558,16 @@ const planCopilotTurn = async ({
             code: "COPILOT_RUN_MISMATCH",
             message: "runId does not match execution payload",
           },
+          ...refWarnings,
         ],
         revisionHash: liveHash,
         createdWorkflowRun: false,
+        workflowReferences: refResponse,
       });
     }
     if (exec?.unauthorized) {
       return buildPlanResponse({
-        intent,
+        intent: intent === "FIX" ? "FIX" : "DEBUG",
         assistantMessage: "You are not authorized to inspect that run.",
         summary: "Unauthorized run",
         plan: emptyPlan(intent, "Unauthorized"),
@@ -431,11 +577,77 @@ const planCopilotTurn = async ({
         assumptions: [],
         warnings: [
           { code: "COPILOT_RUN_FORBIDDEN", message: "Unauthorized runId" },
+          ...refWarnings,
         ],
         revisionHash: liveHash,
         createdWorkflowRun: false,
+        workflowReferences: refResponse,
       });
     }
+  } else if (req.runId) {
+    // Production path: ignore any client execution spoof
+    try {
+      let persisted;
+      if (typeof loadPersistedRun === "function") {
+        persisted = await loadPersistedRun(req.runId, {
+          workflowId,
+          authUser,
+        });
+      } else if (authUser) {
+        const workflowsService = require("../modules/workflows/workflows.service");
+        persisted = await workflowsService.getRunById(req.runId, authUser, {
+          workflowId,
+        });
+      } else {
+        throw Object.assign(new Error("Run hydration requires auth"), {
+          code: "COPILOT_RUN_FORBIDDEN",
+          statusCode: 403,
+        });
+      }
+      if (!persisted) {
+        throw Object.assign(new Error("Workflow run not found"), {
+          code: "NOT_FOUND",
+          statusCode: 404,
+        });
+      }
+      exec = hydration.hydrateExecutionFromPersistedRun(persisted);
+    } catch (err) {
+      const forbidden =
+        err.statusCode === 403 ||
+        err.code === "COPILOT_RUN_FORBIDDEN" ||
+        err.code === "FORBIDDEN";
+      return buildPlanResponse({
+        intent: intent === "FIX" ? "FIX" : "DEBUG",
+        assistantMessage: forbidden
+          ? "You are not authorized to inspect that run."
+          : "That run could not be loaded for this workflow.",
+        summary: forbidden ? "Unauthorized run" : "Run not found",
+        plan: emptyPlan(intent, "Run load failed"),
+        preview: null,
+        unresolvedInputs: [],
+        clarifyingQuestions: [],
+        assumptions: [],
+        warnings: [
+          {
+            code: forbidden ? "COPILOT_RUN_FORBIDDEN" : "COPILOT_RUN_NOT_FOUND",
+            message: err.message || "Run load failed",
+          },
+          ...refWarnings,
+        ],
+        revisionHash: liveHash,
+        createdWorkflowRun: false,
+        workflowReferences: refResponse,
+      });
+    }
+  } else {
+    // No runId — ignore client-provided execution entirely in production
+    exec = null;
+  }
+
+  if (intent === "DEBUG" || intent === "FIX") {
+    const {
+      runDiagnosticTurn,
+    } = require("./workflowCopilotDiagnostics.service");
 
     const diagnosisSourceDefinition =
       exec?.definitionSnapshot ||
@@ -451,6 +663,7 @@ const planCopilotTurn = async ({
       diagnosisSourceDefinition,
       clarification: req.clarification,
       forceFixOps,
+      referencedWorkflows: resolvedRefs,
     });
 
     logCopilotSafe({
@@ -472,13 +685,14 @@ const planCopilotTurn = async ({
       unresolvedInputs: diag.unresolvedInputs,
       clarifyingQuestions: diag.clarifyingQuestions,
       assumptions: diag.assumptions || [],
-      warnings: diag.warnings || [],
+      warnings: [...(diag.warnings || []), ...refWarnings],
       revisionHash: liveHash,
       needsClarification: diag.needsClarification,
       createdWorkflowRun: false,
       diagnosis: diag.diagnosis,
       evidence: diag.evidence,
       fixPlan: diag.fixPlan,
+      workflowReferences: refResponse,
     });
   }
 
@@ -487,12 +701,57 @@ const planCopilotTurn = async ({
       workflow: workflow || { id: workflowId },
       definition: def,
       selectedNodeId: req.selectedNodeId,
-      execution: execution || (req.runId ? { runId: req.runId } : null),
+      execution: exec || (req.runId ? { runId: req.runId } : null),
       intent: "EXPLAIN",
     });
 
+    const msgLower = String(req.message || "").toLowerCase();
+    const askingResult =
+      /\b(return|returned|result|output|what\s+did)\b/.test(msgLower) &&
+      resolvedRefs.some((r) => r.available);
+    const askingCompare =
+      /\b(compar|while|whereas|but|vs\.?|versus)\b/.test(msgLower) &&
+      resolvedRefs.some((r) => r.available);
+
     let assistantMessage;
-    if (req.selectedNodeId && ctx.selectedNode) {
+    if (
+      /^(hi|hello|hey|yo|sup|thanks|thank\s+you|ok|okay|cool|great)\b[.!?]*$/i.test(
+        String(req.message || "").trim()
+      )
+    ) {
+      assistantMessage =
+        "Hi — I'm OpsAi Workflow Copilot. Ask me to explain this workflow, add steps, debug a run, or fix something. You can also type # to reference another workflow.";
+    } else if (askingResult) {
+      const parts = resolvedRefs
+        .filter((r) => r.available)
+        .map((r) => {
+          const lr = r.latestRun || { status: "never_run" };
+          const label = r.name || r.workflowId;
+          if (lr.status === "never_run") {
+            return `#${label} has never run.`;
+          }
+          if (lr.status === "succeeded") {
+            return `#${label} latest run succeeded. Result preview: ${JSON.stringify(lr.resultPreview).slice(0, 400)}`;
+          }
+          if (lr.status === "failed") {
+            return `#${label} latest run failed${lr.failedNode?.nodeId ? ` at ${lr.failedNode.nodeId}` : ""}${lr.safeError?.message ? `: ${lr.safeError.message}` : "."}`;
+          }
+          if (lr.status === "waiting") {
+            return `#${label} latest run is waiting.`;
+          }
+          return `#${label} latest run status: ${lr.status}.`;
+        });
+      assistantMessage = parts.join("\n") || "No referenced workflow results available.";
+    } else if (askingCompare) {
+      const cur = exec?.status || "unknown (current workflow)";
+      const refLines = resolvedRefs
+        .filter((r) => r.available)
+        .map(
+          (r) =>
+            `#${r.name || r.workflowId}: ${r.latestRun?.status || "never_run"}`
+        );
+      assistantMessage = `Current workflow run status: ${cur}. Referenced: ${refLines.join("; ") || "none"}. Compare using these statuses — open each workflow for deeper inspection.`;
+    } else if (req.selectedNodeId && ctx.selectedNode) {
       const sn = ctx.selectedNode;
       const outs = (def.edges || [])
         .filter((e) => e.source === sn.nodeId)
@@ -519,6 +778,15 @@ const planCopilotTurn = async ({
         lines.length > 0
           ? `This workflow has ${lines.length} nodes: ${lines.join(" → ")}.`
           : "This workflow has no nodes yet.";
+      if (resolvedRefs.some((r) => r.available && r.brief)) {
+        const briefs = resolvedRefs
+          .filter((r) => r.available && r.brief)
+          .map(
+            (r) =>
+              `#${r.name}: ${r.brief.purposeSummary || "no summary"}`
+          );
+        assistantMessage += `\nReferenced: ${briefs.join(" | ")}`;
+      }
     }
     return buildPlanResponse({
       intent: "EXPLAIN",
@@ -529,7 +797,7 @@ const planCopilotTurn = async ({
       unresolvedInputs: [],
       clarifyingQuestions: [],
       assumptions: [],
-      warnings: [],
+      warnings: [...refWarnings],
       revisionHash: liveHash,
       needsClarification: false,
       createdWorkflowRun: false,
@@ -537,10 +805,134 @@ const planCopilotTurn = async ({
         nodeCount: ctx.workflow?.nodeCount,
         selectedNodeId: req.selectedNodeId,
       },
+      workflowReferences: refResponse,
     });
   }
 
   // CREATE / MODIFY — model or deterministic planner
+
+  // "After this, run #Workflow" → propose Execute Workflow on CURRENT draft only
+  const runRefMatch =
+    /\b(after\s+this|then\s+run|run)\b/.test(
+      String(req.message || "").toLowerCase()
+    ) && resolvedRefs.filter((r) => r.available).length === 1;
+  if (
+    (intent === "CREATE" || intent === "MODIFY") &&
+    runRefMatch &&
+    /\b(run|execute)\b/.test(String(req.message || "").toLowerCase())
+  ) {
+    const target = resolvedRefs.find((r) => r.available);
+    if (target) {
+      if (String(target.workflowId) === String(workflowId)) {
+        return buildPlanResponse({
+          intent: "MODIFY",
+          assistantMessage:
+            "A workflow cannot Execute Workflow on itself. Choose a different callable workflow.",
+          summary: "Self-reference rejected",
+          plan: emptyPlan("MODIFY", "Self-reference"),
+          warnings: [
+            {
+              code: "SUBWORKFLOW_SELF",
+              message: "Cannot target the current workflow",
+            },
+            ...refWarnings,
+          ],
+          revisionHash: liveHash,
+          createdWorkflowRun: false,
+          workflowReferences: refResponse,
+        });
+      }
+      const ops = [
+        {
+          type: "addNode",
+          tempId: "tmp_exec_wf",
+          nodeType: "executeWorkflow",
+          parameters: {
+            label: `Run ${target.name || "workflow"}`,
+            workflowId: target.workflowId,
+          },
+          positionHint: { strategy: "afterSelection" },
+        },
+      ];
+      if (req.selectedNodeId) {
+        ops.push({
+          type: "connectNodes",
+          sourceNodeId: req.selectedNodeId,
+          targetNodeId: "tmp_exec_wf",
+          sourceHandle: "main",
+          targetHandle: "main",
+        });
+      }
+      const validation = validateCopilotOperations({
+        definition: def,
+        operations: ops,
+        baseRevisionHash: null,
+        workflowId,
+      });
+      if (!validation.valid) {
+        return buildPlanResponse({
+          intent: "MODIFY",
+          assistantMessage:
+            validation.issues?.[0]?.message ||
+            "That workflow cannot be used as an Execute Workflow target.",
+          summary: "Non-callable target",
+          plan: emptyPlan("MODIFY", "Not callable"),
+          warnings: [
+            ...(validation.issues || []).map((i) => ({
+              code: i.code,
+              message: i.message,
+            })),
+            ...refWarnings,
+          ],
+          revisionHash: liveHash,
+          createdWorkflowRun: false,
+          workflowReferences: refResponse,
+        });
+      }
+      return buildPlanResponse({
+        intent: "MODIFY",
+        assistantMessage: `I'll add an Execute Workflow step targeting #${target.name || target.workflowId}. Apply to update your draft (does not run it yet).`,
+        summary: "Propose Execute Workflow",
+        plan: normalizePlan({
+          intent: "MODIFY",
+          summary: "Add Execute Workflow",
+          operations: ops,
+          unresolvedInputs: validation.unresolvedInputs || [],
+          warnings: validation.warnings || [],
+        }),
+        preview: validation.preview,
+        unresolvedInputs: validation.unresolvedInputs || [],
+        clarifyingQuestions: [],
+        assumptions: [],
+        warnings: [...(validation.warnings || []), ...refWarnings],
+        revisionHash: liveHash,
+        createdWorkflowRun: false,
+        workflowReferences: refResponse,
+      });
+    }
+  }
+
+  // Cross-workflow edit: V1 only mutates the CURRENT open workflow
+  if (
+    (intent === "CREATE" || intent === "MODIFY") &&
+    /\b(change|edit|modify|update)\s+#/.test(
+      String(req.message || "").toLowerCase()
+    ) &&
+    resolvedRefs.some((r) => r.available)
+  ) {
+    return buildPlanResponse({
+      intent: "EXPLAIN",
+      assistantMessage:
+        "I can only edit the workflow you currently have open. Open the other workflow in the editor to change it. I can still use it as a read-only reference.",
+      summary: "Referenced workflow is read-only",
+      plan: emptyPlan("EXPLAIN", "No cross-workflow edit"),
+      warnings: refWarnings,
+      revisionHash: liveHash,
+      createdWorkflowRun: false,
+      workflowReferences: refResponse,
+    });
+  }
+
   let planner;
   try {
     planner =
@@ -599,6 +991,14 @@ const planCopilotTurn = async ({
     selectedNodeId: req.selectedNodeId,
     clarification: req.clarification,
     recentConversation: req.recentConversation,
+    referencedWorkflows: resolvedRefs
+      .filter((r) => r.available)
+      .map((r) => ({
+        workflowId: r.workflowId,
+        name: r.name,
+        brief: r.brief,
+        latestRunStatus: r.latestRun?.status || null,
+      })),
     definition: {
       version: def.version || 1,
       nodes: (def.nodes || []).map((n) => ({
@@ -700,6 +1100,38 @@ const planCopilotTurn = async ({
             structured = parseStructuredCopilotPlan(generated.rawContent);
           } catch (parseErr) {
             if (round >= MAX_COPILOT_PLAN_REPAIR_ROUNDS) {
+              // Production model path only — never mask deterministic/test failures.
+              if (planner.kind === "model") {
+                try {
+                  const {
+                    DeterministicCopilotPlanner,
+                  } = require("./workflowCopilotPlanner.service");
+                  const fallback = new DeterministicCopilotPlanner();
+                  const fb = await fallback.generate({
+                    messages: baseMessages,
+                    schema: null,
+                  });
+                  if (fb?.plan && Array.isArray(fb.plan.operations)) {
+                    structured = fb.plan;
+                    validation = fb.plan.operations.length
+                      ? validateCopilotOperations({
+                          definition: def,
+                          operations: fb.plan.operations,
+                          baseRevisionHash: null,
+                        })
+                      : { valid: true, preview: null, issues: [] };
+                    if (validation.valid !== false) {
+                      providerMeta = {
+                        provider: "deterministic-fallback",
+                        model: "deterministic-copilot-planner",
+                      };
+                      break;
+                    }
+                  }
+                } catch {
+                  /* keep invalid response path */
+                }
+              }
               logCopilotSafe({
                 workflowId,
                 intent,
@@ -711,7 +1143,7 @@ const planCopilotTurn = async ({
               return buildPlanResponse({
                 intent,
                 assistantMessage:
-                  "I could not produce a valid structured plan. Please rephrase and try again.",
+                  "I couldn't turn that into a valid workflow plan. Try a shorter request, or ask me to start with Manual Trigger → AI Agent → Result and we'll refine it.",
                 summary: "Invalid provider response",
                 plan: emptyPlan(planIntent, "Invalid response"),
                 warnings: [
@@ -724,6 +1156,7 @@ const planCopilotTurn = async ({
                 createdWorkflowRun: false,
                 repairRounds: round,
                 providerMeta,
+                workflowReferences: refResponse,
               });
             }
             repairRounds = round + 1;
@@ -848,10 +1281,88 @@ const planCopilotTurn = async ({
       });
     }
     if (err?.code === PLAN_ERROR.RESPONSE_INVALID) {
+      if (planner?.kind === "model") {
+      try {
+        const {
+          DeterministicCopilotPlanner,
+        } = require("./workflowCopilotPlanner.service");
+        const fallback = new DeterministicCopilotPlanner();
+        const fb = await fallback.generate({
+          messages: [
+            {
+              role: "user",
+              content: JSON.stringify({
+                message: req.message,
+                intentHint: intent,
+                selectedNodeId: req.selectedNodeId,
+                definition: {
+                  version: def.version || 1,
+                  nodes: def.nodes || [],
+                  edges: def.edges || [],
+                },
+              }),
+            },
+          ],
+          schema: null,
+        });
+        if (fb?.plan) {
+          const ops = fb.plan.operations || [];
+          const validation = ops.length
+            ? validateCopilotOperations({
+                definition: def,
+                operations: ops,
+                baseRevisionHash: null,
+              })
+            : { valid: true, preview: null, issues: [], unresolvedInputs: [] };
+          if (validation.valid !== false) {
+            const plan = normalizePlan({
+              intent: intent === "CREATE" ? "BUILD" : intent,
+              summary: fb.plan.summary || "",
+              operations: ops,
+              unresolvedInputs: [
+                ...(fb.plan.unresolvedInputs || []),
+                ...(validation.unresolvedInputs || []),
+              ],
+              warnings: [
+                ...(fb.plan.warnings || []),
+                {
+                  code: PLAN_ERROR.RESPONSE_INVALID,
+                  message: "Used deterministic fallback after provider parse failure",
+                },
+              ],
+            });
+            return buildPlanResponse({
+              intent,
+              assistantMessage:
+                fb.plan.assistantMessage ||
+                fb.plan.summary ||
+                "Here's a draft plan based on your request.",
+              summary: fb.plan.summary || "",
+              plan,
+              preview: validation.preview || null,
+              unresolvedInputs: plan.unresolvedInputs,
+              clarifyingQuestions: fb.plan.clarifyingQuestions || [],
+              assumptions: fb.plan.assumptions || [],
+              warnings: plan.warnings,
+              unsupportedCapabilities: fb.plan.unsupportedCapabilities || [],
+              revisionHash: liveHash,
+              createdWorkflowRun: false,
+              providerMeta: {
+                provider: "deterministic-fallback",
+                model: "deterministic-copilot-planner",
+              },
+              workflowReferences: refResponse,
+            });
+          }
+        }
+      } catch {
+        /* fall through */
+      }
+      }
       return buildPlanResponse({
         intent,
         assistantMessage:
-          "The Copilot provider returned an invalid response. Nothing was changed.",
+          "I couldn't turn that into a valid workflow plan. Try a shorter request, or ask me to start with Manual Trigger → AI Agent → Result and we'll refine it.",
         summary: "Invalid provider response",
         plan: emptyPlan(planIntent, "Invalid response"),
         warnings: [
@@ -860,6 +1371,7 @@ const planCopilotTurn = async ({
         revisionHash: liveHash,
         createdWorkflowRun: false,
         providerMeta,
+        workflowReferences: refResponse,
       });
     }
     throw err;
@@ -902,7 +1414,7 @@ const planCopilotTurn = async ({
     unresolvedInputs: plan.unresolvedInputs,
     clarifyingQuestions: structured.clarifyingQuestions || [],
     assumptions: structured.assumptions || [],
-    warnings: plan.warnings,
+    warnings: [...(plan.warnings || []), ...refWarnings],
     unsupportedCapabilities: structured.unsupportedCapabilities || [],
     revisionHash: liveHash,
     needsClarification,
@@ -910,6 +1422,7 @@ const planCopilotTurn = async ({
     validation,
     repairRounds,
     providerMeta,
+    workflowReferences: refResponse,
   });
 };
 

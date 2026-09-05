@@ -229,7 +229,7 @@ export const workflowsApi = {
       errorWorkflowId,
     }),
 
-  /** Part 14B — planning turn for future Copilot drawer (no workflow_runs). */
+  /** Part 14B — planning turn for Workflow Copilot drawer (no workflow_runs). */
   copilotPlan: (
     id: string,
     payload: import("./workflowCopilot").CopilotPlanRequest
@@ -238,6 +238,23 @@ export const workflowsApi = {
       `/workflows/${id}/copilot/plan`,
       payload
     ),
+
+  /** Part 14A/14D — apply validated plan to draft definition (returned only). */
+  copilotApplyPlan: (
+    id: string,
+    payload: {
+      definition: import("./types").WorkflowDefinition;
+      plan: unknown;
+      baseRevisionHash?: string | null;
+      workspace?: unknown;
+    }
+  ) =>
+    apiClient.post<{
+      resultingDefinition?: import("./types").WorkflowDefinition;
+      definition?: import("./types").WorkflowDefinition;
+      revisionHash?: string;
+      preview?: unknown;
+    }>(`/workflows/${id}/copilot/apply-plan`, payload),
 };
 
 /** Secrets are write-only: the API never returns a stored secret value. */

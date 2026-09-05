@@ -16,7 +16,11 @@ const registerPart14CTests = ({ check, section, assert: a }) => {
   const { AI_ERROR } = require("../services/workflowAiResources.service");
 
   const turn = (opts) =>
-    planSvc().planCopilotTurn({ forceMode: "deterministic", ...opts });
+    planSvc().planCopilotTurn({
+      forceMode: "deterministic",
+      allowClientExecution: true,
+      ...opts,
+    });
 
   const agentMissingModel = () => ({
     version: 1,
