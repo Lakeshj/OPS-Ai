@@ -301,6 +301,17 @@ UI-only polish on top of 12A/12B. No Memory/RAG/streaming in 12C.
 - Shared `workflowHttpSecurity.service.js`: http(s) only; default-deny loopback/private/link-local/metadata after DNS; redirects followed manually with per-hop revalidation; strip Authorization on cross-origin redirect.
 - Tests inject `withHttpSecurityTestPolicy({ allowLoopback: true })` — production defaults stay deny.
 
+## Workflow Copilot foundation (Part 14A)
+
+Copilot is an **editor assistant**, not an AI Agent node and not a workflow run.
+
+- Context: bounded, redacted (`workflowCopilot.service.js`); no decrypted credentials / Wait resume tokens.
+- Mutations only via constrained operations (`addNode`, `removeNode`, `updateNodeParameters`, `connectNodes`, `disconnectEdge`, `reconnectEdge`, `setWorkflowSetting`, optional `renameNode`).
+- Validate → preview → explicit apply; apply returns a draft definition (no auto-save / execute / activate).
+- Stale plans rejected via `revisionHash` (`COPILOT_PLAN_STALE`).
+- Authoritative graph rules remain `validateDefinition` / connection / Loop / Respond / Error / Subworkflow validators.
+- API: `POST /workflows/:id/copilot/{context,validate-plan,apply-plan,diagnose}`.
+
 - Agent card shows Model required / Model label + Tools count (via `getAiAgentReadiness`).
 - Auxiliary edges labeled Model / Tool (not generic “Resource” when type known).
 - Memory handle hidden until a production memory provider is Available.

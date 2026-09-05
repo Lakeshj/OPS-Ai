@@ -304,6 +304,75 @@ const invalidateEditorSession = asyncHandler(async (req, res) => {
   );
 });
 
+/** Part 14A — Copilot context (safe, bounded). Does not create workflow runs. */
+const copilotContext = asyncHandler(async (req, res) => {
+  const workflow = await workflowsService.getById(req.params.id, req.user);
+  const definition = req.body?.definition || workflow.definition;
+  const {
+    buildCopilotContext,
+  } = require("../../services/workflowCopilot.service");
+  res.json(
+    buildCopilotContext({
+      workflow,
+      definition,
+      selectedNodeId: req.body?.selectedNodeId || null,
+      execution: req.body?.execution || null,
+      intent: req.body?.intent || "EXPLAIN",
+    })
+  );
+});
+
+/** Part 14A — validate Copilot plan without mutating editor/DB. */
+const copilotValidatePlan = asyncHandler(async (req, res) => {
+  await workflowsService.getById(req.params.id, req.user);
+  const {
+    validateCopilotOperations,
+    normalizePlan,
+  } = require("../../services/workflowCopilot.service");
+  const plan = normalizePlan(req.body?.plan || req.body);
+  const result = validateCopilotOperations({
+    definition: req.body?.definition,
+    operations: plan.operations,
+    workflowId: req.params.id,
+    baseRevisionHash: req.body?.baseRevisionHash,
+    workspace: req.body?.workspace,
+    intentHints: req.body?.intentHints,
+  });
+  res.json({ ...result, plan: { ...plan, unresolvedInputs: result.unresolvedInputs } });
+});
+
+/**
+ * Part 14A — apply Copilot plan to a draft definition (returned only).
+ * Does not persist, execute, or activate. Client applies to editor draft.
+ */
+const copilotApplyPlan = asyncHandler(async (req, res) => {
+  await workflowsService.getById(req.params.id, req.user);
+  const {
+    applyCopilotOperations,
+    normalizePlan,
+  } = require("../../services/workflowCopilot.service");
+  const plan = normalizePlan(req.body?.plan || req.body);
+  const result = applyCopilotOperations({
+    definition: req.body?.definition,
+    operations: plan.operations,
+    workflowId: req.params.id,
+    baseRevisionHash: req.body?.baseRevisionHash,
+    workspace: req.body?.workspace,
+    intentHints: req.body?.intentHints,
+  });
+  res.json(result);
+});
+
+/** Part 14A — static diagnosis aggregator. */
+const copilotDiagnose = asyncHandler(async (req, res) => {
+  await workflowsService.getById(req.params.id, req.user);
+  const {
+    diagnoseWorkflow,
+  } = require("../../services/workflowCopilot.service");
+  const definition = req.body?.definition;
+  res.json(diagnoseWorkflow(definition));
+});
+
 module.exports = {
   list,
   listCallableTargets,
@@ -335,4 +404,8 @@ module.exports = {
   listCredentials,
   createCredential,
   removeCredential,
+  copilotContext,
+  copilotValidatePlan,
+  copilotApplyPlan,
+  copilotDiagnose,
 };

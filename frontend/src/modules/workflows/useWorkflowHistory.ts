@@ -47,8 +47,20 @@ export function useWorkflowHistory(initial: HistoryState) {
   const canUndo = pastRef.current.length > 0;
   const canRedo = futureRef.current.length > 0;
 
+  /**
+   * Part 14A — push one snapshot before a multi-edit Copilot apply.
+   * Callers should push(before) once, then apply all graph mutations.
+   */
+  const pushTransaction = useCallback(
+    (nodes: Node[], edges: Edge[]) => {
+      push(nodes, edges);
+    },
+    [push]
+  );
+
   return {
     push,
+    pushTransaction,
     undo,
     redo,
     canUndo,

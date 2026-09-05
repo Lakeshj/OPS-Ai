@@ -30,6 +30,10 @@ const {
   listCredentials,
   createCredential,
   removeCredential,
+  copilotContext,
+  copilotValidatePlan,
+  copilotApplyPlan,
+  copilotDiagnose,
 } = require("./workflows.controller");
 const {
   validateCreate,
@@ -73,6 +77,13 @@ router.post("/:id/nodes/:nodeId/schedule-preview", previewScheduleOccurrences);
 router.post("/:id/webhook/test", webhookTestTrigger);
 router.post("/:id/webhook", webhookTrigger);
 router.patch("/:id/error-workflow", setErrorWorkflow);
+
+// Part 14A — Workflow Copilot (before generic /:id)
+router.post("/:id/copilot/context", copilotContext);
+router.post("/:id/copilot/validate-plan", copilotValidatePlan);
+router.post("/:id/copilot/apply-plan", copilotApplyPlan);
+router.post("/:id/copilot/diagnose", copilotDiagnose);
+
 router.get("/:id", getById);
 router.put("/:id", validate(validateUpdate), update);
 router.delete("/:id", remove);

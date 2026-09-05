@@ -1433,4 +1433,6 @@ module.exports = {
   previewScheduleOccurrences,
   invalidateEditorSession,
   emptyDefinition,
+  validateDefinition,
+  ALLOWED_NODE_TYPES,
 };
