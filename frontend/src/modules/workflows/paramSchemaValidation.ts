@@ -9,6 +9,7 @@ import {
   getParamValue,
   getVisibleParams,
   isParamVisible,
+  valuesWithParamDefaults,
 } from "./paramDisplayOptions";
 import type { WorkflowNodeData, WorkflowNodeType } from "./types";
 
@@ -22,9 +23,10 @@ function isEmptyValue(value: unknown): boolean {
 
 function validateParam(
   param: ParamDescriptor,
-  values: Record<string, unknown>
+  values: Record<string, unknown>,
+  visibilityValues: Record<string, unknown> = values
 ): string | null {
-  if (!isParamVisible(param, values)) return null;
+  if (!isParamVisible(param, visibilityValues)) return null;
 
   let value = getParamValue(values, param.name, param.default);
   if (param.name === "emailBody" && isEmptyValue(value)) {
@@ -74,17 +76,18 @@ export function getSchemaParamIssues(
   if (!nodeType || !data) return [];
   const contract = getNodeContract(nodeType as WorkflowNodeType);
   const values = data as Record<string, unknown>;
+  const resolved = valuesWithParamDefaults(contract.params, values);
   const issues: string[] = [];
 
   for (const param of getVisibleParams(contract.params, values)) {
-    const issue = validateParam(param, values);
+    const issue = validateParam(param, values, resolved);
     if (issue) issues.push(issue);
   }
 
   // Collection sub-fields: validate enabled entries
   for (const param of contract.params) {
     if (param.type !== "collection" || !param.fields) continue;
-    if (!isParamVisible(param, values)) continue;
+    if (!isParamVisible(param, resolved)) continue;
     const bag =
       values[param.name] && typeof values[param.name] === "object"
         ? (values[param.name] as Record<string, unknown>)

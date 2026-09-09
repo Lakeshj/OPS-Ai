@@ -118,6 +118,7 @@ const generate = async (
     threadId,
     prompt: enrichedPrompt,
     assistant,
+    authUser,
   });
 
   const startedAt = Date.now();

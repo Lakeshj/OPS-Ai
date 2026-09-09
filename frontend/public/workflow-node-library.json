@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updatedAt": "2026-08-31T14:13:12.110Z",
+  "updatedAt": "2026-09-08T06:23:56.520Z",
   "categories": [
     "Triggers",
     "Core",
@@ -13,6 +13,7 @@
     "Productivity",
     "CRM",
     "Marketing",
+    "SEO",
     "Cloud",
     "AI",
     "AI Agents",
@@ -57,15 +58,26 @@
       "engineType": "webhook"
     },
     {
+      "id": "gmail-trigger",
+      "name": "Gmail Trigger",
+      "category": "Triggers",
+      "type": "Trigger",
+      "description": "Poll Gmail on an interval and start the workflow for new messages (not push/real-time)",
+      "icon": "mail",
+      "provider": "Google",
+      "available": true,
+      "engineType": "gmailTrigger"
+    },
+    {
       "id": "respond-to-webhook",
       "name": "Respond to Webhook",
-      "category": "Triggers",
+      "category": "Core",
       "type": "Action",
-      "description": "Send a response back to an incoming webhook",
+      "description": "Send a custom response to the incoming webhook request.",
       "icon": "reply",
-      "provider": null,
-      "available": false,
-      "engineType": null
+      "provider": "OpsAi",
+      "available": true,
+      "engineType": "respondToWebhook"
     },
     {
       "id": "execute-workflow",
@@ -138,11 +150,11 @@
       "name": "Wait",
       "category": "Core",
       "type": "Core",
-      "description": "Pause the workflow for a duration or until a condition",
+      "description": "Pause execution until time or signal",
       "icon": "pause",
       "provider": null,
       "available": true,
-      "engineType": "noop"
+      "engineType": "wait"
     },
     {
       "id": "no-operation",
@@ -160,7 +172,7 @@
       "name": "HTTP Request",
       "category": "Core",
       "type": "Action",
-      "description": "Make HTTP requests to external APIs and services",
+      "description": "Call APIs and web endpoints",
       "icon": "http",
       "provider": "HTTP",
       "available": true,
@@ -237,18 +249,18 @@
       "name": "Switch",
       "category": "Logic",
       "type": "Logic",
-      "description": "Route to multiple branches by value",
+      "description": "Route items using ordered rules",
       "icon": "switch",
       "provider": null,
-      "available": false,
-      "engineType": null
+      "available": true,
+      "engineType": "switch"
     },
     {
       "id": "merge",
       "name": "Merge",
       "category": "Logic",
       "type": "Logic",
-      "description": "Combine items from multiple branches",
+      "description": "Combine data from multiple workflow paths",
       "icon": "merge",
       "provider": null,
       "available": true,
@@ -259,11 +271,11 @@
       "name": "Loop Over Items",
       "category": "Logic",
       "type": "Logic",
-      "description": "Iterate over a list of items",
+      "description": "Process items in controlled batches",
       "icon": "repeat",
       "provider": null,
-      "available": false,
-      "engineType": null
+      "available": true,
+      "engineType": "loop"
     },
     {
       "id": "split-out",
@@ -497,6 +509,17 @@
       "engineType": "spreadsheet"
     },
     {
+      "id": "xlsx-builder",
+      "name": "XLSX Builder",
+      "category": "Files",
+      "type": "Action",
+      "description": "Build a multi-sheet Excel workbook as workflow binary",
+      "icon": "sheet",
+      "provider": null,
+      "available": true,
+      "engineType": "xlsxBuilder"
+    },
+    {
       "id": "postgresql",
       "name": "PostgreSQL",
       "category": "Databases",
@@ -609,13 +632,13 @@
     {
       "id": "google-sheets",
       "name": "Google Sheets",
-      "category": "Databases",
+      "category": "Productivity",
       "type": "Action",
-      "description": "Query or update data in Google Sheets",
+      "description": "Read, append, update, or clear Google Sheets rows",
       "icon": "database",
       "provider": "Google",
-      "available": false,
-      "engineType": null
+      "available": true,
+      "engineType": "googleSheets"
     },
     {
       "id": "microsoft-excel-365",
@@ -644,11 +667,33 @@
       "name": "Gmail",
       "category": "Communication",
       "type": "Action",
-      "description": "Send and receive Gmail messages",
+      "description": "Send, read, label, and manage Gmail messages",
       "icon": "mail",
       "provider": "Google",
-      "available": false,
-      "engineType": null
+      "available": true,
+      "engineType": "gmail"
+    },
+    {
+      "id": "google-search-console",
+      "name": "Google Search Console",
+      "category": "SEO",
+      "type": "Action",
+      "description": "Pull Search Analytics queries or pages (clicks, impressions, CTR, position)",
+      "icon": "search",
+      "provider": "Google",
+      "available": true,
+      "engineType": "googleSearchConsole"
+    },
+    {
+      "id": "google-analytics",
+      "name": "Google Analytics",
+      "category": "SEO",
+      "type": "Action",
+      "description": "Run a GA4 report for sessions, users, and other metrics",
+      "icon": "chart",
+      "provider": "Google",
+      "available": true,
+      "engineType": "googleAnalytics"
     },
     {
       "id": "microsoft-outlook",
@@ -1168,11 +1213,66 @@
       "engineType": "ai"
     },
     {
+      "id": "ai-generate",
+      "name": "AI Generate",
+      "category": "AI",
+      "type": "AI",
+      "description": "One model request per item (no agent loop or tools)",
+      "icon": "sparkles",
+      "provider": "OpsAi",
+      "available": true,
+      "engineType": "aiGenerate"
+    },
+    {
+      "id": "ai-agent",
+      "name": "Basic AI Agent",
+      "category": "AI Agents",
+      "type": "AI",
+      "description": "Use a connected Chat Model and optional tools to process workflow data.",
+      "icon": "bot",
+      "provider": "OpsAi",
+      "available": true,
+      "engineType": "aiAgent"
+    },
+    {
+      "id": "ai-chat-model",
+      "name": "Chat Model",
+      "category": "AI",
+      "type": "AI",
+      "description": "Provide a chat model to an AI Agent.",
+      "icon": "sparkles",
+      "provider": "OpsAi",
+      "available": true,
+      "engineType": "aiChatModel"
+    },
+    {
+      "id": "ai-calculator-tool",
+      "name": "Calculator Tool",
+      "category": "AI",
+      "type": "Tool",
+      "description": "Let an AI Agent perform arithmetic calculations.",
+      "icon": "calculator",
+      "provider": "OpsAi",
+      "available": true,
+      "engineType": "aiCalculatorTool"
+    },
+    {
+      "id": "http-request-tool",
+      "name": "HTTP Tool",
+      "category": "AI",
+      "type": "Tool",
+      "description": "Let an AI Agent call a configured HTTP API.",
+      "icon": "http",
+      "provider": "OpsAi",
+      "available": true,
+      "engineType": "aiHttpTool"
+    },
+    {
       "id": "ai-bot",
       "name": "Bot (@assistant)",
       "category": "AI",
       "type": "AI",
-      "description": "Run one of your Keyword Assistants with its own model and prompt template",
+      "description": "Run one of your Keyword Assistants with its own model and prompt template (legacy; not AI Agent resources).",
       "icon": "bot",
       "provider": "OpsAi",
       "available": true,
@@ -1388,11 +1488,11 @@
       "engineType": null
     },
     {
-      "id": "ai-agent",
-      "name": "AI Agent",
+      "id": "ai-agent-soon",
+      "name": "AI Agent (Soon)",
       "category": "AI Agents",
       "type": "AI",
-      "description": "Autonomous agent that uses tools to complete tasks",
+      "description": "Placeholder for future agent variants",
       "icon": "bot",
       "provider": null,
       "available": false,
@@ -1427,17 +1527,6 @@
       "type": "Tool",
       "description": "Call another workflow as an agent tool",
       "icon": "workflow",
-      "provider": null,
-      "available": false,
-      "engineType": null
-    },
-    {
-      "id": "http-request-tool",
-      "name": "HTTP Request Tool",
-      "category": "AI Agents",
-      "type": "Tool",
-      "description": "Let an agent call HTTP APIs",
-      "icon": "http",
       "provider": null,
       "available": false,
       "engineType": null

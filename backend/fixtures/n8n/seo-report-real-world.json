@@ -1,0 +1,849 @@
+{
+  "name": "SEO Report Data - 20 to 23 July - Final One",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "weeks",
+              "triggerAtDay": [
+                1
+              ],
+              "triggerAtHour": 7
+            }
+          ]
+        }
+      },
+      "id": "4c6c4688-2fdb-4eb9-8e1e-d17105184a9b",
+      "name": "Weekly Trigger (Monday 7AM)",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        -448,
+        368
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://searchconsole.googleapis.com/webmasters/v3/sites/https%3A%2F%2Fwww.example.com%2F/searchAnalytics/query",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "oAuth2Api",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ startDate: $today.minus({ days: 7 }).toFormat(\"yyyy-MM-dd\"), endDate: $today.toFormat(\"yyyy-MM-dd\"), dimensions: [\"query\"], rowLimit: 10 }) }}",
+        "options": {}
+      },
+      "id": "2db84f26-0188-455c-a117-c123f5ed60dc",
+      "name": "Get SEO Data from GSC",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        0,
+        0
+      ],
+      "credentials": {
+        "oAuth2Api": {
+          "id": "sanitized_cred_1",
+          "name": "oAuth2Api (sanitized)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const rows = $input.first().json.rows || [];\n\nif (rows.length === 0) {\n  return [{\n    json: {\n      \"Sr No\": \"\",\n      \"Search Query\": \"No Data Available\",\n      \"Clicks\": \"\",\n      \"Impressions\": \"\",\n      \"CTR (%)\": \"\",\n      \"Average Position\": \"\"\n    }\n  }];\n}\n\nreturn rows.map((row, index) => ({\n  json: {\n    \"Sr No\": index + 1,\n    \"Search Query\": row.keys[0],\n    \"Clicks\": row.clicks,\n    \"Impressions\": row.impressions,\n    \"CTR (%)\": Number((row.ctr * 100).toFixed(2)),\n    \"Average Position\": Number(row.position.toFixed(2))\n  }\n}));"
+      },
+      "id": "ee0487c9-9e1f-4b9d-8f50-2689b91629c8",
+      "name": "Generate SEO Report",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        416,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "sendTo": "imported-user@example.com",
+        "subject": "=Weekly SEO Report - {{ $now.toFormat(\"MMMM d, yyyy\") }}",
+        "message": "={{ $json.aiSummaryHtml }}\n\n<br><br>\n\n<hr>\n\n<p style=\"font-family:Arial, sans-serif; font-size:14px; color:#1f2937;\">\n  <b>Attached Excel Report Includes:</b><br>\n  1. GA4 Summary<br>\n  2. GA4 Page Performance<br>\n  3. GSC Queries<br>\n  4. GSC Pages\n</p>\n\n<p style=\"font-family:Arial, sans-serif; font-size:14px; color:#1f2937;\">\nRegards,<br>\nSEO Automation Bot\n</p>",
+        "options": {
+          "attachmentsUi": {
+            "attachmentsBinary": [
+              {}
+            ]
+          }
+        }
+      },
+      "id": "c4a31117-bc5b-42aa-a37a-160d5dc95a77",
+      "name": "Send Weekly Report by Email",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        2640,
+        368
+      ],
+      "executeOnce": true,
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "sanitized_cred_2",
+          "name": "gmailOAuth2 (sanitized)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "propertyId": {
+          "__rl": true,
+          "value": "386929025",
+          "mode": "list",
+          "cachedResultName": "Evincera - GA4",
+          "cachedResultUrl": "https://analytics.google.com/analytics/web/#/p000000000/"
+        },
+        "metricsGA4": {
+          "metricValues": [
+            {
+              "listName": "sessions"
+            },
+            {},
+            {
+              "listName": "screenPageViews"
+            },
+            {
+              "listName": "other",
+              "name": "newUsers"
+            },
+            {
+              "listName": "other",
+              "name": "engagementRate"
+            }
+          ]
+        },
+        "dimensionsGA4": {
+          "dimensionValues": [
+            {}
+          ]
+        },
+        "returnAll": true,
+        "additionalFields": {}
+      },
+      "id": "7cf98758-3238-4200-8dc3-1ad53d40cd4b",
+      "name": "Get GA4 Data",
+      "type": "n8n-nodes-base.googleAnalytics",
+      "typeVersion": 2,
+      "position": [
+        0,
+        368
+      ],
+      "credentials": {
+        "googleAnalyticsOAuth2": {
+          "id": "sanitized_cred_3",
+          "name": "googleAnalyticsOAuth2 (sanitized)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "content": "Google Search Console branch: pulls top search queries for www.example.com (last 7 days) and emails an Excel report.",
+        "height": 200,
+        "width": 260,
+        "color": 6
+      },
+      "id": "a2b9d715-2948-48ac-891a-f65954e55eb8",
+      "name": "📌 GSC Branch",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -512,
+        16
+      ]
+    },
+    {
+      "parameters": {
+        "content": "GA4 branch: pulls daily Sessions, Total Users, New Users, Screen Page Views and Engagement Rate (last 7 days) and emails an Excel report. Select your GA4 property in the Get GA4 Data node.",
+        "height": 220,
+        "width": 260,
+        "color": 4
+      },
+      "id": "82d7065f-1062-4cae-b9d9-66e5899bd8ea",
+      "name": "📌 GA4 Branch",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -1424,
+        224
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\n\nif (items.length === 0) {\n  return [{\n    json: {\n      \"Date\": \"No Data Available\",\n      \"Sessions\": \"\",\n      \"Total Users\": \"\",\n      \"New Users\": \"\",\n      \"Screen Page Views\": \"\",\n      \"Engagement Rate (%)\": \"\"\n    }\n  }];\n}\n\nconst fmtDate = (d) => {\n  if (!d || d.length !== 8) return d || \"\";\n  return d.slice(0, 4) + \"-\" + d.slice(4, 6) + \"-\" + d.slice(6, 8);\n};\n\nreturn items.map((item) => {\n  const j = item.json;\n  const er = j.engagementRate !== undefined && j.engagementRate !== \"\" ? Number((Number(j.engagementRate) * 100).toFixed(2)) : \"\";\n  return {\n    json: {\n      \"Date\": fmtDate(j.date),\n      \"Sessions\": j.sessions !== undefined ? Number(j.sessions) : \"\",\n      \"Total Users\": j.totalUsers !== undefined ? Number(j.totalUsers) : \"\",\n      \"New Users\": j.newUsers !== undefined ? Number(j.newUsers) : \"\",\n      \"Screen Page Views\": j.screenPageViews !== undefined ? Number(j.screenPageViews) : \"\",\n      \"Engagement Rate (%)\": er\n    }\n  };\n});"
+      },
+      "id": "d8cef41a-ffd9-41c3-a209-105471057f7b",
+      "name": "Generate GA4 Report",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        416,
+        368
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Create one XLSX file with 4 worksheets:\n// 1. GA4 Summary\n// 2. GA4 Page Performance\n// 3. GSC Queries\n// 4. GSC Pages\n//\n// Important:\n// This code does NOT use the final merge rows for report data.\n// It directly reads the 4 report nodes.\n\nfunction getNodeRows(nodeName) {\n  try {\n    return $items(nodeName).map(item => item.json || {});\n  } catch (error) {\n    return [];\n  }\n}\n\nconst ga4SummaryItemsRaw = getNodeRows(\"Generate GA4 Report\");\nconst ga4PagePerformanceItemsRaw = getNodeRows(\"Generate GA4 Page Performance Report\");\nconst gscQueryItemsRaw = getNodeRows(\"Generate SEO Report\");\nconst gscPageItemsRaw = getNodeRows(\"Generate GSC Page Report Data\");\n\nconst fileName = `Weekly_SEO_GA4_Report_${$now.toFormat(\"yyyy-MM-dd\")}.xlsx`;\n\nfunction cleanRows(rows, allowedHeaders) {\n  return rows.map(row => {\n    const cleaned = {};\n\n    for (const header of allowedHeaders) {\n      cleaned[header] = row[header] !== undefined && row[header] !== null ? row[header] : \"\";\n    }\n\n    return cleaned;\n  });\n}\n\nconst ga4SummaryHeaders = [\n  \"Date\",\n  \"Sessions\",\n  \"Total Users\",\n  \"New Users\",\n  \"Screen Page Views\",\n  \"Engagement Rate (%)\"\n];\n\nconst ga4PagePerformanceHeaders = [\n  \"Sr No\",\n  \"Page Location\",\n  \"Current Sessions\",\n  \"Previous Sessions\",\n  \"Sessions Difference\",\n  \"Sessions Change (%)\",\n  \"Current Total Users\",\n  \"Previous Total Users\",\n  \"Current New Users\",\n  \"Previous New Users\",\n  \"Current Page Views\",\n  \"Previous Page Views\",\n  \"Current Engagement Rate (%)\",\n  \"Previous Engagement Rate (%)\",\n  \"Engagement Difference (pp)\",\n  \"Performance Status\",\n  \"Observation\"\n];\n\nconst gscQueryHeaders = [\n  \"Sr No\",\n  \"Search Query\",\n  \"Clicks\",\n  \"Impressions\",\n  \"CTR (%)\",\n  \"Average Position\"\n];\n\nconst gscPageHeaders = [\n  \"Sr No\",\n  \"Page URL\",\n  \"Clicks\",\n  \"Impressions\",\n  \"CTR (%)\",\n  \"Average Position\"\n];\n\nconst ga4SummaryItems = cleanRows(ga4SummaryItemsRaw, ga4SummaryHeaders);\nconst ga4PagePerformanceItems = cleanRows(ga4PagePerformanceItemsRaw, ga4PagePerformanceHeaders);\nconst gscQueryItems = cleanRows(gscQueryItemsRaw, gscQueryHeaders);\nconst gscPageItems = cleanRows(gscPageItemsRaw, gscPageHeaders);\n\nfunction escapeXml(value) {\n  if (value === null || value === undefined) return \"\";\n  return String(value)\n    .replace(/&/g, \"&amp;\")\n    .replace(/</g, \"&lt;\")\n    .replace(/>/g, \"&gt;\")\n    .replace(/\"/g, \"&quot;\");\n}\n\nfunction columnLetter(colIndex) {\n  let letter = \"\";\n  let temp = colIndex + 1;\n\n  while (temp > 0) {\n    const remainder = (temp - 1) % 26;\n    letter = String.fromCharCode(65 + remainder) + letter;\n    temp = Math.floor((temp - 1) / 26);\n  }\n\n  return letter;\n}\n\nfunction createSheetXml(rows, headers) {\n  const allRows = [\n    headers,\n    ...rows.map(row => headers.map(header => row[header] !== undefined ? row[header] : \"\"))\n  ];\n\n  let sheetData = \"\";\n\n  allRows.forEach((row, rowIndex) => {\n    const excelRow = rowIndex + 1;\n    sheetData += `<row r=\"${excelRow}\">`;\n\n    row.forEach((value, colIndex) => {\n      const cellRef = `${columnLetter(colIndex)}${excelRow}`;\n\n      if (typeof value === \"number\" && !isNaN(value)) {\n        sheetData += `<c r=\"${cellRef}\"><v>${value}</v></c>`;\n      } else {\n        sheetData += `<c r=\"${cellRef}\" t=\"inlineStr\"><is><t>${escapeXml(value)}</t></is></c>`;\n      }\n    });\n\n    sheetData += `</row>`;\n  });\n\n  return `<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n<worksheet xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\">\n  <sheetData>${sheetData}</sheetData>\n</worksheet>`;\n}\n\nfunction crc32(buffer) {\n  let table = crc32.table;\n\n  if (!table) {\n    table = [];\n\n    for (let i = 0; i < 256; i++) {\n      let c = i;\n\n      for (let k = 0; k < 8; k++) {\n        c = ((c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1));\n      }\n\n      table[i] = c >>> 0;\n    }\n\n    crc32.table = table;\n  }\n\n  let crc = 0 ^ -1;\n\n  for (let i = 0; i < buffer.length; i++) {\n    crc = (crc >>> 8) ^ table[(crc ^ buffer[i]) & 0xff];\n  }\n\n  return (crc ^ -1) >>> 0;\n}\n\nfunction dosDateTime(date = new Date()) {\n  const dosTime =\n    (date.getHours() << 11) |\n    (date.getMinutes() << 5) |\n    Math.floor(date.getSeconds() / 2);\n\n  const dosDate =\n    ((date.getFullYear() - 1980) << 9) |\n    ((date.getMonth() + 1) << 5) |\n    date.getDate();\n\n  return { dosTime, dosDate };\n}\n\nfunction createZip(files) {\n  const localParts = [];\n  const centralParts = [];\n  let offset = 0;\n  const { dosTime, dosDate } = dosDateTime();\n\n  for (const file of files) {\n    const nameBuffer = Buffer.from(file.name, \"utf8\");\n    const dataBuffer = Buffer.from(file.content, \"utf8\");\n    const crc = crc32(dataBuffer);\n\n    const localHeader = Buffer.alloc(30);\n    localHeader.writeUInt32LE(0x04034b50, 0);\n    localHeader.writeUInt16LE(20, 4);\n    localHeader.writeUInt16LE(0x0800, 6);\n    localHeader.writeUInt16LE(0, 8);\n    localHeader.writeUInt16LE(dosTime, 10);\n    localHeader.writeUInt16LE(dosDate, 12);\n    localHeader.writeUInt32LE(crc, 14);\n    localHeader.writeUInt32LE(dataBuffer.length, 18);\n    localHeader.writeUInt32LE(dataBuffer.length, 22);\n    localHeader.writeUInt16LE(nameBuffer.length, 26);\n    localHeader.writeUInt16LE(0, 28);\n\n    localParts.push(localHeader, nameBuffer, dataBuffer);\n\n    const centralHeader = Buffer.alloc(46);\n    centralHeader.writeUInt32LE(0x02014b50, 0);\n    centralHeader.writeUInt16LE(20, 4);\n    centralHeader.writeUInt16LE(20, 6);\n    centralHeader.writeUInt16LE(0x0800, 8);\n    centralHeader.writeUInt16LE(0, 10);\n    centralHeader.writeUInt16LE(dosTime, 12);\n    centralHeader.writeUInt16LE(dosDate, 14);\n    centralHeader.writeUInt32LE(crc, 16);\n    centralHeader.writeUInt32LE(dataBuffer.length, 20);\n    centralHeader.writeUInt32LE(dataBuffer.length, 24);\n    centralHeader.writeUInt16LE(nameBuffer.length, 28);\n    centralHeader.writeUInt16LE(0, 30);\n    centralHeader.writeUInt16LE(0, 32);\n    centralHeader.writeUInt16LE(0, 34);\n    centralHeader.writeUInt16LE(0, 36);\n    centralHeader.writeUInt32LE(0, 38);\n    centralHeader.writeUInt32LE(offset, 42);\n\n    centralParts.push(centralHeader, nameBuffer);\n\n    offset += localHeader.length + nameBuffer.length + dataBuffer.length;\n  }\n\n  const centralDirectory = Buffer.concat(centralParts);\n  const localData = Buffer.concat(localParts);\n\n  const end = Buffer.alloc(22);\n  end.writeUInt32LE(0x06054b50, 0);\n  end.writeUInt16LE(0, 4);\n  end.writeUInt16LE(0, 6);\n  end.writeUInt16LE(files.length, 8);\n  end.writeUInt16LE(files.length, 10);\n  end.writeUInt32LE(centralDirectory.length, 12);\n  end.writeUInt32LE(localData.length, 16);\n  end.writeUInt16LE(0, 20);\n\n  return Buffer.concat([localData, centralDirectory, end]);\n}\n\nconst files = [\n  {\n    name: \"[Content_Types].xml\",\n    content: `<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n<Types xmlns=\"http://schemas.openxmlformats.org/package/2006/content-types\">\n  <Default Extension=\"rels\" ContentType=\"application/vnd.openxmlformats-package.relationships+xml\"/>\n  <Default Extension=\"xml\" ContentType=\"application/xml\"/>\n  <Override PartName=\"/xl/workbook.xml\" ContentType=\"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml\"/>\n  <Override PartName=\"/xl/worksheets/sheet1.xml\" ContentType=\"application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml\"/>\n  <Override PartName=\"/xl/worksheets/sheet2.xml\" ContentType=\"application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml\"/>\n  <Override PartName=\"/xl/worksheets/sheet3.xml\" ContentType=\"application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml\"/>\n  <Override PartName=\"/xl/worksheets/sheet4.xml\" ContentType=\"application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml\"/>\n</Types>`\n  },\n  {\n    name: \"_rels/.rels\",\n    content: `<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n<Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\">\n  <Relationship Id=\"rId1\" Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument\" Target=\"xl/workbook.xml\"/>\n</Relationships>`\n  },\n  {\n    name: \"xl/workbook.xml\",\n    content: `<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n<workbook xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\"\nxmlns:r=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships\">\n  <sheets>\n    <sheet name=\"GA4 Summary\" sheetId=\"1\" r:id=\"rId1\"/>\n    <sheet name=\"GA4 Page Performance\" sheetId=\"2\" r:id=\"rId2\"/>\n    <sheet name=\"GSC Queries\" sheetId=\"3\" r:id=\"rId3\"/>\n    <sheet name=\"GSC Pages\" sheetId=\"4\" r:id=\"rId4\"/>\n  </sheets>\n</workbook>`\n  },\n  {\n    name: \"xl/_rels/workbook.xml.rels\",\n    content: `<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n<Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\">\n  <Relationship Id=\"rId1\" Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet\" Target=\"worksheets/sheet1.xml\"/>\n  <Relationship Id=\"rId2\" Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet\" Target=\"worksheets/sheet2.xml\"/>\n  <Relationship Id=\"rId3\" Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet\" Target=\"worksheets/sheet3.xml\"/>\n  <Relationship Id=\"rId4\" Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet\" Target=\"worksheets/sheet4.xml\"/>\n</Relationships>`\n  },\n  {\n    name: \"xl/worksheets/sheet1.xml\",\n    content: createSheetXml(ga4SummaryItems, ga4SummaryHeaders)\n  },\n  {\n    name: \"xl/worksheets/sheet2.xml\",\n    content: createSheetXml(ga4PagePerformanceItems, ga4PagePerformanceHeaders)\n  },\n  {\n    name: \"xl/worksheets/sheet3.xml\",\n    content: createSheetXml(gscQueryItems, gscQueryHeaders)\n  },\n  {\n    name: \"xl/worksheets/sheet4.xml\",\n    content: createSheetXml(gscPageItems, gscPageHeaders)\n  }\n];\n\nconst xlsxBuffer = createZip(files);\n\nreturn [\n  {\n    json: {\n      fileName,\n      ga4SummaryRows: ga4SummaryItems.length,\n      ga4PagePerformanceRows: ga4PagePerformanceItems.length,\n      gscQueryRows: gscQueryItems.length,\n      gscPageRows: gscPageItems.length\n    },\n    binary: {\n      data: {\n        data: xlsxBuffer.toString(\"base64\"),\n        fileName,\n        mimeType: \"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet\"\n      }\n    }\n  }\n];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1584,
+        208
+      ],
+      "id": "7702e9a1-0dc6-4219-bb10-0cbd00df601d",
+      "name": "Create Combined Excel File"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://searchconsole.googleapis.com/webmasters/v3/sites/https%3A%2F%2Fwww.example.com%2F/searchAnalytics/query",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "oAuth2Api",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"startDate\": \"{{ $today.minus({ days: 7 }).toFormat('yyyy-MM-dd') }}\",\n  \"endDate\": \"{{ $today.minus({ days: 1 }).toFormat('yyyy-MM-dd') }}\",\n  \"dimensions\": [\"page\"],\n  \"rowLimit\": 25\n}",
+        "options": {}
+      },
+      "id": "77fd46d4-8bf8-4959-84a4-b1b0c40f23f4",
+      "name": "GSC Page Data",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        0,
+        192
+      ],
+      "credentials": {
+        "oAuth2Api": {
+          "id": "sanitized_cred_4",
+          "name": "oAuth2Api (sanitized)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const rows = $input.first().json.rows || [];\n\nif (rows.length === 0) {\n  return [{\n    json: {\n      \"Sr No\": \"\",\n      \"Page URL\": \"No Data Available\",\n      \"Clicks\": \"\",\n      \"Impressions\": \"\",\n      \"CTR (%)\": \"\",\n      \"Average Position\": \"\"\n    }\n  }];\n}\n\nreturn rows.map((row, index) => ({\n  json: {\n    \"Sr No\": index + 1,\n    \"Page URL\": row.keys[0],\n    \"Clicks\": row.clicks,\n    \"Impressions\": row.impressions,\n    \"CTR (%)\": Number((row.ctr * 100).toFixed(2)),\n    \"Average Position\": Number(row.position.toFixed(2))\n  }\n}));"
+      },
+      "id": "da9d03c2-e4ca-46e9-89f7-a9bc659465fd",
+      "name": "Generate GSC Page Report Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        416,
+        192
+      ]
+    },
+    {
+      "parameters": {
+        "propertyId": {
+          "__rl": true,
+          "value": "386929025",
+          "mode": "list",
+          "cachedResultName": "Evincera - GA4",
+          "cachedResultUrl": "https://analytics.google.com/analytics/web/#/p000000000/"
+        },
+        "dateRange": "custom",
+        "startDate": "=2026-07-10",
+        "endDate": "={{ $today.minus({ days: 1 }).toFormat(\"yyyy-MM-dd\") }}",
+        "metricsGA4": {
+          "metricValues": [
+            {
+              "listName": "sessions"
+            },
+            {},
+            {
+              "listName": "screenPageViews"
+            },
+            {
+              "listName": "other",
+              "name": "newUsers"
+            },
+            {
+              "listName": "other",
+              "name": "engagementRate"
+            }
+          ]
+        },
+        "dimensionsGA4": {
+          "dimensionValues": [
+            {
+              "listName": "pageLocation"
+            }
+          ]
+        },
+        "returnAll": true,
+        "additionalFields": {
+          "orderByUI": {
+            "metricOrderBy": [
+              {
+                "desc": true,
+                "metricName": "sessions"
+              }
+            ]
+          }
+        }
+      },
+      "id": "d17b53d2-510e-41b1-9315-d5d6c39f7b40",
+      "name": "Get GA4 Page Current Data",
+      "type": "n8n-nodes-base.googleAnalytics",
+      "typeVersion": 2,
+      "position": [
+        0,
+        576
+      ],
+      "credentials": {
+        "googleAnalyticsOAuth2": {
+          "id": "sanitized_cred_5",
+          "name": "googleAnalyticsOAuth2 (sanitized)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "propertyId": {
+          "__rl": true,
+          "value": "386929025",
+          "mode": "list",
+          "cachedResultName": "Evincera - GA4",
+          "cachedResultUrl": "https://analytics.google.com/analytics/web/#/p000000000/"
+        },
+        "dateRange": "custom",
+        "startDate": "={{ $today.minus({ days: 14 }).toFormat(\"yyyy-MM-dd\") }}",
+        "endDate": "={{ $today.minus({ days: 8 }).toFormat(\"yyyy-MM-dd\") }}",
+        "metricsGA4": {
+          "metricValues": [
+            {
+              "listName": "sessions"
+            },
+            {},
+            {
+              "listName": "screenPageViews"
+            },
+            {
+              "listName": "other",
+              "name": "newUsers"
+            },
+            {
+              "listName": "other",
+              "name": "engagementRate"
+            }
+          ]
+        },
+        "dimensionsGA4": {
+          "dimensionValues": [
+            {
+              "listName": "pageLocation"
+            }
+          ]
+        },
+        "returnAll": true,
+        "additionalFields": {
+          "orderByUI": {
+            "metricOrderBy": [
+              {
+                "desc": true,
+                "metricName": "sessions"
+              }
+            ]
+          }
+        }
+      },
+      "id": "683f7828-1908-4283-8461-553e9f890d4f",
+      "name": "Get GA4 Page Previous Data",
+      "type": "n8n-nodes-base.googleAnalytics",
+      "typeVersion": 2,
+      "position": [
+        0,
+        800
+      ],
+      "credentials": {
+        "googleAnalyticsOAuth2": {
+          "id": "sanitized_cred_6",
+          "name": "googleAnalyticsOAuth2 (sanitized)"
+        }
+      }
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        864,
+        208
+      ],
+      "id": "5a9fccec-c312-4372-a3b4-59d422f9228b",
+      "name": "GSC Merge"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        864,
+        384
+      ],
+      "id": "7c7b54d3-46d5-49f3-91a3-909c445754f1",
+      "name": "GA4 Merge"
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combineBy": "combineByPosition",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        1152,
+        320
+      ],
+      "id": "fefdde30-5a6e-4782-b617-0742aed4bb1f",
+      "name": "GSC & GA4 Final Merge"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        448,
+        688
+      ],
+      "id": "8814953c-3dc6-469d-88e6-e5874f5ab11f",
+      "name": "GA4 Merge1"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "b86ec783-e7bd-4a79-b719-49862aa99603",
+              "name": "period",
+              "value": "current",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        192,
+        576
+      ],
+      "id": "01440ce2-c9f7-472e-a6c6-dbc796035c71",
+      "name": "Add Current Period"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "b86ec783-e7bd-4a79-b719-49862aa99603",
+              "name": "period",
+              "value": "previous",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        192,
+        800
+      ],
+      "id": "58c3b44e-1c5f-466c-b936-bd73b199fe40",
+      "name": "Add Previous Period"
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\n\nconst validFiles = items.filter(item => {\n  return item.binary && item.binary.data && item.binary.data.data;\n});\n\nif (validFiles.length === 0) {\n  throw new Error(\"No Excel file found in input. Check Create Combined Excel File output.\");\n}\n\nreturn [validFiles[validFiles.length - 1]];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1888,
+        208
+      ],
+      "id": "4692ae72-2c58-43a1-8bb1-2a98b660902b",
+      "name": "Keep Only One Final Report"
+    },
+    {
+      "parameters": {
+        "jsCode": "const currentItems = $items(\"Get GA4 Page Current Data\").map(item => item.json);\nconst previousItems = $items(\"Get GA4 Page Previous Data\").map(item => item.json);\n\nfunction getPage(j) {\n  return (\n    j.pageLocation ||\n    j.landingPagePlusQueryString ||\n    j.landingPage ||\n    j.pagePathPlusQueryString ||\n    j.pagePath ||\n    j.pageTitle ||\n    \"(not set)\"\n  );\n}\n\nfunction num(value) {\n  const n = Number(value);\n  return Number.isFinite(n) ? n : 0;\n}\n\nfunction engagementPercent(value) {\n  const n = num(value);\n  if (n <= 1) {\n    return n * 100;\n  }\n  return n;\n}\n\nfunction aggregate(items) {\n  const map = {};\n\n  for (const item of items) {\n    const page = getPage(item);\n\n    if (!map[page]) {\n      map[page] = {\n        page,\n        sessions: 0,\n        totalUsers: 0,\n        newUsers: 0,\n        screenPageViews: 0,\n        engagementWeightedTotal: 0\n      };\n    }\n\n    const sessions = num(item.sessions);\n    const engagementRate = engagementPercent(item.engagementRate);\n\n    map[page].sessions += sessions;\n    map[page].totalUsers += num(item.totalUsers);\n    map[page].newUsers += num(item.newUsers);\n    map[page].screenPageViews += num(item.screenPageViews);\n    map[page].engagementWeightedTotal += engagementRate * sessions;\n  }\n\n  for (const page of Object.keys(map)) {\n    const row = map[page];\n    row.engagementRate =\n      row.sessions > 0 ? row.engagementWeightedTotal / row.sessions : 0;\n  }\n\n  return map;\n}\n\nfunction percentChange(current, previous) {\n  if (previous === 0 && current > 0) return \"New\";\n  if (previous === 0 && current === 0) return 0;\n  return Number((((current - previous) / previous) * 100).toFixed(2));\n}\n\nfunction getStatus(currentSessions, previousSessions, sessionsChangePercent, engagementDiff) {\n  if (previousSessions === 0 && currentSessions > 0) {\n    return \"New Traffic\";\n  }\n\n  if (currentSessions === 0 && previousSessions > 0) {\n    return \"Lost Traffic\";\n  }\n\n  if (typeof sessionsChangePercent === \"number\" && sessionsChangePercent >= 20 && engagementDiff >= -5) {\n    return \"Performing Well\";\n  }\n\n  if (typeof sessionsChangePercent === \"number\" && sessionsChangePercent <= -20) {\n    return \"Needs Attention\";\n  }\n\n  if (engagementDiff <= -10) {\n    return \"Engagement Dropped\";\n  }\n\n  return \"Stable\";\n}\n\nfunction getObservation(status, sessionsChangePercent, engagementDiff) {\n  if (status === \"New Traffic\") {\n    return \"This page started receiving traffic in the current period.\";\n  }\n\n  if (status === \"Lost Traffic\") {\n    return \"This page received traffic earlier but has no sessions in the current period.\";\n  }\n\n  if (status === \"Performing Well\") {\n    return `This page improved by ${sessionsChangePercent}% in sessions compared to the previous period.`;\n  }\n\n  if (status === \"Needs Attention\") {\n    return `This page dropped by ${Math.abs(sessionsChangePercent)}% in sessions compared to the previous period.`;\n  }\n\n  if (status === \"Engagement Dropped\") {\n    return `Engagement rate dropped by ${Math.abs(engagementDiff).toFixed(2)} percentage points.`;\n  }\n\n  return \"No major change compared to the previous period.\";\n}\n\nconst currentMap = aggregate(currentItems);\nconst previousMap = aggregate(previousItems);\n\nconst allPages = Array.from(new Set([\n  ...Object.keys(currentMap),\n  ...Object.keys(previousMap)\n]));\n\nif (allPages.length === 0) {\n  return [\n    {\n      json: {\n        \"Sr No\": \"\",\n        \"Page Location\": \"No Data Available\",\n        \"Current Sessions\": \"\",\n        \"Previous Sessions\": \"\",\n        \"Sessions Difference\": \"\",\n        \"Sessions Change (%)\": \"\",\n        \"Current Total Users\": \"\",\n        \"Previous Total Users\": \"\",\n        \"Current New Users\": \"\",\n        \"Previous New Users\": \"\",\n        \"Current Page Views\": \"\",\n        \"Previous Page Views\": \"\",\n        \"Current Engagement Rate (%)\": \"\",\n        \"Previous Engagement Rate (%)\": \"\",\n        \"Engagement Difference (pp)\": \"\",\n        \"Performance Status\": \"\",\n        \"Observation\": \"\"\n      }\n    }\n  ];\n}\n\nconst rows = allPages.map(page => {\n  const current = currentMap[page] || {\n    sessions: 0,\n    totalUsers: 0,\n    newUsers: 0,\n    screenPageViews: 0,\n    engagementRate: 0\n  };\n\n  const previous = previousMap[page] || {\n    sessions: 0,\n    totalUsers: 0,\n    newUsers: 0,\n    screenPageViews: 0,\n    engagementRate: 0\n  };\n\n  const sessionsDifference = current.sessions - previous.sessions;\n  const sessionsChangePercent = percentChange(current.sessions, previous.sessions);\n  const engagementDifference = Number((current.engagementRate - previous.engagementRate).toFixed(2));\n\n  const status = getStatus(\n    current.sessions,\n    previous.sessions,\n    sessionsChangePercent,\n    engagementDifference\n  );\n\n  return {\n    page,\n    current,\n    previous,\n    sessionsDifference,\n    sessionsChangePercent,\n    engagementDifference,\n    status,\n    observation: getObservation(status, sessionsChangePercent, engagementDifference)\n  };\n});\n\nrows.sort((a, b) => b.current.sessions - a.current.sessions);\n\nreturn rows.slice(0, 50).map((row, index) => {\n  return {\n    json: {\n      \"Sr No\": index + 1,\n      \"Page Location\": row.page,\n      \"Current Sessions\": row.current.sessions,\n      \"Previous Sessions\": row.previous.sessions,\n      \"Sessions Difference\": row.sessionsDifference,\n      \"Sessions Change (%)\": row.sessionsChangePercent,\n      \"Current Total Users\": row.current.totalUsers,\n      \"Previous Total Users\": row.previous.totalUsers,\n      \"Current New Users\": row.current.newUsers,\n      \"Previous New Users\": row.previous.newUsers,\n      \"Current Page Views\": row.current.screenPageViews,\n      \"Previous Page Views\": row.previous.screenPageViews,\n      \"Current Engagement Rate (%)\": Number(row.current.engagementRate.toFixed(2)),\n      \"Previous Engagement Rate (%)\": Number(row.previous.engagementRate.toFixed(2)),\n      \"Engagement Difference (pp)\": row.engagementDifference,\n      \"Performance Status\": row.status,\n      \"Observation\": row.observation\n    }\n  };\n});"
+      },
+      "id": "767577cd-27b0-48c9-86bc-46a0d9c5162d",
+      "name": "Generate GA4 Page Performance Report",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        656,
+        688
+      ]
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "gpt-4o-mini",
+          "mode": "list",
+          "cachedResultName": "GPT-4O-MINI"
+        },
+        "responses": {
+          "values": [
+            {
+              "content": "={{ $json.prompt }}"
+            }
+          ]
+        },
+        "builtInTools": {},
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 2.3,
+      "position": [
+        1776,
+        496
+      ],
+      "id": "5f10ec44-618c-4f4b-8df1-e600f1b8e1d1",
+      "name": "Message a model",
+      "credentials": {
+        "openAiApi": {
+          "id": "sanitized_cred_7",
+          "name": "openAiApi (sanitized)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "function getRows(nodeName) {\n  try {\n    return $items(nodeName).map(item => item.json || {});\n  } catch (e) {\n    return [];\n  }\n}\n\nconst ga4Summary = getRows(\"Generate GA4 Report\");\nconst ga4PagePerformance = getRows(\"Generate GA4 Page Performance Report\");\nconst gscQueries = getRows(\"Generate SEO Report\");\nconst gscPages = getRows(\"Generate GSC Page Report Data\");\n\nfunction num(value) {\n  const n = Number(value);\n  return Number.isFinite(n) ? n : 0;\n}\n\nfunction sum(rows, key) {\n  return rows.reduce((total, row) => total + num(row[key]), 0);\n}\n\nfunction weightedAverage(rows, valueKey, weightKey) {\n  const totalWeight = sum(rows, weightKey);\n  if (totalWeight === 0) return 0;\n\n  const weightedTotal = rows.reduce((total, row) => {\n    return total + (num(row[valueKey]) * num(row[weightKey]));\n  }, 0);\n\n  return Number((weightedTotal / totalWeight).toFixed(2));\n}\n\nfunction avg(rows, key) {\n  const validRows = rows.filter(row => row[key] !== undefined && row[key] !== \"\");\n  if (validRows.length === 0) return 0;\n  return Number((validRows.reduce((total, row) => total + num(row[key]), 0) / validRows.length).toFixed(2));\n}\n\nfunction sampleRows(rows, limit = 50) {\n  return rows.slice(0, limit);\n}\n\nfunction topRows(rows, key, limit = 10) {\n  return [...rows]\n    .sort((a, b) => num(b[key]) - num(a[key]))\n    .slice(0, limit);\n}\n\nconst currentSessions = sum(ga4PagePerformance, \"Current Sessions\");\nconst previousSessions = sum(ga4PagePerformance, \"Previous Sessions\");\nconst sessionsDifference = currentSessions - previousSessions;\nconst sessionsChangePercent = previousSessions > 0\n  ? Number(((sessionsDifference / previousSessions) * 100).toFixed(2))\n  : \"New\";\n\nconst gscQueryClicks = sum(gscQueries, \"Clicks\");\nconst gscQueryImpressions = sum(gscQueries, \"Impressions\");\nconst gscQueryCtr = gscQueryImpressions > 0\n  ? Number(((gscQueryClicks / gscQueryImpressions) * 100).toFixed(2))\n  : 0;\n\nconst gscPageClicks = sum(gscPages, \"Clicks\");\nconst gscPageImpressions = sum(gscPages, \"Impressions\");\nconst gscPageCtr = gscPageImpressions > 0\n  ? Number(((gscPageClicks / gscPageImpressions) * 100).toFixed(2))\n  : 0;\n\nconst kpiSnapshot = {\n  reportDate: $now.toFormat(\"dd LLL yyyy\"),\n  currentPeriod: {\n    start: $now.minus({ days: 7 }).toFormat(\"yyyy-MM-dd\"),\n    end: $now.minus({ days: 1 }).toFormat(\"yyyy-MM-dd\")\n  },\n  previousPeriod: {\n    start: $now.minus({ days: 14 }).toFormat(\"yyyy-MM-dd\"),\n    end: $now.minus({ days: 8 }).toFormat(\"yyyy-MM-dd\")\n  },\n  ga4: {\n    currentSessions,\n    previousSessions,\n    sessionsDifference,\n    sessionsChangePercent,\n    totalUsersFromDailyData: sum(ga4Summary, \"Total Users\"),\n    newUsersFromDailyData: sum(ga4Summary, \"New Users\"),\n    screenPageViewsFromDailyData: sum(ga4Summary, \"Screen Page Views\"),\n    averageEngagementRateFromDailyData: avg(ga4Summary, \"Engagement Rate (%)\")\n  },\n  gscQueries: {\n    totalClicks: gscQueryClicks,\n    totalImpressions: gscQueryImpressions,\n    averageCtr: gscQueryCtr,\n    weightedAveragePosition: weightedAverage(gscQueries, \"Average Position\", \"Impressions\")\n  },\n  gscPages: {\n    totalClicks: gscPageClicks,\n    totalImpressions: gscPageImpressions,\n    averageCtr: gscPageCtr,\n    weightedAveragePosition: weightedAverage(gscPages, \"Average Position\", \"Impressions\")\n  },\n  dataLimitations: [\n    \"Country-level data is not connected in the current workflow.\",\n    \"Device-level data is not connected in the current workflow.\",\n    \"Core Web Vitals and PageSpeed data are not connected in the current workflow.\",\n    \"Do not create country, device, or Core Web Vitals insights unless those datasets are added later.\"\n  ]\n};\n\nconst prompt = `\nYou are a senior SEO performance analyst creating a client-ready weekly SEO Intelligence Report email.\n\nYour output must be detailed, action-oriented, and formatted like a clean dashboard-style email.\n\nUse only the data provided below. Do not invent numbers, countries, devices, Core Web Vitals, competitors, rankings, or technical issues that are not present in the data.\n\nReturn only HTML. Do not use markdown. Do not wrap the output in code fences. Do not include <html>, <head>, or <body> tags.\n\nUse email-safe HTML with inline styling only.\n\nThe final email should feel like a professional SEO intelligence report, not a generic AI summary.\n\nSTYLE REQUIREMENTS:\n- Use a clean dashboard format.\n- Use KPI cards at the top.\n- Use alert boxes.\n- Use tables where comparison or prioritization is needed.\n- Use short but specific insights.\n- Use clear labels like High Alert, Quick Win, Monitor, Opportunity, Needs Review.\n- Do not create overly long paragraphs.\n- Make the report easy for leadership or a manager to understand quickly.\n\nDATA AVAILABLE:\n1. GA4 Summary\nDaily traffic data: Date, Sessions, Total Users, New Users, Screen Page Views, Engagement Rate (%)\n\n2. GA4 Page Performance\nPage-level current vs previous comparison: Page Location, Current Sessions, Previous Sessions, Sessions Difference, Sessions Change (%), Users, Page Views, Engagement Rate, Performance Status, Observation\n\n3. GSC Queries\nSearch query data: Search Query, Clicks, Impressions, CTR (%), Average Position\n\n4. GSC Pages\nPage-level search data: Page URL, Clicks, Impressions, CTR (%), Average Position\n\nIMPORTANT LIMITATION:\nDo not include Traffic by Country, Device Distribution, or Core Web Vitals sections unless actual data is provided. In this workflow, those sections are not available yet.\n\nREPORT STRUCTURE TO FOLLOW:\n\n<section style=\"font-family:Arial, sans-serif; color:#1f2937; line-height:1.5;\">\n\n1. REPORT HEADER\nCreate a clean header:\n- Title: Weekly SEO and GA4 Intelligence Report\n- Subtitle: Performance, visibility, risks, quick wins, and next-week priorities\n- Reporting period: use the period from KPI Snapshot\n\n2. EXECUTIVE KPI SNAPSHOT\nCreate a 2-row KPI card layout using HTML table.\n\nCards should include only available metrics:\n- GA4 Current Sessions\n- GA4 Previous Sessions\n- Sessions Change\n- Total Users\n- New Users\n- Page Views\n- GSC Query Clicks\n- GSC Query Impressions\n- GSC Query CTR\n- GSC Page Clicks\n- GSC Page Impressions\n- GSC Page CTR\n- Avg Position if available\n\nEach KPI card should show:\n- Metric name\n- Value\n- Direction or status\n- One short interpretation\n\nExample:\n\"Sessions Change: +80.56%, traffic improved vs previous period\"\n\n3. PERFORMANCE VERDICT\nUse one of these labels:\n- Strong Week\n- Mixed Week\n- Stable Week\n- Needs Attention\n\nThen explain the verdict in 3 to 4 lines using specific data.\n\n4. HIGH ALERTS\nCreate a table with these columns:\n- Alert Level\n- Page / Query\n- Metric Signal\n- Why It Matters\n- Recommended Action\n\nUse alert levels:\n- High Alert\n- Medium Alert\n- Monitor\n\nHigh Alert rules:\n- Page lost all sessions compared to previous period\n- High impressions but 0 or very low clicks\n- Good average position but 0 clicks\n- CTR below 1% with meaningful impressions\n- Engagement dropped sharply\n- Important page lost traffic\n\nIf there are no serious issues, say \"No high-risk movement detected from the available data.\"\n\n5. QUICK WINS\nCreate a table with these columns:\n- Quick Win\n- Page / Query\n- Evidence from Data\n- Effort\n- Impact\n- What to Do\n\nPrioritize low-effort, high-impact actions such as:\n- Meta title improvement\n- Meta description improvement\n- H1 or intro rewrite\n- FAQ addition\n- Internal linking\n- CTA improvement\n- Content refresh for page with impressions but low clicks\n\nClassify effort and impact:\n- Low effort, high impact\n- Low effort, medium impact\n- Medium effort, high impact\n- High effort, high impact\n\n6. GA4 TRAFFIC ANALYSIS\nCreate a short analysis with:\n- Current sessions vs previous sessions\n- User and new user behavior\n- Page view trend\n- Engagement quality\n- Dates or pages that contributed most\n\nInclude a small table:\n- Metric\n- Current / Observed Value\n- Interpretation\n- Action\n\n7. GA4 PAGE PERFORMANCE ANALYSIS\nCreate a table with:\n- Page\n- Current Sessions\n- Previous Sessions\n- Change\n- Engagement Signal\n- Status\n- Recommendation\n\nThen below the table, add:\n- Winning page\n- Page needing attention\n- New or rising page\n- Page to monitor\n\nFor each page recommendation, be specific. Example:\n\"Optimize CTA and above-the-fold messaging because sessions increased but engagement is weak.\"\n\n8. GSC QUERY ANALYSIS\nCreate a table with:\n- Query\n- Clicks\n- Impressions\n- CTR\n- Avg Position\n- Opportunity Type\n- Recommended Action\n\nOpportunity types:\n- CTR opportunity\n- Ranking opportunity\n- Content gap\n- Brand protection\n- Monitor\n- Low priority\n\nGuidelines:\n- If query has impressions but 0 clicks, recommend title/meta or intent alignment.\n- If query position is 2 to 10 but CTR is low, recommend CTR optimization.\n- If query position is 11 to 20, recommend content strengthening and internal links.\n- If query position is above 20 but impressions are present, recommend content expansion or new supporting content.\n- If query is branded and performing well, mention brand protection.\n\n9. GSC PAGE ANALYSIS\nCreate a table with:\n- Page URL\n- Clicks\n- Impressions\n- CTR\n- Avg Position\n- Issue / Opportunity\n- SEO Recommendation\n\nMention:\n- Top search page\n- High visibility but low CTR page\n- Page ranking well but not getting clicks\n- Page to optimize first\n- Page that may need stronger content targeting\n\n10. PAGE OPTIMIZATION CHECKLIST\nCreate a checklist table with:\n- Page\n- What is working\n- What needs improvement\n- Recommended optimization\n- Priority\n\nChecklist items should include only relevant recommendations:\n- Meta title\n- Meta description\n- H1\n- Content depth\n- FAQ section\n- Internal links\n- CTA\n- Schema if relevant to page type\n- Search intent alignment\n\nDo not recommend technical fixes unless technical data is provided.\n\n11. BLOG TOPIC SUGGESTIONS\nCreate a table with 5 to 8 blog or content topic ideas based only on:\n- Queries with impressions but low clicks\n- Queries with poor ranking but business relevance\n- Pages with visibility gaps\n- Search intent gaps visible from the data\n\nTable columns:\n- Suggested Topic\n- Target Query / Theme\n- Intent\n- Why This Topic\n- Suggested Internal Link Target\n- Priority\n\nDo not invent search volume. Use \"based on current GSC signal\" instead.\n\n12. EFFORT VS IMPACT PRIORITY MATRIX\nCreate a table with:\n- Task\n- Page / Query\n- Effort\n- Impact\n- Priority\n- Reason\n\nInclude categories:\n- Quick Wins: Low effort, high impact\n- Big Bets: High effort, high impact\n- Maintain: Low effort, medium impact\n- Avoid for now: High effort, low impact\n\n13. NEXT WEEK ACTION PLAN\nGive maximum 7 actions.\n\nEach action must include:\n- Action\n- Page / Query\n- Why\n- Expected Impact\n- Owner Type, SEO / Content / Technical / Analytics\n\n14. DATA GAPS TO ADD IN FUTURE AUTOMATION\nAdd a short section called \"Recommended Automation Add-ons\".\nMention only this:\n- Country performance can be added if GA4 country dimension is connected.\n- Device performance can be added if GA4 device category dimension is connected.\n- Core Web Vitals can be added if PageSpeed Insights or CrUX API is connected.\n- Keyword movement can be improved by comparing GSC current vs previous query data.\n\n15. FINAL VERDICT\nEnd with one clear sentence:\n\"Overall, this week was [verdict] because [specific reason from the data].\"\n\nOUTPUT RULES:\n- Return only HTML.\n- No markdown.\n- No code block.\n- No generic advice.\n- Every insight must connect to a metric, page, or query from the data.\n- If a metric is not available, say \"not available in current workflow\" instead of guessing.\n- Keep tables readable.\n- Keep language client-ready and practical.\n- Make the report detailed enough to guide next-week SEO work.\n\nKPI Snapshot:\n${JSON.stringify(kpiSnapshot, null, 2)}\n\nGA4 Summary:\n${JSON.stringify(sampleRows(ga4Summary, 50), null, 2)}\n\nGA4 Page Performance:\n${JSON.stringify(sampleRows(ga4PagePerformance, 50), null, 2)}\n\nGSC Queries:\n${JSON.stringify(sampleRows(gscQueries, 50), null, 2)}\n\nGSC Pages:\n${JSON.stringify(sampleRows(gscPages, 50), null, 2)}\n`;\n\nreturn [\n  {\n    json: {\n      prompt\n    }\n  }\n];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1568,
+        496
+      ],
+      "id": "c4165c8f-ec54-4ced-a381-d16d380caeab",
+      "name": "Prepare AI Summary"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        2208,
+        368
+      ],
+      "id": "52b9c885-850e-4bf4-95c4-2ed7ab239894",
+      "name": "Merger"
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\n\nconst fileItem = items.find(item => item.binary && item.binary.data);\n\nif (!fileItem) {\n  throw new Error(\"Excel file not found. Check Keep Only One Final Report output.\");\n}\n\nfunction extractAiHtml(json) {\n  if (!json) return \"\";\n\n  if (\n    Array.isArray(json.output) &&\n    json.output[0] &&\n    Array.isArray(json.output[0].content) &&\n    json.output[0].content[0] &&\n    typeof json.output[0].content[0].text === \"string\"\n  ) {\n    return json.output[0].content[0].text;\n  }\n\n  if (typeof json.text === \"string\") return json.text;\n  if (typeof json.output_text === \"string\") return json.output_text;\n  if (typeof json.response === \"string\") return json.response;\n  if (typeof json.message === \"string\") return json.message;\n  if (typeof json.content === \"string\") return json.content;\n\n  return \"\";\n}\n\nconst aiItem = items.find(item => extractAiHtml(item.json));\n\nconst aiSummaryHtml = aiItem\n  ? extractAiHtml(aiItem.json)\n  : \"<p>AI executive summary was not found. Please check Message a model output.</p>\";\n\nreturn [\n  {\n    json: {\n      fileName: fileItem.json.fileName || \"Weekly_SEO_GA4_Report.xlsx\",\n      aiSummaryHtml: aiSummaryHtml\n    },\n    binary: fileItem.binary\n  }\n];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2416,
+        368
+      ],
+      "id": "48852cbc-5587-425c-adf8-ddcb0251bb93",
+      "name": "Code in JavaScript"
+    }
+  ],
+  "connections": {
+    "Weekly Trigger (Monday 7AM)": {
+      "main": [
+        [
+          {
+            "node": "Get SEO Data from GSC",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Get GA4 Data",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "GSC Page Data",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Get GA4 Page Current Data",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Get GA4 Page Previous Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get SEO Data from GSC": {
+      "main": [
+        [
+          {
+            "node": "Generate SEO Report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate SEO Report": {
+      "main": [
+        [
+          {
+            "node": "GSC Merge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get GA4 Data": {
+      "main": [
+        [
+          {
+            "node": "Generate GA4 Report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate GA4 Report": {
+      "main": [
+        [
+          {
+            "node": "GA4 Merge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Combined Excel File": {
+      "main": [
+        [
+          {
+            "node": "Keep Only One Final Report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "GSC Page Data": {
+      "main": [
+        [
+          {
+            "node": "Generate GSC Page Report Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate GSC Page Report Data": {
+      "main": [
+        [
+          {
+            "node": "GSC Merge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get GA4 Page Current Data": {
+      "main": [
+        [
+          {
+            "node": "Add Current Period",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get GA4 Page Previous Data": {
+      "main": [
+        [
+          {
+            "node": "Add Previous Period",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "GSC Merge": {
+      "main": [
+        [
+          {
+            "node": "GSC & GA4 Final Merge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "GA4 Merge": {
+      "main": [
+        [
+          {
+            "node": "GSC & GA4 Final Merge",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "GSC & GA4 Final Merge": {
+      "main": [
+        [
+          {
+            "node": "Create Combined Excel File",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Prepare AI Summary",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "GA4 Merge1": {
+      "main": [
+        [
+          {
+            "node": "Generate GA4 Page Performance Report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Add Current Period": {
+      "main": [
+        [
+          {
+            "node": "GA4 Merge1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Add Previous Period": {
+      "main": [
+        [
+          {
+            "node": "GA4 Merge1",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Keep Only One Final Report": {
+      "main": [
+        [
+          {
+            "node": "Merger",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate GA4 Page Performance Report": {
+      "main": [
+        [
+          {
+            "node": "GA4 Merge",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Message a model": {
+      "main": [
+        [
+          {
+            "node": "Merger",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Prepare AI Summary": {
+      "main": [
+        [
+          {
+            "node": "Message a model",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merger": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript": {
+      "main": [
+        [
+          {
+            "node": "Send Weekly Report by Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "meta": {
+    "templateCredsSetupCompleted": false,
+    "sanitizedFixture": true
+  },
+  "tags": [],
+  "id": "n8n-source-workflow-id-must-not-be-reused",
+  "versionId": "n8n-source-version-id-must-not-be-reused",
+  "instanceId": "n8n-source-instance-id-must-not-be-reused"
+}

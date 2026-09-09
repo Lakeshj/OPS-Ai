@@ -28,9 +28,14 @@ const COPILOT_ERROR = Object.freeze({
 const COPILOT_INTENTS = Object.freeze([
   "EXPLAIN",
   "BUILD",
+  "CREATE",
   "MODIFY",
   "DEBUG",
   "FIX",
+  "GENERAL",
+  "INFORMATION",
+  "AUTOMATION_ADVICE",
+  "CLARIFY",
 ]);
 
 /** Bounded context limits (exact V1 defaults). */
@@ -79,6 +84,7 @@ const FORBIDDEN_PARAM_KEYS = new Set([
   "authorization",
   "Authorization",
   "accessToken",
+  "refreshToken",
   "resumeToken",
   "externalToken",
   "waitToken",
@@ -163,6 +169,104 @@ const PARAM_ALLOWLIST = Object.freeze({
     "body",
     "responseHeaders",
   ],
+  googleSearchConsole: [
+    "label",
+    "notes",
+    "credentialId",
+    "siteUrl",
+    "siteUrlMode",
+    "operation",
+    "dimension",
+    "dateRange",
+    "startDate",
+    "endDate",
+    "rowLimit",
+    "returnAll",
+    "searchType",
+    "dataState",
+  ],
+  googleAnalytics: [
+    "label",
+    "notes",
+    "credentialId",
+    "propertyId",
+    "propertyIdMode",
+    "propertyDisplayName",
+    "resource",
+    "operation",
+    "dateRange",
+    "startDate",
+    "endDate",
+    "metrics",
+    "dimensions",
+    "limit",
+    "returnAll",
+    "orderByField",
+    "orderDirection",
+    "dimensionFilter",
+    "metricFilter",
+  ],
+  gmail: [
+    "label",
+    "notes",
+    "credentialId",
+    "resource",
+    "operation",
+    "to",
+    "subject",
+    "message",
+    "emailType",
+    "cc",
+    "bcc",
+    "replyTo",
+    "binaryProperty",
+    "messageId",
+    "threadId",
+    "labelIds",
+    "labelIdsMode",
+    "returnAll",
+    "limit",
+    "senderName",
+  ],
+  gmailTrigger: [
+    "label",
+    "notes",
+    "credentialId",
+    "pollIntervalMs",
+    "unreadOnly",
+    "gmailLabel",
+    "gmailLabelMode",
+    "from",
+    "to",
+    "subject",
+    "query",
+  ],
+  googleSheets: [
+    "label",
+    "notes",
+    "credentialId",
+    "spreadsheetId",
+    "spreadsheetIdMode",
+    "sheetName",
+    "sheetNameMode",
+    "range",
+    "operation",
+    "hasHeaderRow",
+    "valueInputMode",
+  ],
+  aiGenerate: [
+    "label",
+    "notes",
+    "provider",
+    "model",
+    "modelMode",
+    "prompt",
+    "systemPrompt",
+    "temperature",
+    "maxTokens",
+    "outputFormat",
+  ],
+  xlsxBuilder: ["label", "notes", "fileName", "binaryProperty", "sheets"],
   aiModelProviderTest: ["label", "notes", "model"],
   aiToolProviderTest: ["label", "notes", "toolName"],
   aiMemoryProviderTest: ["label", "notes"],
@@ -174,6 +278,12 @@ const REQUIRED_PARAMS = Object.freeze({
   email: ["to"],
   executeWorkflow: ["workflowId"],
   aiHttpTool: ["url"],
+  googleSearchConsole: ["credentialId", "siteUrl"],
+  googleAnalytics: ["credentialId", "propertyId"],
+  gmail: ["credentialId"],
+  gmailTrigger: ["credentialId"],
+  googleSheets: ["credentialId", "spreadsheetId"],
+  aiGenerate: ["prompt"],
 });
 
 let _libraryCache = null;
@@ -1210,6 +1320,56 @@ const diagnoseWorkflow = (definition, options = {}) => {
       message: respondCheck.message,
       fixable: false,
     });
+  }
+
+  // Part 14D.4 — surface n8n migration blockers for Copilot diagnosis.
+  const migration = definition?.migration;
+  if (migration?.sourceFormat === "n8n") {
+    if (migration.runtimeReady === false) {
+      issues.push({
+        code: "MIGRATION_RUNTIME_NOT_READY",
+        severity: "error",
+        message:
+          "This workflow was imported from n8n and is not runtime-ready. Unsupported nodes, credentials, or expressions still need fixing.",
+        fixable: false,
+      });
+    }
+    const summary = migration.reportSummary;
+    if (summary?.unsupported?.length) {
+      for (const u of summary.unsupported.slice(0, 25)) {
+        issues.push({
+          code: "MIGRATION_UNSUPPORTED_NODE",
+          severity: "error",
+          message: `${u.name}: ${(u.reasons || []).join(", ") || "unsupported"}`,
+          nodeName: u.name,
+          fixable: false,
+        });
+      }
+    }
+    if (summary?.needsSetup?.length) {
+      for (const c of summary.needsSetup.slice(0, 15)) {
+        issues.push({
+          code: "MIGRATION_CREDENTIAL_SETUP",
+          severity: "warning",
+          message: `${c.nodeName}: reconnect ${c.credentialType || "credential"} (${c.reason || "NEEDS_SETUP"})`,
+          nodeName: c.nodeName,
+          fixable: false,
+        });
+      }
+    }
+  }
+  for (const node of nodes) {
+    if (node.type === "migrationUnsupported") {
+      issues.push({
+        code: "MIGRATION_UNSUPPORTED_NODE",
+        severity: "error",
+        message: `${node.data?.label || node.id}: ${
+          node.data?.migrationReason || "imported node not runnable"
+        }`,
+        nodeId: node.id,
+        fixable: false,
+      });
+    }
   }
 
   const { AI_ERROR } = require("./workflowAiResources.service");

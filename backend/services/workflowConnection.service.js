@@ -171,7 +171,15 @@ const NODE_PORT_CONTRACTS = {
   result: { inputs: [mainIn()], outputs: [] },
   noop: { inputs: [mainIn()], outputs: [mainOut()] },
   integration: { inputs: [mainIn()], outputs: [mainOut()] },
+  migrationUnsupported: { inputs: [mainIn()], outputs: [mainOut()] },
   ai: { inputs: [mainIn()], outputs: [mainOut()] },
+  aiGenerate: { inputs: [mainIn()], outputs: [mainOut()] },
+  googleSearchConsole: { inputs: [mainIn()], outputs: [mainOut()] },
+  googleAnalytics: { inputs: [mainIn()], outputs: [mainOut()] },
+  gmail: { inputs: [mainIn()], outputs: [mainOut()] },
+  gmailTrigger: { inputs: [], outputs: [mainOut()] },
+  googleSheets: { inputs: [mainIn()], outputs: [mainOut()] },
+  xlsxBuilder: { inputs: [mainIn()], outputs: [mainOut()] },
   bot: {
     inputs: [
       mainIn(),

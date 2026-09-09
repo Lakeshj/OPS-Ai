@@ -413,10 +413,13 @@ export default function WorkflowEditorPage({
   return (
     <div className="flex h-[100dvh] flex-col">
       <div className="flex shrink-0 flex-wrap items-center gap-2 border-b bg-card/60 px-3 py-2 md:px-4">
-        <Button asChild variant="ghost" size="sm">
-          <Link href={`/projects/${workflow.workspaceId}?mode=workflow`}>
-            <ArrowLeft className="mr-1 h-4 w-4" />
-            Workspace
+        <Button asChild variant="ghost" size="sm" className="gap-1.5">
+          <Link
+            href={`/projects/${workflow.workspaceId}?mode=workflow`}
+            aria-label="Back to workspace"
+          >
+            <ArrowLeft className="h-4 w-4 shrink-0" aria-hidden />
+            <span>Workspace</span>
           </Link>
         </Button>
 
@@ -427,6 +430,7 @@ export default function WorkflowEditorPage({
             <SidebarTrigger
               className="h-8 w-8"
               title="Collapse / expand app sidebar"
+              aria-label="Toggle app sidebar"
             />
           )}
           <Button

@@ -623,7 +623,17 @@ export function WorkflowCopilotDrawer({
           </div>
         ) : null}
 
-        {turns.map((t) => (
+        {turns.map((t, turnIdx) => {
+          const latestProposalIdx = (() => {
+            for (let i = turns.length - 1; i >= 0; i -= 1) {
+              const r = turns[i]?.response;
+              const ops = r?.plan?.operations || [];
+              const fixOps = r?.fixPlan?.plan?.operations || [];
+              if (ops.length > 0 || fixOps.length > 0) return i;
+            }
+            return -1;
+          })();
+          return (
           <div
             key={t.id}
             className={cn(
@@ -642,6 +652,7 @@ export function WorkflowCopilotDrawer({
                 response={t.response}
                 loading={loading}
                 confirmDestructive={confirmDestructive}
+                isLatestProposal={turnIdx === latestProposalIdx}
                 onApply={() => void applyPlan(t.response!, "copilot-apply")}
                 onApplyFix={() => void applyPlan(t.response!, "copilot-fix")}
                 onClarify={(qId, answer) =>
@@ -658,7 +669,8 @@ export function WorkflowCopilotDrawer({
               />
             ) : null}
           </div>
-        ))}
+          );
+        })}
         {loading ? (
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
             <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -747,6 +759,7 @@ function AssistantCards({
   response,
   loading,
   confirmDestructive,
+  isLatestProposal = true,
   onApply,
   onApplyFix,
   onClarify,
@@ -755,6 +768,7 @@ function AssistantCards({
   response: CopilotPlanResponse;
   loading: boolean;
   confirmDestructive: string | null;
+  isLatestProposal?: boolean;
   onApply: () => void;
   onApplyFix: () => void;
   onClarify: (questionId: string, answer: string) => void;
@@ -768,19 +782,36 @@ function AssistantCards({
   const unsupported = response.unsupportedCapabilities || [];
   const ops = response.plan?.operations || [];
   const fixOps = response.fixPlan?.plan?.operations || [];
+  const readOnlyIntent = new Set([
+    "EXPLAIN",
+    "DEBUG",
+    "GENERAL",
+    "INFORMATION",
+    "AUTOMATION_ADVICE",
+    "CLARIFY",
+  ]).has(String(response.intent || ""));
   const canApply =
+    isLatestProposal &&
     !stale &&
     !unsupported.length &&
     ops.length > 0 &&
-    response.intent !== "EXPLAIN" &&
-    response.intent !== "DEBUG";
+    !readOnlyIntent;
   const canApplyFix =
+    isLatestProposal &&
     !stale &&
     Boolean(response.fixPlan?.applicable) &&
     fixOps.length > 0;
   const destruct = isDestructivePlan(canApplyFix ? fixOps : ops);
   const previewLines = semanticPreviewLines(response.preview, ops);
-  const unresolved = response.unresolvedInputs || [];
+  const unresolved = (response.unresolvedInputs || []).filter(
+    (u) => u && (u.message || u.field)
+  );
+  const diagnosisSummary = String(
+    (response.diagnosis as { problem?: { summary?: string } })?.problem
+      ?.summary ||
+      (response.diagnosis as { summary?: string })?.summary ||
+      ""
+  );
 
   return (
     <div className="mt-2 space-y-2 text-xs">
@@ -810,17 +841,10 @@ function AssistantCards({
         </div>
       ) : null}
 
-      {response.diagnosis ? (
+      {response.diagnosis && diagnosisSummary ? (
         <div className="space-y-1 rounded border p-2">
           <div className="font-medium">Problem</div>
-          <div>
-            {String(
-              (response.diagnosis as { problem?: { summary?: string } })
-                ?.problem?.summary ||
-                (response.diagnosis as { summary?: string })?.summary ||
-                ""
-            )}
-          </div>
+          <div>{diagnosisSummary}</div>
           {(response.diagnosis as { cause?: string })?.cause ? (
             <>
               <div className="mt-1 font-medium">Cause</div>
@@ -842,7 +866,12 @@ function AssistantCards({
         </div>
       ) : null}
 
-      {previewLines.length > 0 && (canApply || response.intent === "CREATE" || response.intent === "MODIFY" || response.intent === "BUILD") ? (
+      {previewLines.length > 0 &&
+      (canApply ||
+        response.intent === "CREATE" ||
+        response.intent === "MODIFY" ||
+        response.intent === "BUILD" ||
+        response.intent === "FIX") ? (
         <div className="rounded border p-2">
           <div className="font-medium">Proposed changes</div>
           <ul className="mt-1 list-inside list-disc">
@@ -869,9 +898,12 @@ function AssistantCards({
         </div>
       ) : null}
 
-      {(response.clarifyingQuestions || []).length > 0 ? (
+      {(response.clarifyingQuestions || []).filter((q) => q?.prompt).length >
+      0 ? (
         <div className="space-y-1">
-          {(response.clarifyingQuestions || []).map((q) => (
+          {(response.clarifyingQuestions || [])
+            .filter((q) => q?.prompt)
+            .map((q) => (
             <div key={q.id} className="rounded border p-2">
               <div>{q.prompt}</div>
               <div className="mt-1 flex flex-wrap gap-1">

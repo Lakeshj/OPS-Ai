@@ -34,6 +34,7 @@ function WorkflowEditorRouteInner() {
     <Layout
       defaultOpen={false}
       hideSidebar={focusMode}
+      showFloatingSidebarTrigger={false}
       sidebarCollapsible="icon"
     >
       <WorkflowEditorPage

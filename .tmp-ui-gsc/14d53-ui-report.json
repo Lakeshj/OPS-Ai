@@ -1,0 +1,19 @@
+{
+  "checks": {
+    "LIVE-OAUTH-1-API": "BLOCKED_BY_CONFIG",
+    "LIVE-OAUTH-1-UI": "BLOCKED_BY_CONFIG",
+    "LIVE-AIGEN-1-UI": "PASS"
+  },
+  "notes": [
+    "jwt_role=Project Manager workspace=SET",
+    "oauth_start_http=503",
+    "oauth_ui popup=no-popup blockedCopy=true",
+    "aigen_ui ready=true leak=false consoleSecrets=0 pageErrors=0"
+  ],
+  "shots": [
+    "01-gsc",
+    "02-connect",
+    "03-aigen"
+  ],
+  "workflowId": "1ba81657-6d63-498a-9379-882c8c24da0d"
+}

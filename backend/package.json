@@ -13,6 +13,7 @@
         "worker:workflows": "node scripts/workflow-worker.js",
         "test:api": "node scripts/test-api.js",
         "test:workflows": "node scripts/smoke-workflow-engine.js",
+        "test:workflows:prepare": "node scripts/prepare-opsai-smoke-db.js",
         "workflows:verify": "node scripts/verify-workflow-run.js",
         "stage1:verify": "node scripts/verify-stage1.js"
     },

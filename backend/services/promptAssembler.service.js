@@ -3,12 +3,18 @@ const { getSessionMemory } = require("./sessionMemory.service");
 const {
   shouldUseSessionMemory,
 } = require("../utils/sessionMemoryPolicy");
+const {
+  buildNormalChatIdentityInstruction,
+  NORMAL_CHAT_ASSISTANT_NAME,
+} = require("../config/opsaiAssistantIdentity");
 
-const BASE_SYSTEM_PROMPT = `You are OpsAi, a workspace AI assistant.
+const BASE_SYSTEM_PROMPT = `${buildNormalChatIdentityInstruction()}
+
 Use the provided Workspace Summary as authoritative project context.
 Follow the selected bot behavior instructions when a bot is selected.
 Prefer concrete, accurate answers grounded in the provided memory.
-If information is missing, say what is missing instead of inventing details.`;
+If information is missing, say what is missing instead of inventing details.
+When asked your name, identify as ${NORMAL_CHAT_ASSISTANT_NAME}.`;
 
 const getWorkspaceSummary = async (workspaceId) => {
   const [rows] = await pool.execute(
@@ -56,6 +62,8 @@ const assemblePrompt = async ({
   threadId,
   prompt,
   assistant = null,
+  authUser = null,
+  safeUserContext = null,
 }) => {
   const workspaceSummary = await getWorkspaceSummary(workspaceId);
   const useSessionMemory = shouldUseSessionMemory({ assistant, prompt });
@@ -71,14 +79,33 @@ const assemblePrompt = async ({
       };
   const recentMessages = await getRecentMessages(threadId, { limit: 12 });
 
+  let resolvedUserContext = safeUserContext;
+  if (resolvedUserContext == null && authUser) {
+    const {
+      buildSafeAssistantUserContext,
+    } = require("./assistantUserContext.service");
+    resolvedUserContext = await buildSafeAssistantUserContext({
+      authUser,
+      workspaceId,
+    });
+  }
+  const {
+    formatSafeUserContextForPrompt,
+  } = require("./assistantUserContext.service");
+  const userContextBlock = formatSafeUserContextForPrompt(
+    resolvedUserContext || {}
+  );
+
   const botPrompt =
     assistant?.promptTemplate ||
-    "You are a helpful workspace assistant for this project.";
+    `You are ${NORMAL_CHAT_ASSISTANT_NAME}, a helpful workspace assistant for this project.`;
 
   // Chat uses: base rules + workspace summary + bot prompt only.
   // Platform System Prompts are for global features (e.g. summary generation), not bots.
   const stableSystemPrompt = [
     BASE_SYSTEM_PROMPT,
+    "",
+    userContextBlock,
     "",
     "## Workspace Summary",
     workspaceSummary.content,
@@ -132,6 +159,7 @@ const assemblePrompt = async ({
     useSessionMemory,
     recentMessages,
     retrievedChunks: [],
+    safeUserContext: resolvedUserContext || {},
   };
 };
 

@@ -21,6 +21,23 @@ const conditionMatches = (
   return allowed.some((a) => normalizeValue(a) === normalized);
 };
 
+/** Fill missing keys from schema defaults without mutating stored node data. */
+export function valuesWithParamDefaults(
+  params: ParamDescriptor[],
+  values: ParamValues
+): ParamValues {
+  const next: ParamValues = { ...values };
+  for (const param of params) {
+    if (
+      param.default !== undefined &&
+      !Object.prototype.hasOwnProperty.call(values, param.name)
+    ) {
+      next[param.name] = param.default;
+    }
+  }
+  return next;
+}
+
 /** True when ALL show rules match and NO hide rule matches. */
 export function isParamVisible(
   param: Pick<ParamDescriptor, "displayOptions">,
@@ -49,7 +66,8 @@ export function getVisibleParams(
   params: ParamDescriptor[],
   values: ParamValues
 ): ParamDescriptor[] {
-  return params.filter((p) => p.type !== "hidden" && isParamVisible(p, values));
+  const resolved = valuesWithParamDefaults(params, values);
+  return params.filter((p) => p.type !== "hidden" && isParamVisible(p, resolved));
 }
 
 export function getParamValue(

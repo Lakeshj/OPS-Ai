@@ -1,0 +1,12 @@
+{
+  "LIVE_OAUTH_1": "BLOCKED_BY_CONFIG",
+  "LIVE_AIGEN_1": "PASS",
+  "LIVE_AIGEN_2": "PASS",
+  "LIVE_XLSX_1": "PASS",
+  "notes": [
+    "oauth_env UNSET — LIVE-OAUTH-1 cannot start",
+    "aigen1 text_has_READY=true items=1 leak=none agent=false tools=false",
+    "aigen2 text_has_EXPRESSION_OK=true items=1 leak=none",
+    "xlsx1 sheets=Summary,Details bytes=7118 fileName_ok=true mime_ok=true"
+  ]
+}

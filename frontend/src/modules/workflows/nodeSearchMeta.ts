@@ -100,7 +100,31 @@ export const NODE_SEARCH_META: Record<string, NodeSearchMeta> = {
   },
   gmail: {
     aliases: ["mail", "gmail", "google mail"],
-    keywords: ["email", "google"],
+    keywords: ["email", "google", "send"],
+  },
+  "gmail-trigger": {
+    aliases: ["gmail poll", "new email", "inbox trigger"],
+    keywords: ["email", "google", "trigger", "poll"],
+  },
+  "google-search-console": {
+    aliases: ["gsc", "search console", "queries", "pages"],
+    keywords: ["seo", "google", "clicks", "impressions"],
+  },
+  "google-analytics": {
+    aliases: ["ga4", "analytics", "sessions"],
+    keywords: ["seo", "google", "traffic"],
+  },
+  "google-sheets": {
+    aliases: ["sheets", "spreadsheet", "google sheet"],
+    keywords: ["rows", "append", "google"],
+  },
+  "ai-generate": {
+    aliases: ["message model", "llm", "generate", "ai summary"],
+    keywords: ["prompt", "model", "text"],
+  },
+  "xlsx-builder": {
+    aliases: ["xlsx", "excel", "workbook", "spreadsheet builder"],
+    keywords: ["report", "binary", "file"],
   },
   outlook: {
     aliases: ["mail", "outlook", "hotmail"],

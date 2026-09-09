@@ -147,6 +147,97 @@ const removeCredential = asyncHandler(async (req, res) => {
   res.json({ success: true });
 });
 
+const startGoogleOAuth = asyncHandler(async (req, res) => {
+  const googleOAuth = require("../../services/googleOAuth.service");
+  res.json(
+    await googleOAuth.startGoogleOAuth(
+      {
+        workspaceId: req.body?.workspaceId,
+        product: req.body?.product,
+        name: req.body?.name,
+      },
+      req.user
+    )
+  );
+});
+
+const testCredential = asyncHandler(async (req, res) => {
+  const googleOAuth = require("../../services/googleOAuth.service");
+  const { pool } = require("../../config/database");
+  const { assertWorkspaceAccess } = require("../../services/authorization.service");
+  const [rows] = await pool.execute(
+    `SELECT * FROM workflow_credentials WHERE id = ?`,
+    [req.params.credentialId]
+  );
+  if (!rows.length) {
+    const AppError = require("../../utils/AppError");
+    throw new AppError("Credential not found", 404, "NOT_FOUND");
+  }
+  await assertWorkspaceAccess(req.user, rows[0].workspace_id);
+  if (googleOAuth.GOOGLE_TYPES.has(rows[0].type)) {
+    res.json(await googleOAuth.testGoogleCredential(req.params.credentialId, req.user));
+    return;
+  }
+  res.json({ ok: true, type: rows[0].type });
+});
+
+const listGscSites = asyncHandler(async (req, res) => {
+  const resources = require("../../services/workflowGoogleResources.service");
+  const credentialId = String(req.query.credentialId || "").trim();
+  const workspaceId = String(req.query.workspaceId || "").trim();
+  res.json(await resources.listGscSitesForCredential({ credentialId, workspaceId }));
+});
+
+const listGa4Properties = asyncHandler(async (req, res) => {
+  const resources = require("../../services/workflowGoogleResources.service");
+  const credentialId = String(req.query.credentialId || "").trim();
+  const workspaceId = String(req.query.workspaceId || "").trim();
+  res.json(await resources.listGa4PropertiesForCredential({ credentialId, workspaceId }));
+});
+
+const listGmailLabels = asyncHandler(async (req, res) => {
+  const resources = require("../../services/workflowGoogleResources.service");
+  const credentialId = String(req.query.credentialId || "").trim();
+  const workspaceId = String(req.query.workspaceId || "").trim();
+  res.json(await resources.listGmailLabelsForCredential({ credentialId, workspaceId }));
+});
+
+const listSheetTabs = asyncHandler(async (req, res) => {
+  const resources = require("../../services/workflowGoogleResources.service");
+  const credentialId = String(req.query.credentialId || "").trim();
+  const workspaceId = String(req.query.workspaceId || "").trim();
+  const spreadsheetId = String(req.query.spreadsheetId || "").trim();
+  res.json(
+    await resources.listSheetTabsForSpreadsheet({
+      credentialId,
+      workspaceId,
+      spreadsheetId,
+    })
+  );
+});
+
+const googleOAuthCallback = asyncHandler(async (req, res) => {
+  const googleOAuth = require("../../services/googleOAuth.service");
+  try {
+    const result = await googleOAuth.finishGoogleOAuth(req.query.code, req.query.state);
+    res.setHeader("Content-Type", "text/html; charset=utf-8");
+    res.send(
+      googleOAuth.oauthCallbackHtml({
+        ok: true,
+        credentialId: result.credentialId,
+      })
+    );
+  } catch (err) {
+    res.setHeader("Content-Type", "text/html; charset=utf-8");
+    res.status(400).send(
+      googleOAuth.oauthCallbackHtml({
+        ok: false,
+        error: googleOAuth.sanitizeCallbackError(err),
+      })
+    );
+  }
+});
+
 const listRuns = asyncHandler(async (req, res) => {
   res.json(await workflowsService.listRuns(req.params.id, req.user));
 });
@@ -402,6 +493,182 @@ const copilotPlan = asyncHandler(async (req, res) => {
   res.json(result);
 });
 
+/** Part 14D.4 — static n8n import preview (no persist / no code execution). */
+const previewN8nImport = asyncHandler(async (req, res) => {
+  const {
+    previewN8nImport: preview,
+  } = require("../../services/n8nWorkflowImport.service");
+  const result = preview(req.body?.workflow || req.body);
+  if (!result.ok) {
+    res.status(400).json(result);
+    return;
+  }
+  res.json(result);
+});
+
+/** Part 14D.4 — import n8n export as inactive draft. */
+const importN8nDraft = asyncHandler(async (req, res) => {
+  const {
+    buildDraftImport,
+  } = require("../../services/n8nWorkflowImport.service");
+  const workspaceId = req.body?.workspaceId;
+  if (!workspaceId) {
+    res.status(400).json({ message: "workspaceId is required" });
+    return;
+  }
+  const built = buildDraftImport(req.body?.workflow || req.body, {
+    name: req.body?.name,
+  });
+  if (!built.ok) {
+    res.status(400).json(built);
+    return;
+  }
+  const created = await workflowsService.create(
+    {
+      name: built.draft.name,
+      description: built.draft.description,
+      workspaceId,
+      definition: built.draft.definition,
+    },
+    req.user
+  );
+  res.status(201).json({
+    workflow: created,
+    report: built.report,
+    runtimeReady: built.runtimeReady,
+    structureImportable: built.structureImportable,
+  });
+});
+
+/** Part 14D.4 — unified import preview (OpsAi native | n8n | unknown). */
+const previewWorkflowImport = asyncHandler(async (req, res) => {
+  const portability = require("../../services/opsaiWorkflowPortability.service");
+  const source = req.body?.workflow || req.body?.source || req.body;
+  const rawLength = Buffer.byteLength(JSON.stringify(source || {}), "utf8");
+  let result;
+  try {
+    result = portability.previewUnifiedImport(source, { rawLength });
+  } catch (err) {
+    res.status(err.statusCode || 400).json({
+      ok: false,
+      error: err.message,
+      code: err.code || "IMPORT_PREVIEW_FAILED",
+    });
+    return;
+  }
+  if (!result.ok) {
+    res.status(400).json(result);
+    return;
+  }
+  const workspaceId = req.body?.workspaceId || null;
+  const commitToken =
+    workspaceId && req.user?.userId
+      ? portability.createPreviewCommitToken({
+          fingerprint: result.fingerprint,
+          workspaceId,
+          userId: req.user.userId,
+          format: result.format || result.detection?.format,
+        })
+      : null;
+  res.json({ ...result, commitToken });
+});
+
+/** Part 14D.4 — unified import commit → new inactive draft. */
+const commitWorkflowImport = asyncHandler(async (req, res) => {
+  const portability = require("../../services/opsaiWorkflowPortability.service");
+  const workspaceId = req.body?.workspaceId;
+  if (!workspaceId) {
+    res.status(400).json({ message: "workspaceId is required" });
+    return;
+  }
+  await require("../../services/authorization.service").assertWorkspaceAccess(
+    req.user,
+    workspaceId
+  );
+
+  const source = req.body?.workflow || req.body?.source;
+  if (!source || typeof source !== "object") {
+    res.status(400).json({ message: "workflow/source JSON is required" });
+    return;
+  }
+
+  // Reject client-supplied definition — always recompute from source.
+  if (req.body?.previewDefinition || req.body?.definition) {
+    // Ignore client definition; revalidation below is authoritative.
+  }
+
+  const rawLength = Buffer.byteLength(JSON.stringify(source), "utf8");
+  let built;
+  try {
+    built = portability.buildUnifiedDraft(source, { name: req.body?.name });
+  } catch (err) {
+    res.status(err.statusCode || 400).json({
+      ok: false,
+      error: err.message,
+      code: err.code || "IMPORT_COMMIT_FAILED",
+    });
+    return;
+  }
+  if (!built.ok) {
+    res.status(400).json(built);
+    return;
+  }
+
+  const format = built.format || built.detection?.format;
+  const tokenCheck = portability.verifyPreviewCommitToken({
+    token: req.body?.commitToken,
+    fingerprint: built.fingerprint,
+    workspaceId,
+    userId: req.user.userId,
+    format,
+  });
+  if (!tokenCheck.ok) {
+    res.status(400).json({
+      ok: false,
+      error: "Import commit token invalid or mismatched — re-run preview",
+      code: tokenCheck.code || "PREVIEW_COMMIT_TAMPER",
+    });
+    return;
+  }
+
+  // n8n runtime gate when migrating unsupported nodes
+  if (format === "N8N" || format === "n8n") {
+    // Draft create always allowed; run/activate blocked separately.
+  }
+
+  const created = await workflowsService.create(
+    {
+      name: built.draft.name,
+      description: built.draft.description,
+      workspaceId,
+      definition: built.draft.definition,
+    },
+    req.user
+  );
+  res.status(201).json({
+    workflow: created,
+    report: built.report,
+    format,
+    runtimeReady: built.runtimeReady,
+    structureImportable: built.structureImportable,
+    fingerprint: built.fingerprint,
+  });
+});
+
+/** Part 14D.4 — native OpsAi export (secrets/history excluded). */
+const exportWorkflowNative = asyncHandler(async (req, res) => {
+  const workflow = await workflowsService.getById(req.params.id, req.user);
+  const portability = require("../../services/opsaiWorkflowPortability.service");
+  const pkg = portability.buildNativeExport(workflow);
+  res.setHeader(
+    "Content-Disposition",
+    `attachment; filename="${encodeURIComponent(
+      (workflow.name || "workflow").replace(/[^\w.-]+/g, "_")
+    )}.opsai.json"`
+  );
+  res.json(pkg);
+});
+
 module.exports = {
   list,
   listCallableTargets,
@@ -433,9 +700,21 @@ module.exports = {
   listCredentials,
   createCredential,
   removeCredential,
+  startGoogleOAuth,
+  testCredential,
+  listGscSites,
+  listGa4Properties,
+  listGmailLabels,
+  listSheetTabs,
+  googleOAuthCallback,
   copilotContext,
   copilotValidatePlan,
   copilotApplyPlan,
   copilotDiagnose,
   copilotPlan,
+  previewN8nImport,
+  importN8nDraft,
+  previewWorkflowImport,
+  commitWorkflowImport,
+  exportWorkflowNative,
 };

@@ -71,6 +71,12 @@ const workflowResumeLimiter =
       });
 router.post("/workflow-resume", workflowResumeLimiter, resumeByExternalToken);
 
+const { googleOAuthCallback } = require("../modules/workflows/workflows.controller");
+// Google redirects the browser at Express directly (not via Next /api rewrite).
+// Local default and nginx both use /api/...; Express also mounts routes at /.
+router.get("/google-oauth/callback", googleOAuthCallback);
+router.get("/api/google-oauth/callback", googleOAuthCallback);
+
 // Protected routes
 router.use(authenticateToken);
 

@@ -36,6 +36,7 @@ export type WorkflowNodeType =
   | "loop"
   | "noop"
   | "integration"
+  | "migrationUnsupported"
   // Part 12A typed-port fixtures (internal / test only)
   | "aiModelProviderTest"
   | "aiToolProviderTest"
@@ -46,7 +47,14 @@ export type WorkflowNodeType =
   | "aiChatModel"
   | "aiCalculatorTool"
   | "aiHttpTool"
-  | "respondToWebhook";
+  | "respondToWebhook"
+  | "googleSearchConsole"
+  | "googleAnalytics"
+  | "gmail"
+  | "gmailTrigger"
+  | "googleSheets"
+  | "aiGenerate"
+  | "xlsxBuilder";
 
 export interface WorkflowSetMapping {
   key: string;
@@ -201,7 +209,11 @@ export type WorkflowCredentialType =
   | "bearer"
   | "api_key_header"
   | "basic"
-  | "query_param";
+  | "query_param"
+  | "google_gsc"
+  | "google_ga4"
+  | "google_gmail"
+  | "google_sheets";
 
 export interface WorkflowCredential {
   id: string;
@@ -217,7 +229,11 @@ export type WorkflowCredentialSecret = Record<string, string>;
 
 export const CREDENTIAL_TYPE_FIELDS: Record<
   WorkflowCredentialType,
-  { label: string; fields: { key: string; label: string; secret?: boolean }[] }
+  {
+    label: string;
+    fields: { key: string; label: string; secret?: boolean }[];
+    oauth?: boolean;
+  }
 > = {
   bearer: {
     label: "Bearer token",
@@ -243,6 +259,26 @@ export const CREDENTIAL_TYPE_FIELDS: Record<
       { key: "paramName", label: "Parameter name" },
       { key: "value", label: "API key", secret: true },
     ],
+  },
+  google_gsc: {
+    label: "Google Search Console",
+    fields: [],
+    oauth: true,
+  },
+  google_ga4: {
+    label: "Google Analytics",
+    fields: [],
+    oauth: true,
+  },
+  google_gmail: {
+    label: "Gmail",
+    fields: [],
+    oauth: true,
+  },
+  google_sheets: {
+    label: "Google Sheets",
+    fields: [],
+    oauth: true,
   },
 };
 

@@ -76,6 +76,7 @@ const START_TYPES = new Set([
   "webhook",
   "workflowTrigger",
   "errorTrigger",
+  "gmailTrigger",
 ]);
 
 const TYPE_LABEL: Record<string, string> = {
@@ -86,16 +87,25 @@ const TYPE_LABEL: Record<string, string> = {
   respondToWebhook: "Respond",
   bot: "Bot",
   ai: "AI Model",
+  aiGenerate: "AI Generate",
+  googleSearchConsole: "Search Console",
+  googleAnalytics: "Analytics",
+  gmail: "Gmail",
+  gmailTrigger: "Gmail Trigger",
+  googleSheets: "Sheets",
+  xlsxBuilder: "XLSX Builder",
 };
 
 function StatusBadge({
   runStatus,
   missingConfig,
   cacheDirty,
+  failTitle,
 }: {
   runStatus: string;
   missingConfig: boolean;
   cacheDirty?: boolean;
+  failTitle?: string;
 }) {
   if (cacheDirty && runStatus === "succeeded") {
     return (
@@ -121,7 +131,7 @@ function StatusBadge({
     return (
       <span
         className="flex h-5 w-5 items-center justify-center rounded-full bg-destructive text-white"
-        title="Failed"
+        title={failTitle || "Failed"}
       >
         <X className="h-3 w-3" strokeWidth={3} />
       </span>
@@ -325,6 +335,7 @@ function WorkflowNodeComponent({ id, data, type, selected }: NodeProps) {
           runStatus={runStatus}
           missingConfig={missingConfig}
           cacheDirty={nodeData.cacheDirty}
+          failTitle={preview || undefined}
         />
       </div>
       <div className="font-medium text-foreground">{label}</div>
@@ -394,8 +405,14 @@ function WorkflowNodeComponent({ id, data, type, selected }: NodeProps) {
         </div>
       )}
       {preview && (
-        <div className="mt-1 line-clamp-2 text-[10px] leading-snug text-muted-foreground">
-          {preview}
+        <div
+          className={
+            runStatus === "failed"
+              ? "mt-1 line-clamp-2 text-[10px] leading-snug text-destructive"
+              : "mt-1 line-clamp-2 text-[10px] leading-snug text-muted-foreground"
+          }
+        >
+          {runStatus === "failed" ? `Failed · ${preview}` : preview}
         </div>
       )}
       {isPlaceholder && !preview && (

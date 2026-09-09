@@ -31,6 +31,12 @@ const {
   createCopilotPlanner,
   PLANNER_ERROR: PLANNER_ERR,
 } = require("./workflowCopilotPlanner.service");
+const {
+  CONVERSATIONAL_INTENTS,
+  classifyPlanningIntent,
+  enforceIntentOperationConsistency,
+  detectPendingClarification,
+} = require("./workflowCopilotIntentRouter.service");
 
 const PLAN_ERROR = Object.freeze({
   ...COPILOT_ERROR,
@@ -38,6 +44,7 @@ const PLAN_ERROR = Object.freeze({
   INTENT_UNSUPPORTED: "COPILOT_INTENT_UNSUPPORTED",
   MESSAGE_REQUIRED: "COPILOT_MESSAGE_REQUIRED",
   CLARIFICATION_REQUIRED: "COPILOT_CLARIFICATION_REQUIRED",
+  INTENT_OP_MISMATCH: "COPILOT_INTENT_OP_MISMATCH",
 });
 
 const truncate = (value, max) => {
@@ -138,119 +145,9 @@ const normalizePlanRequest = (body = {}) => {
   };
 };
 
-/**
- * Intent classification — prefers ACTION over keyword collisions.
- * "Use AI to summarize each item" → CREATE/MODIFY (not EXPLAIN).
- */
-const classifyPlanningIntent = (
-  message,
-  { selectedNodeId, runId, definition } = {}
-) => {
-  const text = String(message || "").toLowerCase();
-  const nodes = definition?.nodes || [];
-  const hasGraph = nodes.length > 0;
-
-  if (
-    /\b(why\s+did\s+(this|it)\s+fail|what\s+went\s+wrong|troubleshoot)\b/.test(
-      text
-    ) ||
-    (/\bdebug\b/.test(text) && !/\bprefix\b/.test(text)) ||
-    (runId && /\b(fail|error|broke)\b/.test(text) && !/\bfix\b/.test(text))
-  ) {
-    return "DEBUG";
-  }
-  if (
-    /\b(fix\s+this|repair|heal|fix\s+the\s+missing)\b/.test(text) ||
-    (/\bfix\b/.test(text) && /\b(missing|broken|error|model)\b/.test(text))
-  ) {
-    return "FIX";
-  }
-
-  // Normal chat: greetings / thanks — no mutation, no revision concerns
-  if (
-    /^(hi|hello|hey|yo|sup|thanks|thank\s+you|ok|okay|cool|great)\b[.!?]*$/i.test(
-      text.trim()
-    )
-  ) {
-    return "EXPLAIN";
-  }
-
-  // Read-only questions about referenced / current results
-  if (
-    /\bwhat\s+did\b.+\b(return|return|output|result)\b/.test(text) ||
-    /\b(latest\s+result|what\s+was\s+returned)\b/.test(text)
-  ) {
-    return "EXPLAIN";
-  }
-  if (
-    /\b(compar|while\s+#|whereas|but\s+#|vs\.?|versus)\b/.test(text) &&
-    /#/.test(text)
-  ) {
-    return "EXPLAIN";
-  }
-
-  // Construction / mutation actions win over "summarize/explain" words
-  if (
-    /\b(use\s+ai|add\s+an?\s+ai|ai\s+agent|let\s+the\s+ai)\b/.test(text) ||
-    /\b(create|build|scaffold|make\s+(me\s+)?a\s+workflow|new\s+workflow)\b/.test(
-      text
-    ) ||
-    /\b(add|insert|connect|remove|delete|change|update|set|rename|move|clear|reset|empty)\b/.test(
-      text
-    ) ||
-    /\b(every\s+weekday|schedule|call\s+my|send\s+every|filter|wait\s+\d|batch|loop)\b/.test(
-      text
-    ) ||
-    /\bonly\s+continue\b|\bhas\s+an?\s+email\b|\bemail\s+the\s+result\b/.test(
-      text
-    )
-  ) {
-    // Explicit fix/connect-model requests are FIX even if they contain "connect"
-    if (
-      /\b(fix\s+this|can\s+you\s+(fix|repair)|repair\s+this|connect\s+the\s+missing\s+model)\b/.test(
-        text
-      )
-    ) {
-      return "FIX";
-    }
-    if (
-      !hasGraph &&
-      /\b(create|build|new\s+workflow|every\s+weekday|use\s+ai|call\s+my|send\s+every|let\s+the\s+ai)\b/.test(
-        text
-      )
-    ) {
-      return "CREATE";
-    }
-    if (!hasGraph) return "CREATE";
-    return "MODIFY";
-  }
-
-  if (
-    /\b(why\s+(can'?t|cannot)\s+i\s+run|what('?s|\s+is)\s+wrong|why\s+is\s+(this|it)\s+(failing|stuck)|why\s+didn'?t|why\s+did\s+nothing)\b/.test(
-      text
-    ) ||
-    /\b(how\s+do\s+i\s+fix)\b/.test(text)
-  ) {
-    return "DEBUG";
-  }
-
-  if (
-    /\b(explain\s+this\s+workflow|describe\s+this\s+workflow|what\s+does\s+this\s+workflow|what\s+does\s+this\b)\b/.test(
-      text
-    ) ||
-    (/^\s*explain\b/.test(text) && !/\b(add|create|use|build)\b/.test(text))
-  ) {
-    return "EXPLAIN";
-  }
-
-  if (selectedNodeId) return "MODIFY";
-  if (hasGraph) return "MODIFY";
-  return "CREATE";
-};
-
 const emptyPlan = (intent, summary) =>
   normalizePlan({
-    intent,
+    intent: intent === "CREATE" ? "BUILD" : intent,
     summary: summary || "",
     operations: [],
     unresolvedInputs: [],
@@ -330,7 +227,7 @@ const unsupportedCapabilityNames = () => {
       .filter(Boolean)
       .slice(0, 40);
   } catch {
-    return ["Slack", "Gmail", "Google Sheets"];
+    return ["Slack"];
   }
 };
 
@@ -371,6 +268,8 @@ const planCopilotTurn = async ({
   execution,
   workflowReferences: rawWorkflowReferences,
   authUser,
+  /** Optional pre-built safe identity (tests); production resolves from authUser. */
+  safeUserContext = null,
   /** Tests / internal only — production HTTP path must leave false. */
   allowClientExecution = false,
   /** Optional override for run loading (tests inject fixtures). */
@@ -397,6 +296,7 @@ const planCopilotTurn = async ({
     currentDraftDefinition: currentDraftDefinition || definition,
     workflowReferences: rawWorkflowReferences,
   });
+  req.safeUserContext = safeUserContext || null;
 
   let def;
   try {
@@ -530,12 +430,11 @@ const planCopilotTurn = async ({
     selectedNodeId: req.selectedNodeId,
     runId: req.runId,
     definition: def,
+    recentConversation: req.recentConversation,
+    clarification: req.clarification,
   });
 
-  if (!COPILOT_INTENTS.includes(intent) && intent !== "CREATE") {
-    // CREATE is planning synonym for BUILD in 14A intents list
-  }
-  // Map CREATE → BUILD for normalizePlan compatibility when needed
+  // Map CREATE → BUILD for normalizePlan when storing ops plans
   const planIntent = intent === "CREATE" ? "BUILD" : intent;
 
   // --- Server-authoritative run hydration (14D) ---
@@ -644,6 +543,119 @@ const planCopilotTurn = async ({
     exec = null;
   }
 
+  // Conversational intents — production LLM; fixtures only when forceMode=deterministic
+  if (CONVERSATIONAL_INTENTS.includes(intent)) {
+    const {
+      generateConversationalReply,
+    } = require("./workflowCopilotConversational.service");
+    const { PLANNER_ERROR: PERR } = require("./workflowCopilotPlanner.service");
+
+    let assistantMessage;
+    let clarifyingQuestions = [];
+    let providerMeta = {
+      provider: "deterministic",
+      model: "conversational-fixture",
+    };
+
+    try {
+      const conv = await generateConversationalReply({
+        intent,
+        message: req.message,
+        recentConversation: req.recentConversation,
+        selectedNodeId: req.selectedNodeId,
+        forceMode,
+        injectedPlanner,
+        signal,
+        authUser,
+        workspaceId: workflow?.workspaceId || null,
+        safeUserContext: req.safeUserContext || null,
+      });
+      intent = conv.intent || intent;
+      assistantMessage = conv.assistantMessage;
+      clarifyingQuestions = conv.clarifyingQuestions || [];
+      providerMeta = conv.providerMeta || providerMeta;
+    } catch (err) {
+      // Never fall back to CREATE. Do not pretend success when the model fails.
+      const code = err.code || PERR.PROVIDER_UNAVAILABLE;
+      assistantMessage =
+        code === PERR.PROVIDER_TIMEOUT
+          ? "The Copilot provider timed out. Nothing was changed — try again in a moment."
+          : code === PERR.PROVIDER_UNAVAILABLE
+            ? "Copilot provider is not configured. Conversational replies need a valid AI provider key."
+            : err.message ||
+              "I couldn't generate a reply just now. Nothing was changed.";
+      providerMeta = {
+        provider: "error",
+        model: String(code),
+      };
+      logCopilotSafe({
+        workflowId,
+        intent,
+        provider: providerMeta.provider,
+        model: providerMeta.model,
+        durationMs: Date.now() - started,
+        repairRounds: 0,
+        validationValid: true,
+      });
+      return buildPlanResponse({
+        intent: "GENERAL",
+        assistantMessage,
+        summary: "Provider error",
+        plan: emptyPlan("GENERAL", "No mutations"),
+        preview: null,
+        unresolvedInputs: [],
+        clarifyingQuestions: [],
+        assumptions: [],
+        warnings: [
+          ...refWarnings,
+          { code, message: assistantMessage },
+        ],
+        revisionHash: liveHash,
+        needsClarification: false,
+        createdWorkflowRun: false,
+        providerMeta,
+        workflowReferences: refResponse,
+      });
+    }
+
+    const guard = enforceIntentOperationConsistency({
+      intent,
+      operations: [],
+    });
+
+    logCopilotSafe({
+      workflowId,
+      intent,
+      provider: providerMeta.provider,
+      model: providerMeta.model,
+      durationMs: Date.now() - started,
+      repairRounds: 0,
+      validationValid: true,
+    });
+
+    return buildPlanResponse({
+      intent,
+      assistantMessage,
+      summary: intent,
+      plan: emptyPlan(intent, "No mutations"),
+      preview: null,
+      unresolvedInputs: [],
+      clarifyingQuestions,
+      assumptions: [],
+      warnings: guard.ok
+        ? [...refWarnings]
+        : [
+            ...refWarnings,
+            { code: guard.code, message: guard.message },
+          ],
+      revisionHash: liveHash,
+      needsClarification: clarifyingQuestions.some((q) => q.required),
+      createdWorkflowRun: false,
+      providerMeta,
+      workflowReferences: refResponse,
+    });
+  }
+
   if (intent === "DEBUG" || intent === "FIX") {
     const {
       runDiagnosticTurn,
@@ -714,14 +726,7 @@ const planCopilotTurn = async ({
       resolvedRefs.some((r) => r.available);
 
     let assistantMessage;
-    if (
-      /^(hi|hello|hey|yo|sup|thanks|thank\s+you|ok|okay|cool|great)\b[.!?]*$/i.test(
-        String(req.message || "").trim()
-      )
-    ) {
-      assistantMessage =
-        "Hi — I'm OpsAi Workflow Copilot. Ask me to explain this workflow, add steps, debug a run, or fix something. You can also type # to reference another workflow.";
-    } else if (askingResult) {
+    if (askingResult) {
       const parts = resolvedRefs
         .filter((r) => r.available)
         .map((r) => {
@@ -980,9 +985,24 @@ const planCopilotTurn = async ({
 
   const catalogBrief = buildCatalogBrief();
   const unsupportedNames = unsupportedCapabilityNames();
+  let planSafeUserContext = req.safeUserContext || null;
+  if (planSafeUserContext == null && authUser) {
+    try {
+      const {
+        buildSafeAssistantUserContext,
+      } = require("./assistantUserContext.service");
+      planSafeUserContext = await buildSafeAssistantUserContext({
+        authUser,
+        workspaceId: workflow?.workspaceId || null,
+      });
+    } catch {
+      planSafeUserContext = {};
+    }
+  }
   const system = buildCopilotSystemInstruction({
     catalogBrief,
     unsupportedNames,
+    safeUserContext: planSafeUserContext,
   });
 
   const userPayload = {
@@ -1032,7 +1052,8 @@ const planCopilotTurn = async ({
       content:
         "OUTPUT SCHEMA: " +
         JSON.stringify({
-          intent: "CREATE|MODIFY|EXPLAIN|DEBUG|FIX",
+          intent:
+            "GENERAL|INFORMATION|AUTOMATION_ADVICE|CLARIFY|CREATE|MODIFY|EXPLAIN|DEBUG|FIX",
           assistantMessage: "string",
           summary: "string",
           operations: [],
@@ -1396,6 +1417,41 @@ const planCopilotTurn = async ({
     (structured.clarifyingQuestions || []).some((q) => q.required)
   );
 
+  const consistency = enforceIntentOperationConsistency({
+    intent,
+    operations: plan.operations || [],
+  });
+  if (!consistency.ok) {
+    return buildPlanResponse({
+      intent: CONVERSATIONAL_INTENTS.includes(intent) ? intent : "CLARIFY",
+      assistantMessage:
+        structured.assistantMessage ||
+        conversationalFixtureReply(
+          CONVERSATIONAL_INTENTS.includes(intent) ? intent : "CLARIFY",
+          req.message
+        ),
+      summary: "Intent/operation mismatch rejected",
+      plan: emptyPlan(
+        CONVERSATIONAL_INTENTS.includes(intent) ? intent : "CLARIFY",
+        "No mutations"
+      ),
+      preview: null,
+      unresolvedInputs: [],
+      clarifyingQuestions: [],
+      assumptions: [],
+      warnings: [
+        ...refWarnings,
+        { code: consistency.code, message: consistency.message },
+      ],
+      revisionHash: liveHash,
+      needsClarification: false,
+      createdWorkflowRun: false,
+      providerMeta,
+      workflowReferences: refResponse,
+    });
+  }
+  plan.operations = consistency.operations;
+
   logCopilotSafe({
     workflowId,
     intent,
@@ -1410,7 +1466,10 @@ const planCopilotTurn = async ({
     assistantMessage: structured.assistantMessage || structured.summary || "",
     summary: structured.summary || "",
     plan,
-    preview: validation?.preview || null,
+    preview:
+      (plan.operations || []).length > 0
+        ? validation?.preview || null
+        : null,
     unresolvedInputs: plan.unresolvedInputs,
     clarifyingQuestions: structured.clarifyingQuestions || [],
     assumptions: structured.assumptions || [],
@@ -1432,6 +1491,7 @@ module.exports = {
   MAX_MESSAGE_CHARS,
   normalizePlanRequest,
   classifyPlanningIntent,
+  enforceIntentOperationConsistency,
   planCopilotTurn,
   buildPlanResponse,
   emptyPlan,

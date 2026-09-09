@@ -253,7 +253,8 @@ const DEFAULT_WORKFLOW_SYSTEM_PROMPT =
  * Shared LLM execution for `ai` (generic model) and `bot` (Keyword Assistant).
  * `bot` requires an assistantId; `ai` runs on the configured provider/model.
  */
-const runLlmNode = async (node, context, { requireBot }) => {
+const runLlmNode = async (node, context, options = {}) => {
+  const requireBot = Boolean(options.requireBot);
   const data = node.data || {};
   let provider = data.provider || "openai";
   let model = data.model || undefined;
@@ -288,7 +289,17 @@ const runLlmNode = async (node, context, { requireBot }) => {
   const userPrompt = interpolate(promptTemplate, {
     input: context.input,
     steps: context.steps,
+    item: context.item,
+    items: context.items,
   });
+  if (typeof model === "string" && model.includes("{{")) {
+    model = interpolate(model, {
+      input: context.input,
+      steps: context.steps,
+      item: context.item,
+      items: context.items,
+    });
+  }
 
   const wantsJson = String(data.outputFormat || "text") === "json";
   if (wantsJson) {
@@ -1471,7 +1482,7 @@ const handlers = {
 
   splitOut: async (node, context) => {
     const data = node.data || {};
-    const field = String(data.fieldName || "").trim();
+    const field = String(data.fieldName || data.fieldToSplitOut || data.field || "").trim();
     const scope = { input: context.input, steps: context.steps, items: context.items };
 
     let source;
@@ -1556,8 +1567,8 @@ const handlers = {
   },
 
   limit: async (node, context) => {
-    const max = Math.max(Number(node.data?.maxItems) || 10, 0);
-    const keepLast = node.data?.keep === "last";
+    const max = Math.max(Number(node.data?.maxItems ?? node.data?.count) || 10, 0);
+    const keepLast = node.data?.keep === "last" || node.data?.mode === "last";
     const items = keepLast
       ? context.inputItems.slice(-max)
       : context.inputItems.slice(0, max);
@@ -2146,6 +2157,62 @@ const handlers = {
     );
   },
 
+  migrationUnsupported: async (node) => {
+    const name = node.data?.label || "Imported node";
+    const reason =
+      node.data?.migrationReason ||
+      node.data?.migration?.reasons?.[0] ||
+      "UNSUPPORTED";
+    const err = new Error(
+      `${name} was imported from n8n but is not runnable in OpsAi (${reason}).`
+    );
+    err.code = "MIGRATION_UNSUPPORTED_NODE";
+    throw err;
+  },
+
+  googleSearchConsole: async (node, context) => {
+    const { executeGoogleNode } = require("./workflowGoogleNodes.service");
+    return executeGoogleNode(node, context);
+  },
+  googleAnalytics: async (node, context) => {
+    const { executeGoogleNode } = require("./workflowGoogleNodes.service");
+    return executeGoogleNode(node, context);
+  },
+  gmail: async (node, context) => {
+    const { executeGoogleNode } = require("./workflowGoogleNodes.service");
+    return executeGoogleNode(node, context);
+  },
+  googleSheets: async (node, context) => {
+    const { executeGoogleNode } = require("./workflowGoogleNodes.service");
+    return executeGoogleNode(node, context);
+  },
+  xlsxBuilder: async (node, context) => {
+    const { executeXlsxBuilder } = require("./workflowXlsxBuilder.service");
+    return executeXlsxBuilder(node, context);
+  },
+  aiGenerate: async (node, context) => {
+    const { executeAiGenerate } = require("./workflowAiGenerate.service");
+    return executeAiGenerate(node, context);
+  },
+  gmailTrigger: async (node, context) => {
+    const input = context.input || {};
+    if (Array.isArray(input.items) && input.items.length) {
+      return {
+        output: {
+          triggered: true,
+          kind: "gmailTrigger",
+          polling: true,
+          itemCount: input.items.length,
+        },
+        items: input.items,
+      };
+    }
+    const {
+      executeGmailTriggerManual,
+    } = require("./workflowGmailTrigger.service");
+    return executeGmailTriggerManual(node, context);
+  },
+
   result: async (node, context) => {
     const data = node.data || {};
     const mapFrom = data.mapFrom || "{{input}}";
@@ -2233,6 +2300,7 @@ module.exports = {
   getItemPayload,
   getByPath,
   ExpressionReferenceError,
+  runLlmNodeForItem: runLlmNode,
   // Shared HTTP primitives (Part 13A HTTP Tool reuses these)
   buildUrl,
   applyCredential,

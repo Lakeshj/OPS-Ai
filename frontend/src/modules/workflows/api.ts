@@ -255,6 +255,41 @@ export const workflowsApi = {
       revisionHash?: string;
       preview?: unknown;
     }>(`/workflows/${id}/copilot/apply-plan`, payload),
+
+  previewImport: (payload: {
+    workspaceId: string;
+    workflow: unknown;
+  }) =>
+    apiClient.post<{
+      ok?: boolean;
+      format?: string;
+      detection?: { format?: string };
+      structureImportable?: boolean;
+      runtimeReady?: boolean;
+      commitToken?: string | null;
+      fingerprint?: string;
+      draftName?: string;
+      report?: unknown;
+      error?: string;
+    }>("/workflows/import/preview", payload),
+
+  commitImport: (payload: {
+    workspaceId: string;
+    workflow: unknown;
+    commitToken: string;
+    name?: string;
+  }) =>
+    apiClient.post<{
+      workflow: Workflow;
+      format?: string;
+      report?: unknown;
+      runtimeReady?: boolean;
+    }>("/workflows/import", payload),
+
+  exportNative: async (id: string) => {
+    // Use apiClient base via fetch through get — blob download handled by caller
+    return apiClient.get<Record<string, unknown>>(`/workflows/${id}/export`);
+  },
 };
 
 /** Secrets are write-only: the API never returns a stored secret value. */
@@ -274,5 +309,43 @@ export const workflowCredentialsApi = {
   remove: (credentialId: string) =>
     apiClient.delete<{ success: boolean }>(
       `/workflows/credentials/${credentialId}`
+    ),
+
+  startGoogleOAuth: (payload: {
+    workspaceId: string;
+    product: WorkflowCredential["type"];
+    name?: string;
+  }) =>
+    apiClient.post<{ url: string; state: string; callbackOrigin: string }>(
+      "/workflows/google-oauth/start",
+      payload
+    ),
+
+  test: (credentialId: string) =>
+    apiClient.post<{ ok: boolean; type: string }>(
+      `/workflows/credentials/${credentialId}/test`,
+      {}
+    ),
+
+  listGscSites: (workspaceId: string, credentialId: string) =>
+    apiClient.get<{ sites: { siteUrl: string; permissionLevel?: string }[] }>(
+      `/workflows/google-oauth/gsc-sites?workspaceId=${encodeURIComponent(workspaceId)}&credentialId=${encodeURIComponent(credentialId)}`
+    ),
+
+  listGa4Properties: (workspaceId: string, credentialId: string) =>
+    apiClient.get<{
+      properties: { propertyId: string; displayName: string }[];
+    }>(
+      `/workflows/google-oauth/ga4-properties?workspaceId=${encodeURIComponent(workspaceId)}&credentialId=${encodeURIComponent(credentialId)}`
+    ),
+
+  listGmailLabels: (workspaceId: string, credentialId: string) =>
+    apiClient.get<{ labels: { id: string; name: string }[] }>(
+      `/workflows/google-oauth/gmail-labels?workspaceId=${encodeURIComponent(workspaceId)}&credentialId=${encodeURIComponent(credentialId)}`
+    ),
+
+  listSheetTabs: (workspaceId: string, credentialId: string, spreadsheetId: string) =>
+    apiClient.get<{ sheets: { title: string; sheetId?: number }[] }>(
+      `/workflows/google-oauth/sheet-tabs?workspaceId=${encodeURIComponent(workspaceId)}&credentialId=${encodeURIComponent(credentialId)}&spreadsheetId=${encodeURIComponent(spreadsheetId)}`
     ),
 };

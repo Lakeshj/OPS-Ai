@@ -50,6 +50,7 @@ import {
 
 import {
   MoreHorizontal,
+  MoreVertical,
   FolderPlus,
   Folder,
   ChevronRight,
@@ -63,12 +64,18 @@ import {
   X,
   Sparkles,
   Workflow,
+  Star,
+  Share2,
+  Copy,
+  Archive,
+  ExternalLink,
 } from "lucide-react";
 
 import Sidebar from "@/components/Sidebar";
 import { ChatInterface } from "@/components/ChatInterface";
 import { workflowsApi } from "@/modules/workflows/api";
 import type { Workflow as WorkflowItem } from "@/modules/workflows/types";
+import { formatWorkflowListMeta } from "@/modules/workflows/workflowListMeta";
 
 type WorkspaceMode = "chat" | "workflow";
 
@@ -310,6 +317,40 @@ const ProjectDetailPage = () => {
     } catch (error) {
       console.error(error);
       toast.error("Failed to rename workflow");
+    }
+  };
+
+  const handleDuplicateWorkflow = async (wf: WorkflowItem) => {
+    if (!projectId) return;
+    try {
+      const created = await workflowsApi.create({
+        name: `${wf.name} (copy)`,
+        workspaceId: projectId,
+        description: wf.description || undefined,
+        definition: wf.definition,
+      });
+      setWorkflows((prev) => [created, ...prev]);
+      setSelectedWorkflow(created);
+      toast.success("Workflow duplicated");
+    } catch (error) {
+      console.error(error);
+      toast.error("Failed to duplicate workflow");
+    }
+  };
+
+  const handleArchiveWorkflow = async (wf: WorkflowItem) => {
+    try {
+      const updated = await workflowsApi.update(wf.id, { status: "archived" });
+      setWorkflows((prev) =>
+        prev.map((w) => (w.id === wf.id ? { ...w, status: updated.status } : w))
+      );
+      setSelectedWorkflow((prev) =>
+        prev?.id === wf.id ? { ...prev, status: updated.status } : prev
+      );
+      toast.success("Workflow archived");
+    } catch (error) {
+      console.error(error);
+      toast.error("Failed to archive workflow");
     }
   };
 
@@ -751,12 +792,12 @@ const ProjectDetailPage = () => {
                         ) : (
                           <>
                             <div className="min-w-0 flex-1 overflow-hidden">
-                              <div className="line-clamp-2 break-words font-medium leading-snug text-gray-700 dark:text-gray-200">
+                              <div className="line-clamp-2 break-words font-medium leading-snug text-gray-800 dark:text-gray-100">
                                 {wf.name}
                               </div>
                               <div className="mt-0.5 truncate text-[11px] text-muted-foreground">
-                                {wf.definition?.nodes?.length || 0} nodes ·{" "}
-                                {wf.status}
+                                {formatWorkflowListMeta(wf.updatedAt, wf.createdAt) ||
+                                  `${wf.definition?.nodes?.length || 0} nodes · ${wf.status}`}
                               </div>
                             </div>
                             <DropdownMenu>
@@ -769,10 +810,60 @@ const ProjectDetailPage = () => {
                                   aria-label="Workflow actions"
                                   onClick={(e) => e.stopPropagation()}
                                 >
-                                  <MoreHorizontal className="h-4 w-4" />
+                                  <MoreVertical className="h-4 w-4" />
                                 </Button>
                               </DropdownMenuTrigger>
-                              <DropdownMenuContent align="end" className="z-50">
+                              <DropdownMenuContent align="end" className="z-50 w-48">
+                                <DropdownMenuItem
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    router.push(`/workflows/${wf.id}`);
+                                  }}
+                                >
+                                  <ExternalLink className="mr-2 h-4 w-4" />
+                                  Open
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                  disabled
+                                  onClick={(e) => e.stopPropagation()}
+                                >
+                                  <Share2 className="mr-2 h-4 w-4" />
+                                  Share…
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                  disabled
+                                  onClick={(e) => e.stopPropagation()}
+                                >
+                                  <Star className="mr-2 h-4 w-4" />
+                                  Favorite
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    void handleDuplicateWorkflow(wf);
+                                  }}
+                                >
+                                  <Copy className="mr-2 h-4 w-4" />
+                                  Duplicate
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                  disabled
+                                  onClick={(e) => e.stopPropagation()}
+                                >
+                                  <Move className="mr-2 h-4 w-4" />
+                                  Move
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                  disabled={wf.status === "archived"}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    void handleArchiveWorkflow(wf);
+                                  }}
+                                >
+                                  <Archive className="mr-2 h-4 w-4" />
+                                  Archive
+                                </DropdownMenuItem>
+                                <DropdownMenuSeparator />
                                 <DropdownMenuItem
                                   onClick={(e) => {
                                     e.stopPropagation();
@@ -783,7 +874,6 @@ const ProjectDetailPage = () => {
                                   <Edit className="mr-2 h-4 w-4" />
                                   Rename
                                 </DropdownMenuItem>
-                                <DropdownMenuSeparator />
                                 <AlertDialog>
                                   <AlertDialogTrigger asChild>
                                     <DropdownMenuItem
@@ -1210,8 +1300,11 @@ const ProjectDetailPage = () => {
                         {selectedWorkflow.name}
                       </h3>
                       <p className="text-sm text-muted-foreground">
-                        {selectedWorkflow.definition?.nodes?.length || 0} nodes ·{" "}
-                        {selectedWorkflow.status}
+                        {formatWorkflowListMeta(
+                          selectedWorkflow.updatedAt,
+                          selectedWorkflow.createdAt
+                        ) ||
+                          `${selectedWorkflow.definition?.nodes?.length || 0} nodes · ${selectedWorkflow.status}`}
                       </p>
                     </div>
                     <Button

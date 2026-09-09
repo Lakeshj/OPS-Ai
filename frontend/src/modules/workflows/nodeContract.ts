@@ -142,7 +142,10 @@ export type ParamCustomRenderer =
   | "scheduleRules"
   | "queryParams"
   | "httpPagination"
-  | "workflowPicker";
+  | "workflowPicker"
+  | "googleGscSites"
+  | "googleGa4Properties"
+  | "resourceLocator";
 
 export interface DisplayOptions {
   show?: Record<string, Array<string | number | boolean>>;
@@ -152,6 +155,7 @@ export interface DisplayOptions {
 export interface ParamOption {
   name: string;
   value: string | number | boolean;
+  displayOptions?: DisplayOptions;
 }
 
 export interface ParamDescriptor {
@@ -166,6 +170,8 @@ export interface ParamDescriptor {
   fields?: ParamDescriptor[];
   /** Discriminator field inside fixedCollection items */
   typeOptions?: Record<string, ParamDescriptor[]>;
+  /** Restrict CredentialPicker to these stored types */
+  credentialTypes?: string[];
   displayOptions?: DisplayOptions;
   required?: boolean;
   /** Use ExpressionField when previewContext is available */
@@ -174,6 +180,18 @@ export interface ParamDescriptor {
   multiline?: boolean;
   /** Delegate to a registered specialized renderer */
   customRenderer?: ParamCustomRenderer;
+  /** Resource locator kind when customRenderer is resourceLocator / Google pickers */
+  locatorKind?:
+    | "gscSites"
+    | "ga4Properties"
+    | "gmailLabels"
+    | "sheetTabs"
+    | "aiModels"
+    | "spreadsheetId";
+  locatorModes?: Array<"account" | "manual" | "expression">;
+  locatorModeField?: string;
+  locatorLabelField?: string;
+  locatorMulti?: boolean;
   min?: number;
   max?: number;
 }
@@ -1196,6 +1214,129 @@ export const NODE_CONTRACTS: Record<WorkflowNodeType, NodeContract> = {
     ],
   },
 
+  googleSearchConsole: {
+    type: "googleSearchConsole",
+    version: 1,
+    category: "SEO",
+    label: "Google Search Console",
+    inputs: [mainIn()],
+    outputs: [mainOut, errorOut],
+    cardinality: "1-to-N",
+    pairedItemPolicy: "fanOut",
+    settings: SETTINGS_ACTION,
+    capabilities: CAP_ACTION,
+    isSideEffecting: true,
+    params: [],
+    dirtyTriggers: ["params", "edges", "pin", "disabled"],
+    edgeCases: ["Read-only Search Analytics", "Google account required"],
+  },
+
+  googleAnalytics: {
+    type: "googleAnalytics",
+    version: 1,
+    category: "SEO",
+    label: "Google Analytics",
+    inputs: [mainIn()],
+    outputs: [mainOut, errorOut],
+    cardinality: "1-to-N",
+    pairedItemPolicy: "fanOut",
+    settings: SETTINGS_ACTION,
+    capabilities: CAP_ACTION,
+    isSideEffecting: true,
+    params: [],
+    dirtyTriggers: ["params", "edges", "pin", "disabled"],
+    edgeCases: ["GA4 only", "Google account required"],
+  },
+
+  gmail: {
+    type: "gmail",
+    version: 1,
+    category: "Communication",
+    label: "Gmail",
+    inputs: [mainIn()],
+    outputs: [mainOut, errorOut],
+    cardinality: "N-to-N",
+    pairedItemPolicy: "identity1to1",
+    settings: SETTINGS_ACTION,
+    capabilities: CAP_ACTION,
+    isSideEffecting: true,
+    params: [],
+    dirtyTriggers: ["params", "edges", "pin", "disabled"],
+    edgeCases: ["Attachments from WorkflowItem.binary only"],
+  },
+
+  gmailTrigger: {
+    type: "gmailTrigger",
+    version: 1,
+    category: "Triggers",
+    label: "Gmail Trigger",
+    inputs: [],
+    outputs: [mainOut],
+    cardinality: "0-to-1",
+    pairedItemPolicy: "none",
+    settings: SETTINGS_TRIGGER,
+    capabilities: CAP_TRIGGER,
+    isTrigger: true,
+    isStateful: true,
+    stateScope: "node",
+    params: [],
+    dirtyTriggers: ["params", "disabled"],
+    edgeCases: ["Polling trigger — not push/real-time", "Durable cursor per workflow/node"],
+  },
+
+  googleSheets: {
+    type: "googleSheets",
+    version: 1,
+    category: "Productivity",
+    label: "Google Sheets",
+    inputs: [mainIn()],
+    outputs: [mainOut, errorOut],
+    cardinality: "N-to-N",
+    pairedItemPolicy: "identity1to1",
+    settings: SETTINGS_ACTION,
+    capabilities: CAP_ACTION,
+    isSideEffecting: true,
+    params: [],
+    dirtyTriggers: ["params", "edges", "pin", "disabled"],
+    edgeCases: ["Header row maps to named fields"],
+  },
+
+  aiGenerate: {
+    type: "aiGenerate",
+    version: 1,
+    category: "AI",
+    label: "AI Generate",
+    inputs: [mainIn()],
+    outputs: [mainOut, errorOut],
+    cardinality: "N-to-N",
+    pairedItemPolicy: "identity1to1",
+    settings: SETTINGS_ACTION,
+    capabilities: CAP_ACTION,
+    isSideEffecting: true,
+    params: [],
+    dirtyTriggers: ["params", "edges", "pin", "disabled"],
+    edgeCases: [
+      "Main-flow node — one model request per item",
+      "Not an Agent; no tools or memory",
+    ],
+  },
+
+  xlsxBuilder: {
+    type: "xlsxBuilder",
+    version: 1,
+    category: "Files",
+    label: "XLSX Builder",
+    inputs: [mainIn()],
+    outputs: [mainOut],
+    cardinality: "N-to-1",
+    pairedItemPolicy: "fanIn",
+    settings: SETTINGS_LOGIC,
+    capabilities: ["execute_step", "disable", "pin", "notes"],
+    params: [],
+    dirtyTriggers: ["params", "edges", "pin", "disabled"],
+    edgeCases: ["In-memory workbook only", "Binary property data for Gmail attachments"],
+  },
+
   // ---- END ----
   result: {
     type: "result",
@@ -1393,6 +1534,44 @@ export const NODE_CONTRACTS: Record<WorkflowNodeType, NodeContract> = {
     params: [],
     dirtyTriggers: ["params", "edges"],
     edgeCases: ["Placeholder — 1:1 passthrough until specialized"],
+  },
+
+  migrationUnsupported: {
+    type: "migrationUnsupported",
+    version: 1,
+    category: "Core",
+    label: "Unsupported (imported)",
+    inputs: [mainIn()],
+    outputs: [mainOut],
+    cardinality: "N-to-N",
+    pairedItemPolicy: "identity1to1",
+    settings: {
+      disabled: true,
+      onError: false,
+      retries: false,
+      timeoutMs: false,
+      alwaysOutputData: false,
+      executeOnce: false,
+      notes: true,
+    },
+    capabilities: ["notes", "disable"],
+    params: [
+      {
+        name: "migrationReason",
+        displayName: "Migration reason",
+        type: "string",
+      },
+      {
+        name: "sourceNodeType",
+        displayName: "Source node type",
+        type: "string",
+      },
+    ],
+    dirtyTriggers: ["params", "edges", "disabled"],
+    edgeCases: [
+      "n8n import placeholder — preserves topology; blocks activate/run until replaced",
+      "Must never execute imported n8n JavaScript",
+    ],
   },
 
   // ---- AI ----

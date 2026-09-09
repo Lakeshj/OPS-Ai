@@ -3,8 +3,12 @@
 import React from "react";
 import type { ParamDescriptor } from "@/modules/workflows/nodeContract";
 import type { WorkflowNodeData } from "@/modules/workflows/types";
-import { getVisibleParams } from "@/modules/workflows/paramDisplayOptions";
+import {
+  getVisibleParams,
+  valuesWithParamDefaults,
+} from "@/modules/workflows/paramDisplayOptions";
 import { CredentialPicker } from "./CredentialPicker";
+import { GoogleResourcePicker } from "./GoogleResourcePicker";
 import {
   BooleanParamField,
   CodeParamField,
@@ -66,8 +70,49 @@ function renderSpecial(
             onChange({ ...values, [param.name]: credentialId })
           }
           label={param.displayName}
+          allowedTypes={param.credentialTypes as import("@/modules/workflows/types").WorkflowCredentialType[] | undefined}
         />
       );
+    case "googleGscSites":
+    case "googleGa4Properties":
+    case "resourceLocator": {
+      const kind =
+        param.locatorKind ||
+        (renderer === "googleGscSites" ? "gscSites" : "ga4Properties");
+      const modeField = param.locatorModeField || `${param.name}Mode`;
+      const labelField = param.locatorLabelField;
+      return (
+        <GoogleResourcePicker
+          key={param.name}
+          kind={kind}
+          workspaceId={context.workspaceId}
+          credentialId={String(values.credentialId || "")}
+          value={values[param.name]}
+          mode={String(values[modeField] || "")}
+          displayName={labelField ? String(values[labelField] || "") : undefined}
+          displayNameField={labelField}
+          multi={Boolean(param.locatorMulti)}
+          spreadsheetId={String(values.spreadsheetId || "")}
+          provider={String(values.provider || "openai")}
+          modes={param.locatorModes}
+          accountModeLabel={kind === "aiModels" ? "From provider" : "From account"}
+          previewContext={context.previewContext}
+          onChange={(next, extra) => {
+            const patch: WorkflowNodeData = {
+              ...values,
+              [param.name]: next,
+            };
+            if (extra?.mode != null) patch[modeField] = extra.mode;
+            if (labelField && extra?.[labelField] != null) {
+              patch[labelField] = extra[labelField];
+            }
+            onChange(patch);
+          }}
+          label={param.displayName}
+          placeholder={param.placeholder}
+        />
+      );
+    }
     case "scheduleRules":
       return (
         <ScheduleRulesEditor
@@ -150,7 +195,8 @@ function renderPrimitive(
   param: ParamDescriptor,
   value: unknown,
   onFieldChange: (name: string, value: unknown) => void,
-  previewContext?: FieldPreviewContext
+  previewContext?: FieldPreviewContext,
+  parentValues?: Record<string, unknown>
 ): React.ReactNode {
   const onChange = (v: unknown) => onFieldChange(param.name, v);
 
@@ -169,7 +215,12 @@ function renderPrimitive(
       );
     case "options":
       return (
-        <OptionsParamField param={param} value={value} onChange={onChange} />
+        <OptionsParamField
+          param={param}
+          value={value}
+          onChange={onChange}
+          parentValues={parentValues}
+        />
       );
     case "multiOptions":
       return (
@@ -223,7 +274,9 @@ export function NodeParameterRenderer({
   onChange,
   context,
 }: Props) {
-  const visible = getVisibleParams(schema, values as Record<string, unknown>);
+  const rawValues = values as Record<string, unknown>;
+  const resolvedValues = valuesWithParamDefaults(schema, rawValues);
+  const visible = getVisibleParams(schema, rawValues);
 
   const onFieldChange = (name: string, fieldValue: unknown) => {
     onChange({ ...values, [name]: fieldValue });
@@ -242,7 +295,8 @@ export function NodeParameterRenderer({
               param,
               values[param.name],
               onFieldChange,
-              context.previewContext
+              context.previewContext,
+              resolvedValues
             )}
           </React.Fragment>
         );

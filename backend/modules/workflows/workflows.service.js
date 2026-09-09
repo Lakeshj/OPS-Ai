@@ -54,6 +54,16 @@ const ALLOWED_NODE_TYPES = new Set([
   "aiCalculatorTool",
   "aiHttpTool",
   "respondToWebhook",
+  // Part 14D.5 — native Google / SEO / AI Generate / XLSX
+  "googleSearchConsole",
+  "googleAnalytics",
+  "gmail",
+  "gmailTrigger",
+  "googleSheets",
+  "aiGenerate",
+  "xlsxBuilder",
+  // Part 14D.4 — n8n import placeholders (non-runnable)
+  "migrationUnsupported",
 ]);
 
 const parseJson = (value, fallback = null) => {
@@ -208,6 +218,23 @@ const validateSchedulesForActivation = (definition) => {
   }
   if (errors.length > 0) {
     throw new AppError(errors[0], 400, "VALIDATION_ERROR");
+  }
+};
+
+const findGmailTriggerNodesInDefinition = (definition) => {
+  const nodes = Array.isArray(definition?.nodes) ? definition.nodes : [];
+  return nodes.filter((n) => (n.type || n.data?.nodeType) === "gmailTrigger");
+};
+
+const validateGmailTriggersForActivation = (definition) => {
+  for (const node of findGmailTriggerNodesInDefinition(definition)) {
+    if (!String(node.data?.credentialId || "").trim()) {
+      throw new AppError(
+        "Gmail Trigger requires a Google credential before activation",
+        400,
+        "VALIDATION_ERROR"
+      );
+    }
   }
 };
 
@@ -427,7 +454,22 @@ const update = async (id, payload, authUser) => {
     status === "active" &&
     (existing.status !== "active" || payload.definition !== undefined);
   if (status === "active") {
+    const {
+      assertMigrationRunnable,
+    } = require("../../services/n8nWorkflowImport.service");
+    try {
+      assertMigrationRunnable(definition);
+    } catch (err) {
+      const appErr = new AppError(
+        err.message,
+        err.statusCode || 400,
+        err.code || "MIGRATION_RUNTIME_BLOCKED"
+      );
+      if (err.details) appErr.details = err.details;
+      throw appErr;
+    }
     validateSchedulesForActivation(definition);
+    validateGmailTriggersForActivation(definition);
     if (activating) {
       definition = prepareDefinitionForActivation(definition);
     }
@@ -507,6 +549,21 @@ const remove = async (id, authUser) => {
 
 const startRun = async (workflowId, input, authUser, idempotencyKey = null) => {
   const workflow = await getById(workflowId, authUser);
+
+  const {
+    assertMigrationRunnable,
+  } = require("../../services/n8nWorkflowImport.service");
+  try {
+    assertMigrationRunnable(workflow.definition || emptyDefinition());
+  } catch (err) {
+    const appErr = new AppError(
+      err.message,
+      err.statusCode || 400,
+      err.code || "MIGRATION_RUNTIME_BLOCKED"
+    );
+    if (err.details) appErr.details = err.details;
+    throw appErr;
+  }
 
   // A repeated webhook delivery reuses the original run instead of
   // processing the same payload twice.

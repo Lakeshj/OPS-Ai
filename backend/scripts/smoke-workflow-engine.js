@@ -9371,6 +9371,51 @@ require("./smoke-workflow-14d").registerPart14DTests({
   section,
   assert,
 });
+require("./smoke-workflow-14d2").registerPart14D2Tests({
+  check,
+  section,
+  assert,
+});
+require("./smoke-workflow-14d3").registerPart14D3Tests({
+  check,
+  section,
+  assert,
+});
+require("./smoke-workflow-14d31").registerPart14D31Tests({
+  check,
+  section,
+  assert,
+});
+require("./smoke-workflow-14d4").registerPart14D4Tests({
+  check,
+  section,
+  assert,
+});
+require("./smoke-workflow-14d4-native").registerPart14D4NativeTests({
+  check,
+  section,
+  assert,
+});
+require("./smoke-workflow-14d4-gap").registerPart14D4GapTests({
+  check,
+  section,
+  assert,
+});
+require("./smoke-workflow-14d5").registerPart14D5Tests({
+  check,
+  section,
+  assert,
+});
+require("./smoke-workflow-14d51").registerPart14D51Tests({
+  check,
+  section,
+  assert,
+});
+require("./smoke-workflow-14d52").registerPart14D52Tests({
+  check,
+  section,
+  assert,
+});
 
 (async () => {
   for (const task of queue) await task();

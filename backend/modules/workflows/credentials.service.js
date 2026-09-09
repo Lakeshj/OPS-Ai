@@ -4,11 +4,23 @@ const AppError = require("../../utils/AppError");
 const { assertWorkspaceAccess } = require("../../services/authorization.service");
 const { encryptSecret, decryptSecret } = require("../../services/secretBox.service");
 
-const CREDENTIAL_TYPES = new Set([
+const HTTP_CREDENTIAL_TYPES = new Set([
   "bearer",
   "api_key_header",
   "basic",
   "query_param",
+]);
+
+const GOOGLE_CREDENTIAL_TYPES = new Set([
+  "google_gsc",
+  "google_ga4",
+  "google_gmail",
+  "google_sheets",
+]);
+
+const CREDENTIAL_TYPES = new Set([
+  ...HTTP_CREDENTIAL_TYPES,
+  ...GOOGLE_CREDENTIAL_TYPES,
 ]);
 
 /** Never returns the secret itself — only what is safe to render in the UI. */
@@ -34,7 +46,14 @@ const listByWorkspace = async (workspaceId, authUser) => {
 const create = async ({ workspaceId, name, type, secret }, authUser) => {
   await assertWorkspaceAccess(authUser, workspaceId);
 
-  if (!CREDENTIAL_TYPES.has(type)) {
+  if (GOOGLE_CREDENTIAL_TYPES.has(type)) {
+    throw new AppError(
+      "Connect Google from the credential picker — access tokens cannot be pasted",
+      400,
+      "VALIDATION_ERROR"
+    );
+  }
+  if (!HTTP_CREDENTIAL_TYPES.has(type)) {
     throw new AppError(`Unsupported credential type: ${type}`, 400, "VALIDATION_ERROR");
   }
   if (!secret || typeof secret !== "object") {
@@ -92,4 +111,6 @@ module.exports = {
   remove,
   getSecretForWorkspace,
   CREDENTIAL_TYPES,
+  HTTP_CREDENTIAL_TYPES,
+  GOOGLE_CREDENTIAL_TYPES,
 };

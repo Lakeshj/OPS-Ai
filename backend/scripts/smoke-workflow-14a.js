@@ -206,9 +206,9 @@ const registerPart14ATests = ({ check, section, assert: a }) => {
   });
 
   check("TEST 14A-8 Soon node marked unavailable", () => {
-    const gmail = catalog.nodes.find((n) => n.id === "gmail");
-    assertX.ok(gmail);
-    assertX.equal(gmail.available, false);
+    const slack = catalog.nodes.find((n) => n.id === "slack");
+    assertX.ok(slack);
+    assertX.equal(slack.available, false);
     const v = copilot().validateCopilotOperations({
       definition: manualBase(),
       operations: [

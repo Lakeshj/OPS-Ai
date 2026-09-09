@@ -1,0 +1,104 @@
+/**
+ * Part 14D.5 — Standalone AI Generate (main-flow, one model call per item).
+ * Distinct from aiAgent (no tools/memory/loop) and aiChatModel (auxiliary).
+ */
+
+let testComplete = null;
+
+const withAiGenerateTestComplete = async (complete, fn) => {
+  const prev = testComplete;
+  testComplete = complete;
+  try {
+    return await fn();
+  } finally {
+    testComplete = prev;
+  }
+};
+
+const payloadOf = (item) => {
+  if (item && typeof item === "object" && "json" in item) return item.json;
+  return item;
+};
+
+const executeAiGenerate = async (node, context) => {
+  const {
+    runLlmNodeForItem,
+    interpolate,
+  } = require("./workflowNodes.service");
+  const data = node.data || {};
+  if (!String(data.provider || data.model || "").trim() && !data.model) {
+    // model still has a default in runLlmNode; require explicit prompt
+  }
+  const prompt = String(data.prompt || "").trim();
+  if (!prompt) {
+    throw new Error("AI Generate requires a prompt");
+  }
+
+  const incoming =
+    Array.isArray(context.inputItems) && context.inputItems.length
+      ? context.inputItems
+      : [{ json: context.input ?? {} }];
+
+  const items = [];
+  for (let i = 0; i < incoming.length; i += 1) {
+    const src = incoming[i];
+    const itemContext = {
+      ...context,
+      input: payloadOf(src) ?? context.input,
+      item: src,
+      inputItems: [src],
+    };
+    if (testComplete) {
+      const userPrompt = interpolate(data.prompt || "{{input}}", itemContext);
+      const model = interpolate(data.model || "gpt-4o-mini", itemContext);
+      const text = await testComplete({
+        prompt: userPrompt,
+        systemPrompt: interpolate(data.systemPrompt || "", itemContext),
+        model,
+        item: payloadOf(src),
+        index: i,
+        outputFormat: data.outputFormat || "text",
+      });
+      items.push({
+        json: {
+          text: String(text ?? ""),
+          provider: data.provider || "openai",
+          model: model || "gpt-4o-mini",
+        },
+      });
+      continue;
+    }
+    const result = await runLlmNodeForItem(node, itemContext, {
+      requireBot: false,
+    });
+    items.push({
+      json: {
+        text: result.output?.text || "",
+        json: result.output?.json ?? undefined,
+        provider: result.output?.provider,
+        model: result.output?.model,
+      },
+    });
+  }
+
+  return {
+    items,
+    output: {
+      text: items.length === 1 ? items[0].json.text : items.map((it) => it.json.text),
+      itemCount: items.length,
+      isLlm: true,
+    },
+    resolved: {
+      provider: data.provider || "openai",
+      model: data.model || "gpt-4o-mini",
+      perItem: true,
+      agent: false,
+      tools: false,
+    },
+  };
+};
+
+module.exports = {
+  executeAiGenerate,
+  withAiGenerateTestComplete,
+};

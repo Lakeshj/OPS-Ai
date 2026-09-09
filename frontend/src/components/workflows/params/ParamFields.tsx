@@ -104,8 +104,21 @@ export function BooleanParamField({ param, value, onChange }: ScalarFieldProps) 
   );
 }
 
-export function OptionsParamField({ param, value, onChange }: ScalarFieldProps) {
+export function OptionsParamField({
+  param,
+  value,
+  onChange,
+  parentValues,
+}: ScalarFieldProps & { parentValues?: Record<string, unknown> }) {
   const str = value == null ? String(param.default ?? "") : String(value);
+  const options = (param.options || []).filter((opt) =>
+    isParamVisible({ displayOptions: opt.displayOptions }, parentValues || {})
+  );
+  const shown = options.some((opt) => String(opt.value) === str)
+    ? options
+    : str
+      ? [...options, { name: `${str} (current)`, value: str }]
+      : options;
   return (
     <div className="space-y-1">
       <Label className="text-xs">{param.displayName}</Label>
@@ -114,7 +127,7 @@ export function OptionsParamField({ param, value, onChange }: ScalarFieldProps) 
           <SelectValue />
         </SelectTrigger>
         <SelectContent>
-          {(param.options || []).map((opt) => (
+          {shown.map((opt) => (
             <SelectItem key={String(opt.value)} value={String(opt.value)}>
               {opt.name}
             </SelectItem>

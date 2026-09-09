@@ -83,6 +83,14 @@ const config = {
     pass: (process.env.SMTP_PASS || "").trim().replace(/^["']|["']$/g, ""),
     from: (process.env.SMTP_FROM || "no-reply@opsai.local").trim(),
   },
+  googleOAuth: {
+    clientId: (process.env.GOOGLE_OAUTH_CLIENT_ID || "").trim(),
+    clientSecret: (process.env.GOOGLE_OAUTH_CLIENT_SECRET || "").trim(),
+    redirectUri: (
+      process.env.GOOGLE_OAUTH_REDIRECT_URI ||
+      "http://localhost:5013/api/google-oauth/callback"
+    ).trim(),
+  },
 };
 
 module.exports = config;

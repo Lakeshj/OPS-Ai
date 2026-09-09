@@ -33,6 +33,74 @@ const findScheduleNodes = (definition) => {
   return nodes.filter((n) => (n.type || n.data?.nodeType) === "schedule");
 };
 
+const findGmailTriggerNodes = (definition) => {
+  const nodes = Array.isArray(definition?.nodes) ? definition.nodes : [];
+  return nodes.filter((n) => (n.type || n.data?.nodeType) === "gmailTrigger" && !n.data?.disabled);
+};
+
+const fireGmailPoll = async (workflow, node) => {
+  try {
+    const [rows] = await pool.execute(
+      `SELECT id, status, workspace_id, created_by, definition_json FROM workflows WHERE id = ? AND status = 'active'`,
+      [workflow.id]
+    );
+    if (rows.length === 0) return;
+    const {
+      pollGmailTriggerOnce,
+    } = require("./workflowGmailTrigger.service");
+    const result = await pollGmailTriggerOnce({
+      workflowId: workflow.id,
+      nodeId: node.id,
+      workspaceId: rows[0].workspace_id,
+      data: node.data || {},
+    });
+    if (!result?.items?.length) return;
+    for (const item of result.items) {
+      const msgId = item?.json?.id;
+      const idempotencyKey = msgId
+        ? `gmail:${workflow.id}:${node.id}:${msgId}`
+        : null;
+      await workflowsService.startRun(
+        workflow.id,
+        {
+          source: "gmailTrigger",
+          gmailTriggerNodeId: node.id,
+          items: [item],
+        },
+        { userId: rows[0].created_by, role: "system" },
+        idempotencyKey
+      );
+    }
+  } catch (err) {
+    console.error(
+      `[workflow-scheduler] Gmail poll failed for ${workflow.id}/${node.id}:`,
+      err && err.message ? err.message : err
+    );
+  }
+};
+
+const scheduleGmailTrigger = (workflow, node) => {
+  const {
+    clampPollMs,
+  } = require("./workflowGmailTrigger.service");
+  const intervalMs = clampPollMs(node.data?.pollIntervalMs);
+  let stopped = false;
+  let timer = null;
+  const tick = async () => {
+    if (stopped) return;
+    await fireGmailPoll(workflow, node);
+    if (stopped) return;
+    timer = setTimeout(tick, intervalMs);
+  };
+  timer = setTimeout(tick, intervalMs);
+  return {
+    stop() {
+      stopped = true;
+      if (timer) clearTimeout(timer);
+    },
+  };
+};
+
 const registrationKey = (workflowId, nodeId, ruleId) =>
   `${workflowId}:${nodeId}:${ruleId}`;
 
@@ -218,7 +286,8 @@ const registerWorkflow = (workflow) => {
 
   const definition = parseJson(workflow.definition_json, { nodes: [] });
   const scheduleNodes = findScheduleNodes(definition);
-  if (scheduleNodes.length === 0) return;
+  const gmailTriggers = findGmailTriggerNodes(definition);
+  if (scheduleNodes.length === 0 && gmailTriggers.length === 0) return;
 
   const validationErrors = [];
   for (const node of scheduleNodes) {
@@ -230,14 +299,14 @@ const registerWorkflow = (workflow) => {
   }
   if (validationErrors.length > 0) {
     console.error(
-      `[workflow-scheduler] Skipping workflow ${workflow.id} — invalid schedule: ${validationErrors[0]}`
+      `[workflow-scheduler] Skipping schedule nodes for ${workflow.id} — invalid schedule: ${validationErrors[0]}`
     );
-    return;
   }
 
   const registrations = new Map();
 
-  for (const node of scheduleNodes) {
+  if (validationErrors.length === 0) {
+    for (const node of scheduleNodes) {
     const data = normalizeScheduleNodeData(node.data);
     if (data.disabled) continue;
     const rules = data.scheduleRules || [];
@@ -250,6 +319,12 @@ const registerWorkflow = (workflow) => {
           : scheduleCronRule(workflow, { ...node, data }, rule, definition);
       if (reg) registrations.set(key, reg);
     }
+  }
+  }
+
+  for (const node of gmailTriggers) {
+    const key = `gmail:${workflow.id}:${node.id}`;
+    registrations.set(key, scheduleGmailTrigger(workflow, node));
   }
 
   if (registrations.size > 0) {

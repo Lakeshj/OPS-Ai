@@ -30,11 +30,22 @@ const {
   listCredentials,
   createCredential,
   removeCredential,
+  startGoogleOAuth,
+  testCredential,
+  listGscSites,
+  listGa4Properties,
+  listGmailLabels,
+  listSheetTabs,
   copilotContext,
   copilotValidatePlan,
   copilotApplyPlan,
   copilotDiagnose,
   copilotPlan,
+  previewN8nImport,
+  importN8nDraft,
+  previewWorkflowImport,
+  commitWorkflowImport,
+  exportWorkflowNative,
 } = require("./workflows.controller");
 const {
   validateCreate,
@@ -49,6 +60,18 @@ const router = express.Router();
 router.get("/credentials", listCredentials);
 router.post("/credentials", validate(validateCredential), createCredential);
 router.delete("/credentials/:credentialId", removeCredential);
+router.post("/credentials/:credentialId/test", testCredential);
+router.post("/google-oauth/start", startGoogleOAuth);
+router.get("/google-oauth/gsc-sites", listGscSites);
+router.get("/google-oauth/ga4-properties", listGa4Properties);
+router.get("/google-oauth/gmail-labels", listGmailLabels);
+router.get("/google-oauth/sheet-tabs", listSheetTabs);
+
+// Part 14D.4 — unified + n8n import (before /:id)
+router.post("/import/preview", previewWorkflowImport);
+router.post("/import", commitWorkflowImport);
+router.post("/import/n8n/preview", previewN8nImport);
+router.post("/import/n8n", importN8nDraft);
 
 // Callable / Error Workflow picker metadata — before /:id
 router.get("/callable-targets", listCallableTargets);
@@ -86,6 +109,7 @@ router.post("/:id/copilot/validate-plan", copilotValidatePlan);
 router.post("/:id/copilot/apply-plan", copilotApplyPlan);
 router.post("/:id/copilot/diagnose", copilotDiagnose);
 
+router.get("/:id/export", exportWorkflowNative);
 router.get("/:id", getById);
 router.put("/:id", validate(validateUpdate), update);
 router.delete("/:id", remove);

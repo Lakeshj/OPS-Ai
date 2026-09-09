@@ -30,6 +30,7 @@ import { WorkflowResultsDialog } from "./WorkflowResultsDialog";
 import { WorkflowNodeDialog } from "./WorkflowNodeDialog";
 import { NodePickerDialog } from "./NodePickerDialog";
 import { WorkflowSettingsDialog } from "./WorkflowSettingsDialog";
+import { WorkflowImportDialog } from "./WorkflowImportDialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -43,11 +44,13 @@ import {
 } from "@/components/ui/dropdown-menu";
 import {
   CircleDot,
+  Download,
   LayoutGrid,
   MoreHorizontal,
   PanelRight,
   Plus,
   Settings2,
+  Upload,
 } from "lucide-react";
 import { redactOrchestrationOutput } from "@/modules/workflows/subworkflowUx";
 import {
@@ -149,6 +152,7 @@ const nodeTypes = {
   loop: WorkflowNode,
   noop: WorkflowNode,
   integration: WorkflowNode,
+  migrationUnsupported: WorkflowNode,
   aiModelProviderTest: WorkflowNode,
   aiToolProviderTest: WorkflowNode,
   aiMemoryProviderTest: WorkflowNode,
@@ -158,6 +162,13 @@ const nodeTypes = {
   aiCalculatorTool: WorkflowNode,
   aiHttpTool: WorkflowNode,
   respondToWebhook: WorkflowNode,
+  googleSearchConsole: WorkflowNode,
+  googleAnalytics: WorkflowNode,
+  gmail: WorkflowNode,
+  gmailTrigger: WorkflowNode,
+  googleSheets: WorkflowNode,
+  aiGenerate: WorkflowNode,
+  xlsxBuilder: WorkflowNode,
 };
 
 const edgeTypes = {
@@ -176,6 +187,7 @@ const START_TYPES = new Set([
   "webhook",
   "workflowTrigger",
   "errorTrigger",
+  "gmailTrigger",
 ]);
 
 type PickerTarget =
@@ -864,6 +876,7 @@ function WorkflowCanvasInner({
   const [runInput, setRunInput] = useState("");
   const [publishing, setPublishing] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
   const hasManualTrigger = useMemo(
     () => nodes.some((n) => n.type === "trigger"),
     [nodes]
@@ -873,6 +886,7 @@ function WorkflowCanvasInner({
     [nodes]
   );
   const [localError, setLocalError] = useState<string | null>(null);
+  const [localErrorNodeId, setLocalErrorNodeId] = useState<string | null>(null);
   const [rightPanel, setRightPanel] = useState<RightPanel>(null);
   const copilotButtonRef = useRef<HTMLButtonElement>(null);
   const [copilotFocusToken, setCopilotFocusToken] = useState(0);
@@ -2236,34 +2250,71 @@ function WorkflowCanvasInner({
     );
   };
 
-  const validateForRun = (): string | null => {
+  type RunValidationIssue = {
+    message: string;
+    nodeId?: string;
+    nodeLabel?: string;
+    preview?: string;
+  };
+
+  const validateForRun = (): RunValidationIssue | null => {
     if (!nodes.some((n) => START_TYPES.has(String(n.type)))) {
-      return "Add a Trigger, Schedule, or Webhook start node before Execute";
+      return {
+        message: "Add a Trigger, Schedule, or Webhook start node before Execute",
+      };
     }
     if (!nodes.some((n) => n.type === "result")) {
-      return "Add a Result node to finish the workflow";
+      return { message: "Add a Result node to finish the workflow" };
     }
     if (edges.length === 0) {
-      return "Connect nodes by dragging from one handle to another";
+      return {
+        message: "Connect nodes by dragging from one handle to another",
+      };
     }
     if (isSimplePassThrough) {
-      return "This only echoes input. Insert an AI node (or use a template) for a real reply.";
+      return {
+        message:
+          "This only echoes input. Insert an AI node (or use a template) for a real reply.",
+      };
     }
 
     const loopCheck = validateLoopGraph(nodes, edges);
     if (!loopCheck.ok) {
-      return loopCheck.message || "Invalid Loop topology";
+      return { message: loopCheck.message || "Invalid Loop topology" };
     }
 
     for (const n of nodes) {
       const data = (n.data || {}) as WorkflowNodeData;
-      if (n.type === "integration" || data.available === false) {
-        return `${String(data.label || n.type)} is not executable yet — remove it or replace with an available node`;
+      if (
+        n.type === "integration" ||
+        n.type === "migrationUnsupported" ||
+        data.available === false
+      ) {
+        const label = String(data.label || n.type || "node");
+        const mig = data.migration as
+          | { reasons?: string[] }
+          | undefined;
+        const reason = String(
+          data.migrationReason ||
+            (Array.isArray(mig?.reasons) ? mig.reasons[0] : "") ||
+            "UNSUPPORTED"
+        );
+        return {
+          nodeId: n.id,
+          nodeLabel: label,
+          preview: reason,
+          message: `Failed at «${label}»: not executable in OpsAi (${reason}). Replace or remove this node.`,
+        };
       }
       const issues = getNodeConfigIssues(n.type as WorkflowNodeType, data);
       if (issues.length > 0) {
         const label = String(data.label || n.type || "node");
-        return `${label}: ${issues[0]}`;
+        return {
+          nodeId: n.id,
+          nodeLabel: label,
+          preview: issues[0],
+          message: `Failed at «${label}»: ${issues[0]}`,
+        };
       }
     }
     return null;
@@ -2272,6 +2323,7 @@ function WorkflowCanvasInner({
   const handleSave = async () => {
     try {
       setLocalError(null);
+      setLocalErrorNodeId(null);
       if (isSimplePassThrough) {
         toast.message("Saved — tip: insert AI for a real reply");
       }
@@ -2289,17 +2341,45 @@ function WorkflowCanvasInner({
   const handleRun = async () => {
     try {
       setLocalError(null);
+      setLocalErrorNodeId(null);
       const err = validateForRun();
       if (err) {
-        setLocalError(err);
-        toast.error(err);
-        const incomplete = nodes.find((n) =>
-          nodeHasMissingConfig(
-            n.type as WorkflowNodeType,
-            (n.data || {}) as WorkflowNodeData
-          )
-        );
-        if (incomplete) setSelected(incomplete.id);
+        setLocalError(err.message);
+        setLocalErrorNodeId(err.nodeId || null);
+        toast.error(err.message);
+        const focusId =
+          err.nodeId ||
+          nodes.find((n) =>
+            nodeHasMissingConfig(
+              n.type as WorkflowNodeType,
+              (n.data || {}) as WorkflowNodeData
+            )
+          )?.id;
+        if (focusId) {
+          setSelected(focusId);
+          // Mark the blocking node like a real run failure (red X); clear stale ticks.
+          setNodes((prev) =>
+            prev.map((n) => {
+              if (n.id === focusId) {
+                return {
+                  ...n,
+                  data: {
+                    ...n.data,
+                    runStatus: "failed",
+                    runPreview: err.preview || "Not executable",
+                  },
+                };
+              }
+              if (n.data?.runStatus || n.data?.runPreview) {
+                const nextData = { ...n.data };
+                delete nextData.runStatus;
+                delete nextData.runPreview;
+                return { ...n, data: nextData };
+              }
+              return n;
+            })
+          );
+        }
         return;
       }
 
@@ -2466,6 +2546,47 @@ function WorkflowCanvasInner({
                 Results
               </DropdownMenuItem>
               <DropdownMenuSeparator />
+              {workspaceId ? (
+                <DropdownMenuItem
+                  disabled={historicalView}
+                  onSelect={() => setImportOpen(true)}
+                >
+                  <Upload className="mr-2 h-4 w-4" />
+                  Import Workflow
+                </DropdownMenuItem>
+              ) : null}
+              {workflowId ? (
+                <DropdownMenuItem
+                  onSelect={() => {
+                    void (async () => {
+                      try {
+                        const pkg = await workflowsApi.exportNative(workflowId);
+                        const blob = new Blob(
+                          [JSON.stringify(pkg, null, 2)],
+                          { type: "application/json" }
+                        );
+                        const url = URL.createObjectURL(blob);
+                        const a = document.createElement("a");
+                        a.href = url;
+                        a.download = `${(name || "workflow").replace(/[^\w.-]+/g, "_")}.opsai.json`;
+                        a.click();
+                        URL.revokeObjectURL(url);
+                        toast.success("Exported OpsAi workflow JSON");
+                      } catch (err) {
+                        toast.error(
+                          err instanceof Error
+                            ? err.message
+                            : "Export failed"
+                        );
+                      }
+                    })();
+                  }}
+                >
+                  <Download className="mr-2 h-4 w-4" />
+                  Export Workflow
+                </DropdownMenuItem>
+              ) : null}
+              <DropdownMenuSeparator />
               <DropdownMenuItem
                 onSelect={() => {
                   if (selectedId) openNodeDialog();
@@ -2525,8 +2646,36 @@ function WorkflowCanvasInner({
       {(localError || (latestRun?.status === "failed" && latestRun.error)) &&
         !resultsDialogOpen && (
           <div className="rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
-            <div className="font-medium">Error</div>
-            <div className="mt-0.5 whitespace-pre-wrap">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="rounded bg-blue-600 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white">
+                Error
+              </span>
+              {(localErrorNodeId ||
+                latestRun?.steps?.find((s) => s.status === "failed")
+                  ?.nodeId) && (
+                <button
+                  type="button"
+                  className="text-xs font-medium underline underline-offset-2 hover:opacity-80"
+                  onClick={() => {
+                    const id =
+                      localErrorNodeId ||
+                      latestRun?.steps?.find((s) => s.status === "failed")
+                        ?.nodeId;
+                    if (id) setSelected(id);
+                  }}
+                >
+                  Failed node:{" "}
+                  {String(
+                    nodes.find((n) => n.id === localErrorNodeId)?.data?.label ||
+                      latestRun?.steps?.find((s) => s.status === "failed")
+                        ?.nodeId ||
+                      localErrorNodeId ||
+                      "unknown"
+                  )}
+                </button>
+              )}
+            </div>
+            <div className="mt-1 whitespace-pre-wrap">
               {localError || latestRun?.error}
             </div>
           </div>
@@ -2811,6 +2960,14 @@ function WorkflowCanvasInner({
           }}
         />
       )}
+
+      {workspaceId ? (
+        <WorkflowImportDialog
+          open={importOpen}
+          onOpenChange={setImportOpen}
+          workspaceId={workspaceId}
+        />
+      ) : null}
 
       {selectedEdgeId && (
         <div className="fixed bottom-20 left-1/2 z-50 flex -translate-x-1/2 gap-2 rounded-lg border bg-card p-2 shadow-lg">

@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updatedAt": "2026-08-31T14:13:12.110Z",
+  "updatedAt": "2026-09-08T06:23:56.520Z",
   "categories": [
     "Triggers",
     "Core",
@@ -13,6 +13,7 @@
     "Productivity",
     "CRM",
     "Marketing",
+    "SEO",
     "Cloud",
     "AI",
     "AI Agents",
@@ -55,6 +56,17 @@
       "provider": null,
       "available": true,
       "engineType": "webhook"
+    },
+    {
+      "id": "gmail-trigger",
+      "name": "Gmail Trigger",
+      "category": "Triggers",
+      "type": "Trigger",
+      "description": "Poll Gmail on an interval and start the workflow for new messages (not push/real-time)",
+      "icon": "mail",
+      "provider": "Google",
+      "available": true,
+      "engineType": "gmailTrigger"
     },
     {
       "id": "respond-to-webhook",
@@ -497,6 +509,17 @@
       "engineType": "spreadsheet"
     },
     {
+      "id": "xlsx-builder",
+      "name": "XLSX Builder",
+      "category": "Files",
+      "type": "Action",
+      "description": "Build a multi-sheet Excel workbook as workflow binary",
+      "icon": "sheet",
+      "provider": null,
+      "available": true,
+      "engineType": "xlsxBuilder"
+    },
+    {
       "id": "postgresql",
       "name": "PostgreSQL",
       "category": "Databases",
@@ -609,13 +632,13 @@
     {
       "id": "google-sheets",
       "name": "Google Sheets",
-      "category": "Databases",
+      "category": "Productivity",
       "type": "Action",
-      "description": "Query or update data in Google Sheets",
+      "description": "Read, append, update, or clear Google Sheets rows",
       "icon": "database",
       "provider": "Google",
-      "available": false,
-      "engineType": null
+      "available": true,
+      "engineType": "googleSheets"
     },
     {
       "id": "microsoft-excel-365",
@@ -644,11 +667,33 @@
       "name": "Gmail",
       "category": "Communication",
       "type": "Action",
-      "description": "Send and receive Gmail messages",
+      "description": "Send, read, label, and manage Gmail messages",
       "icon": "mail",
       "provider": "Google",
-      "available": false,
-      "engineType": null
+      "available": true,
+      "engineType": "gmail"
+    },
+    {
+      "id": "google-search-console",
+      "name": "Google Search Console",
+      "category": "SEO",
+      "type": "Action",
+      "description": "Pull Search Analytics queries or pages (clicks, impressions, CTR, position)",
+      "icon": "search",
+      "provider": "Google",
+      "available": true,
+      "engineType": "googleSearchConsole"
+    },
+    {
+      "id": "google-analytics",
+      "name": "Google Analytics",
+      "category": "SEO",
+      "type": "Action",
+      "description": "Run a GA4 report for sessions, users, and other metrics",
+      "icon": "chart",
+      "provider": "Google",
+      "available": true,
+      "engineType": "googleAnalytics"
     },
     {
       "id": "microsoft-outlook",
@@ -1166,6 +1211,17 @@
       "provider": "OpsAi",
       "available": true,
       "engineType": "ai"
+    },
+    {
+      "id": "ai-generate",
+      "name": "AI Generate",
+      "category": "AI",
+      "type": "AI",
+      "description": "One model request per item (no agent loop or tools)",
+      "icon": "sparkles",
+      "provider": "OpsAi",
+      "available": true,
+      "engineType": "aiGenerate"
     },
     {
       "id": "ai-agent",
