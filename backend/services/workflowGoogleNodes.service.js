@@ -49,10 +49,14 @@ const expr = (value, context, item) => {
   });
 };
 
-const requireCredential = (data) => {
+const requireCredential = (data, connectProduct) => {
   const id = String(data.credentialId || "").trim();
   if (!id) {
-    const err = new Error("Select a Google credential");
+    const err = new Error(
+      connectProduct
+        ? `Connect ${connectProduct} to continue.`
+        : "Select a Google credential"
+    );
     err.code = "GOOGLE_CREDENTIAL_REQUIRED";
     throw err;
   }
@@ -63,7 +67,7 @@ const encodeSiteUrl = (siteUrl) => encodeURIComponent(String(siteUrl || "").trim
 
 const gscQuery = async (node, context, item) => {
   const data = node.data || {};
-  const credentialId = requireCredential(data);
+  const credentialId = requireCredential(data, "Google Search Console");
   const siteUrl = String(expr(data.siteUrl, context, item) || "").trim();
   if (!siteUrl) {
     throw new Error("Search Console site URL is required");

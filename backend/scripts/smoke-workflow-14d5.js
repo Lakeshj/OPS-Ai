@@ -514,7 +514,7 @@ const registerPart14D5Tests = ({ check, section, assert: a }) => {
   check("GSC-2 credential required", async () => {
     await assertX.rejects(
       () => exec("googleSearchConsole", { siteUrl: "https://ex.com/" }),
-      /credential/i
+      /Connect Google Search Console to continue/i
     );
   });
 

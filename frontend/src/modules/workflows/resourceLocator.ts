@@ -76,7 +76,7 @@ export const classifyResourceLoadError = (err: {
   if (
     code === "GOOGLE_CREDENTIAL_REQUIRED" ||
     code === "GOOGLE_CREDENTIAL_TYPE" ||
-    /select a google credential|credential is required|missing credential/.test(msg)
+    /select a google credential|credential is required|missing credential|connect google .+ to continue/.test(msg)
   ) {
     return "missing_credential" as const;
   }

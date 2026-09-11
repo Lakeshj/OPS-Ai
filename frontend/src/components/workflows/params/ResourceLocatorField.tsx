@@ -61,8 +61,16 @@ const MODE_LABEL: Record<LocatorMode, string> = {
   expression: "Expression",
 };
 
-const loadErrorMessage = (state: string) => {
-  if (state === "missing_credential") return "Connect a Google account to load resources.";
+const connectContinueHint = (kind: LocatorKind) => {
+  if (kind === "gscSites") return "Connect Google Search Console to continue.";
+  if (kind === "ga4Properties") return "Connect Google Analytics to continue.";
+  if (kind === "gmailLabels") return "Connect Gmail to continue.";
+  if (kind === "sheetTabs") return "Connect Google Sheets to continue.";
+  return "Connect a Google account to load resources.";
+};
+
+const loadErrorMessage = (state: string, kind: LocatorKind) => {
+  if (state === "missing_credential") return connectContinueHint(kind);
   if (state === "unauthorized") return "This Google credential is expired or revoked. Reconnect it, then refresh.";
   if (state === "permission_denied") return "This account cannot list that resource. The saved value was kept.";
   if (state === "provider_error") return "Could not load resources. You can still enter a value manually.";
@@ -233,7 +241,7 @@ export function ResourceLocatorField({
       {currentMode === "expression" ? (
         <ExpressionField
           value={scalar}
-          onChange={(v) => patchValue(v)}
+          onChange={(v) => patchValue(v, { mode: "expression" })}
           placeholder={placeholder || "{{input.field}}"}
           expressionContext={previewContext}
         />
@@ -247,7 +255,8 @@ export function ResourceLocatorField({
             patchValue(
               multi
                 ? e.target.value.split(/[,\s]+/).filter(Boolean)
-                : e.target.value
+                : e.target.value,
+              { mode: "manual" }
             )
           }
         />
@@ -257,9 +266,9 @@ export function ResourceLocatorField({
         <>
           {!canLoadAccount ? (
             <p className="text-[11px] text-muted-foreground">
-              {kind === "sheetTabs"
+              {kind === "sheetTabs" && !spreadsheetId
                 ? "Enter a spreadsheet ID first to list tabs."
-                : "Connect a Google account to load resources."}
+                : connectContinueHint(kind)}
             </p>
           ) : null}
 
@@ -279,9 +288,9 @@ export function ResourceLocatorField({
                   No accessible resources for this account.
                 </p>
               ) : null}
-              {!loading && loadErrorMessage(loadState) ? (
+              {!loading && loadErrorMessage(loadState, kind) ? (
                 <p className="text-[11px] text-amber-700 dark:text-amber-400">
-                  {loadErrorMessage(loadState)}
+                  {loadErrorMessage(loadState, kind)}
                 </p>
               ) : null}
 
@@ -298,7 +307,7 @@ export function ResourceLocatorField({
                             const next = enabled
                               ? [...selectedIds, opt.id]
                               : selectedIds.filter((id) => id !== opt.id);
-                            patchValue(next);
+                            patchValue(next, { mode: "account" });
                           }}
                         />
                         <span className="truncate">{opt.label}</span>
@@ -311,7 +320,10 @@ export function ResourceLocatorField({
                   value={scalar || undefined}
                   onValueChange={(id) => {
                     const opt = options.find((o) => o.id === id);
-                    patchValue(id, displayNameField && opt ? { [displayNameField]: opt.label } : {});
+                    patchValue(id, {
+                      mode: "account",
+                      ...(displayNameField && opt ? { [displayNameField]: opt.label } : {}),
+                    });
                   }}
                 >
                   <SelectTrigger>
