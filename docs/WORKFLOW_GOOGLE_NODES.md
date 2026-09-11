@@ -11,9 +11,29 @@ Native Google integrations for workflows. Tokens live only in encrypted `workflo
 | `google_gmail` | Gmail | `gmail.modify`, `gmail.send`, `gmail.compose` |
 | `google_sheets` | Google Sheets | `spreadsheets` |
 
-Do not paste access/refresh tokens into Copilot or node parameters. Use **Connect Google** in the credential picker (OAuth authorization code, server callback, encrypted refresh).
+## Predefined Google OAuth (14D.5.4B)
 
-Env: `GOOGLE_OAUTH_CLIENT_ID`, `GOOGLE_OAUTH_CLIENT_SECRET`, `GOOGLE_OAUTH_REDIRECT_URI` (default `http://localhost:5013/api/google-oauth/callback`). Google redirects the browser at Express directly — that URI must match Google Cloud Console exactly. OAuth `state` is HMAC-signed, expiring, user/workspace-bound, and **single-use** (nonce consumed on callback). The editor accepts OAuth `postMessage` only from the callback origin and the editor origin, only from the opened popup, and only a typed `{ type, ok, credentialId|error }` payload (no tokens).
+Normal author flow is **frontend-configured** (`CUSTOM_APP`):
+
+1. Connect Google Analytics / GSC / Gmail / Sheets
+2. Credential modal: OAuth Redirect URL (read-only + copy), Client ID, Client Secret, allowed domains, optional custom scopes
+3. Save → Connect → Google account chooser (`prompt=select_account consent`) → callback
+4. Encrypted credential becomes selectable; node picks resources (property/site/sheet)
+
+Google authorization/token endpoints are owned by the provider registry — authors do **not** enter them for predefined Google types.
+
+**OAuth app modes (explicit):**
+
+| Mode | Client ID / Secret source |
+| --- | --- |
+| `CUSTOM_APP` | Per-credential (encrypted secret + safe config). First-class path. |
+| `PLATFORM_MANAGED` | Optional legacy/fallback using server `GOOGLE_OAUTH_CLIENT_*` when present |
+
+Redirect URI (register in the author’s Google Cloud OAuth client): `GOOGLE_OAUTH_REDIRECT_URI` or default `http://localhost:5013/api/google-oauth/callback`.
+
+OAuth `state` is HMAC-signed, expiring, user/workspace/credential-bound, and **single-use**. Refresh uses the **same** OAuth app mode that created the credential.
+
+Do not paste access/refresh tokens into Copilot or node parameters. Copilot must never invent Client ID/Secret.
 
 ## Credential vs resource (14D.5.1)
 
@@ -46,7 +66,7 @@ Model: suggested list for the selected provider, manual ID, or `{{input.model}}`
 
 ## Token refresh / revocation
 
-Server-side refresh uses the stored refresh token. `invalid_grant` / 401 after refresh → `GOOGLE_UNAUTHORIZED` (reconnect). Wrong workspace → denied. Logs never include `Authorization` or tokens.
+Server-side refresh uses the stored refresh token with the credential’s OAuth app. `invalid_grant` / 401 after refresh → `GOOGLE_UNAUTHORIZED` (reconnect). Wrong workspace → denied. Logs never include `Authorization` or tokens.
 
 ## Google Search Console (`googleSearchConsole`)
 
@@ -76,4 +96,4 @@ Get spreadsheet, read/append/update rows, clear range, create spreadsheet, add s
 
 ## Security
 
-Never put tokens in workflow JSON, run output, Copilot context, native export, or logs. Copilot may say “Google credential required” — never ask for client secrets or tokens.
+Never put tokens or Client Secret in workflow JSON, run output, Copilot context, native export, or logs. Editor views return `hasClientSecret` flags only — never plaintext secrets.
