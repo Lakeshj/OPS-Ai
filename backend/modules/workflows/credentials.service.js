@@ -4,6 +4,12 @@ const AppError = require("../../utils/AppError");
 const { assertWorkspaceAccess } = require("../../services/authorization.service");
 const { encryptSecret, decryptSecret } = require("../../services/secretBox.service");
 const oauth2 = require("../../services/genericOAuth2.service");
+const registry = require("../../services/connectionRegistry.service");
+const {
+  OAUTH_APP_MODE,
+  redirectUri: googleRedirectUri,
+  platformClientConfigured,
+} = require("../../services/googleOAuth.service");
 
 const HTTP_CREDENTIAL_TYPES = new Set([
   "bearer",
@@ -27,9 +33,14 @@ const CREDENTIAL_TYPES = new Set([
 
 const parseConfig = (raw) => oauth2.parseConfig(raw);
 
+const googleConnected = (secret, cfg) =>
+  Boolean(cfg?.connected) || Boolean(secret?.accessToken);
+
 /** Never returns the secret itself — only what is safe to render in the UI. */
 const formatCredential = (row) => {
   const cfg = parseConfig(row.config_json);
+  const isGoogle = GOOGLE_CREDENTIAL_TYPES.has(row.type);
+  const isOauth2 = row.type === "oauth2";
   return {
     id: row.id,
     workspaceId: row.workspace_id,
@@ -38,8 +49,19 @@ const formatCredential = (row) => {
     createdBy: row.created_by,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
-    connected: row.type === "oauth2" ? Boolean(cfg.connected) : true,
+    connected: isOauth2
+      ? Boolean(cfg.connected)
+      : isGoogle
+        ? cfg.connected === undefined
+          ? true
+          : Boolean(cfg.connected)
+        : true,
     sharing: "workspace",
+    oauthAppMode: isGoogle
+      ? cfg.oauthAppMode || OAUTH_APP_MODE.CUSTOM_APP
+      : undefined,
+    accountEmail:
+      isGoogle && cfg.accountEmail ? String(cfg.accountEmail) : undefined,
   };
 };
 
@@ -52,25 +74,86 @@ const listByWorkspace = async (workspaceId, authUser) => {
   return rows.map(formatCredential);
 };
 
+const validateGoogleCreate = ({ type, secret, config }) => {
+  const entry = registry.getSupportedPredefined(type);
+  const errors = [];
+  const mode = String(
+    config?.oauthAppMode || OAUTH_APP_MODE.CUSTOM_APP
+  ).trim();
+  if (
+    mode !== OAUTH_APP_MODE.CUSTOM_APP &&
+    mode !== OAUTH_APP_MODE.PLATFORM_MANAGED
+  ) {
+    errors.push("oauthAppMode must be CUSTOM_APP or PLATFORM_MANAGED");
+  }
+  if (mode === OAUTH_APP_MODE.CUSTOM_APP) {
+    if (!String(config?.clientId || "").trim()) {
+      errors.push("Client ID is required");
+    }
+    if (!String(secret?.clientSecret || "").trim()) {
+      errors.push("Client Secret is required");
+    }
+  } else if (!platformClientConfigured()) {
+    errors.push(
+      "Platform-managed Google OAuth is not available. Use Client ID and Client Secret on this connection."
+    );
+  }
+  return {
+    errors,
+    mode,
+    defaults: entry
+      ? {
+          allowedDomains: [...(entry.allowedDomains || [])],
+          defaultScopes: [...(entry.oauth?.defaultScopes || [])],
+        }
+      : { allowedDomains: [], defaultScopes: [] },
+  };
+};
+
 const create = async ({ workspaceId, name, type, secret, config }, authUser) => {
   await assertWorkspaceAccess(authUser, workspaceId);
 
-  if (GOOGLE_CREDENTIAL_TYPES.has(type)) {
-    throw new AppError(
-      "Connect Google from the credential picker — access tokens cannot be pasted",
-      400,
-      "VALIDATION_ERROR"
-    );
-  }
-  if (!HTTP_CREDENTIAL_TYPES.has(type)) {
-    throw new AppError(`Unsupported credential type: ${type}`, 400, "VALIDATION_ERROR");
-  }
   if (!secret || typeof secret !== "object") {
     throw new AppError("secret object is required", 400, "VALIDATION_ERROR");
   }
 
   let configJson = null;
-  if (type === "oauth2") {
+  let secretPayload = secret;
+
+  if (GOOGLE_CREDENTIAL_TYPES.has(type)) {
+    const checked = validateGoogleCreate({ type, secret, config });
+    if (checked.errors.length) {
+      throw new AppError(checked.errors[0], 400, "VALIDATION_ERROR");
+    }
+    const allowedDomains =
+      Array.isArray(config?.allowedDomains) && config.allowedDomains.length
+        ? config.allowedDomains.map((d) => String(d).trim()).filter(Boolean)
+        : checked.defaults.allowedDomains;
+    const customScopes = String(config?.customScopes || "").trim();
+    configJson = JSON.stringify({
+      oauthAppMode: checked.mode,
+      clientId:
+        checked.mode === OAUTH_APP_MODE.CUSTOM_APP
+          ? String(config.clientId || "").trim()
+          : undefined,
+      allowedDomains,
+      customScopes: customScopes || undefined,
+      connected: false,
+    });
+    secretPayload =
+      checked.mode === OAUTH_APP_MODE.CUSTOM_APP
+        ? {
+            clientSecret: String(secret.clientSecret || ""),
+            oauthAppMode: checked.mode,
+          }
+        : { oauthAppMode: checked.mode };
+  } else if (!HTTP_CREDENTIAL_TYPES.has(type)) {
+    throw new AppError(
+      `Unsupported credential type: ${type}`,
+      400,
+      "VALIDATION_ERROR"
+    );
+  } else if (type === "oauth2") {
     const checked = oauth2.validateOAuth2Config(
       { ...(config || {}), clientSecret: secret.clientSecret },
       { requireSecret: true }
@@ -79,10 +162,16 @@ const create = async ({ workspaceId, name, type, secret, config }, authUser) => 
       throw new AppError(checked.errors[0], 400, "VALIDATION_ERROR");
     }
     configJson = JSON.stringify({ ...checked.config, connected: false });
-    secret = { clientSecret: String(secret.clientSecret || "") };
-  } else if (config && Array.isArray(config.allowedDomains) && config.allowedDomains.length) {
+    secretPayload = { clientSecret: String(secret.clientSecret || "") };
+  } else if (
+    config &&
+    Array.isArray(config.allowedDomains) &&
+    config.allowedDomains.length
+  ) {
     configJson = JSON.stringify({
-      allowedDomains: config.allowedDomains.map((d) => String(d).trim()).filter(Boolean),
+      allowedDomains: config.allowedDomains
+        .map((d) => String(d).trim())
+        .filter(Boolean),
     });
   }
 
@@ -96,7 +185,7 @@ const create = async ({ workspaceId, name, type, secret, config }, authUser) => 
       workspaceId,
       name,
       type,
-      encryptSecret(secret),
+      encryptSecret(secretPayload),
       configJson,
       authUser.id || authUser.userId,
     ]
@@ -107,6 +196,90 @@ const create = async ({ workspaceId, name, type, secret, config }, authUser) => 
     [id]
   );
   return formatCredential(rows[0]);
+};
+
+const update = async (credentialId, { name, secret, config }, authUser) => {
+  const [rows] = await pool.execute(
+    `SELECT * FROM workflow_credentials WHERE id = ?`,
+    [credentialId]
+  );
+  if (!rows.length) throw new AppError("Credential not found", 404, "NOT_FOUND");
+  await assertWorkspaceAccess(authUser, rows[0].workspace_id);
+  const row = rows[0];
+  const existingSecret = decryptSecret(row.secret_json) || {};
+  const existingConfig = parseConfig(row.config_json);
+
+  if (!GOOGLE_CREDENTIAL_TYPES.has(row.type)) {
+    throw new AppError(
+      "Updating this connection type is not supported here",
+      400,
+      "VALIDATION_ERROR"
+    );
+  }
+
+  const mode = String(
+    config?.oauthAppMode ||
+      existingConfig.oauthAppMode ||
+      OAUTH_APP_MODE.CUSTOM_APP
+  ).trim();
+  const nextClientId =
+    config?.clientId !== undefined
+      ? String(config.clientId || "").trim()
+      : String(existingConfig.clientId || "").trim();
+  const nextSecret =
+    secret?.clientSecret !== undefined &&
+    String(secret.clientSecret || "").trim()
+      ? String(secret.clientSecret).trim()
+      : existingSecret.clientSecret || "";
+  if (mode === OAUTH_APP_MODE.CUSTOM_APP) {
+    if (!nextClientId) {
+      throw new AppError("Client ID is required", 400, "VALIDATION_ERROR");
+    }
+    if (!nextSecret) {
+      throw new AppError("Client Secret is required", 400, "VALIDATION_ERROR");
+    }
+  }
+  const entry = registry.getSupportedPredefined(row.type);
+  const allowedDomains =
+    Array.isArray(config?.allowedDomains) && config.allowedDomains.length
+      ? config.allowedDomains.map((d) => String(d).trim()).filter(Boolean)
+      : existingConfig.allowedDomains ||
+        (entry ? [...(entry.allowedDomains || [])] : []);
+  const customScopes =
+    config?.customScopes !== undefined
+      ? String(config.customScopes || "").trim()
+      : existingConfig.customScopes || "";
+  const nextConfig = {
+    ...existingConfig,
+    oauthAppMode: mode,
+    clientId: mode === OAUTH_APP_MODE.CUSTOM_APP ? nextClientId : undefined,
+    allowedDomains,
+    customScopes: customScopes || undefined,
+    connected: googleConnected(existingSecret, existingConfig),
+    accountEmail: existingConfig.accountEmail,
+  };
+  const nextSecretObj = {
+    ...existingSecret,
+    oauthAppMode: mode,
+    clientSecret: mode === OAUTH_APP_MODE.CUSTOM_APP ? nextSecret : undefined,
+  };
+  await pool.execute(
+    `UPDATE workflow_credentials
+        SET name = ?, secret_json = ?, config_json = ?
+      WHERE id = ?`,
+    [
+      name != null ? String(name).trim() : row.name,
+      encryptSecret(nextSecretObj),
+      JSON.stringify(nextConfig),
+      credentialId,
+    ]
+  );
+
+  const [updated] = await pool.execute(
+    `SELECT * FROM workflow_credentials WHERE id = ?`,
+    [credentialId]
+  );
+  return formatCredential(updated[0]);
 };
 
 const remove = async (id, authUser) => {
@@ -130,10 +303,45 @@ const getEditorView = async (id, authUser) => {
   await assertWorkspaceAccess(authUser, rows[0].workspace_id);
   const row = rows[0];
   const formatted = formatCredential(row);
-  if (row.type !== "oauth2") {
-    return { ...formatted, editor: { allowedDomains: parseConfig(row.config_json).allowedDomains || [] } };
+  const cfg = parseConfig(row.config_json);
+  const secret = decryptSecret(row.secret_json) || {};
+
+  if (GOOGLE_CREDENTIAL_TYPES.has(row.type)) {
+    const entry = registry.getSupportedPredefined(row.type);
+    return {
+      ...formatted,
+      editor: {
+        oauthAppMode:
+          cfg.oauthAppMode ||
+          (secret.clientSecret
+            ? OAUTH_APP_MODE.CUSTOM_APP
+            : OAUTH_APP_MODE.PLATFORM_MANAGED),
+        clientId: cfg.clientId || "",
+        hasClientSecret: Boolean(secret.clientSecret),
+        hasAccessToken: Boolean(secret.accessToken),
+        hasRefreshToken: Boolean(secret.refreshToken),
+        connected: googleConnected(secret, cfg),
+        redirectUri: googleRedirectUri(),
+        allowedDomains:
+          cfg.allowedDomains ||
+          (entry ? [...(entry.allowedDomains || [])] : []),
+        customScopes: cfg.customScopes || "",
+        defaultScopes: entry?.oauth?.defaultScopes
+          ? [...entry.oauth.defaultScopes]
+          : [],
+        authorizationUrl: entry?.oauth?.authorizationUrl || "",
+        tokenUrl: entry?.oauth?.tokenUrl || "",
+        accountEmail: cfg.accountEmail || "",
+      },
+    };
   }
-  const secret = decryptSecret(row.secret_json);
+
+  if (row.type !== "oauth2") {
+    return {
+      ...formatted,
+      editor: { allowedDomains: cfg.allowedDomains || [] },
+    };
+  }
   return {
     ...formatted,
     editor: {
@@ -195,6 +403,7 @@ const getSecretForWorkspace = async (credentialId, workspaceId) => {
 module.exports = {
   listByWorkspace,
   create,
+  update,
   remove,
   getEditorView,
   getForWorkspace,
@@ -204,4 +413,5 @@ module.exports = {
   HTTP_CREDENTIAL_TYPES,
   GOOGLE_CREDENTIAL_TYPES,
   formatCredential,
+  OAUTH_APP_MODE,
 };

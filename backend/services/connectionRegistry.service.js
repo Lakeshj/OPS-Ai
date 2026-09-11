@@ -79,6 +79,22 @@ const GENERIC_METHODS = Object.freeze([
   },
 ]);
 
+const GOOGLE_AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth";
+const GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token";
+
+const googleOAuthDef = (product, scopes) => ({
+  product,
+  /** Frontend-configured Client ID/Secret is the primary path (14D.5.4B). */
+  appModeDefault: "CUSTOM_APP",
+  /** Optional server GOOGLE_OAUTH_* fallback when credential is PLATFORM_MANAGED. */
+  platformManagedSupported: true,
+  authorizationUrl: GOOGLE_AUTH_URL,
+  tokenUrl: GOOGLE_TOKEN_URL,
+  defaultScopes: scopes,
+  refresh: "offline_access_with_consent",
+  prompt: "select_account consent",
+});
+
 const PREDEFINED = Object.freeze([
   {
     id: "google_gsc",
@@ -91,7 +107,9 @@ const PREDEFINED = Object.freeze([
     dbType: "google_gsc",
     allowedDomains: GOOGLE_HOSTS.gsc,
     requestApplication: { type: "bearer" },
-    oauth: { managed: "google", product: "google_gsc" },
+    oauth: googleOAuthDef("google_gsc", [
+      "https://www.googleapis.com/auth/webmasters.readonly",
+    ]),
     testConnection: { kind: "google" },
     search: ["google", "search console", "gsc", "oauth2"],
   },
@@ -106,7 +124,9 @@ const PREDEFINED = Object.freeze([
     dbType: "google_ga4",
     allowedDomains: GOOGLE_HOSTS.ga4,
     requestApplication: { type: "bearer" },
-    oauth: { managed: "google", product: "google_ga4" },
+    oauth: googleOAuthDef("google_ga4", [
+      "https://www.googleapis.com/auth/analytics.readonly",
+    ]),
     testConnection: { kind: "google" },
     search: ["google", "analytics", "ga4", "oauth2"],
   },
@@ -121,7 +141,11 @@ const PREDEFINED = Object.freeze([
     dbType: "google_gmail",
     allowedDomains: GOOGLE_HOSTS.gmail,
     requestApplication: { type: "bearer" },
-    oauth: { managed: "google", product: "google_gmail" },
+    oauth: googleOAuthDef("google_gmail", [
+      "https://www.googleapis.com/auth/gmail.modify",
+      "https://www.googleapis.com/auth/gmail.send",
+      "https://www.googleapis.com/auth/gmail.compose",
+    ]),
     testConnection: { kind: "google" },
     search: ["google", "gmail", "mail", "oauth2"],
   },
@@ -136,7 +160,9 @@ const PREDEFINED = Object.freeze([
     dbType: "google_sheets",
     allowedDomains: GOOGLE_HOSTS.sheets,
     requestApplication: { type: "bearer" },
-    oauth: { managed: "google", product: "google_sheets" },
+    oauth: googleOAuthDef("google_sheets", [
+      "https://www.googleapis.com/auth/spreadsheets",
+    ]),
     testConnection: { kind: "google" },
     search: ["google", "sheets", "spreadsheet", "oauth2"],
   },
@@ -194,22 +220,35 @@ const byId = new Map(
   [...PREDEFINED, ...CATALOG_SOON].map((e) => [e.id, e])
 );
 
-const publicEntry = (e) => ({
-  id: e.id,
-  displayName: e.displayName,
-  provider: e.provider || "",
-  category: e.category || "",
-  authScheme: e.authScheme,
-  kind: e.kind,
-  status: e.status,
-  allowedDomains: e.allowedDomains ? [...e.allowedDomains] : undefined,
-  oauthManaged: Boolean(e.oauth && e.oauth.managed === "google"),
-  testConnection: Boolean(e.testConnection),
-  reason: e.reason || undefined,
-  searchText: [e.displayName, e.provider, e.category, e.authScheme, ...(e.search || [])]
-    .join(" ")
-    .toLowerCase(),
-});
+const publicEntry = (e) => {
+  const isPredefinedGoogle = Boolean(e.oauth && e.oauth.product && e.dbType);
+  return {
+    id: e.id,
+    displayName: e.displayName,
+    provider: e.provider || "",
+    category: e.category || "",
+    authScheme: e.authScheme,
+    kind: e.kind,
+    status: e.status,
+    allowedDomains: e.allowedDomains ? [...e.allowedDomains] : undefined,
+    defaultScopes: e.oauth?.defaultScopes ? [...e.oauth.defaultScopes] : undefined,
+    authorizationUrl: e.oauth?.authorizationUrl,
+    tokenUrl: e.oauth?.tokenUrl,
+    /** Predefined Google: frontend credential modal (CUSTOM_APP). Not generic OAuth2. */
+    oauthManaged: isPredefinedGoogle,
+    oauthMode: isPredefinedGoogle
+      ? "predefined_custom_app"
+      : e.dbType === "oauth2"
+        ? "generic"
+        : undefined,
+    oauthAppModeDefault: e.oauth?.appModeDefault || undefined,
+    testConnection: Boolean(e.testConnection),
+    reason: e.reason || undefined,
+    searchText: [e.displayName, e.provider, e.category, e.authScheme, ...(e.search || [])]
+      .join(" ")
+      .toLowerCase(),
+  };
+};
 
 const listPredefined = () =>
   [...PREDEFINED, ...CATALOG_SOON].map(publicEntry);

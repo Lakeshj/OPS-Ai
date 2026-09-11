@@ -35,10 +35,36 @@ const validateCredential = (req) => {
   if (!workspaceId) errors.push("workspaceId is required");
   if (!name || !String(name).trim()) errors.push("name is required");
 
+  const googleTypes = new Set([
+    "google_gsc",
+    "google_ga4",
+    "google_gmail",
+    "google_sheets",
+  ]);
+  if (googleTypes.has(type)) {
+    if (!secret || typeof secret !== "object") {
+      errors.push("secret is required");
+      return errors;
+    }
+    const mode = String(config?.oauthAppMode || "CUSTOM_APP").trim();
+    if (mode === "CUSTOM_APP") {
+      if (!String(config?.clientId || "").trim()) {
+        errors.push("Client ID is required");
+      }
+      if (!String(secret.clientSecret || "").trim()) {
+        errors.push("Client Secret is required");
+      }
+    }
+    return errors;
+  }
+
   const required = CREDENTIAL_SECRET_FIELDS[type];
   if (!required) {
     errors.push(
-      `type must be one of: ${Object.keys(CREDENTIAL_SECRET_FIELDS).join(", ")}`
+      `type must be one of: ${[
+        ...Object.keys(CREDENTIAL_SECRET_FIELDS),
+        ...googleTypes,
+      ].join(", ")}`
     );
     return errors;
   }

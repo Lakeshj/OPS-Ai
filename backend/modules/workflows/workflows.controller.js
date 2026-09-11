@@ -155,6 +155,7 @@ const startGoogleOAuth = asyncHandler(async (req, res) => {
         workspaceId: req.body?.workspaceId,
         product: req.body?.product,
         name: req.body?.name,
+        credentialId: req.body?.credentialId,
       },
       req.user
     )
@@ -163,15 +164,23 @@ const startGoogleOAuth = asyncHandler(async (req, res) => {
 
 const listConnectionTypes = asyncHandler(async (_req, res) => {
   const registry = require("../../services/connectionRegistry.service");
+  const googleOAuth = require("../../services/googleOAuth.service");
   res.json({
     predefined: registry.listPredefined(),
     generic: registry.listGenericMethods(),
     oauth2RedirectUri: require("../../services/genericOAuth2.service").redirectUri(),
+    googleOAuthRedirectUri: googleOAuth.redirectUri(),
   });
 });
 
 const getCredentialEditor = asyncHandler(async (req, res) => {
   res.json(await credentialsService.getEditorView(req.params.credentialId, req.user));
+});
+
+const updateCredential = asyncHandler(async (req, res) => {
+  res.json(
+    await credentialsService.update(req.params.credentialId, req.body, req.user)
+  );
 });
 
 const startOAuth2 = asyncHandler(async (req, res) => {
@@ -760,6 +769,7 @@ module.exports = {
   invalidateEditorSession,
   listCredentials,
   createCredential,
+  updateCredential,
   removeCredential,
   startGoogleOAuth,
   listConnectionTypes,

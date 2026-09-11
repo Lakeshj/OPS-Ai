@@ -29,6 +29,7 @@ const {
   invalidateEditorSession,
   listCredentials,
   createCredential,
+  updateCredential,
   removeCredential,
   startGoogleOAuth,
   listConnectionTypes,
@@ -62,6 +63,7 @@ const router = express.Router();
 // declared before the /:id routes to avoid being captured by them.
 router.get("/credentials", listCredentials);
 router.post("/credentials", validate(validateCredential), createCredential);
+router.put("/credentials/:credentialId", updateCredential);
 router.delete("/credentials/:credentialId", removeCredential);
 router.get("/credentials/:credentialId/editor", getCredentialEditor);
 router.post("/credentials/:credentialId/test", testCredential);
