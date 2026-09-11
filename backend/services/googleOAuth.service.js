@@ -45,6 +45,12 @@ const TOKEN_URL = "https://oauth2.googleapis.com/token";
 const DEFAULT_TIMEOUT_MS = 25000;
 const REFRESH_SKEW_MS = 60_000;
 
+/** Explicit OAuth application modes (14D.5.4B). Do not infer ambiguously. */
+const OAUTH_APP_MODE = Object.freeze({
+  CUSTOM_APP: "CUSTOM_APP",
+  PLATFORM_MANAGED: "PLATFORM_MANAGED",
+});
+
 const hooks = {
   transport: null,
   now: () => Date.now(),
@@ -180,16 +186,92 @@ const clientConfig = () => ({
   ).trim(),
 });
 
-const requireClientConfig = () => {
+const redirectUri = () => clientConfig().redirectUri;
+
+const platformClientConfigured = () => {
   const cfg = clientConfig();
-  if (!cfg.clientId || !cfg.clientSecret) {
+  return Boolean(cfg.clientId && cfg.clientSecret);
+};
+
+/**
+ * Resolve which OAuth application credentials to use for authorize/refresh.
+ * CUSTOM_APP: per-credential Client ID (config) + Client Secret (secret).
+ * PLATFORM_MANAGED: optional server GOOGLE_OAUTH_* (legacy / convenience).
+ */
+const resolveOAuthApp = (secret = {}, cfg = {}) => {
+  const modeRaw = String(
+    cfg.oauthAppMode || secret.oauthAppMode || ""
+  ).trim();
+  const hasCustom =
+    Boolean(String(cfg.clientId || secret.clientId || "").trim()) &&
+    Boolean(String(secret.clientSecret || "").trim());
+
+  let mode = modeRaw;
+  if (!mode) {
+    // Legacy rows: tokens only → PLATFORM_MANAGED; new rows with client → CUSTOM_APP
+    mode = hasCustom
+      ? OAUTH_APP_MODE.CUSTOM_APP
+      : OAUTH_APP_MODE.PLATFORM_MANAGED;
+  }
+
+  if (mode === OAUTH_APP_MODE.CUSTOM_APP) {
+    const clientId = String(cfg.clientId || secret.clientId || "").trim();
+    const clientSecret = String(secret.clientSecret || "").trim();
+    if (!clientId || !clientSecret) {
+      throw new AppError(
+        "Add Client ID and Client Secret on this Google connection before connecting.",
+        400,
+        "GOOGLE_OAUTH_APP_REQUIRED"
+      );
+    }
+    return {
+      mode: OAUTH_APP_MODE.CUSTOM_APP,
+      clientId,
+      clientSecret,
+      redirectUri: redirectUri(),
+    };
+  }
+
+  if (mode !== OAUTH_APP_MODE.PLATFORM_MANAGED) {
     throw new AppError(
-      "Google OAuth is not configured (GOOGLE_OAUTH_CLIENT_ID / GOOGLE_OAUTH_CLIENT_SECRET)",
+      "Unknown Google OAuth app mode for this connection",
+      400,
+      "VALIDATION_ERROR"
+    );
+  }
+
+  const platform = clientConfig();
+  if (!platform.clientId || !platform.clientSecret) {
+    if (hooks.transport) {
+      return {
+        mode: OAUTH_APP_MODE.PLATFORM_MANAGED,
+        clientId: "test-client",
+        clientSecret: "test-secret",
+        redirectUri: platform.redirectUri,
+      };
+    }
+    throw new AppError(
+      "Add Client ID and Client Secret on this Google connection before connecting.",
       503,
       "GOOGLE_OAUTH_NOT_CONFIGURED"
     );
   }
-  return cfg;
+  return {
+    mode: OAUTH_APP_MODE.PLATFORM_MANAGED,
+    clientId: platform.clientId,
+    clientSecret: platform.clientSecret,
+    redirectUri: platform.redirectUri,
+  };
+};
+
+/** @deprecated Prefer resolveOAuthApp — kept for PLATFORM_MANAGED-only callers. */
+const requireClientConfig = () => {
+  const resolved = resolveOAuthApp({}, { oauthAppMode: OAUTH_APP_MODE.PLATFORM_MANAGED });
+  return {
+    clientId: resolved.clientId,
+    clientSecret: resolved.clientSecret,
+    redirectUri: resolved.redirectUri,
+  };
 };
 
 const sanitizeGoogleError = (status, body) => {
@@ -279,18 +361,36 @@ const loadCredential = async (credentialId, workspaceId) => {
     err.code = "GOOGLE_WORKSPACE_DENIED";
     throw err;
   }
+  let configObj = {};
+  try {
+    configObj = rows[0].config_json
+      ? typeof rows[0].config_json === "object"
+        ? rows[0].config_json
+        : JSON.parse(rows[0].config_json)
+      : {};
+  } catch {
+    configObj = {};
+  }
   return {
     id: rows[0].id,
     type: rows[0].type,
     name: rows[0].name,
     workspaceId: rows[0].workspace_id,
     secret: decryptSecret(rows[0].secret_json),
+    config: configObj && typeof configObj === "object" ? configObj : {},
   };
 };
 
-const saveCredentialSecret = async (credentialId, secret) => {
+const saveCredentialSecret = async (credentialId, secret, configObj) => {
   if (hooks.credentialSaver) {
-    return hooks.credentialSaver(credentialId, secret);
+    return hooks.credentialSaver(credentialId, secret, configObj);
+  }
+  if (configObj !== undefined) {
+    await pool.execute(
+      `UPDATE workflow_credentials SET secret_json = ?, config_json = ? WHERE id = ?`,
+      [encryptSecret(secret), JSON.stringify(configObj || {}), credentialId]
+    );
+    return;
   }
   await pool.execute(
     `UPDATE workflow_credentials SET secret_json = ? WHERE id = ?`,
@@ -311,20 +411,15 @@ const expiryMs = (secret) => {
   return 0;
 };
 
-const refreshAccessToken = async (secret) => {
+const refreshAccessToken = async (secret, cfg = {}) => {
   if (!secret?.refreshToken) {
     const err = sanitizeGoogleError(401, null);
     throw err;
   }
-  const cfg = clientConfig();
-  const clientId = cfg.clientId || (hooks.transport ? "test-client" : "");
-  const clientSecret = cfg.clientSecret || (hooks.transport ? "test-secret" : "");
-  if (!clientId || !clientSecret) {
-    requireClientConfig();
-  }
+  const app = resolveOAuthApp(secret, cfg);
   const body = new URLSearchParams({
-    client_id: clientId,
-    client_secret: clientSecret,
+    client_id: app.clientId,
+    client_secret: app.clientSecret,
     grant_type: "refresh_token",
     refresh_token: secret.refreshToken,
   }).toString();
@@ -338,6 +433,7 @@ const refreshAccessToken = async (secret) => {
     event: "token_refresh",
     status: res.status,
     ok: res.ok,
+    oauthAppMode: app.mode,
   });
   if (!res.ok) {
     const grantErr =
@@ -357,22 +453,24 @@ const refreshAccessToken = async (secret) => {
     tokenType: json.token_type || "Bearer",
     expiryMs: hooks.now() + Number(json.expires_in || 3600) * 1000,
     revoked: false,
+    oauthAppMode: app.mode,
   };
 };
 
-const getValidAccessToken = async (secret) => {
+const getValidAccessToken = async (secret, cfg = {}) => {
   if (secret?.revoked) {
     throw sanitizeGoogleError(401, null);
   }
   const exp = expiryMs(secret);
   if (!secret?.accessToken || exp - REFRESH_SKEW_MS <= hooks.now()) {
-    return refreshAccessToken(secret);
+    return refreshAccessToken(secret, cfg);
   }
   return secret;
 };
 
 const googleAuthorizedFetch = async ({
   secret,
+  config: credConfig = {},
   url,
   method = "GET",
   headers = {},
@@ -380,7 +478,7 @@ const googleAuthorizedFetch = async ({
   timeoutMs = DEFAULT_TIMEOUT_MS,
   credentialId = null,
 }) => {
-  let current = await getValidAccessToken(secret);
+  let current = await getValidAccessToken(secret, credConfig);
   const send = async (tok) => {
     const hdrs = {
       Accept: "application/json",
@@ -413,7 +511,7 @@ const googleAuthorizedFetch = async ({
 
   let res = await send(current);
   if (res.status === 401) {
-    current = await refreshAccessToken(current);
+    current = await refreshAccessToken(current, credConfig);
     if (credentialId) {
       await saveCredentialSecret(credentialId, current);
     }
@@ -453,6 +551,7 @@ const googleApiRequest = async ({
   }
   const result = await googleAuthorizedFetch({
     secret: cred.secret,
+    config: cred.config || {},
     url,
     method,
     headers,
@@ -463,28 +562,68 @@ const googleApiRequest = async ({
   return result;
 };
 
+const scopesForProduct = (product, cfg = {}) => {
+  const custom = String(cfg.customScopes || "").trim();
+  if (custom) {
+    return custom.split(/\s+/).filter(Boolean);
+  }
+  return [...(GOOGLE_PRODUCTS[product]?.scopes || [])];
+};
+
 const startGoogleOAuth = async (
-  { workspaceId, product, name },
+  { workspaceId, product, name, credentialId },
   authUser
 ) => {
   await assertWorkspaceAccess(authUser, workspaceId);
   if (!GOOGLE_PRODUCTS[product]) {
     throw new AppError("Unknown Google product", 400, "VALIDATION_ERROR");
   }
-  const cfg = requireClientConfig();
+
+  let app;
+  let scopes;
+  let credConfig = {};
+  let credSecret = {};
+  let displayName = String(name || GOOGLE_PRODUCTS[product].label).slice(0, 80);
+
+  if (credentialId) {
+    const cred = await loadCredential(credentialId, workspaceId);
+    if (cred.type !== product) {
+      throw new AppError(
+        "Credential type does not match this Google product",
+        400,
+        "VALIDATION_ERROR"
+      );
+    }
+    credConfig = cred.config || {};
+    credSecret = cred.secret || {};
+    displayName = cred.name || displayName;
+    app = resolveOAuthApp(credSecret, credConfig);
+    scopes = scopesForProduct(product, credConfig);
+  } else {
+    // Legacy: create-on-callback with PLATFORM_MANAGED only
+    app = resolveOAuthApp(
+      {},
+      { oauthAppMode: OAUTH_APP_MODE.PLATFORM_MANAGED }
+    );
+    scopes = scopesForProduct(product, {});
+  }
+
   const state = signState({
+    flow: "google",
     workspaceId,
     userId: authUser.id,
     product,
-    name: String(name || GOOGLE_PRODUCTS[product].label).slice(0, 80),
+    name: displayName,
+    credentialId: credentialId || null,
+    oauthAppMode: app.mode,
     exp: hooks.now() + 10 * 60 * 1000,
     nonce: crypto.randomBytes(8).toString("hex"),
   });
   const params = new URLSearchParams({
-    client_id: cfg.clientId,
-    redirect_uri: cfg.redirectUri,
+    client_id: app.clientId,
+    redirect_uri: app.redirectUri,
     response_type: "code",
-    scope: GOOGLE_PRODUCTS[product].scopes.join(" "),
+    scope: scopes.join(" "),
     access_type: "offline",
     prompt: "select_account consent",
     include_granted_scopes: "false",
@@ -492,23 +631,47 @@ const startGoogleOAuth = async (
   });
   let callbackOrigin = "";
   try {
-    callbackOrigin = new URL(cfg.redirectUri).origin;
+    callbackOrigin = new URL(app.redirectUri).origin;
   } catch {
     callbackOrigin = "";
   }
-  return { url: `${AUTH_URL}?${params.toString()}`, state, callbackOrigin };
+  return {
+    url: `${AUTH_URL}?${params.toString()}`,
+    state,
+    callbackOrigin,
+    redirectUri: app.redirectUri,
+    oauthAppMode: app.mode,
+  };
 };
 
 const finishGoogleOAuth = async (code, state) => {
   const parsed = verifyState(state);
   consumeOauthNonce(parsed);
-  const cfg = requireClientConfig();
+  if (!GOOGLE_PRODUCTS[parsed.product]) {
+    throw new AppError("Unknown Google product", 400, "VALIDATION_ERROR");
+  }
+
+  let existing = null;
+  if (parsed.credentialId) {
+    existing = await loadCredential(parsed.credentialId, parsed.workspaceId);
+  }
+
+  const app = existing
+    ? resolveOAuthApp(existing.secret || {}, existing.config || {})
+    : resolveOAuthApp(
+        {},
+        {
+          oauthAppMode:
+            parsed.oauthAppMode || OAUTH_APP_MODE.PLATFORM_MANAGED,
+        }
+      );
+
   const body = new URLSearchParams({
-    client_id: cfg.clientId,
-    client_secret: cfg.clientSecret,
+    client_id: app.clientId,
+    client_secret: app.clientSecret,
     code: String(code || ""),
     grant_type: "authorization_code",
-    redirect_uri: cfg.redirectUri,
+    redirect_uri: app.redirectUri,
   }).toString();
   const res = await callTransport(TOKEN_URL, {
     method: "POST",
@@ -516,33 +679,66 @@ const finishGoogleOAuth = async (code, state) => {
     body,
     timeoutMs: DEFAULT_TIMEOUT_MS,
   });
-  hooks.logger({ event: "oauth_code_exchange", status: res.status, ok: res.ok });
+  hooks.logger({
+    event: "oauth_code_exchange",
+    status: res.status,
+    ok: res.ok,
+    oauthAppMode: app.mode,
+  });
   if (!res.ok) {
     throw sanitizeGoogleError(res.status === 401 ? 401 : 400, null);
   }
   const json = res.body && typeof res.body === "object" ? res.body : {};
-  const secret = {
+  const tokenSecret = {
     accessToken: json.access_token,
-    refreshToken: json.refresh_token || "",
+    refreshToken: json.refresh_token || existing?.secret?.refreshToken || "",
     tokenType: json.token_type || "Bearer",
     expiryMs: hooks.now() + Number(json.expires_in || 3600) * 1000,
-    scopes: String(json.scope || GOOGLE_PRODUCTS[parsed.product].scopes.join(" ")).split(/\s+/),
+    scopes: String(
+      json.scope || scopesForProduct(parsed.product, existing?.config || {}).join(" ")
+    ).split(/\s+/),
     revoked: false,
+    oauthAppMode: app.mode,
   };
-  if (!secret.accessToken) {
+  if (app.mode === OAUTH_APP_MODE.CUSTOM_APP && existing?.secret?.clientSecret) {
+    tokenSecret.clientSecret = existing.secret.clientSecret;
+  }
+  if (!tokenSecret.accessToken) {
     throw new AppError("Google did not return an access token", 502, "GOOGLE_OAUTH_FAILED");
   }
+
+  if (existing) {
+    const nextConfig = {
+      ...(existing.config || {}),
+      oauthAppMode: app.mode,
+      connected: true,
+    };
+    if (app.mode === OAUTH_APP_MODE.CUSTOM_APP && existing.config?.clientId) {
+      nextConfig.clientId = existing.config.clientId;
+    }
+    await saveCredentialSecret(existing.id, tokenSecret, nextConfig);
+    return {
+      credentialId: existing.id,
+      workspaceId: parsed.workspaceId,
+      product: parsed.product,
+    };
+  }
+
   const id = uuidv4();
   await pool.execute(
     `INSERT INTO workflow_credentials
-      (id, workspace_id, name, type, secret_json, created_by)
-     VALUES (?, ?, ?, ?, ?, ?)`,
+      (id, workspace_id, name, type, secret_json, config_json, created_by)
+     VALUES (?, ?, ?, ?, ?, ?, ?)`,
     [
       id,
       parsed.workspaceId,
       parsed.name || GOOGLE_PRODUCTS[parsed.product].label,
       parsed.product,
-      encryptSecret(secret),
+      encryptSecret(tokenSecret),
+      JSON.stringify({
+        oauthAppMode: OAUTH_APP_MODE.PLATFORM_MANAGED,
+        connected: true,
+      }),
       parsed.userId,
     ]
   );
@@ -604,7 +800,17 @@ const testGoogleCredential = async (credentialId, authUser) => {
   };
   if (!probes[type]) {
     const secret = decryptSecret(rows[0].secret_json);
-    await getValidAccessToken(secret);
+    let cfg = {};
+    try {
+      cfg = rows[0].config_json
+        ? typeof rows[0].config_json === "object"
+          ? rows[0].config_json
+          : JSON.parse(rows[0].config_json)
+        : {};
+    } catch {
+      cfg = {};
+    }
+    await getValidAccessToken(secret, cfg);
     return { ok: true, type };
   }
   await googleApiRequest({
@@ -627,12 +833,16 @@ const allowedFrontendOrigins = () =>
 const sanitizeCallbackError = (err) => {
   const code = err && err.code != null ? String(err.code) : "";
   const raw = err && err.message ? String(err.message) : "OAuth failed";
+  if (/GOOGLE_OAUTH_CLIENT|process\.env|CLIENT_SECRET|CLIENT_ID\s*\//i.test(raw)) {
+    return "Add Client ID and Client Secret on this Google connection before connecting.";
+  }
   if (/token|bearer|secret|authorization|refresh/i.test(raw)) {
     return "Google connect failed";
   }
   if (
     code === "GOOGLE_OAUTH_STATE" ||
     code === "GOOGLE_OAUTH_NOT_CONFIGURED" ||
+    code === "GOOGLE_OAUTH_APP_REQUIRED" ||
     code === "GOOGLE_OAUTH_FAILED" ||
     code.startsWith("GOOGLE_")
   ) {
@@ -665,6 +875,9 @@ const oauthCallbackHtml = ({ ok, credentialId, error }) => {
 module.exports = {
   GOOGLE_PRODUCTS,
   GOOGLE_TYPES,
+  OAUTH_APP_MODE,
+  AUTH_URL,
+  TOKEN_URL,
   DEFAULT_TIMEOUT_MS,
   withGoogleOAuthTestHooks,
   signState,
@@ -688,4 +901,9 @@ module.exports = {
   oauthCallbackHtml,
   loadCredential,
   saveCredentialSecret,
+  resolveOAuthApp,
+  redirectUri,
+  platformClientConfigured,
+  clientConfig,
+  requireClientConfig,
 };

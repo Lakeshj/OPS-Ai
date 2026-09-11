@@ -22,9 +22,6 @@ const {
   getSwitchOutputPortIds,
   SWITCH_FALLBACK_HANDLE,
 } = require("./workflowDynamicPorts.service");
-const {
-  getSecretForWorkspace,
-} = require("../modules/workflows/credentials.service");
 const ExcelJS = require("exceljs");
 const fs = require("fs/promises");
 const path = require("path");
@@ -640,7 +637,11 @@ const applyCredential = async (
 ) => {
   let credential;
   try {
-    credential = await getSecretForWorkspace(credentialId, context.workspaceId);
+    const credentialsService = require("../modules/workflows/credentials.service");
+    credential = await credentialsService.getSecretForWorkspace(
+      credentialId,
+      context.workspaceId
+    );
   } catch (err) {
     throw failWith(err instanceof Error ? err.message : String(err), {
       credentialId,
@@ -688,7 +689,7 @@ const applyCredential = async (
     type === "google_sheets"
   ) {
     const googleOAuth = require("./googleOAuth.service");
-    const tok = await googleOAuth.getValidAccessToken(secret);
+    const tok = await googleOAuth.getValidAccessToken(secret, config || {});
     headers.Authorization = `Bearer ${tok.accessToken}`;
   } else {
     throw failWith("This connection type cannot be used with HTTP Request", {
@@ -1152,6 +1153,9 @@ const handlers = {
       body: body ?? null,
       timeoutMs,
       credentialId: data.credentialId || null,
+      httpAuthMode: authMode,
+      predefinedConnectionType: data.predefinedConnectionType || null,
+      genericAuthType: data.genericAuthType || null,
       maxPages,
     };
 
