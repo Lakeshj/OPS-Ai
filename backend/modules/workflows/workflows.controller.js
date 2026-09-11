@@ -200,7 +200,7 @@ const oauth2Callback = asyncHandler(async (req, res) => {
   const genericOAuth2 = require("../../services/genericOAuth2.service");
   try {
     const result = await genericOAuth2.finishOAuth2(req.query.code, req.query.state);
-    res.setHeader("Content-Type", "text/html; charset=utf-8");
+    genericOAuth2.applyOAuthPopupResponseHeaders(res);
     res.send(
       genericOAuth2.oauth2CallbackHtml({
         ok: true,
@@ -208,7 +208,7 @@ const oauth2Callback = asyncHandler(async (req, res) => {
       })
     );
   } catch (err) {
-    res.setHeader("Content-Type", "text/html; charset=utf-8");
+    genericOAuth2.applyOAuthPopupResponseHeaders(res);
     res.status(400).send(
       genericOAuth2.oauth2CallbackHtml({
         ok: false,
@@ -290,7 +290,7 @@ const googleOAuthCallback = asyncHandler(async (req, res) => {
   const googleOAuth = require("../../services/googleOAuth.service");
   try {
     const result = await googleOAuth.finishGoogleOAuth(req.query.code, req.query.state);
-    res.setHeader("Content-Type", "text/html; charset=utf-8");
+    googleOAuth.applyOAuthPopupResponseHeaders(res);
     res.send(
       googleOAuth.oauthCallbackHtml({
         ok: true,
@@ -298,7 +298,7 @@ const googleOAuthCallback = asyncHandler(async (req, res) => {
       })
     );
   } catch (err) {
-    res.setHeader("Content-Type", "text/html; charset=utf-8");
+    googleOAuth.applyOAuthPopupResponseHeaders(res);
     res.status(400).send(
       googleOAuth.oauthCallbackHtml({
         ok: false,

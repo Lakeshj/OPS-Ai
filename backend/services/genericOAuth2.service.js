@@ -136,19 +136,38 @@ const oauth2CallbackHtml = ({ ok, credentialId, error }) => {
     : { type: OAUTH2_MESSAGE_TYPE, ok: false, error: String(error || "OAuth failed") };
   const json = JSON.stringify(payload);
   const origins = JSON.stringify(allowedFrontendOrigins());
-  return `<!doctype html><html><body><script>
+  const visible = ok
+    ? "Account connected. You can close this window."
+    : `Connect failed: ${payload.error || "OAuth failed"}`;
+  return `<!doctype html><html><head><meta charset="utf-8"><title>OpsAi OAuth2</title></head><body>
+<p id="msg">${String(visible).replace(/</g, "&lt;")}</p>
+<script>
 (function(){
   var payload = ${json};
   var origins = ${origins};
+  var msg = document.getElementById("msg");
   if (window.opener) {
     origins.forEach(function(origin){
       try { window.opener.postMessage(payload, origin); } catch (e) {}
     });
+  } else if (msg) {
+    msg.innerText = payload.ok
+      ? "Account connected. Return to OpsAi and refresh the connection list."
+      : ("Connect failed: " + (payload.error || ""));
   }
-  document.body.innerText = payload.ok ? "Account connected. You can close this window." : ("Connect failed: " + (payload.error || ""));
-  setTimeout(function(){ window.close(); }, 400);
+  setTimeout(function(){ try { window.close(); } catch (e) {} }, 1200);
 })();
-</script></body></html>`;
+</script>
+</body></html>`;
+};
+
+const applyOAuthPopupResponseHeaders = (res) => {
+  res.setHeader("Content-Type", "text/html; charset=utf-8");
+  res.setHeader(
+    "Content-Security-Policy",
+    "default-src 'none'; base-uri 'none'; form-action 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'none'"
+  );
+  res.setHeader("Cross-Origin-Opener-Policy", "unsafe-none");
 };
 
 const parseConfig = (raw) => {
@@ -397,6 +416,7 @@ module.exports = {
   finishOAuth2,
   getValidAccessToken,
   oauth2CallbackHtml,
+  applyOAuthPopupResponseHeaders,
   sanitizeOAuth2Error,
   withOAuth2TestHooks,
   resetOAuth2NonceStore,

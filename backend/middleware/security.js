@@ -6,7 +6,8 @@ const config = require("../config");
 const helmetMiddleware = helmet({
   // Allow Next.js (different origin/port) to embed generated images/videos.
   crossOriginResourcePolicy: { policy: "cross-origin" },
-  // Media is served from the API origin; keep default CSP on API responses.
+  // Keep window.opener for OAuth popups that navigate Google → OpsAi callback.
+  crossOriginOpenerPolicy: { policy: "same-origin-allow-popups" },
 });
 
 const corsOrigins = (process.env.CORS_ORIGIN || "http://localhost:3001")

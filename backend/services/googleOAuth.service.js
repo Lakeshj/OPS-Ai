@@ -857,19 +857,40 @@ const oauthCallbackHtml = ({ ok, credentialId, error }) => {
     : { type: "opsai-google-oauth", ok: false, error: String(error || "OAuth failed") };
   const json = JSON.stringify(payload);
   const origins = JSON.stringify(allowedFrontendOrigins());
-  return `<!doctype html><html><body><script>
+  const visible = ok
+    ? "Google connected. You can close this window."
+    : `Google connect failed: ${payload.error || "OAuth failed"}`;
+  // Visible text is in HTML (not only JS) so Helmet CSP cannot leave a blank page.
+  return `<!doctype html><html><head><meta charset="utf-8"><title>OpsAi Google OAuth</title></head><body>
+<p id="msg">${visible.replace(/</g, "&lt;")}</p>
+<script>
 (function(){
   var payload = ${json};
   var origins = ${origins};
+  var msg = document.getElementById("msg");
   if (window.opener) {
     origins.forEach(function(origin){
       try { window.opener.postMessage(payload, origin); } catch (e) {}
     });
+  } else if (msg) {
+    msg.innerText = payload.ok
+      ? "Google connected. Return to OpsAi and refresh the connection list."
+      : ("Google connect failed: " + (payload.error || ""));
   }
-  document.body.innerText = payload.ok ? "Google connected. You can close this window." : ("Google connect failed: " + (payload.error || ""));
-  setTimeout(function(){ window.close(); }, 400);
+  setTimeout(function(){ try { window.close(); } catch (e) {} }, 1200);
 })();
-</script></body></html>`;
+</script>
+</body></html>`;
+};
+
+/** Override Helmet so OAuth popup callback scripts can run and keep opener. */
+const applyOAuthPopupResponseHeaders = (res) => {
+  res.setHeader("Content-Type", "text/html; charset=utf-8");
+  res.setHeader(
+    "Content-Security-Policy",
+    "default-src 'none'; base-uri 'none'; form-action 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'none'"
+  );
+  res.setHeader("Cross-Origin-Opener-Policy", "unsafe-none");
 };
 
 module.exports = {
@@ -899,6 +920,7 @@ module.exports = {
   upsertGoogleOAuthCredential,
   testGoogleCredential,
   oauthCallbackHtml,
+  applyOAuthPopupResponseHeaders,
   loadCredential,
   saveCredentialSecret,
   resolveOAuthApp,
