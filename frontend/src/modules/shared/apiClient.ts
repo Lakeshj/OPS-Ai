@@ -91,7 +91,15 @@ class ApiClient {
           unauthorizedHandler &&
           !skipUnauthorizedHandler
         ) {
-          unauthorizedHandler();
+          // Provider/credential failures must not clear the OpsAi login session.
+          const providerAuthFailure =
+            typeof code === "string" &&
+            (code.startsWith("GOOGLE_") ||
+              code.startsWith("OAUTH") ||
+              code === "UPSTREAM_ERROR");
+          if (!providerAuthFailure) {
+            unauthorizedHandler();
+          }
         }
 
         throw new ApiError(message, response.status, code);

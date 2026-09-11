@@ -17,15 +17,22 @@ const errorHandler = (err, req, res, next) => {
     });
   }
 
-  // OpenAI / fetch-style errors often expose status + message.
+  // OpenAI / fetch-style / Google provider errors often expose status + message.
   // Do not return 502 here — Cloudflare replaces origin 502 with its own
   // Bad Gateway HTML page, which breaks the SPA error toast.
+  // Important: never forward provider 401 as HTTP 401 — the SPA treats 401 as
+  // OpsAi session expiry and signs the user out (GSC/GA4 credential failures).
   const upstreamStatus = Number(err.status || err.statusCode || 0);
   if (upstreamStatus >= 400 && upstreamStatus < 600 && err.message) {
-    const status = upstreamStatus >= 500 ? 500 : upstreamStatus;
+    let status = upstreamStatus >= 500 ? 500 : upstreamStatus;
+    const code =
+      typeof err.code === "string" && err.code ? err.code : "UPSTREAM_ERROR";
+    if (status === 401) {
+      status = 400;
+    }
     return res.status(status).json({
       error: err.message,
-      code: "UPSTREAM_ERROR",
+      code,
     });
   }
 

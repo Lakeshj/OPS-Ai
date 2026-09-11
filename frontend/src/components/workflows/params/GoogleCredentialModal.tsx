@@ -32,6 +32,7 @@ type Props = {
   initialName?: string;
   redirectUri: string;
   onSaved: (credentialId: string) => void;
+  onDeleted?: (credentialId: string) => void;
 };
 
 type FormState = {
@@ -51,6 +52,7 @@ export function GoogleCredentialModal({
   initialName,
   redirectUri,
   onSaved,
+  onDeleted,
 }: Props) {
   const meta = CREDENTIAL_TYPE_FIELDS[product];
   const title = meta?.accountLabel || meta?.label || "Google account";
@@ -69,6 +71,7 @@ export function GoogleCredentialModal({
   } | null>(null);
   const [saving, setSaving] = useState(false);
   const [connecting, setConnecting] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [copied, setCopied] = useState(false);
   const [activeId, setActiveId] = useState(credentialId || "");
   const [connected, setConnected] = useState(false);
@@ -333,6 +336,29 @@ export function GoogleCredentialModal({
     }
   };
 
+  const deleteConnection = async () => {
+    if (!activeId) return;
+    const ok = window.confirm(
+      "Remove this Google connection? Workflows using it will need a new account selected."
+    );
+    if (!ok) return;
+    setDeleting(true);
+    try {
+      await workflowCredentialsApi.remove(activeId);
+      toast.success("Google connection removed");
+      onDeleted?.(activeId);
+      onOpenChange(false);
+    } catch (err) {
+      setBanner({
+        kind: "error",
+        text:
+          err instanceof Error ? err.message : "Could not remove connection",
+      });
+    } finally {
+      setDeleting(false);
+    }
+  };
+
   const copyRedirect = async () => {
     try {
       await navigator.clipboard.writeText(redirectUri);
@@ -499,7 +525,7 @@ export function GoogleCredentialModal({
                   <Button
                     type="button"
                     variant="secondary"
-                    disabled={saving}
+                    disabled={saving || deleting}
                     onClick={() => void saveConnection()}
                   >
                     {saving ? "Saving…" : "Save"}
@@ -507,28 +533,42 @@ export function GoogleCredentialModal({
                   {canConnect ? (
                     <Button
                       type="button"
-                      disabled={connecting}
+                      disabled={connecting || deleting}
                       onClick={() => void connectAccount()}
                     >
                       {connecting
                         ? "Connecting…"
                         : connected
                           ? "Switch account"
-                          : "Connect"}
+                          : activeId
+                            ? "Reconnect"
+                            : "Connect"}
                     </Button>
                   ) : null}
                   {connected && activeId ? (
                     <Button
                       type="button"
                       variant="outline"
+                      disabled={deleting}
                       onClick={() => void testConnection()}
                     >
                       Test
                     </Button>
                   ) : null}
+                  {activeId ? (
+                    <Button
+                      type="button"
+                      variant="destructive"
+                      disabled={deleting || connecting || saving}
+                      onClick={() => void deleteConnection()}
+                    >
+                      {deleting ? "Removing…" : "Delete"}
+                    </Button>
+                  ) : null}
                   <Button
                     type="button"
                     variant="ghost"
+                    disabled={deleting}
                     onClick={() => onOpenChange(false)}
                   >
                     Cancel

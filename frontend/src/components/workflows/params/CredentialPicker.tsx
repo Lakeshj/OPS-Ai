@@ -51,6 +51,7 @@ export function CredentialPicker({
   const [editingCredentialId, setEditingCredentialId] = useState<
     string | undefined
   >();
+  const [removing, setRemoving] = useState(false);
   const defaultType =
     allowedTypes && allowedTypes.length === 1
       ? allowedTypes[0]
@@ -134,6 +135,27 @@ export function CredentialPicker({
   };
 
   const selected = listed.find((c) => c.id === value);
+
+  const removeSelected = async () => {
+    if (!selected) return;
+    const ok = window.confirm(
+      `Remove "${selected.name}"? Workflows using this account will need another connection.`
+    );
+    if (!ok) return;
+    setRemoving(true);
+    try {
+      await workflowCredentialsApi.remove(selected.id);
+      if (value === selected.id) onChange("");
+      reload();
+      toast.success("Google connection removed");
+    } catch (err) {
+      toast.error(
+        err instanceof Error ? err.message : "Could not remove connection"
+      );
+    } finally {
+      setRemoving(false);
+    }
+  };
   const googleMeta = googleProduct
     ? CREDENTIAL_TYPE_FIELDS[googleProduct]
     : null;
@@ -194,27 +216,54 @@ export function CredentialPicker({
 
       {googleOnly && googleProduct ? (
         <div className="space-y-2">
-          <p className="text-[11px] text-muted-foreground">
-            Configure your Google OAuth client, then connect a Google account.
-            OpsAi stores the connection encrypted.
-          </p>
+          {selected && selected.connected === false ? (
+            <p className="rounded-md border border-amber-500/40 bg-amber-500/10 px-2 py-1.5 text-[11px] text-amber-900 dark:text-amber-100">
+              This account is not connected yet. Reconnect to authorize Google,
+              or delete it if you no longer need it.
+            </p>
+          ) : (
+            <p className="text-[11px] text-muted-foreground">
+              Configure your Google OAuth client, then connect a Google account.
+              OpsAi stores the connection encrypted.
+            </p>
+          )}
           <div className="flex flex-wrap gap-2">
-            <Button
-              type="button"
-              size="sm"
-              variant={value ? "outline" : "default"}
-              onClick={() => openGoogleModal()}
-            >
-              {connectPrimary}
-            </Button>
             {selected ? (
+              <>
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={() => openGoogleModal(selected.id)}
+                >
+                  {selected.connected === false ? "Reconnect" : "Manage"}
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="destructive"
+                  disabled={removing}
+                  onClick={() => void removeSelected()}
+                >
+                  {removing ? "Removing…" : "Delete"}
+                </Button>
+              </>
+            ) : (
+              <Button
+                type="button"
+                size="sm"
+                onClick={() => openGoogleModal()}
+              >
+                {connectPrimary}
+              </Button>
+            )}
+            {listed.length > 0 ? (
               <Button
                 type="button"
                 size="sm"
                 variant="ghost"
-                onClick={() => openGoogleModal(selected.id)}
+                onClick={() => openGoogleModal()}
               >
-                Edit connection
+                {connectAnother}
               </Button>
             ) : null}
           </div>
@@ -311,6 +360,10 @@ export function CredentialPicker({
             reload();
             onChange(id);
             setAdding(false);
+          }}
+          onDeleted={(id) => {
+            if (value === id) onChange("");
+            reload();
           }}
         />
       ) : null}
