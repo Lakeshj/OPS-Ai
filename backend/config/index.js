@@ -88,13 +88,28 @@ const config = {
     clientSecret: (process.env.GOOGLE_OAUTH_CLIENT_SECRET || "").trim(),
     redirectUri: (
       process.env.GOOGLE_OAUTH_REDIRECT_URI ||
-      "http://localhost:5013/api/google-oauth/callback"
+      (() => {
+        // Prefer public HTTPS origin from CORS (production), else local Express.
+        const cors = String(process.env.CORS_ORIGIN || "")
+          .split(",")
+          .map((s) => s.trim().replace(/\/$/, ""))
+          .find((s) => /^https:\/\/[^/\s]+$/i.test(s));
+        if (cors) return `${cors}/api/google-oauth/callback`;
+        return "http://localhost:5013/api/google-oauth/callback";
+      })()
     ).trim(),
   },
   oauth2: {
     redirectUri: (
       process.env.OAUTH2_REDIRECT_URI ||
-      "http://localhost:5013/api/oauth2/callback"
+      (() => {
+        const cors = String(process.env.CORS_ORIGIN || "")
+          .split(",")
+          .map((s) => s.trim().replace(/\/$/, ""))
+          .find((s) => /^https:\/\/[^/\s]+$/i.test(s));
+        if (cors) return `${cors}/api/oauth2/callback`;
+        return "http://localhost:5013/api/oauth2/callback";
+      })()
     ).trim(),
   },
 };

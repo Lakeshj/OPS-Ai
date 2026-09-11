@@ -29,7 +29,12 @@ Google authorization/token endpoints are owned by the provider registry — auth
 | `CUSTOM_APP` | Per-credential (encrypted secret + safe config). First-class path. |
 | `PLATFORM_MANAGED` | Optional legacy/fallback using server `GOOGLE_OAUTH_CLIENT_*` when present |
 
-Redirect URI (register in the author’s Google Cloud OAuth client): `GOOGLE_OAUTH_REDIRECT_URI` or default `http://localhost:5013/api/google-oauth/callback`.
+Redirect URI (register in the author’s Google Cloud OAuth client):
+
+- **Production:** `https://opsai.socialchamps.com/api/google-oauth/callback`
+- **Local:** `http://localhost:5013/api/google-oauth/callback`
+
+Set `GOOGLE_OAUTH_REDIRECT_URI` on the backend, or leave it unset and set `CORS_ORIGIN=https://opsai.socialchamps.com` so production builds the live callback automatically. The credential modal shows the server redirect URL (read-only + copy).
 
 OAuth `state` is HMAC-signed, expiring, user/workspace/credential-bound, and **single-use**. Refresh uses the **same** OAuth app mode that created the credential.
 

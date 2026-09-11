@@ -70,6 +70,8 @@ Set: `DB_*`, `JWT_SECRET`, `PORT` (e.g. `5013` or `5014` — whatever is free), 
 
 ```env
 CORS_ORIGIN=https://opsai.socialchamps.com
+# Google OAuth callback shown in workflow Google credential modals (GSC/GA4/Gmail/Sheets)
+GOOGLE_OAUTH_REDIRECT_URI=https://opsai.socialchamps.com/api/google-oauth/callback
 ```
 
 Wrong (causes CORS issues if anything hits the API cross-origin):
@@ -78,6 +80,8 @@ Wrong (causes CORS issues if anything hits the API cross-origin):
 CORS_ORIGIN=https://opsai.socialchamps.com:3001,https://opsai.socialchamps.com:3002
 ```
 
+If `GOOGLE_OAUTH_REDIRECT_URI` is omitted but `CORS_ORIGIN` is the public HTTPS site, the backend builds  
+`https://opsai.socialchamps.com/api/google-oauth/callback` automatically. Still add that exact URI in Google Cloud → OAuth client → **Authorized redirect URIs**.
 ```bash
 # Frontend
 cp source/frontend/.env.example source/frontend/.env.local

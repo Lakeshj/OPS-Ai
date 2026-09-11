@@ -45,12 +45,20 @@ export function CredentialPicker({
   const [saving, setSaving] = useState(false);
   const [name, setName] = useState("");
   const [googleModalOpen, setGoogleModalOpen] = useState(false);
-  const [googleRedirectUri, setGoogleRedirectUri] = useState(
-    "http://localhost:5013/api/google-oauth/callback"
-  );
+  const [googleRedirectUri, setGoogleRedirectUri] = useState(() => {
+    if (typeof window === "undefined") {
+      return "http://localhost:5013/api/google-oauth/callback";
+    }
+    const origin = window.location.origin.replace(/\/$/, "");
+    if (/^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/i.test(origin)) {
+      return "http://localhost:5013/api/google-oauth/callback";
+    }
+    return `${origin}/api/google-oauth/callback`;
+  });
   const [editingCredentialId, setEditingCredentialId] = useState<
     string | undefined
   >();
+  const [googleAutoConnect, setGoogleAutoConnect] = useState(false);
   const [removing, setRemoving] = useState(false);
   const defaultType =
     allowedTypes && allowedTypes.length === 1
@@ -98,9 +106,10 @@ export function CredentialPicker({
       });
   }, [googleOnly]);
 
-  const openGoogleModal = (credentialId?: string) => {
+  const openGoogleModal = (credentialId?: string, autoConnect = false) => {
     if (!googleProduct) return;
     setEditingCredentialId(credentialId);
+    setGoogleAutoConnect(autoConnect);
     setGoogleModalOpen(true);
   };
 
@@ -233,7 +242,12 @@ export function CredentialPicker({
                 <Button
                   type="button"
                   size="sm"
-                  onClick={() => openGoogleModal(selected.id)}
+                  onClick={() =>
+                    openGoogleModal(
+                      selected.id,
+                      selected.connected === false
+                    )
+                  }
                 >
                   {selected.connected === false ? "Reconnect" : "Manage"}
                 </Button>
@@ -350,20 +364,26 @@ export function CredentialPicker({
       {googleProduct ? (
         <GoogleCredentialModal
           open={googleModalOpen}
-          onOpenChange={setGoogleModalOpen}
+          onOpenChange={(next) => {
+            setGoogleModalOpen(next);
+            if (!next) setGoogleAutoConnect(false);
+          }}
           workspaceId={workspaceId}
           product={googleProduct}
           credentialId={editingCredentialId}
           initialName={googleMeta?.label}
           redirectUri={googleRedirectUri}
+          autoConnect={googleAutoConnect}
           onSaved={(id) => {
             reload();
             onChange(id);
             setAdding(false);
+            setGoogleAutoConnect(false);
           }}
           onDeleted={(id) => {
             if (value === id) onChange("");
             reload();
+            setGoogleAutoConnect(false);
           }}
         />
       ) : null}

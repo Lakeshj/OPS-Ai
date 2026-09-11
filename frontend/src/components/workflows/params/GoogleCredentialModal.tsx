@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Check, Copy } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -33,6 +33,8 @@ type Props = {
   redirectUri: string;
   onSaved: (credentialId: string) => void;
   onDeleted?: (credentialId: string) => void;
+  /** When true, start Google OAuth after the credential editor loads (Reconnect). */
+  autoConnect?: boolean;
 };
 
 type FormState = {
@@ -53,6 +55,7 @@ export function GoogleCredentialModal({
   redirectUri,
   onSaved,
   onDeleted,
+  autoConnect = false,
 }: Props) {
   const meta = CREDENTIAL_TYPE_FIELDS[product];
   const title = meta?.accountLabel || meta?.label || "Google account";
@@ -73,6 +76,9 @@ export function GoogleCredentialModal({
   const [connecting, setConnecting] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [oauthAttempted, setOauthAttempted] = useState(false);
+  const [editorReady, setEditorReady] = useState(false);
+  const autoConnectStarted = useRef(false);
   const [activeId, setActiveId] = useState(credentialId || "");
   const [connected, setConnected] = useState(false);
   const [hasClientSecret, setHasClientSecret] = useState(false);
@@ -88,6 +94,10 @@ export function GoogleCredentialModal({
     setTab("connection");
     setErrors({});
     setBanner(null);
+    setConnecting(false);
+    setOauthAttempted(false);
+    setEditorReady(false);
+    autoConnectStarted.current = false;
     setActiveId(credentialId || "");
     setForm({
       name: initialName || meta?.label || "Google",
@@ -100,20 +110,24 @@ export function GoogleCredentialModal({
     if (!credentialId) {
       setConnected(false);
       setDetails({});
-      void workflowCredentialsApi.listConnectionTypes().then((res) => {
-        const entry = res.predefined.find((p) => p.id === product) as
-          | {
-              allowedDomains?: string[];
-              defaultScopes?: string[];
-            }
-          | undefined;
-        if (entry?.allowedDomains?.length) {
-          setForm((prev) => ({
-            ...prev,
-            allowedDomainsText: entry.allowedDomains!.join("\n"),
-          }));
-        }
-      });
+      void workflowCredentialsApi
+        .listConnectionTypes()
+        .then((res) => {
+          const entry = res.predefined.find((p) => p.id === product) as
+            | {
+                allowedDomains?: string[];
+                defaultScopes?: string[];
+              }
+            | undefined;
+          if (entry?.allowedDomains?.length) {
+            setForm((prev) => ({
+              ...prev,
+              allowedDomainsText: entry.allowedDomains!.join("\n"),
+            }));
+          }
+          setEditorReady(true);
+        })
+        .catch(() => setEditorReady(true));
       return;
     }
     void workflowCredentialsApi
@@ -140,12 +154,14 @@ export function GoogleCredentialModal({
         if (!view.connected && !ed.connected) {
           setBanner({
             kind: "warning",
-            text: "Connect your account to use this credential",
+            text: "Not connected yet — click Reconnect / Try again to authorize with Google.",
           });
         }
+        setEditorReady(true);
       })
       .catch(() => {
         setBanner({ kind: "error", text: "Please check the errors below" });
+        setEditorReady(true);
       });
   }, [open, credentialId, initialName, meta?.label, product]);
 
@@ -245,6 +261,11 @@ export function GoogleCredentialModal({
     }
     if (!id) return;
     setConnecting(true);
+    setOauthAttempted(true);
+    setBanner({
+      kind: "warning",
+      text: "Complete Google sign-in in the popup. If it was blocked or closed, click Try again.",
+    });
     try {
       const { url, callbackOrigin } =
         await workflowCredentialsApi.startGoogleOAuth({
@@ -261,19 +282,30 @@ export function GoogleCredentialModal({
       if (!popup) {
         toast.error("Google sign-in popup was blocked");
         setConnecting(false);
+        setBanner({
+          kind: "error",
+          text: "Popup was blocked. Allow popups for this site, then click Try again.",
+        });
         return;
       }
       const allowedOrigins = resolveOAuthMessageAllowedOrigins({
         editorOrigin: window.location.origin,
         callbackOrigin,
       });
+      let settled = false;
+      const finish = () => {
+        if (settled) return;
+        settled = true;
+        window.removeEventListener("message", onMsg);
+        window.clearInterval(closeTimer);
+      };
       const onMsg = (event: MessageEvent) => {
         const result = acceptGoogleOAuthPostMessage(event, {
           allowedOrigins,
           expectedSource: popup,
         });
         if (!result.handled) return;
-        window.removeEventListener("message", onMsg);
+        finish();
         setConnecting(false);
         if (result.accepted) {
           setConnected(true);
@@ -283,7 +315,9 @@ export function GoogleCredentialModal({
         } else {
           setBanner({
             kind: "error",
-            text: result.error || "Could not connect Google account",
+            text:
+              result.error ||
+              "Google connect failed. Fix Google Cloud test-user / consent settings, then click Try again.",
           });
         }
         try {
@@ -293,6 +327,19 @@ export function GoogleCredentialModal({
         }
       };
       window.addEventListener("message", onMsg);
+      const closeTimer = window.setInterval(() => {
+        if (!popup.closed) return;
+        finish();
+        setConnecting(false);
+        setBanner((prev) =>
+          prev?.kind === "success"
+            ? prev
+            : {
+                kind: "warning",
+                text: "Google window closed before connecting. Click Try again to reconnect.",
+              }
+        );
+      }, 500);
     } catch (err) {
       setConnecting(false);
       setBanner({
@@ -300,7 +347,7 @@ export function GoogleCredentialModal({
         text:
           err instanceof Error
             ? err.message
-            : "Could not start Google sign-in",
+            : "Could not start Google sign-in. Click Try again.",
       });
     }
   };
@@ -376,6 +423,24 @@ export function GoogleCredentialModal({
   const canConnect =
     Boolean(form.clientId.trim()) &&
     (Boolean(form.clientSecret.trim()) || (activeId && hasClientSecret));
+
+  const connectLabel = connecting
+    ? "Connecting…"
+    : connected
+      ? "Switch account"
+      : oauthAttempted
+        ? "Try again"
+        : activeId
+          ? "Reconnect"
+          : "Connect";
+
+  useEffect(() => {
+    if (!open || !autoConnect || !editorReady || connected || connecting) return;
+    if (!canConnect || autoConnectStarted.current) return;
+    autoConnectStarted.current = true;
+    void connectAccount();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, autoConnect, editorReady, canConnect, connected]);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -525,24 +590,32 @@ export function GoogleCredentialModal({
                   <Button
                     type="button"
                     variant="secondary"
-                    disabled={saving || deleting}
+                    disabled={saving || deleting || connecting}
                     onClick={() => void saveConnection()}
                   >
                     {saving ? "Saving…" : "Save"}
                   </Button>
-                  {canConnect ? (
+                  <Button
+                    type="button"
+                    disabled={connecting || deleting || !canConnect}
+                    onClick={() => void connectAccount()}
+                  >
+                    {connectLabel}
+                  </Button>
+                  {!canConnect ? (
+                    <p className="w-full text-[11px] text-muted-foreground">
+                      Enter Client ID and Client Secret, then click{" "}
+                      {activeId ? "Reconnect / Try again" : "Connect"}.
+                    </p>
+                  ) : null}
+                  {oauthAttempted && !connected && !connecting ? (
                     <Button
                       type="button"
-                      disabled={connecting || deleting}
+                      variant="outline"
+                      disabled={deleting || !canConnect}
                       onClick={() => void connectAccount()}
                     >
-                      {connecting
-                        ? "Connecting…"
-                        : connected
-                          ? "Switch account"
-                          : activeId
-                            ? "Reconnect"
-                            : "Connect"}
+                      Try again
                     </Button>
                   ) : null}
                   {connected && activeId ? (
