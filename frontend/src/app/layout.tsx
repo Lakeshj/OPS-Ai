@@ -5,6 +5,9 @@ import { Providers } from "./providers";
 export const metadata: Metadata = {
   title: "OpsAi — Keyword Chat Forge",
   description: "Workspace-based AI chat for teams",
+  verification: {
+    google: "xkMBshZGX1381z0RXxuZk4Xf6TxIVG0mKu9bxqMbBQs",
+  },
 };
 
 export default function RootLayout({
