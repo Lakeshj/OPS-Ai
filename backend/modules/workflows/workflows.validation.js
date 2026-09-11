@@ -26,11 +26,12 @@ const CREDENTIAL_SECRET_FIELDS = {
   api_key_header: ["headerName", "value"],
   basic: ["username", "password"],
   query_param: ["paramName", "value"],
+  oauth2: ["clientSecret"],
 };
 
 const validateCredential = (req) => {
   const errors = [];
-  const { workspaceId, name, type, secret } = req.body || {};
+  const { workspaceId, name, type, secret, config } = req.body || {};
   if (!workspaceId) errors.push("workspaceId is required");
   if (!name || !String(name).trim()) errors.push("name is required");
 
@@ -49,6 +50,14 @@ const validateCredential = (req) => {
     if (!String(secret[field] ?? "").trim()) {
       errors.push(`secret.${field} is required for ${type} credentials`);
     }
+  }
+  if (type === "oauth2") {
+    const oauth2 = require("../../services/genericOAuth2.service");
+    const checked = oauth2.validateOAuth2Config(
+      { ...(config || {}), clientSecret: secret.clientSecret },
+      { requireSecret: true }
+    );
+    errors.push(...checked.errors);
   }
   return errors;
 };

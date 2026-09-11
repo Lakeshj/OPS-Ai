@@ -631,7 +631,13 @@ const buildUrl = (base, query) => {
 };
 
 /** Injects a stored credential into the outgoing request. */
-const applyCredential = async (credentialId, context, headers, query) => {
+const applyCredential = async (
+  credentialId,
+  context,
+  headers,
+  query,
+  options = {}
+) => {
   let credential;
   try {
     credential = await getSecretForWorkspace(credentialId, context.workspaceId);
@@ -641,11 +647,29 @@ const applyCredential = async (credentialId, context, headers, query) => {
     });
   }
 
-  const { type, secret } = credential;
+  const { type, secret, config } = credential;
+  const registry = require("./connectionRegistry.service");
+  const domainPolicy = require("./connectionDomainPolicy.service");
+  const allowedHosts = registry.allowedHostsForCredential(type, config || {});
+  const destinationUrl = options.destinationUrl;
+  if (destinationUrl && allowedHosts.length) {
+    try {
+      domainPolicy.assertUrlAllowed(destinationUrl, allowedHosts);
+    } catch (err) {
+      throw failWith(err instanceof Error ? err.message : String(err), {
+        credentialId,
+        code: err.code,
+      });
+    }
+  }
+
+  const extraSensitiveHeaders = [];
+
   if (type === "bearer") {
     headers.Authorization = `Bearer ${secret.token}`;
   } else if (type === "api_key_header") {
     headers[secret.headerName] = secret.value;
+    if (secret.headerName) extraSensitiveHeaders.push(secret.headerName);
   } else if (type === "basic") {
     const encoded = Buffer.from(
       `${secret.username}:${secret.password}`
@@ -653,7 +677,29 @@ const applyCredential = async (credentialId, context, headers, query) => {
     headers.Authorization = `Basic ${encoded}`;
   } else if (type === "query_param") {
     query[secret.paramName] = secret.value;
+  } else if (type === "oauth2") {
+    const genericOAuth2 = require("./genericOAuth2.service");
+    const tok = await genericOAuth2.getValidAccessToken(secret, config || {});
+    headers.Authorization = `${tok.tokenType || "Bearer"} ${tok.accessToken}`;
+  } else if (
+    type === "google_gsc" ||
+    type === "google_ga4" ||
+    type === "google_gmail" ||
+    type === "google_sheets"
+  ) {
+    const googleOAuth = require("./googleOAuth.service");
+    const tok = await googleOAuth.getValidAccessToken(secret);
+    headers.Authorization = `Bearer ${tok.accessToken}`;
+  } else {
+    throw failWith("This connection type cannot be used with HTTP Request", {
+      credentialId,
+    });
   }
+
+  return {
+    allowedHosts: allowedHosts.length ? allowedHosts : null,
+    extraSensitiveHeaders,
+  };
 };
 
 const parseRetryAfter = (value) => {
@@ -671,7 +717,7 @@ const parseRetryAfter = (value) => {
 const fetchWithRateLimitRetry = async (
   url,
   { method, headers, body },
-  { timeoutMs, resolved, attempts = 2, redirect } = {}
+  { timeoutMs, resolved, attempts = 2, redirect, authPolicy } = {}
 ) => {
   const {
     secureHttpFetch,
@@ -718,7 +764,7 @@ const fetchWithRateLimitRetry = async (
       const res = await secureHttpFetch(
         url,
         { method, headers, body },
-        { timeoutMs }
+        { timeoutMs, authPolicy }
       );
       const retryable = res.status === 429 || res.status >= 500;
       if (retryable && attempt < maxAttempts) {
@@ -1071,8 +1117,13 @@ const handlers = {
       query[key] = stringifyValue(resolveExpression(String(row?.value ?? ""), scope));
     }
 
-    if (data.credentialId) {
-      await applyCredential(data.credentialId, context, headers, query);
+    const authMode = String(data.httpAuthMode || (data.credentialId ? "generic" : "none"));
+    let authPolicy = null;
+    if (authMode !== "none" && data.credentialId) {
+      const builtUrl = buildUrl(url, query);
+      authPolicy = await applyCredential(data.credentialId, context, headers, query, {
+        destinationUrl: builtUrl,
+      });
     }
 
     let body;
@@ -1120,7 +1171,12 @@ const handlers = {
       const res = await fetchWithRateLimitRetry(
         requestUrl,
         { method, headers, body },
-        { timeoutMs, resolved, attempts: Number(data.rateLimitRetries ?? 2) }
+        {
+          timeoutMs,
+          resolved,
+          attempts: Number(data.rateLimitRetries ?? 2),
+          authPolicy,
+        }
       );
       lastStatus = res.status;
 

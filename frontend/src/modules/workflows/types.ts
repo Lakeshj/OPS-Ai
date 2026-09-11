@@ -213,7 +213,8 @@ export type WorkflowCredentialType =
   | "google_gsc"
   | "google_ga4"
   | "google_gmail"
-  | "google_sheets";
+  | "google_sheets"
+  | "oauth2";
 
 export interface WorkflowCredential {
   id: string;
@@ -279,6 +280,10 @@ export const CREDENTIAL_TYPE_FIELDS: Record<
     label: "Google Sheets",
     fields: [],
     oauth: true,
+  },
+  oauth2: {
+    label: "OAuth2",
+    fields: [{ key: "clientSecret", label: "Client Secret", secret: true }],
   },
 };
 

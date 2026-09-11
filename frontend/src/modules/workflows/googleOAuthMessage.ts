@@ -4,6 +4,7 @@
  */
 
 export const OAUTH_MESSAGE_TYPE = "opsai-google-oauth";
+export const OAUTH2_MESSAGE_TYPE = "opsai-oauth2";
 
 const CREDENTIAL_ID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -72,7 +73,8 @@ const sanitizeOauthError = (error: unknown): string => {
 };
 
 export const parseGoogleOAuthMessage = (
-  data: unknown
+  data: unknown,
+  messageType: string = OAUTH_MESSAGE_TYPE
 ): GoogleOAuthMessageResult => {
   if (!data || typeof data !== "object" || Array.isArray(data)) {
     return { handled: false, reason: "malformed" };
@@ -82,7 +84,7 @@ export const parseGoogleOAuthMessage = (
   if (keys.some((k) => SECRET_KEY_RE.test(k))) {
     return { handled: false, reason: "malformed" };
   }
-  if (rec.type !== OAUTH_MESSAGE_TYPE) {
+  if (rec.type !== messageType) {
     return { handled: false, reason: "malformed" };
   }
   if (rec.ok === true) {

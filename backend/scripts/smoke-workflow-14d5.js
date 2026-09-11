@@ -438,6 +438,45 @@ const registerPart14D5Tests = ({ check, section, assert: a }) => {
     assertX.ok(feHelper.includes("expectedSource"));
   });
 
+  check("GOOGLEAUTH-16 connect URL includes prompt=select_account", async () => {
+    const prevId = process.env.GOOGLE_OAUTH_CLIENT_ID;
+    const prevSecret = process.env.GOOGLE_OAUTH_CLIENT_SECRET;
+    process.env.GOOGLE_OAUTH_CLIENT_ID = "opsai-test-google-client";
+    process.env.GOOGLE_OAUTH_CLIENT_SECRET = "opsai-test-google-secret";
+    try {
+      const started = await oauth().startGoogleOAuth(
+        { workspaceId: "ws-oauth", product: "google_gsc" },
+        { id: "user-oauth", userId: "user-oauth", role: "Admin" }
+      );
+      const auth = new URL(started.url);
+      assertX.equal(
+        `${auth.origin}${auth.pathname}`,
+        "https://accounts.google.com/o/oauth2/v2/auth"
+      );
+      const promptValues = String(auth.searchParams.get("prompt") || "")
+        .split(/[+\s]+/)
+        .filter(Boolean);
+      assertX.ok(
+        promptValues.includes("select_account"),
+        `prompt=${auth.searchParams.get("prompt")}`
+      );
+      assertX.ok(
+        promptValues.includes("consent"),
+        "offline connect still requests consent"
+      );
+      assertX.equal(auth.searchParams.get("login_hint"), null);
+      const picker = readFe("components/workflows/params/CredentialPicker.tsx");
+      assertX.ok(picker.includes("Connect Google Account"));
+      assertX.ok(picker.includes("Connect another account"));
+      assertX.ok(!/login_hint/i.test(picker));
+    } finally {
+      if (prevId == null) delete process.env.GOOGLE_OAUTH_CLIENT_ID;
+      else process.env.GOOGLE_OAUTH_CLIENT_ID = prevId;
+      if (prevSecret == null) delete process.env.GOOGLE_OAUTH_CLIENT_SECRET;
+      else process.env.GOOGLE_OAUTH_CLIENT_SECRET = prevSecret;
+    }
+  });
+
   check("SMOKE-SCHEMA-1 workflow_jobs ON DELETE CASCADE", async () => {
     const { pool } = require("../config/database");
     const [rows] = await pool.query(

@@ -11,7 +11,9 @@
  * weaken production defaults for fixtures.
  */
 
-const dns = require("node:dns").promises;
+const {
+  hostMatchesAllowlist,
+} = require("./connectionDomainPolicy.service");
 const net = require("node:net");
 const { URL } = require("node:url");
 
@@ -202,10 +204,13 @@ const assertSafeHttpUrl = async (rawUrl) => {
 
 const SENSITIVE_HEADER = /^(authorization|proxy-authorization|cookie|set-cookie)$/i;
 
-const stripSensitiveHeaders = (headers) => {
+const stripSensitiveHeaders = (headers, extraNames = []) => {
+  const extra = new Set(
+    (extraNames || []).map((n) => String(n || "").toLowerCase()).filter(Boolean)
+  );
   const out = { ...(headers || {}) };
   for (const key of Object.keys(out)) {
-    if (SENSITIVE_HEADER.test(key)) delete out[key];
+    if (SENSITIVE_HEADER.test(key) || extra.has(key.toLowerCase())) delete out[key];
   }
   return out;
 };
@@ -228,15 +233,26 @@ const resolveRedirectUrl = (baseUrl, location) => {
 const secureHttpFetch = async (
   url,
   { method, headers, body } = {},
-  { timeoutMs = 30000, signal, maxRedirects = MAX_HTTP_REDIRECTS } = {}
+  { timeoutMs = 30000, signal, maxRedirects = MAX_HTTP_REDIRECTS, authPolicy } = {}
 ) => {
   let currentUrl = String(url);
   let currentHeaders = { ...(headers || {}) };
   let currentBody = body;
   let currentMethod = String(method || "GET").toUpperCase();
+  const allowedHosts = authPolicy?.allowedHosts || null;
+  const extraSensitive = authPolicy?.extraSensitiveHeaders || [];
 
   for (let hop = 0; hop <= maxRedirects; hop += 1) {
     await assertSafeHttpUrl(currentUrl);
+    if (Array.isArray(allowedHosts) && allowedHosts.length) {
+      if (!hostMatchesAllowlist(new URL(currentUrl).hostname, allowedHosts)) {
+        throw new HttpSecurityError(
+          "This connection cannot be used with that destination host.",
+          ERROR.DESTINATION_BLOCKED,
+          { host: new URL(currentUrl).hostname }
+        );
+      }
+    }
 
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeoutMs);
@@ -282,7 +298,17 @@ const secureHttpFetch = async (
         // Revalidate destination before following
         await assertSafeHttpUrl(nextUrl);
         if (prev.origin !== next.origin) {
-          currentHeaders = stripSensitiveHeaders(currentHeaders);
+          currentHeaders = stripSensitiveHeaders(currentHeaders, extraSensitive);
+        }
+        if (Array.isArray(allowedHosts) && allowedHosts.length) {
+          if (!hostMatchesAllowlist(next.hostname, allowedHosts)) {
+            currentHeaders = stripSensitiveHeaders(currentHeaders, extraSensitive);
+            throw new HttpSecurityError(
+              "HTTP redirect host is not allowed for this connection.",
+              ERROR.REDIRECT_BLOCKED,
+              { host: next.hostname }
+            );
+          }
         }
         // RFC: 303 switches to GET; 301/302 historically treated as GET for non-GET
         if (

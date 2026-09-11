@@ -139,6 +139,9 @@ const verifyState = (state) => {
   } catch {
     throw new AppError("Invalid OAuth state", 400, "GOOGLE_OAUTH_STATE");
   }
+  if (parsed.flow && parsed.flow !== "google") {
+    throw new AppError("Invalid OAuth state", 400, "GOOGLE_OAUTH_STATE");
+  }
   if (!parsed || parsed.exp < hooks.now()) {
     throw new AppError("OAuth state expired — start connect again", 400, "GOOGLE_OAUTH_STATE");
   }
@@ -483,7 +486,7 @@ const startGoogleOAuth = async (
     response_type: "code",
     scope: GOOGLE_PRODUCTS[product].scopes.join(" "),
     access_type: "offline",
-    prompt: "consent",
+    prompt: "select_account consent",
     include_granted_scopes: "false",
     state,
   });

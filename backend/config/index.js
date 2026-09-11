@@ -91,6 +91,12 @@ const config = {
       "http://localhost:5013/api/google-oauth/callback"
     ).trim(),
   },
+  oauth2: {
+    redirectUri: (
+      process.env.OAUTH2_REDIRECT_URI ||
+      "http://localhost:5013/api/oauth2/callback"
+    ).trim(),
+  },
 };
 
 module.exports = config;

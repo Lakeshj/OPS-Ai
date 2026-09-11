@@ -260,7 +260,9 @@ const executeHttpTool = async ({ nodeData, args, context }) => {
   }
 
   if (credentialId) {
-    await applyCredential(credentialId, context || {}, headers, query);
+    await applyCredential(credentialId, context || {}, headers, query, {
+      destinationUrl: buildUrl(resolvedPath, query),
+    });
   }
 
   const requestUrl = buildUrl(resolvedPath, query);

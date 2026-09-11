@@ -31,6 +31,9 @@ const {
   createCredential,
   removeCredential,
   startGoogleOAuth,
+  listConnectionTypes,
+  getCredentialEditor,
+  startOAuth2,
   testCredential,
   listGscSites,
   listGa4Properties,
@@ -60,8 +63,11 @@ const router = express.Router();
 router.get("/credentials", listCredentials);
 router.post("/credentials", validate(validateCredential), createCredential);
 router.delete("/credentials/:credentialId", removeCredential);
+router.get("/credentials/:credentialId/editor", getCredentialEditor);
 router.post("/credentials/:credentialId/test", testCredential);
+router.get("/connection-types", listConnectionTypes);
 router.post("/google-oauth/start", startGoogleOAuth);
+router.post("/oauth2/start", startOAuth2);
 router.get("/google-oauth/gsc-sites", listGscSites);
 router.get("/google-oauth/ga4-properties", listGa4Properties);
 router.get("/google-oauth/gmail-labels", listGmailLabels);

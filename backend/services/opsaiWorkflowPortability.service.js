@@ -179,6 +179,9 @@ const sanitizeNodeDataForExport = (data) => {
     cleaned.credentialRequirement = {
       configuredAtSource: Boolean(data.credentialId),
       portable: false,
+      httpAuthMode: data.httpAuthMode || undefined,
+      predefinedConnectionType: data.predefinedConnectionType || undefined,
+      genericAuthType: data.genericAuthType || undefined,
     };
     delete cleaned.credentialId;
   }

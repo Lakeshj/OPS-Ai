@@ -145,7 +145,8 @@ export type ParamCustomRenderer =
   | "workflowPicker"
   | "googleGscSites"
   | "googleGa4Properties"
-  | "resourceLocator";
+  | "resourceLocator"
+  | "httpAuth";
 
 export interface DisplayOptions {
   show?: Record<string, Array<string | number | boolean>>;

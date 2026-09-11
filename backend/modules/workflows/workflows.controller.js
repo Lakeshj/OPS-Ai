@@ -161,6 +161,54 @@ const startGoogleOAuth = asyncHandler(async (req, res) => {
   );
 });
 
+const listConnectionTypes = asyncHandler(async (_req, res) => {
+  const registry = require("../../services/connectionRegistry.service");
+  res.json({
+    predefined: registry.listPredefined(),
+    generic: registry.listGenericMethods(),
+    oauth2RedirectUri: require("../../services/genericOAuth2.service").redirectUri(),
+  });
+});
+
+const getCredentialEditor = asyncHandler(async (req, res) => {
+  res.json(await credentialsService.getEditorView(req.params.credentialId, req.user));
+});
+
+const startOAuth2 = asyncHandler(async (req, res) => {
+  const genericOAuth2 = require("../../services/genericOAuth2.service");
+  res.json(
+    await genericOAuth2.startOAuth2(
+      {
+        workspaceId: req.body?.workspaceId,
+        credentialId: req.body?.credentialId,
+      },
+      req.user
+    )
+  );
+});
+
+const oauth2Callback = asyncHandler(async (req, res) => {
+  const genericOAuth2 = require("../../services/genericOAuth2.service");
+  try {
+    const result = await genericOAuth2.finishOAuth2(req.query.code, req.query.state);
+    res.setHeader("Content-Type", "text/html; charset=utf-8");
+    res.send(
+      genericOAuth2.oauth2CallbackHtml({
+        ok: true,
+        credentialId: result.credentialId,
+      })
+    );
+  } catch (err) {
+    res.setHeader("Content-Type", "text/html; charset=utf-8");
+    res.status(400).send(
+      genericOAuth2.oauth2CallbackHtml({
+        ok: false,
+        error: genericOAuth2.sanitizeOAuth2Error(err),
+      })
+    );
+  }
+});
+
 const testCredential = asyncHandler(async (req, res) => {
   const googleOAuth = require("../../services/googleOAuth.service");
   const { pool } = require("../../config/database");
@@ -178,7 +226,20 @@ const testCredential = asyncHandler(async (req, res) => {
     res.json(await googleOAuth.testGoogleCredential(req.params.credentialId, req.user));
     return;
   }
-  res.json({ ok: true, type: rows[0].type });
+  if (rows[0].type === "oauth2") {
+    const view = await credentialsService.getEditorView(req.params.credentialId, req.user);
+    if (view.editor?.hasAccessToken || view.connected) {
+      res.json({ ok: true, type: "oauth2", message: "Account connected" });
+      return;
+    }
+    res.json({
+      ok: false,
+      type: "oauth2",
+      message: "Connect your account to use this connection",
+    });
+    return;
+  }
+  res.json({ ok: true, type: rows[0].type, message: "Connection tested successfully" });
 });
 
 const listGscSites = asyncHandler(async (req, res) => {
@@ -701,6 +762,10 @@ module.exports = {
   createCredential,
   removeCredential,
   startGoogleOAuth,
+  listConnectionTypes,
+  getCredentialEditor,
+  startOAuth2,
+  oauth2Callback,
   testCredential,
   listGscSites,
   listGa4Properties,

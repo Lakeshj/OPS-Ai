@@ -231,10 +231,32 @@ export const NODE_PARAMETER_SCHEMAS: Record<WorkflowNodeType, ParamDescriptor[]>
         expression: true,
       },
       {
-        name: "credentialId",
+        name: "httpAuth",
         displayName: "Authentication",
-        type: "credential",
-        customRenderer: "credential",
+        type: "options",
+        customRenderer: "httpAuth",
+        default: "none",
+      },
+      {
+        name: "httpAuthMode",
+        displayName: "Authentication mode",
+        type: "hidden",
+        default: "none",
+      },
+      {
+        name: "predefinedConnectionType",
+        displayName: "Connection type",
+        type: "hidden",
+      },
+      {
+        name: "genericAuthType",
+        displayName: "Authentication type",
+        type: "hidden",
+      },
+      {
+        name: "credentialId",
+        displayName: "Connection",
+        type: "hidden",
       },
       {
         name: "queryParams",

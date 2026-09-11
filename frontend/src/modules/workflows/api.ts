@@ -304,12 +304,49 @@ export const workflowCredentialsApi = {
     name: string;
     type: WorkflowCredential["type"];
     secret: WorkflowCredentialSecret;
+    config?: Record<string, unknown>;
   }) => apiClient.post<WorkflowCredential>("/workflows/credentials", payload),
 
   remove: (credentialId: string) =>
     apiClient.delete<{ success: boolean }>(
       `/workflows/credentials/${credentialId}`
     ),
+
+  startOAuth2: (payload: { workspaceId: string; credentialId: string }) =>
+    apiClient.post<{ url: string; callbackOrigin: string; redirectUri: string }>(
+      "/workflows/oauth2/start",
+      payload
+    ),
+
+  listConnectionTypes: () =>
+    apiClient.get<{
+      predefined: Array<{
+        id: string;
+        displayName: string;
+        provider: string;
+        category: string;
+        authScheme: string;
+        kind: string;
+        status: string;
+        searchText: string;
+        reason?: string;
+        oauthManaged?: boolean;
+      }>;
+      generic: Array<{
+        id: string;
+        displayName: string;
+        status: string;
+        dbType: string | null;
+      }>;
+      oauth2RedirectUri: string;
+    }>("/workflows/connection-types"),
+
+  editorView: (credentialId: string) =>
+    apiClient.get<
+      WorkflowCredential & {
+        editor?: Record<string, unknown>;
+      }
+    >(`/workflows/credentials/${credentialId}/editor`),
 
   startGoogleOAuth: (payload: {
     workspaceId: string;
