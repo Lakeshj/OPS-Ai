@@ -885,7 +885,7 @@ export const NODE_PARAMETER_SCHEMAS: Record<WorkflowNodeType, ParamDescriptor[]>
     googleSearchConsole: [
       {
         name: "credentialId",
-        displayName: "Google Account",
+        displayName: "Google Search Console Account",
         type: "credential",
         customRenderer: "credential",
         required: true,
@@ -977,7 +977,7 @@ export const NODE_PARAMETER_SCHEMAS: Record<WorkflowNodeType, ParamDescriptor[]>
     googleAnalytics: [
       {
         name: "credentialId",
-        displayName: "Google Account",
+        displayName: "Google Analytics Account",
         type: "credential",
         customRenderer: "credential",
         required: true,
@@ -1122,7 +1122,7 @@ export const NODE_PARAMETER_SCHEMAS: Record<WorkflowNodeType, ParamDescriptor[]>
     gmail: [
       {
         name: "credentialId",
-        displayName: "Google Account",
+        displayName: "Gmail Account",
         type: "credential",
         customRenderer: "credential",
         required: true,
@@ -1310,7 +1310,7 @@ export const NODE_PARAMETER_SCHEMAS: Record<WorkflowNodeType, ParamDescriptor[]>
     gmailTrigger: [
       {
         name: "credentialId",
-        displayName: "Google Account",
+        displayName: "Gmail Account",
         type: "credential",
         customRenderer: "credential",
         required: true,
@@ -1339,7 +1339,7 @@ export const NODE_PARAMETER_SCHEMAS: Record<WorkflowNodeType, ParamDescriptor[]>
     googleSheets: [
       {
         name: "credentialId",
-        displayName: "Google Account",
+        displayName: "Google Sheets Account",
         type: "credential",
         customRenderer: "credential",
         required: true,

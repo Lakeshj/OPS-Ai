@@ -9,6 +9,7 @@ import {
 } from "@/modules/workflows/paramDisplayOptions";
 import { CredentialPicker } from "./CredentialPicker";
 import { GoogleResourcePicker } from "./GoogleResourcePicker";
+import { HttpAuthField } from "./HttpAuthField";
 import {
   BooleanParamField,
   CodeParamField,
@@ -71,6 +72,15 @@ function renderSpecial(
           }
           label={param.displayName}
           allowedTypes={param.credentialTypes as import("@/modules/workflows/types").WorkflowCredentialType[] | undefined}
+        />
+      );
+    case "httpAuth":
+      return (
+        <HttpAuthField
+          key={param.name}
+          workspaceId={context.workspaceId}
+          values={values}
+          onChange={onChange}
         />
       );
     case "googleGscSites":

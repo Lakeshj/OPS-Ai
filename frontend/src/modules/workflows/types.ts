@@ -224,6 +224,10 @@ export interface WorkflowCredential {
   createdBy: string;
   createdAt: string;
   updatedAt: string;
+  connected?: boolean;
+  sharing?: string;
+  oauthAppMode?: string;
+  accountEmail?: string;
 }
 
 export type WorkflowCredentialSecret = Record<string, string>;
@@ -232,6 +236,12 @@ export const CREDENTIAL_TYPE_FIELDS: Record<
   WorkflowCredentialType,
   {
     label: string;
+    /** Author-facing account field when this type is used alone (native Google nodes). */
+    accountLabel?: string;
+    /** Primary connect CTA — opens the predefined Google credential modal. */
+    connectAction?: string;
+    /** Additional-account CTA for Google products. */
+    connectAnotherAction?: string;
     fields: { key: string; label: string; secret?: boolean }[];
     oauth?: boolean;
   }
@@ -263,21 +273,33 @@ export const CREDENTIAL_TYPE_FIELDS: Record<
   },
   google_gsc: {
     label: "Google Search Console",
+    accountLabel: "Google Search Console Account",
+    connectAction: "Connect Google Search Console",
+    connectAnotherAction: "Connect another Search Console account",
     fields: [],
     oauth: true,
   },
   google_ga4: {
     label: "Google Analytics",
+    accountLabel: "Google Analytics Account",
+    connectAction: "Connect Google Analytics",
+    connectAnotherAction: "Connect another Analytics account",
     fields: [],
     oauth: true,
   },
   google_gmail: {
     label: "Gmail",
+    accountLabel: "Gmail Account",
+    connectAction: "Connect Gmail",
+    connectAnotherAction: "Connect another Gmail account",
     fields: [],
     oauth: true,
   },
   google_sheets: {
     label: "Google Sheets",
+    accountLabel: "Google Sheets Account",
+    connectAction: "Connect Google Sheets",
+    connectAnotherAction: "Connect another Sheets account",
     fields: [],
     oauth: true,
   },

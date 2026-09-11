@@ -1,9 +1,10 @@
 /**
- * Shared Google OAuth popup postMessage policy (CommonJS copy of
+ * Shared OAuth popup postMessage policy (CommonJS copy of
  * frontend/src/modules/workflows/googleOAuthMessage.ts). Keep both in lockstep.
  * Tokens never appear in the payload — only type/ok/credentialId or type/ok/error.
  */
 const OAUTH_MESSAGE_TYPE = "opsai-google-oauth";
+const OAUTH2_MESSAGE_TYPE = "opsai-oauth2";
 
 const CREDENTIAL_ID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -48,7 +49,7 @@ const sanitizeOauthError = (error) => {
   return clipped || "Google connect failed";
 };
 
-const parseGoogleOAuthMessage = (data) => {
+const parseGoogleOAuthMessage = (data, messageType = OAUTH_MESSAGE_TYPE) => {
   if (!data || typeof data !== "object" || Array.isArray(data)) {
     return { handled: false, reason: "malformed" };
   }
@@ -56,7 +57,7 @@ const parseGoogleOAuthMessage = (data) => {
   if (keys.some((k) => SECRET_KEY_RE.test(k))) {
     return { handled: false, reason: "malformed" };
   }
-  if (data.type !== OAUTH_MESSAGE_TYPE) {
+  if (data.type !== messageType) {
     return { handled: false, reason: "malformed" };
   }
   if (data.ok === true) {
@@ -96,11 +97,15 @@ const acceptGoogleOAuthPostMessage = (event, options = {}) => {
   ) {
     return { handled: false, reason: "source" };
   }
-  return parseGoogleOAuthMessage(event && event.data);
+  return parseGoogleOAuthMessage(
+    event && event.data,
+    options.messageType || OAUTH_MESSAGE_TYPE
+  );
 };
 
 module.exports = {
   OAUTH_MESSAGE_TYPE,
+  OAUTH2_MESSAGE_TYPE,
   normalizeOrigin,
   resolveOAuthMessageAllowedOrigins,
   parseGoogleOAuthMessage,

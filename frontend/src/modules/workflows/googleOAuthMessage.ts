@@ -21,6 +21,8 @@ export type GoogleOAuthPostMessageEvent = {
 export type GoogleOAuthMessageOptions = {
   allowedOrigins: string[];
   expectedSource?: unknown;
+  /** Defaults to Google OAuth message type; use OAUTH2_MESSAGE_TYPE for generic OAuth2. */
+  messageType?: string;
 };
 
 export type GoogleOAuthMessageResult =
@@ -127,5 +129,8 @@ export const acceptGoogleOAuthPostMessage = (
   ) {
     return { handled: false, reason: "source" };
   }
-  return parseGoogleOAuthMessage(event?.data);
+  return parseGoogleOAuthMessage(
+    event?.data,
+    options.messageType || OAUTH_MESSAGE_TYPE
+  );
 };
