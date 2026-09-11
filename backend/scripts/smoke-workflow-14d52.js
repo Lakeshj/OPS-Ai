@@ -147,20 +147,20 @@ const registerPart14D52Tests = ({ check, section, assert }) => {
     );
     assertX.match(
       schema,
-      /googleSearchConsole: \[[\s\S]*displayName: "Google Account"/
+      /googleSearchConsole: \[[\s\S]*displayName: "Google Search Console Account"/
     );
     assertX.match(
       schema,
-      /googleAnalytics: \[[\s\S]*displayName: "Google Account"/
+      /googleAnalytics: \[[\s\S]*displayName: "Google Analytics Account"/
     );
-    assertX.match(schema, /gmail: \[[\s\S]*displayName: "Google Account"/);
+    assertX.match(schema, /gmail: \[[\s\S]*displayName: "Gmail Account"/);
     assertX.match(
       schema,
-      /gmailTrigger: \[[\s\S]*displayName: "Google Account"/
+      /gmailTrigger: \[[\s\S]*displayName: "Gmail Account"/
     );
     assertX.match(
       schema,
-      /googleSheets: \[[\s\S]*displayName: "Google Account"/
+      /googleSheets: \[[\s\S]*displayName: "Google Sheets Account"/
     );
     const googleBlock = schema.slice(schema.indexOf("googleSearchConsole:"));
     const beforeAi = googleBlock.split("aiGenerate:")[0] || googleBlock;
@@ -175,13 +175,22 @@ const registerPart14D52Tests = ({ check, section, assert }) => {
       ),
       "utf8"
     );
-    assertX.match(picker, /Connect Google Account/);
-    assertX.match(picker, /Connect another account/);
+    const types = fs.readFileSync(
+      path.join(__dirname, "../../frontend/src/modules/workflows/types.ts"),
+      "utf8"
+    );
+    assertX.match(types, /connectAction: "Connect Google Analytics"/);
+    assertX.match(types, /connectAction: "Connect Google Search Console"/);
+    assertX.match(types, /connectAction: "Connect Gmail"/);
+    assertX.match(types, /connectAction: "Connect Google Sheets"/);
+    assertX.match(picker, /connectAction/);
+    assertX.match(picker, /CREDENTIAL_TYPE_FIELDS/);
     assertX.match(picker, /Select connected account/);
     assertX.equal(/Add credential/.test(picker), false);
     assertX.equal(/No authentication/.test(picker), false);
     assertX.equal(/access or refresh tokens/.test(picker), false);
-    assertX.equal(/OAuth Client/.test(picker), false);
+    assertX.equal(/OAuth Client ID/.test(picker), false);
+    assertX.equal(/OAuth Redirect URL/.test(picker), false);
     assertX.match(picker, /Add API key/);
     assertX.match(picker, /Add connection/);
   });

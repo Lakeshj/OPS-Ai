@@ -430,9 +430,9 @@ const registerPart14D5Tests = ({ check, section, assert: a }) => {
       { allowedOrigins: allowed, expectedSource: oauthPopup }
     );
     assertX.equal(ok.handled, true);
-    const picker = readFe("components/workflows/params/CredentialPicker.tsx");
-    assertX.ok(picker.includes("acceptGoogleOAuthPostMessage"));
-    assertX.ok(picker.includes("expectedSource: popup"));
+    const modal = readFe("components/workflows/params/GoogleCredentialModal.tsx");
+    assertX.ok(modal.includes("acceptGoogleOAuthPostMessage"));
+    assertX.ok(modal.includes("expectedSource: popup"));
     const feHelper = readFe("modules/workflows/googleOAuthMessage.ts");
     assertX.ok(feHelper.includes('OAUTH_MESSAGE_TYPE = "opsai-google-oauth"'));
     assertX.ok(feHelper.includes("expectedSource"));
@@ -466,9 +466,15 @@ const registerPart14D5Tests = ({ check, section, assert: a }) => {
       );
       assertX.equal(auth.searchParams.get("login_hint"), null);
       const picker = readFe("components/workflows/params/CredentialPicker.tsx");
-      assertX.ok(picker.includes("Connect Google Account"));
-      assertX.ok(picker.includes("Connect another account"));
+      const types = readFe("modules/workflows/types.ts");
+      assertX.ok(picker.includes("connectAction"));
+      assertX.ok(types.includes('connectAction: "Connect Google Analytics"'));
+      assertX.ok(
+        types.includes('connectAction: "Connect Google Search Console"')
+      );
       assertX.ok(!/login_hint/i.test(picker));
+      assertX.ok(!picker.includes("OAuth Redirect URL"));
+      assertX.ok(picker.includes("GoogleCredentialModal"));
     } finally {
       if (prevId == null) delete process.env.GOOGLE_OAUTH_CLIENT_ID;
       else process.env.GOOGLE_OAUTH_CLIENT_ID = prevId;
