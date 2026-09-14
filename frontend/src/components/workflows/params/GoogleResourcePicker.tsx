@@ -16,6 +16,7 @@ type Props = {
   placeholder?: string;
   modes?: Array<"account" | "manual" | "expression">;
   accountModeLabel?: string;
+  manualModeLabel?: string;
   mode?: string;
   displayName?: string;
   displayNameField?: string;

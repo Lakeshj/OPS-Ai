@@ -106,6 +106,7 @@ function renderSpecial(
           provider={String(values.provider || "openai")}
           modes={param.locatorModes}
           accountModeLabel={kind === "aiModels" ? "From provider" : "From account"}
+          manualModeLabel={kind === "ga4Properties" ? "Property ID" : "Manual"}
           previewContext={context.previewContext}
           onChange={(next, extra) => {
             const patch: WorkflowNodeData = {

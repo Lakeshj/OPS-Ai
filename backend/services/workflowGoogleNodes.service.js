@@ -252,7 +252,7 @@ const ga4FilterExpression = (filter) => {
 
 const ga4Report = async (node, context, item) => {
   const data = node.data || {};
-  const credentialId = requireCredential(data);
+  const credentialId = requireCredential(data, "Google Analytics");
   let propertyId = String(expr(data.propertyId, context, item) || "").trim();
   if (!propertyId) throw new Error("Google Analytics property ID is required");
   if (!propertyId.startsWith("properties/")) {

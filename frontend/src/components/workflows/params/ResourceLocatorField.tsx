@@ -45,6 +45,7 @@ type Props = {
   placeholder?: string;
   modes?: LocatorMode[];
   accountModeLabel?: string;
+  manualModeLabel?: string;
   mode?: string;
   modeField?: string;
   displayName?: string;
@@ -87,6 +88,7 @@ export function ResourceLocatorField({
   placeholder,
   modes,
   accountModeLabel = "From account",
+  manualModeLabel = "Manual",
   mode: modeValue,
   displayName,
   displayNameField,
@@ -233,7 +235,11 @@ export function ResourceLocatorField({
             className="h-7 px-2 text-[11px]"
             onClick={() => setMode(m)}
           >
-            {m === "account" ? accountModeLabel : MODE_LABEL[m]}
+            {m === "account"
+              ? accountModeLabel
+              : m === "manual"
+                ? manualModeLabel
+                : MODE_LABEL[m]}
           </Button>
         ))}
       </div>

@@ -743,7 +743,10 @@ const registerPart14D5Tests = ({ check, section, assert: a }) => {
   });
 
   check("GA4-2 credential required", async () => {
-    await assertX.rejects(() => exec("googleAnalytics", { propertyId: "1" }), /credential/i);
+    await assertX.rejects(
+      () => exec("googleAnalytics", { propertyId: "1" }),
+      /Connect Google Analytics to continue/i
+    );
   });
 
   check("GA4-3 property required", async () => {

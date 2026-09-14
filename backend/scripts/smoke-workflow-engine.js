@@ -9436,6 +9436,11 @@ require("./smoke-workflow-14d55a").registerPart14D55ATests({
   section,
   assert,
 });
+require("./smoke-workflow-14d55b").registerPart14D55BTests({
+  check,
+  section,
+  assert,
+});
 
 (async () => {
   for (const task of queue) await task();
