@@ -87,6 +87,8 @@ export function CredentialPicker({
     Boolean(allowedTypes?.length) && allowedTypes!.every(isGoogleType);
   const googleProduct =
     googleOnly && allowedTypes!.length === 1 ? allowedTypes![0] : null;
+  /** Native Gmail is PLATFORM_MANAGED only — no Custom OAuth author path. */
+  const gmailManagedOnly = googleProduct === "google_gmail";
 
   const reload = useCallback(() => {
     if (!workspaceId) return;
@@ -123,7 +125,10 @@ export function CredentialPicker({
   ) => {
     if (!googleProduct) return;
     setEditingCredentialId(credentialId);
-    setGoogleSetupMode(options?.setupMode || "managed");
+    // Native Gmail never opens Custom OAuth2.
+    setGoogleSetupMode(
+      gmailManagedOnly ? "managed" : options?.setupMode || "managed"
+    );
     setGoogleAutoConnect(Boolean(options?.autoConnect));
     setGoogleModalOpen(true);
   };
@@ -164,6 +169,10 @@ export function CredentialPicker({
 
   const save = async () => {
     if (isGoogleType(type) && googleProduct) {
+      if (gmailManagedOnly) {
+        void connectGoogleDirect();
+        return;
+      }
       openGoogleModal(undefined, { setupMode: "custom" });
       return;
     }
@@ -337,13 +346,17 @@ export function CredentialPicker({
             ) : null}
           </div>
 
-          <button
-            type="button"
-            className="text-[11px] text-muted-foreground underline-offset-2 hover:underline"
-            onClick={() => openGoogleModal(undefined, { setupMode: "custom" })}
-          >
-            Advanced connection options
-          </button>
+          {!gmailManagedOnly ? (
+            <button
+              type="button"
+              className="text-[11px] text-muted-foreground underline-offset-2 hover:underline"
+              onClick={() =>
+                openGoogleModal(undefined, { setupMode: "custom" })
+              }
+            >
+              Advanced connection options
+            </button>
+          ) : null}
         </div>
       ) : null}
 
@@ -436,7 +449,8 @@ export function CredentialPicker({
           credentialId={editingCredentialId}
           initialName={googleMeta?.label}
           redirectUri={googleRedirectUri}
-          initialSetupMode={googleSetupMode}
+          initialSetupMode={gmailManagedOnly ? "managed" : googleSetupMode}
+          managedOnly={gmailManagedOnly}
           platformManagedAvailable={platformManagedAvailable}
           autoConnect={googleAutoConnect}
           onSaved={(id) => {

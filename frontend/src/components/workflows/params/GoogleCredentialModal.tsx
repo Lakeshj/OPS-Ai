@@ -74,6 +74,8 @@ type Props = {
   onDeleted?: (credentialId: string) => void;
   initialSetupMode?: GoogleCredentialSetupMode;
   platformManagedAvailable?: boolean;
+  /** When true (native Gmail), force PLATFORM_MANAGED — no Custom OAuth UI. */
+  managedOnly?: boolean;
   autoConnect?: boolean;
 };
 
@@ -97,13 +99,16 @@ export function GoogleCredentialModal({
   onDeleted,
   initialSetupMode = "managed",
   platformManagedAvailable = true,
+  managedOnly = false,
   autoConnect = false,
 }: Props) {
   const meta = CREDENTIAL_TYPE_FIELDS[product];
   const title = meta?.accountLabel || meta?.label || "Google account";
   const [tab, setTab] = useState("connection");
   const [setupMode, setSetupMode] =
-    useState<GoogleCredentialSetupMode>(initialSetupMode);
+    useState<GoogleCredentialSetupMode>(
+      managedOnly || product === "google_gmail" ? "managed" : initialSetupMode
+    );
   const [allowedDomainsMode, setAllowedDomainsMode] =
     useState<AllowedDomainsMode>("all");
   const [sharingScope, setSharingScope] =
@@ -140,7 +145,8 @@ export function GoogleCredentialModal({
     sharingLabel?: string;
   }>({});
 
-  const isManaged = setupMode === "managed";
+  const forceManaged = managedOnly || product === "google_gmail";
+  const isManaged = forceManaged || setupMode === "managed";
   const oauthAppMode = isManaged ? "PLATFORM_MANAGED" : "CUSTOM_APP";
 
   useEffect(() => {
@@ -153,9 +159,10 @@ export function GoogleCredentialModal({
     setEditorReady(false);
     autoConnectStarted.current = false;
     setActiveId(credentialId || "");
-    // Keep managed as the normal UI. Only open Custom when the existing
-    // credential is CUSTOM_APP or the caller explicitly requested custom.
-    setSetupMode(initialSetupMode);
+    // Keep managed as the normal UI. Native Gmail is always managed-only.
+    setSetupMode(
+      managedOnly || product === "google_gmail" ? "managed" : initialSetupMode
+    );
     setForm({
       name: initialName || meta?.label || "Google",
       clientId: "",
@@ -194,9 +201,11 @@ export function GoogleCredentialModal({
         const ed = (view.editor || {}) as Record<string, unknown>;
         const modeRaw = String(ed.oauthAppMode || "");
         const nextSetup: GoogleCredentialSetupMode =
-          modeRaw === "CUSTOM_APP" || initialSetupMode === "custom"
-            ? "custom"
-            : "managed";
+          managedOnly || product === "google_gmail"
+            ? "managed"
+            : modeRaw === "CUSTOM_APP" || initialSetupMode === "custom"
+              ? "custom"
+              : "managed";
         setSetupMode(nextSetup);
         setConnected(Boolean(view.connected || ed.connected));
         setHasClientSecret(Boolean(ed.hasClientSecret));
@@ -254,6 +263,7 @@ export function GoogleCredentialModal({
     product,
     initialSetupMode,
     platformManagedAvailable,
+    managedOnly,
     oauthAppMode,
   ]);
 
@@ -606,27 +616,31 @@ export function GoogleCredentialModal({
 
               {tab === "connection" ? (
                 <div className="space-y-4 pb-1">
-                  <div className="flex items-center justify-between gap-3">
-                    <Label className="text-sm font-medium">Setup credential</Label>
-                    <Select
-                      value={setupMode}
-                      onValueChange={(next) =>
-                        setSetupMode(next as GoogleCredentialSetupMode)
-                      }
-                    >
-                      <SelectTrigger className="h-8 w-[220px] text-xs">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="managed">
-                          Managed OAuth2 (recommended)
-                        </SelectItem>
-                        <SelectItem value="custom">
-                          Use custom Google OAuth app
-                        </SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
+                  {!forceManaged ? (
+                    <div className="flex items-center justify-between gap-3">
+                      <Label className="text-sm font-medium">
+                        Setup credential
+                      </Label>
+                      <Select
+                        value={setupMode}
+                        onValueChange={(next) =>
+                          setSetupMode(next as GoogleCredentialSetupMode)
+                        }
+                      >
+                        <SelectTrigger className="h-8 w-[220px] text-xs">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="managed">
+                            Managed OAuth2 (recommended)
+                          </SelectItem>
+                          <SelectItem value="custom">
+                            Use custom Google OAuth app
+                          </SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  ) : null}
 
                   <div>
                     <Label className="text-[11px]">Connection name</Label>

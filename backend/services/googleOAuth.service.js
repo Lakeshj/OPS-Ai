@@ -274,7 +274,8 @@ const requireClientConfig = () => {
   };
 };
 
-const sanitizeGoogleError = (status, body) => {
+const sanitizeGoogleError = (status, body, options = {}) => {
+  const product = String(options.product || options.requiredType || "");
   const code =
     status === 401
       ? "GOOGLE_UNAUTHORIZED"
@@ -287,11 +288,15 @@ const sanitizeGoogleError = (status, body) => {
             : status >= 500
               ? "GOOGLE_UNAVAILABLE"
               : "GOOGLE_ERROR";
+  const forbiddenMessage =
+    product === "google_gmail"
+      ? "Google denied Gmail access. Check that the connected account granted the required Gmail permissions."
+      : "Google denied access to this resource. Check property permissions.";
   const message =
     status === 401
       ? "Google credential expired or was revoked. Reconnect it in Credentials."
       : status === 403
-        ? "Google denied access to this resource. Check property permissions."
+        ? forbiddenMessage
         : status === 429
           ? "Google API quota exceeded. Try again later."
           : status === 400
@@ -477,6 +482,7 @@ const googleAuthorizedFetch = async ({
   body,
   timeoutMs = DEFAULT_TIMEOUT_MS,
   credentialId = null,
+  product = null,
 }) => {
   let current = await getValidAccessToken(secret, credConfig);
   const send = async (tok) => {
@@ -521,7 +527,7 @@ const googleAuthorizedFetch = async ({
   }
 
   if (!res.ok) {
-    throw sanitizeGoogleError(res.status, res.body);
+    throw sanitizeGoogleError(res.status, res.body, { product });
   }
   return { ...res, secret: current };
 };
@@ -558,6 +564,7 @@ const googleApiRequest = async ({
     body,
     timeoutMs,
     credentialId: cred.id,
+    product: requiredType || cred.type,
   });
   return result;
 };
