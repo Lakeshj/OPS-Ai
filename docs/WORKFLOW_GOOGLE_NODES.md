@@ -2,6 +2,26 @@
 
 Native Google integrations for workflows. Tokens live only in encrypted `workflow_credentials.secret_json`. Nodes store a `credentialId` reference.
 
+## Native authentication policy (per provider)
+
+**Do not** decide connection UX from generic `isGoogle` / `oauthManaged` alone. Use the canonical policy in:
+
+- `frontend/src/modules/workflows/googleNativeAuthPolicy.ts`
+- `backend/config/googleNativeAuthPolicy.js`
+
+| Product | Policy | Author UX |
+| --- | --- | --- |
+| Gmail (`google_gmail`) | `PLATFORM_MANAGED_ONLY` | Sign in with Google only. No Client ID/Secret. |
+| Search Console (`google_gsc`) | `HYBRID_CUSTOM_PRIMARY` | Connect → credential modal with Client ID/Secret |
+| Analytics (`google_ga4`) | `HYBRID_CUSTOM_PRIMARY` | Same hybrid CUSTOM_APP-primary flow |
+| Sheets (`google_sheets`) | `HYBRID_CUSTOM_PRIMARY` | Same hybrid CUSTOM_APP-primary flow |
+
+`platformManagedAvailable` / `GOOGLE_OAUTH_*` matter **only** for `PLATFORM_MANAGED_ONLY` (Gmail). A valid GSC/GA4/Sheets `CUSTOM_APP` connection must never show Gmail’s “sign-in is not available” warning.
+
+### Provider change discipline
+
+Any future authentication UX change for one Google provider **MUST** run the Google provider policy regression matrix (`GOOGLEPOLICY-*`) before commit — at minimum Gmail, GSC, GA4, and Sheets — to prevent “fix Gmail → break GSC” regressions.
+
 ## Credential types and scopes
 
 | Type | Product | Scopes |
@@ -11,14 +31,23 @@ Native Google integrations for workflows. Tokens live only in encrypted `workflo
 | `google_gmail` | Gmail | `gmail.modify`, `gmail.send`, `gmail.compose` |
 | `google_sheets` | Google Sheets | `spreadsheets` |
 
-## Predefined Google OAuth (14D.5.4B)
+## Predefined Google OAuth
+
+### GSC / GA4 / Sheets (HYBRID_CUSTOM_PRIMARY)
 
 Normal author flow is **frontend-configured** (`CUSTOM_APP`):
 
-1. Connect Google Analytics / GSC / Gmail / Sheets
+1. Connect Google Analytics / GSC / Sheets
 2. Credential modal: OAuth Redirect URL (read-only + copy), Client ID, Client Secret, allowed domains, optional custom scopes
 3. Save → Connect → Google account chooser (`prompt=select_account consent`) → callback
 4. Encrypted credential becomes selectable; node picks resources (property/site/sheet)
+
+### Gmail (PLATFORM_MANAGED_ONLY)
+
+1. Sign in with Google
+2. OpsAi uses operator-owned `GOOGLE_OAUTH_CLIENT_*`
+3. Google account chooser → consent → callback
+4. No Client ID/Secret fields for workflow authors
 
 Google authorization/token endpoints are owned by the provider registry — authors do **not** enter them for predefined Google types.
 
@@ -26,10 +55,10 @@ Google authorization/token endpoints are owned by the provider registry — auth
 
 | Mode | Client ID / Secret source |
 | --- | --- |
-| `CUSTOM_APP` | Per-credential (encrypted secret + safe config). First-class path. |
-| `PLATFORM_MANAGED` | Optional legacy/fallback using server `GOOGLE_OAUTH_CLIENT_*` when present |
+| `CUSTOM_APP` | Per-credential (encrypted secret + safe config). Primary for GSC/GA4/Sheets. |
+| `PLATFORM_MANAGED` | Server `GOOGLE_OAUTH_CLIENT_*`. Required for native Gmail. |
 
-Redirect URI (register in the author’s Google Cloud OAuth client):
+Redirect URI (register in the author’s Google Cloud OAuth client for CUSTOM_APP):
 
 - **Production:** `https://opsai.socialchamps.com/api/google-oauth/callback`
 - **Local:** `http://localhost:5013/api/google-oauth/callback`

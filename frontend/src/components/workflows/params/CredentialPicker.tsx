@@ -20,6 +20,12 @@ import { CREDENTIAL_TYPE_FIELDS } from "@/modules/workflows/types";
 import { workflowCredentialsApi } from "@/modules/workflows/api";
 import { startGoogleOAuthPopup } from "@/modules/workflows/googleOAuthPopup";
 import {
+  defaultGoogleSetupMode,
+  getGoogleNativeAuthPolicy,
+  isPlatformManagedOnlyGoogle,
+  shouldShowPlatformManagedUnavailableWarning,
+} from "@/modules/workflows/googleNativeAuthPolicy";
+import {
   GoogleCredentialModal,
   type GoogleCredentialSetupMode,
 } from "./GoogleCredentialModal";
@@ -65,7 +71,7 @@ export function CredentialPicker({
     string | undefined
   >();
   const [googleSetupMode, setGoogleSetupMode] =
-    useState<GoogleCredentialSetupMode>("managed");
+    useState<GoogleCredentialSetupMode>("custom");
   const [googleAutoConnect, setGoogleAutoConnect] = useState(false);
   const [removing, setRemoving] = useState(false);
   const defaultType =
@@ -87,8 +93,9 @@ export function CredentialPicker({
     Boolean(allowedTypes?.length) && allowedTypes!.every(isGoogleType);
   const googleProduct =
     googleOnly && allowedTypes!.length === 1 ? allowedTypes![0] : null;
-  /** Native Gmail is PLATFORM_MANAGED only — no Custom OAuth author path. */
-  const gmailManagedOnly = googleProduct === "google_gmail";
+  const nativeAuthPolicy = getGoogleNativeAuthPolicy(googleProduct);
+  const gmailManagedOnly = isPlatformManagedOnlyGoogle(googleProduct);
+  const hybridCustomPrimary = nativeAuthPolicy === "HYBRID_CUSTOM_PRIMARY";
 
   const reload = useCallback(() => {
     if (!workspaceId) return;
@@ -125,16 +132,15 @@ export function CredentialPicker({
   ) => {
     if (!googleProduct) return;
     setEditingCredentialId(credentialId);
-    // Native Gmail never opens Custom OAuth2.
     setGoogleSetupMode(
-      gmailManagedOnly ? "managed" : options?.setupMode || "managed"
+      options?.setupMode || defaultGoogleSetupMode(googleProduct)
     );
     setGoogleAutoConnect(Boolean(options?.autoConnect));
     setGoogleModalOpen(true);
   };
 
   const connectGoogleDirect = async (credentialId?: string) => {
-    if (!workspaceId || !googleProduct) return;
+    if (!workspaceId || !googleProduct || !gmailManagedOnly) return;
     if (!platformManagedAvailable) {
       toast.error(
         "Google sign-in is not available on this OpsAi instance yet. Please contact your workspace administrator."
@@ -200,6 +206,12 @@ export function CredentialPicker({
   };
 
   const selected = listed.find((c) => c.id === value);
+  const selectedAppMode = String(
+    (selected as { oauthAppMode?: string } | undefined)?.oauthAppMode || ""
+  );
+  const selectedIsCustomApp =
+    selectedAppMode === "CUSTOM_APP" ||
+    (!selectedAppMode && hybridCustomPrimary);
 
   const removeSelected = async () => {
     if (!selected) return;
@@ -245,6 +257,13 @@ export function CredentialPicker({
       ? "Add API key"
       : "Add connection";
 
+  const showManagedUnavailableWarning =
+    shouldShowPlatformManagedUnavailableWarning({
+      product: googleProduct,
+      platformManagedAvailable,
+      selectedAppMode: selectedAppMode || null,
+    });
+
   return (
     <div className="space-y-2 rounded-md border p-2.5">
       <Label className="text-xs font-semibold uppercase tracking-wide">
@@ -254,7 +273,12 @@ export function CredentialPicker({
         value={value || "none"}
         onValueChange={(v) => {
           if (v === CONNECT_ANOTHER) {
-            if (googleProduct) void connectGoogleDirect();
+            if (!googleProduct) return;
+            if (gmailManagedOnly) {
+              void connectGoogleDirect();
+            } else {
+              openGoogleModal(undefined, { setupMode: "custom" });
+            }
             return;
           }
           onChange(v === "none" ? "" : v);
@@ -280,9 +304,9 @@ export function CredentialPicker({
         </SelectContent>
       </Select>
 
-      {googleOnly && googleProduct ? (
+      {googleOnly && googleProduct && gmailManagedOnly ? (
         <div className="space-y-2">
-          {!platformManagedAvailable ? (
+          {showManagedUnavailableWarning ? (
             <p className="rounded-md border border-amber-500/40 bg-amber-500/10 px-2 py-1.5 text-[11px] text-amber-900 dark:text-amber-100">
               Google sign-in is not available on this OpsAi instance yet. Please
               contact your workspace administrator.
@@ -345,18 +369,82 @@ export function CredentialPicker({
               </>
             ) : null}
           </div>
+        </div>
+      ) : null}
 
-          {!gmailManagedOnly ? (
-            <button
-              type="button"
-              className="text-[11px] text-muted-foreground underline-offset-2 hover:underline"
-              onClick={() =>
-                openGoogleModal(undefined, { setupMode: "custom" })
-              }
-            >
-              Advanced connection options
-            </button>
-          ) : null}
+      {googleOnly && googleProduct && hybridCustomPrimary ? (
+        <div className="space-y-2">
+          {selected && selected.connected === false ? (
+            <p className="rounded-md border border-amber-500/40 bg-amber-500/10 px-2 py-1.5 text-[11px] text-amber-900 dark:text-amber-100">
+              This account is not connected yet. Reconnect to authorize Google,
+              or delete it if you no longer need it.
+            </p>
+          ) : selected ? (
+            <p className="text-[11px] text-muted-foreground">
+              {selected.accountEmail
+                ? `Connected as ${selected.accountEmail}.`
+                : selectedIsCustomApp
+                  ? "Connection ready. OpsAi stores tokens encrypted."
+                  : "Account connected. OpsAi stores tokens encrypted."}
+            </p>
+          ) : (
+            <p className="text-[11px] text-muted-foreground">
+              Configure your Google OAuth client, then connect a Google account.
+              OpsAi stores the connection encrypted.
+            </p>
+          )}
+          <div className="flex flex-wrap gap-2">
+            {selected ? (
+              <>
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={() =>
+                    openGoogleModal(selected.id, {
+                      autoConnect: selected.connected === false,
+                      setupMode:
+                        selectedAppMode === "PLATFORM_MANAGED"
+                          ? "managed"
+                          : "custom",
+                    })
+                  }
+                >
+                  {selected.connected === false ? "Reconnect" : "Manage"}
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="destructive"
+                  disabled={removing}
+                  onClick={() => void removeSelected()}
+                >
+                  {removing ? "Removing…" : "Delete"}
+                </Button>
+              </>
+            ) : (
+              <Button
+                type="button"
+                size="sm"
+                onClick={() =>
+                  openGoogleModal(undefined, { setupMode: "custom" })
+                }
+              >
+                {connectPrimary}
+              </Button>
+            )}
+            {listed.length > 0 ? (
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                onClick={() =>
+                  openGoogleModal(undefined, { setupMode: "custom" })
+                }
+              >
+                {connectAnother}
+              </Button>
+            ) : null}
+          </div>
         </div>
       ) : null}
 
@@ -449,7 +537,11 @@ export function CredentialPicker({
           credentialId={editingCredentialId}
           initialName={googleMeta?.label}
           redirectUri={googleRedirectUri}
-          initialSetupMode={gmailManagedOnly ? "managed" : googleSetupMode}
+          initialSetupMode={
+            gmailManagedOnly
+              ? "managed"
+              : googleSetupMode || defaultGoogleSetupMode(googleProduct)
+          }
           managedOnly={gmailManagedOnly}
           platformManagedAvailable={platformManagedAvailable}
           autoConnect={googleAutoConnect}

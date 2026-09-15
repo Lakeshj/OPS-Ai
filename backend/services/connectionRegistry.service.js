@@ -82,11 +82,17 @@ const GENERIC_METHODS = Object.freeze([
 const GOOGLE_AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth";
 const GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token";
 
+const {
+  getGoogleNativeAuthPolicy,
+  defaultAppModeForProduct,
+} = require("../config/googleNativeAuthPolicy");
+
 const googleOAuthDef = (product, scopes) => ({
   product,
-  /** Managed OAuth2 is the default; Custom OAuth2 remains available explicitly. */
-  appModeDefault: "PLATFORM_MANAGED",
-  /** Optional server GOOGLE_OAUTH_* fallback when credential is PLATFORM_MANAGED. */
+  /** Explicit native auth policy — do not infer from isGoogle alone. */
+  nativeAuthPolicy: getGoogleNativeAuthPolicy(product),
+  appModeDefault: defaultAppModeForProduct(product),
+  /** Optional server GOOGLE_OAUTH_* when PLATFORM_MANAGED is used. */
   platformManagedSupported: true,
   authorizationUrl: GOOGLE_AUTH_URL,
   tokenUrl: GOOGLE_TOKEN_URL,
@@ -234,14 +240,17 @@ const publicEntry = (e) => {
     defaultScopes: e.oauth?.defaultScopes ? [...e.oauth.defaultScopes] : undefined,
     authorizationUrl: e.oauth?.authorizationUrl,
     tokenUrl: e.oauth?.tokenUrl,
-    /** Predefined Google: frontend credential modal (CUSTOM_APP). Not generic OAuth2. */
+    /** Predefined Google: not generic OAuth2. Policy is per-product. */
     oauthManaged: isPredefinedGoogle,
     oauthMode: isPredefinedGoogle
-      ? "predefined_custom_app"
+      ? e.oauth?.nativeAuthPolicy === "PLATFORM_MANAGED_ONLY"
+        ? "predefined_platform_managed"
+        : "predefined_custom_app"
       : e.dbType === "oauth2"
         ? "generic"
         : undefined,
     oauthAppModeDefault: e.oauth?.appModeDefault || undefined,
+    nativeAuthPolicy: e.oauth?.nativeAuthPolicy || undefined,
     testConnection: Boolean(e.testConnection),
     reason: e.reason || undefined,
     searchText: [e.displayName, e.provider, e.category, e.authScheme, ...(e.search || [])]

@@ -38,6 +38,7 @@ import {
   CredentialSharingPanel,
   type CredentialSharingScope,
 } from "./CredentialSharingPanel";
+import { isPlatformManagedOnlyGoogle } from "@/modules/workflows/googleNativeAuthPolicy";
 
 const formatCredentialTimestamp = (value: unknown) => {
   if (value == null || value === "") return "—";
@@ -107,7 +108,9 @@ export function GoogleCredentialModal({
   const [tab, setTab] = useState("connection");
   const [setupMode, setSetupMode] =
     useState<GoogleCredentialSetupMode>(
-      managedOnly || product === "google_gmail" ? "managed" : initialSetupMode
+      managedOnly || isPlatformManagedOnlyGoogle(product)
+        ? "managed"
+        : initialSetupMode
     );
   const [allowedDomainsMode, setAllowedDomainsMode] =
     useState<AllowedDomainsMode>("all");
@@ -145,7 +148,7 @@ export function GoogleCredentialModal({
     sharingLabel?: string;
   }>({});
 
-  const forceManaged = managedOnly || product === "google_gmail";
+  const forceManaged = managedOnly || isPlatformManagedOnlyGoogle(product);
   const isManaged = forceManaged || setupMode === "managed";
   const oauthAppMode = isManaged ? "PLATFORM_MANAGED" : "CUSTOM_APP";
 
@@ -161,7 +164,9 @@ export function GoogleCredentialModal({
     setActiveId(credentialId || "");
     // Keep managed as the normal UI. Native Gmail is always managed-only.
     setSetupMode(
-      managedOnly || product === "google_gmail" ? "managed" : initialSetupMode
+      managedOnly || isPlatformManagedOnlyGoogle(product)
+        ? "managed"
+        : initialSetupMode
     );
     setForm({
       name: initialName || meta?.label || "Google",
@@ -201,7 +206,7 @@ export function GoogleCredentialModal({
         const ed = (view.editor || {}) as Record<string, unknown>;
         const modeRaw = String(ed.oauthAppMode || "");
         const nextSetup: GoogleCredentialSetupMode =
-          managedOnly || product === "google_gmail"
+          managedOnly || isPlatformManagedOnlyGoogle(product)
             ? "managed"
             : modeRaw === "CUSTOM_APP" || initialSetupMode === "custom"
               ? "custom"

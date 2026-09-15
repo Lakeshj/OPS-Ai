@@ -186,9 +186,19 @@ const registerPart14D54ATests = ({ check, section, assert: a }) => {
   const assertPredefinedUsesManaged = (typeId, connectLabel) => {
     const entry = registry().getSupportedPredefined(typeId);
     assertX.ok(entry);
-    assertX.equal(entry.oauth.appModeDefault, "PLATFORM_MANAGED");
+    const policy = require("../config/googleNativeAuthPolicy").getGoogleNativeAuthPolicy(
+      typeId
+    );
+    const expectedMode =
+      policy === "PLATFORM_MANAGED_ONLY" ? "PLATFORM_MANAGED" : "CUSTOM_APP";
+    const expectedOauthMode =
+      policy === "PLATFORM_MANAGED_ONLY"
+        ? "predefined_platform_managed"
+        : "predefined_custom_app";
+    assertX.equal(entry.oauth.appModeDefault, expectedMode);
+    assertX.equal(entry.oauth.nativeAuthPolicy, policy);
     assertX.ok(entry.oauth.product);
-    assertX.equal(registry().publicEntry(entry).oauthMode, "predefined_custom_app");
+    assertX.equal(registry().publicEntry(entry).oauthMode, expectedOauthMode);
     assertX.equal(registry().publicEntry(entry).oauthManaged, true);
     const http = readFe("components/workflows/params/HttpAuthField.tsx");
     assertX.ok(http.includes("oauthManaged"));

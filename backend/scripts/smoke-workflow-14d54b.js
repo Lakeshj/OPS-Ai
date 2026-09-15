@@ -307,7 +307,8 @@ const registerPart14D54BTests = ({ check, section, assert: a }) => {
     assertX.ok(http.includes("oauthManaged"));
     const reg = registry().getSupportedPredefined("google_ga4");
     assertX.equal(reg.dbType, "google_ga4");
-    assertX.equal(reg.oauth.appModeDefault, "PLATFORM_MANAGED");
+    assertX.equal(reg.oauth.appModeDefault, "CUSTOM_APP");
+    assertX.equal(reg.oauth.nativeAuthPolicy, "HYBRID_CUSTOM_PRIMARY");
   });
 
   check("FRONTOAUTH-18 HTTP Generic OAuth2 remains separate", () => {
@@ -385,12 +386,17 @@ const registerPart14D54BTests = ({ check, section, assert: a }) => {
   });
 
   check("FRONTOAUTH-registry predefined Google endpoints", () => {
+    const policy = require("../config/googleNativeAuthPolicy");
     for (const id of ["google_ga4", "google_gsc", "google_gmail", "google_sheets"]) {
       const e = registry().getSupportedPredefined(id);
       assertX.ok(e.oauth.authorizationUrl.includes("accounts.google.com"));
       assertX.ok(e.oauth.tokenUrl.includes("oauth2.googleapis.com"));
       assertX.ok(e.oauth.defaultScopes.length >= 1);
-      assertX.equal(e.oauth.appModeDefault, "PLATFORM_MANAGED");
+      assertX.equal(e.oauth.nativeAuthPolicy, policy.getGoogleNativeAuthPolicy(id));
+      assertX.equal(
+        e.oauth.appModeDefault,
+        policy.defaultAppModeForProduct(id)
+      );
     }
   });
 };

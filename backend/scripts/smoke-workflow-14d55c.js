@@ -343,11 +343,11 @@ const registerPart14D55CTests = ({ check, section, assert: a }) => {
   });
 
   check("GMAILMANAGED-20 CUSTOM_APP remains available only as explicit advanced path", () => {
-    assertX.ok(picker().includes("Advanced connection options"));
-    assertX.ok(picker().includes("!gmailManagedOnly"));
-    assertX.ok(modal().includes("Use custom Google OAuth app"));
-    assertX.ok(modal().includes("CUSTOM_APP") || modal().includes("custom"));
-    // Normal path must not auto-open custom on missing platform config
+    // Hybrid providers (GSC/GA4/Sheets) open CUSTOM_APP via Connect/Manage.
+    // Gmail PLATFORM_MANAGED_ONLY never exposes Advanced CUSTOM_APP.
+    assertX.ok(picker().includes("HYBRID_CUSTOM_PRIMARY") || picker().includes("hybridCustomPrimary"));
+    assertX.ok(picker().includes("gmailManagedOnly") || picker().includes("PLATFORM_MANAGED_ONLY"));
+    assertX.ok(modal().includes("Use custom Google OAuth app") || modal().includes("Client ID"));
     assertX.ok(
       !/platformManagedAvailable[\s\S]{0,120}setupMode:\s*"custom"/.test(picker())
     );
@@ -367,35 +367,27 @@ const registerPart14D55CTests = ({ check, section, assert: a }) => {
   });
 
   check("GMAILMANAGEDONLY-2 native Gmail has no Custom OAuth2 option", () => {
-    assertX.ok(picker().includes('googleProduct === "google_gmail"'));
-    assertX.ok(picker().includes("!gmailManagedOnly"));
-    assertX.ok(modal().includes("managedOnly") || modal().includes('product === "google_gmail"'));
+    assertX.ok(picker().includes("gmailManagedOnly"));
+    assertX.ok(picker().includes("hybridCustomPrimary"));
+    assertX.ok(picker().includes("&& gmailManagedOnly ?"));
     assertX.ok(modal().includes("forceManaged"));
   });
 
   check("GMAILMANAGEDONLY-3 native Gmail has no Client ID field", () => {
-    // Client ID remains for non-Gmail custom path, but Gmail forceManaged hides it
     assertX.ok(modal().includes("forceManaged"));
-    assertX.ok(/forceManaged[\s\S]{0,40}\?[\s\S]{0,200}null/.test(modal()) || modal().includes("!forceManaged"));
     assertX.ok(modal().includes("{!forceManaged"));
   });
 
   check("GMAILMANAGEDONLY-4 native Gmail has no Client Secret field", () => {
-    // Client Secret remains only on the non-Gmail custom branch
     assertX.ok(modal().includes("Client Secret"));
     assertX.ok(modal().includes("forceManaged"));
     assertX.ok(modal().includes("{!forceManaged"));
-    // Gmail product forces managed — custom Client Secret UI is not selected
-    assertX.ok(modal().includes('product === "google_gmail"'));
+    assertX.ok(modal().includes("isPlatformManagedOnlyGoogle"));
   });
 
   check("GMAILMANAGEDONLY-5 native Gmail has no Advanced connection route to CUSTOM_APP", () => {
-    assertX.ok(picker().includes("!gmailManagedOnly"));
-    assertX.ok(
-      /!gmailManagedOnly \? \([\s\S]*?Advanced connection options[\s\S]*?\) : null/.test(
-        picker()
-      )
-    );
+    assertX.ok(picker().includes("gmailManagedOnly"));
+    assertX.ok(!picker().includes("Advanced connection options"));
     assertX.ok(
       !/gmailManagedOnly[\s\S]{0,80}setupMode:\s*"custom"/.test(picker())
     );
