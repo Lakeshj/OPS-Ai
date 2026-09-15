@@ -186,7 +186,7 @@ const registerPart14D54ATests = ({ check, section, assert: a }) => {
   const assertPredefinedUsesManaged = (typeId, connectLabel) => {
     const entry = registry().getSupportedPredefined(typeId);
     assertX.ok(entry);
-    assertX.equal(entry.oauth.appModeDefault, "CUSTOM_APP");
+    assertX.equal(entry.oauth.appModeDefault, "PLATFORM_MANAGED");
     assertX.ok(entry.oauth.product);
     assertX.equal(registry().publicEntry(entry).oauthMode, "predefined_custom_app");
     assertX.equal(registry().publicEntry(entry).oauthManaged, true);
@@ -260,8 +260,9 @@ const registerPart14D54ATests = ({ check, section, assert: a }) => {
   check("MANAGEDOAUTH-ui-path-audit no managed Google opens generic OAuth modal", () => {
     const picker = readFe("components/workflows/params/CredentialPicker.tsx");
     assertX.ok(!picker.includes("OAuth2ConnectionModal"));
-    assertX.ok(!picker.includes("OAuth Redirect URL"));
     assertX.ok(!picker.includes("Authorization URL"));
+    assertX.ok(picker.includes("startGoogleOAuthPopup"));
+    assertX.ok(picker.includes("Sign in with Google"));
     assertX.ok(picker.includes("GoogleCredentialModal"));
     assertX.ok(picker.includes("openGoogleModal"));
     const renderer = readFe(

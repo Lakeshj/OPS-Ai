@@ -251,7 +251,7 @@ const resolveOAuthApp = (secret = {}, cfg = {}) => {
       };
     }
     throw new AppError(
-      "Add Client ID and Client Secret on this Google connection before connecting.",
+      "Gmail sign-in is not available on this OpsAi instance yet. Please contact your workspace administrator.",
       503,
       "GOOGLE_OAUTH_NOT_CONFIGURED"
     );
@@ -707,11 +707,35 @@ const finishGoogleOAuth = async (code, state) => {
     throw new AppError("Google did not return an access token", 502, "GOOGLE_OAUTH_FAILED");
   }
 
+  let accountEmail = existing?.config?.accountEmail || "";
+  if (parsed.product === "google_gmail" && tokenSecret.accessToken) {
+    try {
+      const profile = await callTransport(
+        "https://gmail.googleapis.com/gmail/v1/users/me/profile",
+        {
+          method: "GET",
+          headers: {
+            Authorization: `Bearer ${tokenSecret.accessToken}`,
+          },
+          timeoutMs: 10000,
+        }
+      );
+      const email =
+        profile?.body && typeof profile.body === "object"
+          ? String(profile.body.emailAddress || "").trim()
+          : "";
+      if (email) accountEmail = email;
+    } catch {
+      // Identity display is best-effort; do not fail the connection.
+    }
+  }
+
   if (existing) {
     const nextConfig = {
       ...(existing.config || {}),
       oauthAppMode: app.mode,
       connected: true,
+      ...(accountEmail ? { accountEmail } : {}),
     };
     if (app.mode === OAUTH_APP_MODE.CUSTOM_APP && existing.config?.clientId) {
       nextConfig.clientId = existing.config.clientId;
@@ -738,6 +762,7 @@ const finishGoogleOAuth = async (code, state) => {
       JSON.stringify({
         oauthAppMode: OAUTH_APP_MODE.PLATFORM_MANAGED,
         connected: true,
+        ...(accountEmail ? { accountEmail } : {}),
       }),
       parsed.userId,
     ]
@@ -834,7 +859,7 @@ const sanitizeCallbackError = (err) => {
   const code = err && err.code != null ? String(err.code) : "";
   const raw = err && err.message ? String(err.message) : "OAuth failed";
   if (/GOOGLE_OAUTH_CLIENT|process\.env|CLIENT_SECRET|CLIENT_ID\s*\//i.test(raw)) {
-    return "Add Client ID and Client Secret on this Google connection before connecting.";
+    return "Google sign-in is not available on this OpsAi instance yet. Please contact your workspace administrator.";
   }
   if (/token|bearer|secret|authorization|refresh/i.test(raw)) {
     return "Google connect failed";

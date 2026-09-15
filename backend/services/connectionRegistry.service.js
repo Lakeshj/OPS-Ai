@@ -84,8 +84,8 @@ const GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token";
 
 const googleOAuthDef = (product, scopes) => ({
   product,
-  /** Frontend-configured Client ID/Secret is the primary path (14D.5.4B). */
-  appModeDefault: "CUSTOM_APP",
+  /** Managed OAuth2 is the default; Custom OAuth2 remains available explicitly. */
+  appModeDefault: "PLATFORM_MANAGED",
   /** Optional server GOOGLE_OAUTH_* fallback when credential is PLATFORM_MANAGED. */
   platformManagedSupported: true,
   authorizationUrl: GOOGLE_AUTH_URL,

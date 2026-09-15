@@ -356,6 +356,7 @@ export const workflowCredentialsApi = {
       }>;
       oauth2RedirectUri: string;
       googleOAuthRedirectUri?: string;
+      platformManagedGoogleOAuthAvailable?: boolean;
     }>("/workflows/connection-types"),
 
   editorView: (credentialId: string) =>

@@ -36,11 +36,24 @@ const parseConfig = (raw) => oauth2.parseConfig(raw);
 const googleConnected = (secret, cfg) =>
   Boolean(cfg?.connected) || Boolean(secret?.accessToken);
 
+const normalizeSharingScope = (raw) => {
+  const value = String(raw || "all").trim();
+  if (value === "workspace" || value === "users") return value;
+  return "all";
+};
+
+const sharingLabel = (scope) => {
+  if (scope === "users") return "Specific users";
+  if (scope === "workspace") return "This workspace only";
+  return "All users and projects";
+};
+
 /** Never returns the secret itself — only what is safe to render in the UI. */
 const formatCredential = (row) => {
   const cfg = parseConfig(row.config_json);
   const isGoogle = GOOGLE_CREDENTIAL_TYPES.has(row.type);
   const isOauth2 = row.type === "oauth2";
+  const sharingScope = normalizeSharingScope(cfg.sharingScope);
   return {
     id: row.id,
     workspaceId: row.workspace_id,
@@ -56,9 +69,13 @@ const formatCredential = (row) => {
           ? true
           : Boolean(cfg.connected)
         : true,
-    sharing: "workspace",
+    sharing: sharingScope,
+    sharingLabel: sharingLabel(sharingScope),
     oauthAppMode: isGoogle
-      ? cfg.oauthAppMode || OAUTH_APP_MODE.CUSTOM_APP
+      ? cfg.oauthAppMode ||
+        (platformClientConfigured()
+          ? OAUTH_APP_MODE.PLATFORM_MANAGED
+          : OAUTH_APP_MODE.CUSTOM_APP)
       : undefined,
     accountEmail:
       isGoogle && cfg.accountEmail ? String(cfg.accountEmail) : undefined,
@@ -77,9 +94,10 @@ const listByWorkspace = async (workspaceId, authUser) => {
 const validateGoogleCreate = ({ type, secret, config }) => {
   const entry = registry.getSupportedPredefined(type);
   const errors = [];
-  const mode = String(
-    config?.oauthAppMode || OAUTH_APP_MODE.CUSTOM_APP
-  ).trim();
+  const defaultMode = platformClientConfigured()
+    ? OAUTH_APP_MODE.PLATFORM_MANAGED
+    : OAUTH_APP_MODE.CUSTOM_APP;
+  const mode = String(config?.oauthAppMode || defaultMode).trim();
   if (
     mode !== OAUTH_APP_MODE.CUSTOM_APP &&
     mode !== OAUTH_APP_MODE.PLATFORM_MANAGED
@@ -95,7 +113,7 @@ const validateGoogleCreate = ({ type, secret, config }) => {
     }
   } else if (!platformClientConfigured()) {
     errors.push(
-      "Platform-managed Google OAuth is not available. Use Client ID and Client Secret on this connection."
+      "Google sign-in is not available on this OpsAi instance yet. Please contact your workspace administrator."
     );
   }
   return {
@@ -130,6 +148,7 @@ const create = async ({ workspaceId, name, type, secret, config }, authUser) => 
         ? config.allowedDomains.map((d) => String(d).trim()).filter(Boolean)
         : checked.defaults.allowedDomains;
     const customScopes = String(config?.customScopes || "").trim();
+    const sharingScope = normalizeSharingScope(config?.sharingScope);
     configJson = JSON.stringify({
       oauthAppMode: checked.mode,
       clientId:
@@ -138,6 +157,7 @@ const create = async ({ workspaceId, name, type, secret, config }, authUser) => 
           : undefined,
       allowedDomains,
       customScopes: customScopes || undefined,
+      sharingScope,
       connected: false,
     });
     secretPayload =
@@ -161,7 +181,11 @@ const create = async ({ workspaceId, name, type, secret, config }, authUser) => 
     if (checked.errors.length) {
       throw new AppError(checked.errors[0], 400, "VALIDATION_ERROR");
     }
-    configJson = JSON.stringify({ ...checked.config, connected: false });
+    configJson = JSON.stringify({
+      ...checked.config,
+      connected: false,
+      sharingScope: normalizeSharingScope(config?.sharingScope),
+    });
     secretPayload = { clientSecret: String(secret.clientSecret || "") };
   } else if (
     config &&
@@ -220,7 +244,9 @@ const update = async (credentialId, { name, secret, config }, authUser) => {
   const mode = String(
     config?.oauthAppMode ||
       existingConfig.oauthAppMode ||
-      OAUTH_APP_MODE.CUSTOM_APP
+      (platformClientConfigured()
+        ? OAUTH_APP_MODE.PLATFORM_MANAGED
+        : OAUTH_APP_MODE.CUSTOM_APP)
   ).trim();
   const nextClientId =
     config?.clientId !== undefined
@@ -255,6 +281,10 @@ const update = async (credentialId, { name, secret, config }, authUser) => {
     clientId: mode === OAUTH_APP_MODE.CUSTOM_APP ? nextClientId : undefined,
     allowedDomains,
     customScopes: customScopes || undefined,
+    sharingScope:
+      config?.sharingScope !== undefined
+        ? normalizeSharingScope(config.sharingScope)
+        : normalizeSharingScope(existingConfig.sharingScope),
     connected: googleConnected(existingSecret, existingConfig),
     accountEmail: existingConfig.accountEmail,
   };
@@ -313,19 +343,22 @@ const getEditorView = async (id, authUser) => {
       editor: {
         oauthAppMode:
           cfg.oauthAppMode ||
-          (secret.clientSecret
-            ? OAUTH_APP_MODE.CUSTOM_APP
-            : OAUTH_APP_MODE.PLATFORM_MANAGED),
+          (platformClientConfigured()
+            ? OAUTH_APP_MODE.PLATFORM_MANAGED
+            : OAUTH_APP_MODE.CUSTOM_APP),
         clientId: cfg.clientId || "",
         hasClientSecret: Boolean(secret.clientSecret),
         hasAccessToken: Boolean(secret.accessToken),
         hasRefreshToken: Boolean(secret.refreshToken),
         connected: googleConnected(secret, cfg),
         redirectUri: googleRedirectUri(),
+        platformManagedAvailable: platformClientConfigured(),
         allowedDomains:
           cfg.allowedDomains ||
           (entry ? [...(entry.allowedDomains || [])] : []),
         customScopes: cfg.customScopes || "",
+        sharingScope: normalizeSharingScope(cfg.sharingScope),
+        sharingLabel: sharingLabel(normalizeSharingScope(cfg.sharingScope)),
         defaultScopes: entry?.oauth?.defaultScopes
           ? [...entry.oauth.defaultScopes]
           : [],
@@ -348,6 +381,8 @@ const getEditorView = async (id, authUser) => {
       ...oauth2.editorSafeConfig(row.config_json),
       hasClientSecret: Boolean(secret && secret.clientSecret),
       hasAccessToken: Boolean(secret && secret.accessToken),
+      sharingScope: normalizeSharingScope(cfg.sharingScope),
+      sharingLabel: sharingLabel(normalizeSharingScope(cfg.sharingScope)),
     },
   };
 };

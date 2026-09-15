@@ -170,6 +170,7 @@ const listConnectionTypes = asyncHandler(async (_req, res) => {
     generic: registry.listGenericMethods(),
     oauth2RedirectUri: require("../../services/genericOAuth2.service").redirectUri(),
     googleOAuthRedirectUri: googleOAuth.redirectUri(),
+    platformManagedGoogleOAuthAvailable: googleOAuth.platformClientConfigured(),
   });
 });
 

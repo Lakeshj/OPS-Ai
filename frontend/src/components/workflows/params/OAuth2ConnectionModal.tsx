@@ -26,6 +26,10 @@ import {
   acceptGoogleOAuthPostMessage,
   resolveOAuthMessageAllowedOrigins,
 } from "@/modules/workflows/googleOAuthMessage";
+import {
+  CredentialSharingPanel,
+  type CredentialSharingScope,
+} from "./CredentialSharingPanel";
 
 type Props = {
   open: boolean;
@@ -88,6 +92,8 @@ export function OAuth2ConnectionModal({
   const [copied, setCopied] = useState(false);
   const [activeId, setActiveId] = useState(credentialId || "");
   const [connected, setConnected] = useState(false);
+  const [sharingScope, setSharingScope] =
+    useState<CredentialSharingScope>("all");
   const [details, setDetails] = useState<{
     createdAt?: string;
     updatedAt?: string;
@@ -100,6 +106,7 @@ export function OAuth2ConnectionModal({
     setErrors({});
     setBanner(null);
     setActiveId(credentialId || "");
+    setSharingScope("all");
     setForm({
       ...emptyForm(redirectUri),
       name: initialName || "OAuth2 connection",
@@ -114,6 +121,11 @@ export function OAuth2ConnectionModal({
       .then((view) => {
         const ed = (view.editor || {}) as Record<string, unknown>;
         setConnected(Boolean(view.connected || ed.connected));
+        setSharingScope(
+          (String(
+            ed.sharingScope || view.sharing || "all"
+          ) as CredentialSharingScope) || "all"
+        );
         setDetails({
           createdAt: String(view.createdAt || ""),
           updatedAt: String(view.updatedAt || ""),
@@ -336,32 +348,41 @@ export function OAuth2ConnectionModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[90vh] max-w-3xl overflow-hidden p-0">
-        <DialogHeader className="border-b px-4 py-3">
+      <DialogContent className="flex max-h-[min(90vh,720px)] max-w-3xl flex-col gap-0 overflow-hidden p-0 sm:rounded-lg">
+        <DialogHeader className="shrink-0 border-b px-4 py-3 pr-12">
           <DialogTitle className="text-base">OAuth2 Connection</DialogTitle>
         </DialogHeader>
-        <div className="flex min-h-[420px]">
-          <aside className="w-40 shrink-0 border-r bg-muted/30 p-2">
+        <div className="flex min-h-0 max-h-[calc(min(90vh,720px)-4.75rem)] flex-1 overflow-hidden">
+          <aside className="flex w-44 shrink-0 flex-col border-r bg-muted/25 p-3">
             <Tabs
               value={tab}
               onValueChange={setTab}
               orientation="vertical"
-              className="flex flex-col gap-1"
+              className="flex w-full flex-col"
             >
-              <TabsList className="flex h-auto w-full flex-col items-stretch bg-transparent p-0">
-                <TabsTrigger value="connection" className="justify-start">
+              <TabsList className="flex h-auto w-full flex-col items-stretch gap-1 rounded-none bg-transparent p-0">
+                <TabsTrigger
+                  value="connection"
+                  className="h-9 justify-start rounded-md border border-transparent px-3 text-sm font-medium text-muted-foreground shadow-none transition-colors hover:bg-muted/70 hover:text-foreground data-[state=active]:border-border data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm"
+                >
                   Connection
                 </TabsTrigger>
-                <TabsTrigger value="sharing" className="justify-start">
+                <TabsTrigger
+                  value="sharing"
+                  className="h-9 justify-start rounded-md border border-transparent px-3 text-sm font-medium text-muted-foreground shadow-none transition-colors hover:bg-muted/70 hover:text-foreground data-[state=active]:border-border data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm"
+                >
                   Sharing
                 </TabsTrigger>
-                <TabsTrigger value="details" className="justify-start">
+                <TabsTrigger
+                  value="details"
+                  className="h-9 justify-start rounded-md border border-transparent px-3 text-sm font-medium text-muted-foreground shadow-none transition-colors hover:bg-muted/70 hover:text-foreground data-[state=active]:border-border data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm"
+                >
                   Details
                 </TabsTrigger>
               </TabsList>
             </Tabs>
           </aside>
-          <div className="min-w-0 flex-1 overflow-y-auto p-4">
+          <div className="min-h-0 min-w-0 flex-1 overflow-y-auto overscroll-contain p-4">
             {banner ? (
               <div
                 className={
@@ -642,15 +663,11 @@ export function OAuth2ConnectionModal({
                 </div>
               </TabsContent>
 
-              <TabsContent value="sharing" className="mt-0 space-y-2 text-sm">
-                <p>
-                  V1 sharing: connections are available to members of this
-                  workspace. Granular owner-only or per-user sharing is not
-                  implemented yet.
-                </p>
-                <p className="text-muted-foreground">
-                  Status: shared with workspace
-                </p>
+              <TabsContent value="sharing" className="mt-0">
+                <CredentialSharingPanel
+                  value={sharingScope}
+                  onChange={setSharingScope}
+                />
               </TabsContent>
 
               <TabsContent value="details" className="mt-0 space-y-2 text-sm">

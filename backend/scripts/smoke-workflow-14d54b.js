@@ -33,10 +33,11 @@ const registerPart14D54BTests = ({ check, section, assert: a }) => {
     assertX.ok(picker().includes("GoogleCredentialModal"));
   });
 
-  check("FRONTOAUTH-3 native Gmail Connect opens Gmail credential setup modal", () => {
+  check("FRONTOAUTH-3 native Gmail Connect opens Google sign-in directly", () => {
     const types = readFe("modules/workflows/types.ts");
     assertX.ok(types.includes('connectAction: "Connect Gmail"'));
-    assertX.ok(modal().includes('product'));
+    assertX.ok(picker().includes("startGoogleOAuthPopup"));
+    assertX.ok(picker().includes("Sign in with Google"));
   });
 
   check("FRONTOAUTH-4 native Sheets Connect opens Sheets credential setup modal", () => {
@@ -58,11 +59,12 @@ const registerPart14D54BTests = ({ check, section, assert: a }) => {
     assertX.ok(modal().includes("Copy"));
   });
 
-  check("FRONTOAUTH-8 Client ID required", () => {
+  check("FRONTOAUTH-8 Custom OAuth2 Client ID required", () => {
+    assertX.ok(modal().includes("Custom OAuth2"));
     assertX.ok(modal().includes('next.clientId = "This field is required"'));
   });
 
-  check("FRONTOAUTH-9 Client Secret required", () => {
+  check("FRONTOAUTH-9 Custom OAuth2 Client Secret required", () => {
     assertX.ok(modal().includes('next.clientSecret = "This field is required"'));
   });
 
@@ -305,7 +307,7 @@ const registerPart14D54BTests = ({ check, section, assert: a }) => {
     assertX.ok(http.includes("oauthManaged"));
     const reg = registry().getSupportedPredefined("google_ga4");
     assertX.equal(reg.dbType, "google_ga4");
-    assertX.equal(reg.oauth.appModeDefault, "CUSTOM_APP");
+    assertX.equal(reg.oauth.appModeDefault, "PLATFORM_MANAGED");
   });
 
   check("FRONTOAUTH-18 HTTP Generic OAuth2 remains separate", () => {
@@ -388,7 +390,7 @@ const registerPart14D54BTests = ({ check, section, assert: a }) => {
       assertX.ok(e.oauth.authorizationUrl.includes("accounts.google.com"));
       assertX.ok(e.oauth.tokenUrl.includes("oauth2.googleapis.com"));
       assertX.ok(e.oauth.defaultScopes.length >= 1);
-      assertX.equal(e.oauth.appModeDefault, "CUSTOM_APP");
+      assertX.equal(e.oauth.appModeDefault, "PLATFORM_MANAGED");
     }
   });
 };

@@ -165,6 +165,34 @@ check("result prefers the LLM step over a loader", async () => {
   );
   assert.strictEqual(r.output.result, "AI ANSWER");
 });
+check("result {{input}} falls back to incoming item when run input empty", async () => {
+  const row = {
+    key: "site:example.com",
+    clicks: 0,
+    impressions: 1,
+    query: "site:example.com",
+  };
+  const r = await handlers.result(
+    { id: "r1", data: { mapFrom: "{{input}}" } },
+    {
+      input: {},
+      steps: {},
+      inputItems: [{ json: row }],
+    }
+  );
+  assert.deepStrictEqual(r.output.result, row);
+});
+check("result {{input}} keeps non-empty run input over incoming items", async () => {
+  const r = await handlers.result(
+    { id: "r1", data: { mapFrom: "{{input}}" } },
+    {
+      input: { message: "from-run" },
+      steps: {},
+      inputItems: [{ json: { query: "upstream" } }],
+    }
+  );
+  assert.strictEqual(r.output.result, "from-run");
+});
 check("set preserves types", async () => {
   const r = await handlers.set(
     {
@@ -1965,6 +1993,44 @@ check("TEST 14 webhook-style input path uses provenance-aware expression context
 });
 
 section("expression preview context");
+check("buildExpressionPreviewContext falls back {{input}} to selected incoming item", () => {
+  const definition = {
+    nodes: [
+      { id: "source", type: "noop" },
+      {
+        id: "target",
+        type: "result",
+        data: { mapFrom: "{{input}}" },
+      },
+    ],
+    edges: [{ source: "source", target: "target" }],
+  };
+  const sessionNodeResults = {
+    source: {
+      output: { ok: true },
+      items: [
+        { json: { query: "site:a.com", clicks: 0 }, pairedItem: { item: 0 } },
+        { json: { query: "site:b.com", clicks: 2 }, pairedItem: { item: 1 } },
+      ],
+    },
+  };
+  const { context: ctx0 } = buildExpressionPreviewContext(
+    definition,
+    { nodeResults: sessionNodeResults },
+    "target",
+    0,
+    {}
+  );
+  assert.deepStrictEqual(ctx0.input, { query: "site:a.com", clicks: 0 });
+  const { context: ctx1 } = buildExpressionPreviewContext(
+    definition,
+    { nodeResults: sessionNodeResults },
+    "target",
+    1,
+    {}
+  );
+  assert.deepStrictEqual(ctx1.input, { query: "site:b.com", clicks: 2 });
+});
 check("buildExpressionPreviewContext resolves item fields for selected index", () => {
   const definition = {
     nodes: [
@@ -9437,6 +9503,11 @@ require("./smoke-workflow-14d55a").registerPart14D55ATests({
   assert,
 });
 require("./smoke-workflow-14d55b").registerPart14D55BTests({
+  check,
+  section,
+  assert,
+});
+require("./smoke-workflow-14d55c").registerPart14D55CTests({
   check,
   section,
   assert,

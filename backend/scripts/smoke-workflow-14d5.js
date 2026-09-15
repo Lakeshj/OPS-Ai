@@ -430,9 +430,11 @@ const registerPart14D5Tests = ({ check, section, assert: a }) => {
       { allowedOrigins: allowed, expectedSource: oauthPopup }
     );
     assertX.equal(ok.handled, true);
+    const popupHelper = readFe("modules/workflows/googleOAuthPopup.ts");
+    assertX.ok(popupHelper.includes("acceptGoogleOAuthPostMessage"));
+    assertX.ok(popupHelper.includes("expectedSource: popup"));
     const modal = readFe("components/workflows/params/GoogleCredentialModal.tsx");
-    assertX.ok(modal.includes("acceptGoogleOAuthPostMessage"));
-    assertX.ok(modal.includes("expectedSource: popup"));
+    assertX.ok(modal.includes("startGoogleOAuthPopup"));
     const feHelper = readFe("modules/workflows/googleOAuthMessage.ts");
     assertX.ok(feHelper.includes('OAUTH_MESSAGE_TYPE = "opsai-google-oauth"'));
     assertX.ok(feHelper.includes("expectedSource"));

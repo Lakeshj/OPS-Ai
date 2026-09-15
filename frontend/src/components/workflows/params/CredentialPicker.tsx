@@ -18,7 +18,11 @@ import type {
 } from "@/modules/workflows/types";
 import { CREDENTIAL_TYPE_FIELDS } from "@/modules/workflows/types";
 import { workflowCredentialsApi } from "@/modules/workflows/api";
-import { GoogleCredentialModal } from "./GoogleCredentialModal";
+import { startGoogleOAuthPopup } from "@/modules/workflows/googleOAuthPopup";
+import {
+  GoogleCredentialModal,
+  type GoogleCredentialSetupMode,
+} from "./GoogleCredentialModal";
 
 type Props = {
   workspaceId?: string;
@@ -43,6 +47,7 @@ export function CredentialPicker({
   const [credentials, setCredentials] = useState<WorkflowCredential[]>([]);
   const [adding, setAdding] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [connecting, setConnecting] = useState(false);
   const [name, setName] = useState("");
   const [googleModalOpen, setGoogleModalOpen] = useState(false);
   const [googleRedirectUri, setGoogleRedirectUri] = useState(() => {
@@ -55,9 +60,12 @@ export function CredentialPicker({
     }
     return `${origin}/api/google-oauth/callback`;
   });
+  const [platformManagedAvailable, setPlatformManagedAvailable] = useState(true);
   const [editingCredentialId, setEditingCredentialId] = useState<
     string | undefined
   >();
+  const [googleSetupMode, setGoogleSetupMode] =
+    useState<GoogleCredentialSetupMode>("managed");
   const [googleAutoConnect, setGoogleAutoConnect] = useState(false);
   const [removing, setRemoving] = useState(false);
   const defaultType =
@@ -100,24 +108,63 @@ export function CredentialPicker({
         if (res.googleOAuthRedirectUri) {
           setGoogleRedirectUri(res.googleOAuthRedirectUri);
         }
+        if (typeof res.platformManagedGoogleOAuthAvailable === "boolean") {
+          setPlatformManagedAvailable(res.platformManagedGoogleOAuthAvailable);
+        }
       })
       .catch(() => {
-        // keep default
+        // keep defaults
       });
   }, [googleOnly]);
 
-  const openGoogleModal = (credentialId?: string, autoConnect = false) => {
+  const openGoogleModal = (
+    credentialId?: string,
+    options?: { autoConnect?: boolean; setupMode?: GoogleCredentialSetupMode }
+  ) => {
     if (!googleProduct) return;
     setEditingCredentialId(credentialId);
-    setGoogleAutoConnect(autoConnect);
+    setGoogleSetupMode(options?.setupMode || "managed");
+    setGoogleAutoConnect(Boolean(options?.autoConnect));
     setGoogleModalOpen(true);
+  };
+
+  const connectGoogleDirect = async (credentialId?: string) => {
+    if (!workspaceId || !googleProduct) return;
+    if (!platformManagedAvailable) {
+      toast.error(
+        "Google sign-in is not available on this OpsAi instance yet. Please contact your workspace administrator."
+      );
+      return;
+    }
+    setConnecting(true);
+    try {
+      const result = await startGoogleOAuthPopup({
+        workspaceId,
+        product: googleProduct,
+        name: googleMeta?.label || googleProduct,
+        credentialId,
+      });
+      if (result.ok) {
+        reload();
+        onChange(result.credentialId);
+        toast.success("Google account connected");
+      } else {
+        toast.error(result.error);
+      }
+    } catch (err) {
+      toast.error(
+        err instanceof Error ? err.message : "Could not start Google sign-in"
+      );
+    } finally {
+      setConnecting(false);
+    }
   };
 
   if (!workspaceId) return null;
 
   const save = async () => {
     if (isGoogleType(type) && googleProduct) {
-      openGoogleModal();
+      openGoogleModal(undefined, { setupMode: "custom" });
       return;
     }
     setSaving(true);
@@ -165,6 +212,7 @@ export function CredentialPicker({
       setRemoving(false);
     }
   };
+
   const googleMeta = googleProduct
     ? CREDENTIAL_TYPE_FIELDS[googleProduct]
     : null;
@@ -197,7 +245,7 @@ export function CredentialPicker({
         value={value || "none"}
         onValueChange={(v) => {
           if (v === CONNECT_ANOTHER) {
-            if (googleProduct) openGoogleModal();
+            if (googleProduct) void connectGoogleDirect();
             return;
           }
           onChange(v === "none" ? "" : v);
@@ -225,31 +273,56 @@ export function CredentialPicker({
 
       {googleOnly && googleProduct ? (
         <div className="space-y-2">
-          {selected && selected.connected === false ? (
+          {!platformManagedAvailable ? (
             <p className="rounded-md border border-amber-500/40 bg-amber-500/10 px-2 py-1.5 text-[11px] text-amber-900 dark:text-amber-100">
-              This account is not connected yet. Reconnect to authorize Google,
-              or delete it if you no longer need it.
+              Google sign-in is not available on this OpsAi instance yet. Please
+              contact your workspace administrator.
+            </p>
+          ) : selected && selected.connected === false ? (
+            <p className="rounded-md border border-amber-500/40 bg-amber-500/10 px-2 py-1.5 text-[11px] text-amber-900 dark:text-amber-100">
+              This account is not connected yet. Click Sign in with Google to
+              authorize, or delete it if you no longer need it.
+            </p>
+          ) : selected ? (
+            <p className="text-[11px] text-muted-foreground">
+              {selected.accountEmail
+                ? `Connected as ${selected.accountEmail}.`
+                : "Account connected. OpsAi stores tokens encrypted."}
             </p>
           ) : (
             <p className="text-[11px] text-muted-foreground">
-              Configure your Google OAuth client, then connect a Google account.
-              OpsAi stores the connection encrypted.
+              Sign in with Google to authorize your Gmail account. OpsAi stores
+              the connection encrypted.
             </p>
           )}
-          <div className="flex flex-wrap gap-2">
+
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              type="button"
+              size="sm"
+              disabled={connecting || !platformManagedAvailable}
+              className="gap-2 bg-white text-gray-800 hover:bg-gray-100 dark:bg-white dark:text-gray-900"
+              onClick={() =>
+                void connectGoogleDirect(
+                  selected?.connected === false ? selected.id : undefined
+                )
+              }
+            >
+              <GoogleMark />
+              {connecting ? "Connecting…" : "Sign in with Google"}
+            </Button>
+
             {selected ? (
               <>
                 <Button
                   type="button"
                   size="sm"
+                  variant="outline"
                   onClick={() =>
-                    openGoogleModal(
-                      selected.id,
-                      selected.connected === false
-                    )
+                    openGoogleModal(selected.id, { setupMode: "managed" })
                   }
                 >
-                  {selected.connected === false ? "Reconnect" : "Manage"}
+                  Manage
                 </Button>
                 <Button
                   type="button"
@@ -261,26 +334,16 @@ export function CredentialPicker({
                   {removing ? "Removing…" : "Delete"}
                 </Button>
               </>
-            ) : (
-              <Button
-                type="button"
-                size="sm"
-                onClick={() => openGoogleModal()}
-              >
-                {connectPrimary}
-              </Button>
-            )}
-            {listed.length > 0 ? (
-              <Button
-                type="button"
-                size="sm"
-                variant="ghost"
-                onClick={() => openGoogleModal()}
-              >
-                {connectAnother}
-              </Button>
             ) : null}
           </div>
+
+          <button
+            type="button"
+            className="text-[11px] text-muted-foreground underline-offset-2 hover:underline"
+            onClick={() => openGoogleModal(undefined, { setupMode: "custom" })}
+          >
+            Advanced connection options
+          </button>
         </div>
       ) : null}
 
@@ -373,6 +436,8 @@ export function CredentialPicker({
           credentialId={editingCredentialId}
           initialName={googleMeta?.label}
           redirectUri={googleRedirectUri}
+          initialSetupMode={googleSetupMode}
+          platformManagedAvailable={platformManagedAvailable}
           autoConnect={googleAutoConnect}
           onSaved={(id) => {
             reload();
@@ -388,5 +453,28 @@ export function CredentialPicker({
         />
       ) : null}
     </div>
+  );
+}
+
+function GoogleMark() {
+  return (
+    <svg viewBox="0 0 24 24" className="h-4 w-4" aria-hidden="true">
+      <path
+        fill="#4285F4"
+        d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
+      />
+      <path
+        fill="#34A853"
+        d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
+      />
+      <path
+        fill="#FBBC05"
+        d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"
+      />
+      <path
+        fill="#EA4335"
+        d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
+      />
+    </svg>
   );
 }

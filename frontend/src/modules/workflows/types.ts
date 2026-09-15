@@ -226,6 +226,7 @@ export interface WorkflowCredential {
   updatedAt: string;
   connected?: boolean;
   sharing?: string;
+  sharingLabel?: string;
   oauthAppMode?: string;
   accountEmail?: string;
 }
