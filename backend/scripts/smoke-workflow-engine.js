@@ -9502,6 +9502,11 @@ require("./smoke-workflow-14d55a").registerPart14D55ATests({
   section,
   assert,
 });
+require("./smoke-workflow-14d55a1").registerPart14D55A1Tests({
+  check,
+  section,
+  assert,
+});
 require("./smoke-workflow-14d55b").registerPart14D55BTests({
   check,
   section,

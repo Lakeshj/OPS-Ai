@@ -27,12 +27,58 @@ const classifyGscProperty = (siteUrl) => {
   const id = String(siteUrl || "").trim();
   if (!id) return { kind: "unknown", id: "", label: "" };
   if (/^sc-domain:/i.test(id)) {
-    return { kind: "domain", id, label: `Domain property · ${id}` };
+    const host = id.replace(/^sc-domain:/i, "");
+    return { kind: "domain", id, label: `Domain · ${host}` };
   }
   if (/^https?:\/\//i.test(id)) {
     return { kind: "urlPrefix", id, label: `URL prefix · ${id}` };
   }
   return { kind: "unknown", id, label: id };
+};
+
+/** Host key used only for legacy bare-domain suggestion matching — never for save. */
+const gscPropertyHostKey = (siteUrl) => {
+  const id = String(siteUrl || "").trim();
+  if (!id) return "";
+  if (/^sc-domain:/i.test(id)) {
+    return id.replace(/^sc-domain:/i, "").replace(/^www\./i, "").toLowerCase();
+  }
+  if (/^https?:\/\//i.test(id)) {
+    try {
+      return new URL(id).hostname.replace(/^www\./i, "").toLowerCase();
+    } catch {
+      return "";
+    }
+  }
+  if (/^[a-z0-9.-]+\.[a-z]{2,}$/i.test(id) && !/[/\s]/.test(id)) {
+    return id.replace(/^www\./i, "").toLowerCase();
+  }
+  return "";
+};
+
+/**
+ * Suggest provider properties that may correspond to a legacy bare-domain siteUrl.
+ * Never auto-rewrites — caller must require explicit user selection.
+ */
+const findLegacyGscPropertyMatches = (saved, options) => {
+  const raw = String(saved || "").trim();
+  if (!raw || isExpressionValue(raw)) {
+    return { legacyBare: false, matches: [], ambiguous: false };
+  }
+  if (/^sc-domain:/i.test(raw) || /^https?:\/\//i.test(raw)) {
+    return { legacyBare: false, matches: [], ambiguous: false };
+  }
+  const key = gscPropertyHostKey(raw);
+  if (!key) {
+    return { legacyBare: true, matches: [], ambiguous: false };
+  }
+  const list = Array.isArray(options) ? options : [];
+  const matches = list.filter((opt) => gscPropertyHostKey(opt.id) === key);
+  return {
+    legacyBare: true,
+    matches,
+    ambiguous: matches.length > 1,
+  };
 };
 
 const isGa4PropertyId = (value) => /^\d{5,20}$/.test(String(value || "").trim());
@@ -92,6 +138,7 @@ const staleResourceState = (value, options) => {
   }
   const list = Array.isArray(options) ? options : [];
   if (!list.length) return { stale: false, retained: id };
+  // Compare canonical provider values only — never labels.
   const found = list.some((opt) => String(opt.id) === id);
   return { stale: !found, retained: id };
 };
@@ -160,6 +207,8 @@ module.exports = {
   isExpressionValue,
   inferLocatorMode,
   classifyGscProperty,
+  gscPropertyHostKey,
+  findLegacyGscPropertyMatches,
   isGa4PropertyId,
   parseSpreadsheetRef,
   filterResourceOptions,

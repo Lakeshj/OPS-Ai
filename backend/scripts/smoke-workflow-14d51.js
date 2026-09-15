@@ -163,7 +163,7 @@ const registerPart14D51Tests = ({ check, section, assert: a }) => {
   check("GSC-PICKER-2 search filters results", () => {
     const opts = [
       { id: "https://client-a.com/", label: "URL prefix · https://client-a.com/" },
-      { id: "sc-domain:client-b.com", label: "Domain property · sc-domain:client-b.com" },
+      { id: "sc-domain:client-b.com", label: "Domain · client-b.com" },
     ];
     const filtered = locator().filterResourceOptions(opts, "client-b");
     assertX.equal(filtered.length, 1);

@@ -19,6 +19,7 @@ import {
   classifyGscProperty,
   classifyResourceLoadError,
   filterResourceOptions,
+  findLegacyGscPropertyMatches,
   inferLocatorMode,
   isExpressionValue,
   suggestedAiModels,
@@ -72,10 +73,29 @@ const connectContinueHint = (kind: LocatorKind) => {
 
 const loadErrorMessage = (state: string, kind: LocatorKind) => {
   if (state === "missing_credential") return connectContinueHint(kind);
-  if (state === "unauthorized") return "This Google credential is expired or revoked. Reconnect it, then refresh.";
-  if (state === "permission_denied") return "This account cannot list that resource. The saved value was kept.";
-  if (state === "provider_error") return "Could not load resources. You can still enter a value manually.";
+  if (state === "unauthorized") {
+    return "This Google credential is expired or revoked. Reconnect it, then refresh.";
+  }
+  if (state === "permission_denied") {
+    if (kind === "gscSites") {
+      return "Couldn't load Search Console properties. Retry.";
+    }
+    return "Couldn't load resources for this account. Retry.";
+  }
+  if (state === "provider_error") {
+    if (kind === "gscSites") {
+      return "Couldn't load Search Console properties. Retry.";
+    }
+    return "Could not load resources. You can still enter a value manually.";
+  }
   return "";
+};
+
+const resourceMismatchMessage = (kind: LocatorKind) => {
+  if (kind === "gscSites") {
+    return "The selected Search Console property isn't available to this account. The saved property was kept.";
+  }
+  return "The selected resource isn't available to this account. The saved value was kept.";
 };
 
 export function ResourceLocatorField({
@@ -124,7 +144,8 @@ export function ResourceLocatorField({
   const [loadState, setLoadState] = useState<
     "ok" | "missing_credential" | "unauthorized" | "permission_denied" | "provider_error" | "empty"
   >("ok");
-  const [query, setQuery] = useState("");
+  /** Search filter only — never written to siteUrl / resource value. */
+  const [searchQuery, setSearchQuery] = useState("");
 
   const canLoadAccount =
     kind === "aiModels" ||
@@ -160,7 +181,12 @@ export function ResourceLocatorField({
         const res = await workflowCredentialsApi.listGscSites(workspaceId, credentialId);
         next = (res.sites || []).map((s) => {
           const cls = classifyGscProperty(s.siteUrl);
-          return { id: s.siteUrl, label: cls.label || s.siteUrl, kind: cls.kind };
+          const perm = s.permissionLevel ? ` · ${s.permissionLevel}` : "";
+          return {
+            id: s.siteUrl,
+            label: `${cls.label || s.siteUrl}${perm}`,
+            kind: cls.kind,
+          };
         });
       } else if (kind === "ga4Properties") {
         const res = await workflowCredentialsApi.listGa4Properties(workspaceId, credentialId);
@@ -204,15 +230,29 @@ export function ResourceLocatorField({
     if (currentMode === "account") void load();
   }, [currentMode, load]);
 
+  // Credential switch: clear search filter and reload (load deps already cover reload).
+  useEffect(() => {
+    setSearchQuery("");
+  }, [credentialId, kind]);
+
   const visible = useMemo(
-    () => filterResourceOptions(options, query),
-    [options, query]
+    () => filterResourceOptions(options, searchQuery),
+    [options, searchQuery]
   );
 
   const stale =
     currentMode === "account" && !loading && loadState === "ok"
       ? staleResourceState(multi ? selectedIds.join(",") : scalar, options)
       : { stale: false, retained: scalar };
+
+  const legacyGsc =
+    kind === "gscSites" &&
+    currentMode === "account" &&
+    !loading &&
+    loadState === "ok" &&
+    !multi
+      ? findLegacyGscPropertyMatches(scalar, options)
+      : { legacyBare: false, matches: [] as ResourceOption[], ambiguous: false };
 
   const setMode = (next: LocatorMode) => {
     onChange(value, { mode: next });
@@ -281,10 +321,15 @@ export function ResourceLocatorField({
           {canLoadAccount ? (
             <>
               <Input
-                value={query}
-                placeholder="Search"
-                onChange={(e) => setQuery(e.target.value)}
+                value={searchQuery}
+                placeholder={
+                  kind === "gscSites"
+                    ? "Search properties"
+                    : "Search"
+                }
+                onChange={(e) => setSearchQuery(e.target.value)}
                 className="h-8 text-xs"
+                aria-label="Search resources"
               />
               {loading ? (
                 <p className="text-[11px] text-muted-foreground">Loading…</p>
@@ -326,16 +371,30 @@ export function ResourceLocatorField({
                   value={scalar || undefined}
                   onValueChange={(id) => {
                     const opt = options.find((o) => o.id === id);
+                    // Persist canonical provider id only — never the search filter.
                     patchValue(id, {
                       mode: "account",
-                      ...(displayNameField && opt ? { [displayNameField]: opt.label } : {}),
+                      ...(displayNameField && opt
+                        ? { [displayNameField]: opt.label }
+                        : {}),
                     });
+                    setSearchQuery("");
                   }}
                 >
                   <SelectTrigger>
-                    <SelectValue placeholder={loading ? "Loading…" : placeholder || "Select"} />
+                    <SelectValue
+                      placeholder={
+                        loading
+                          ? "Loading…"
+                          : placeholder || "Select a property"
+                      }
+                    />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent
+                    position="popper"
+                    className="z-[200]"
+                    onCloseAutoFocus={(e) => e.preventDefault()}
+                  >
                     {scalar && !visible.some((o) => o.id === scalar) ? (
                       <SelectItem value={scalar}>
                         {displayName || scalar} (saved)
@@ -350,9 +409,54 @@ export function ResourceLocatorField({
                 </Select>
               )}
 
-              {stale.stale ? (
+              {stale.stale && !legacyGsc.legacyBare ? (
                 <p className="text-[11px] text-amber-700 dark:text-amber-400">
-                  Saved value is no longer in this account’s list. It was kept — pick another only if you intend to change it.
+                  {resourceMismatchMessage(kind)}
+                </p>
+              ) : null}
+
+              {legacyGsc.legacyBare && legacyGsc.matches.length > 0 ? (
+                <div className="space-y-1.5 rounded-md border border-amber-500/40 bg-amber-500/10 px-2.5 py-2">
+                  <p className="text-[11px] text-amber-900 dark:text-amber-100">
+                    Saved value <span className="font-mono">{scalar}</span> is
+                    not a canonical Search Console property ID. Select the
+                    matching property from this account
+                    {legacyGsc.ambiguous ? " (more than one match)" : ""}:
+                  </p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {legacyGsc.matches.map((opt) => (
+                      <Button
+                        key={opt.id}
+                        type="button"
+                        size="sm"
+                        variant="secondary"
+                        className="h-7 max-w-full truncate px-2 text-[11px]"
+                        onClick={() => {
+                          patchValue(opt.id, {
+                            mode: "account",
+                            ...(displayNameField
+                              ? { [displayNameField]: opt.label }
+                              : {}),
+                          });
+                          setSearchQuery("");
+                        }}
+                      >
+                        {opt.label}
+                      </Button>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+
+              {legacyGsc.legacyBare &&
+              loadState === "ok" &&
+              legacyGsc.matches.length === 0 &&
+              options.length > 0 ? (
+                <p className="text-[11px] text-amber-700 dark:text-amber-400">
+                  {resourceMismatchMessage(kind)} Enter the exact property ID
+                  (for example <span className="font-mono">sc-domain:…</span>{" "}
+                  or <span className="font-mono">https://…/</span>) or pick one
+                  from the list.
                 </p>
               ) : null}
 

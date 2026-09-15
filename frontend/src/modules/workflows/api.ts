@@ -387,7 +387,14 @@ export const workflowCredentialsApi = {
     ),
 
   listGscSites: (workspaceId: string, credentialId: string) =>
-    apiClient.get<{ sites: { siteUrl: string; permissionLevel?: string }[] }>(
+    apiClient.get<{
+      sites: {
+        siteUrl: string;
+        permissionLevel?: string;
+        kind?: string;
+        label?: string;
+      }[];
+    }>(
       `/workflows/google-oauth/gsc-sites?workspaceId=${encodeURIComponent(workspaceId)}&credentialId=${encodeURIComponent(credentialId)}`
     ),
 
