@@ -5,7 +5,7 @@
   "main": "src/index.js",
   "type": "commonjs",
   "scripts": {
-    "test": "node src/testing/smoke-connection.js && node src/testing/smoke-tools.js && node src/testing/smoke-intelligence.js && node src/testing/smoke-intelligence-filters.js && node src/testing/smoke-intelligence-context.js",
+    "test": "node src/testing/smoke-connection.js && node src/testing/smoke-tools.js && node src/testing/smoke-intelligence.js && node src/testing/smoke-intelligence-filters.js && node src/testing/smoke-intelligence-context.js && node src/testing/smoke-intelligence-ai-reasoning.js",
     "smoke": "npm test"
   },
   "engines": {

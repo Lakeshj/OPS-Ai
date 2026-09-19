@@ -13,7 +13,7 @@
         "worker:workflows": "node scripts/workflow-worker.js",
         "test:api": "node scripts/test-api.js",
         "test:workflows": "node scripts/smoke-workflow-engine.js",
-        "test:gsc-mcp": "node ../plugins/gsc-mcp/src/testing/smoke-connection.js && node ../plugins/gsc-mcp/src/testing/smoke-tools.js && node ../plugins/gsc-mcp/src/testing/smoke-intelligence.js && node ../plugins/gsc-mcp/src/testing/smoke-intelligence-filters.js && node ../plugins/gsc-mcp/src/testing/smoke-intelligence-context.js",
+        "test:gsc-mcp": "node ../plugins/gsc-mcp/src/testing/smoke-connection.js && node ../plugins/gsc-mcp/src/testing/smoke-tools.js && node ../plugins/gsc-mcp/src/testing/smoke-intelligence.js && node ../plugins/gsc-mcp/src/testing/smoke-intelligence-filters.js && node ../plugins/gsc-mcp/src/testing/smoke-intelligence-context.js && node ../plugins/gsc-mcp/src/testing/smoke-intelligence-ai-reasoning.js",
         "test:workflows:prepare": "node scripts/prepare-opsai-smoke-db.js",
         "workflows:verify": "node scripts/verify-workflow-run.js",
         "stage1:verify": "node scripts/verify-stage1.js"
