@@ -192,3 +192,187 @@
 .workflow-canvas-shell .react-flow {
   background: hsl(var(--background));
 }
+
+/* Soft fade + slide for stacked toasts (not abrupt pop-in) */
+@keyframes opsai-toast-in {
+  from {
+    opacity: 0;
+    transform: translate3d(12px, -6px, 0) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+}
+
+@keyframes opsai-toast-out {
+  from {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: translate3d(10px, -4px, 0) scale(0.98);
+  }
+}
+
+.opsai-toast-enter {
+  animation: opsai-toast-in 360ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.opsai-toast-exit {
+  animation: opsai-toast-out 260ms ease-in both;
+}
+
+/* ── OpsAi premium toasts (react-toastify) ───────────────────────────
+   Dark app → light toast surface; light app → dark toast surface.
+   Type color = icon + left accent + progress only (no neon fills). */
+.Toastify__toast-container {
+  z-index: 99999 !important;
+  width: min(380px, calc(100vw - 24px));
+}
+
+.Toastify__toast-container.opsai-toast-container {
+  padding: 12px;
+}
+
+.Toastify__toast.opsai-toast {
+  min-height: 56px;
+  margin-bottom: 10px !important;
+  padding: 12px 14px;
+  border-radius: 10px;
+  border: 1px solid transparent;
+  font-size: 0.875rem;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  backdrop-filter: blur(8px);
+}
+
+/* Dark platform → light notification */
+.opsai-toast--dark.Toastify__toast,
+.Toastify__toast.opsai-toast--dark {
+  background: #ffffff !important;
+  color: #0f172a !important;
+  border-color: rgba(15, 23, 42, 0.08) !important;
+  box-shadow:
+    0 1px 2px rgba(15, 23, 42, 0.04),
+    0 8px 24px rgba(15, 23, 42, 0.08);
+}
+
+/* Light platform → dark notification */
+.opsai-toast--light.Toastify__toast,
+.Toastify__toast.opsai-toast--light {
+  background: #0f172a !important;
+  color: #f8fafc !important;
+  border-color: rgba(248, 250, 252, 0.08) !important;
+  box-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.2),
+    0 10px 28px rgba(0, 0, 0, 0.28);
+}
+
+.opsai-toast .Toastify__toast-icon {
+  width: 20px;
+  margin-inline-end: 12px;
+}
+
+.opsai-toast .Toastify__close-button {
+  opacity: 0.45;
+  align-self: flex-start;
+  margin-top: 2px;
+}
+
+.opsai-toast--dark .Toastify__close-button {
+  color: #0f172a !important;
+}
+
+.opsai-toast--light .Toastify__close-button {
+  color: #f8fafc !important;
+}
+
+.opsai-toast .Toastify__close-button:hover {
+  opacity: 0.85;
+}
+
+.opsai-toast-body {
+  margin: 0;
+  padding: 0;
+  line-height: 1.4;
+  align-items: flex-start;
+}
+
+/* Left type accent */
+.opsai-toast.Toastify__toast--success,
+.opsai-toast.Toastify__toast--error,
+.opsai-toast.Toastify__toast--info,
+.opsai-toast.Toastify__toast--warning {
+  border-left-width: 3px !important;
+  border-left-style: solid !important;
+}
+
+.opsai-toast.Toastify__toast--success {
+  border-left-color: #16a34a !important;
+}
+
+.opsai-toast.Toastify__toast--error {
+  border-left-color: #dc2626 !important;
+}
+
+.opsai-toast.Toastify__toast--info {
+  border-left-color: #2563eb !important;
+}
+
+.opsai-toast.Toastify__toast--warning {
+  border-left-color: #d97706 !important;
+}
+
+/* Icon colors by type */
+.opsai-toast.Toastify__toast--success .Toastify__toast-icon svg {
+  fill: #16a34a;
+}
+
+.opsai-toast.Toastify__toast--error .Toastify__toast-icon svg {
+  fill: #dc2626;
+}
+
+.opsai-toast.Toastify__toast--info .Toastify__toast-icon svg {
+  fill: #2563eb;
+}
+
+.opsai-toast.Toastify__toast--warning .Toastify__toast-icon svg {
+  fill: #d97706;
+}
+
+/* Progress line — type-colored, subtle track */
+.Toastify__progress-bar.opsai-toast-progress {
+  height: 3px;
+  border-radius: 0 0 10px 10px;
+}
+
+.opsai-toast.Toastify__toast--success .opsai-toast-progress {
+  background: #16a34a !important;
+}
+
+.opsai-toast.Toastify__toast--error .opsai-toast-progress {
+  background: #dc2626 !important;
+}
+
+.opsai-toast.Toastify__toast--info .opsai-toast-progress {
+  background: #2563eb !important;
+}
+
+.opsai-toast.Toastify__toast--warning .opsai-toast-progress {
+  background: #d97706 !important;
+}
+
+.opsai-toast.Toastify__toast--default .opsai-toast-progress {
+  background: #64748b !important;
+}
+
+/* Kill toastify "colored" neon backgrounds if theme flickers */
+.Toastify__toast-theme--colored.Toastify__toast--success,
+.Toastify__toast-theme--colored.Toastify__toast--error,
+.Toastify__toast-theme--colored.Toastify__toast--info,
+.Toastify__toast-theme--colored.Toastify__toast--warning {
+  background: inherit;
+}
+

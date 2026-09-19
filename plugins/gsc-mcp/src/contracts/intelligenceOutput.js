@@ -202,29 +202,26 @@ const scoreRankingOpportunity = ({ impressions, position }) => {
   };
 };
 
-/** Transparent decay score: click drop + 10 * position worsening. */
+/** Transparent decay score: absolute click drop + 10 * position worsening. */
 const scoreContentDecay = ({
   clickDrop = 0,
   positionDelta = 0,
-  impressions = 0,
-  ctr = 0,
+  clickDropPercent = 0,
 }) => {
-  if (clickDrop > 0 || positionDelta > 0) {
-    const score = Math.round(clickDrop + positionDelta * 10);
-    return {
-      score,
-      score_breakdown: {
-        formula: "clickDrop + positionDelta * 10",
-        inputs: { clickDrop, positionDelta: round(positionDelta, 2) },
-      },
-    };
-  }
-  const score = Math.round(impressions * (1 - Math.min(ctr, 1)));
+  const click_drop_score = Math.max(0, Number(clickDrop) || 0);
+  const position_drop_score = Math.max(0, Number(positionDelta) || 0) * 10;
+  const score = Math.round(click_drop_score + position_drop_score);
   return {
     score,
     score_breakdown: {
-      formula: "impressions * (1 - ctr)",
-      inputs: { impressions, ctr: round(ctr, 4) },
+      formula: "click_drop_score + position_drop_score",
+      click_drop_score: round(click_drop_score, 2),
+      position_drop_score: round(position_drop_score, 2),
+      click_drop_percent: round(clickDropPercent, 1),
+      inputs: {
+        clickDrop: round(clickDrop, 2),
+        positionDelta: round(positionDelta, 2),
+      },
     },
   };
 };

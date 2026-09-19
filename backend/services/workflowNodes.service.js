@@ -244,7 +244,71 @@ const parseSpreadsheetFromMarkdown = (markdown, options = {}) => {
 };
 
 const DEFAULT_WORKFLOW_SYSTEM_PROMPT =
-  "You are a helpful workflow assistant. Answer the user request using the provided data. Be concise and never dump the whole dataset unless explicitly asked.";
+  "You are a helpful workflow assistant. Answer the user request using the provided workflow runtime data. Prefer connected-node output over general knowledge. Be concise and never dump the whole dataset unless explicitly asked.";
+
+const MAX_RUNTIME_PROMPT_CHARS = 24000;
+
+/** Resolve the payload the model should treat as upstream workflow evidence. */
+const resolveRuntimePromptPayload = (context) => {
+  if (context?.item != null) {
+    const fromItem = getItemPayload(context.item);
+    if (!isEmptyWorkflowInput(fromItem)) return fromItem;
+  }
+  const incoming = Array.isArray(context?.inputItems) ? context.inputItems : [];
+  if (incoming.length === 1) {
+    const one = getItemPayload(incoming[0]);
+    if (!isEmptyWorkflowInput(one)) return one;
+  }
+  if (incoming.length > 1) {
+    return incoming.map((item) => getItemPayload(item));
+  }
+  const fromInput = resolveExpressionInput(context);
+  if (!isEmptyWorkflowInput(fromInput)) return fromInput;
+  return null;
+};
+
+/**
+ * When the prompt template omitted {{input}}/{{item}} and GSC grounding did not
+ * attach evidence, still give the model the connected-node runtime payload.
+ */
+const attachRuntimeDataToPrompt = (userPrompt, runtimePayload) => {
+  if (runtimePayload == null || isEmptyWorkflowInput(runtimePayload)) {
+    return { prompt: String(userPrompt || ""), attached: false };
+  }
+  let serialized;
+  try {
+    serialized = JSON.stringify(runtimePayload, null, 2);
+  } catch {
+    serialized = stringifyValue(runtimePayload);
+  }
+  if (!serialized || serialized === "{}" || serialized === "[]") {
+    return { prompt: String(userPrompt || ""), attached: false };
+  }
+  if (serialized.length > MAX_RUNTIME_PROMPT_CHARS) {
+    serialized = `${serialized.slice(0, MAX_RUNTIME_PROMPT_CHARS)}\n…[truncated]`;
+  }
+  const base = String(userPrompt || "");
+  // Already expanded via {{input}} / prior attachment — avoid doubling.
+  const fingerprint = serialized.slice(0, Math.min(120, serialized.length));
+  if (fingerprint && base.includes(fingerprint)) {
+    return { prompt: base, attached: false };
+  }
+  if (base.includes("## Workflow runtime data")) {
+    return { prompt: base, attached: false };
+  }
+  const attached = [
+    base.trim(),
+    "",
+    "## Workflow runtime data (from connected nodes — use this as primary evidence)",
+    "```json",
+    serialized,
+    "```",
+  ]
+    .filter((line, i, arr) => !(line === "" && i === 0))
+    .join("\n")
+    .trim();
+  return { prompt: attached, attached: true };
+};
 
 /**
  * Shared LLM execution for `ai` (generic model) and `bot` (Keyword Assistant).
@@ -283,23 +347,25 @@ const runLlmNode = async (node, context, options = {}) => {
     }
   }
 
-  let userPrompt = interpolate(promptTemplate, {
-    input: context.input,
+  // Prefer upstream item payloads over empty run input so {{input}} resolves
+  // from connected nodes (Merge / GSC / Filter), not only the Run dialog.
+  const expressionInput = resolveExpressionInput(context);
+  const exprScope = {
+    input: expressionInput,
     steps: context.steps,
-    item: context.item,
+    item: context.item != null ? getItemPayload(context.item) : expressionInput,
     items: context.items,
-  });
+    inputItems: context.inputItems,
+  };
+
+  let userPrompt = interpolate(promptTemplate, exprScope);
   if (typeof model === "string" && model.includes("{{")) {
-    model = interpolate(model, {
-      input: context.input,
-      steps: context.steps,
-      item: context.item,
-      items: context.items,
-    });
+    model = interpolate(model, exprScope);
   }
 
   // GSC IntelligenceContext: structure AI input at the data-contract level.
   let intelligenceContext = null;
+  let runtimeDataAttached = false;
   try {
     const {
       applyAiGrounding,
@@ -311,7 +377,7 @@ const runLlmNode = async (node, context, options = {}) => {
           ? context.inputItems.length === 1
             ? context.inputItems[0]
             : context.inputItems
-          : context.input;
+          : expressionInput;
     const grounded = applyAiGrounding({
       systemPrompt,
       userPrompt: String(userPrompt || ""),
@@ -333,6 +399,15 @@ const runLlmNode = async (node, context, options = {}) => {
     // Non-GSC paths: ignore require/grounding issues
   }
 
+  // Non-GSC (or untagged) upstream: still inject runtime evidence when the
+  // author prompt did not reference {{input}}/{{item}}.
+  if (!intelligenceContext) {
+    const runtimePayload = resolveRuntimePromptPayload(context);
+    const attached = attachRuntimeDataToPrompt(userPrompt, runtimePayload);
+    userPrompt = attached.prompt;
+    runtimeDataAttached = attached.attached;
+  }
+
   const wantsJson = String(data.outputFormat || "text") === "json";
   if (wantsJson) {
     systemPrompt = `${systemPrompt}\n\nRespond with a single valid JSON object and nothing else.`;
@@ -347,6 +422,7 @@ const runLlmNode = async (node, context, options = {}) => {
     systemPrompt,
     promptTemplate,
     userPrompt: String(userPrompt || ""),
+    runtimeDataAttached: Boolean(runtimeDataAttached),
     ...(intelligenceContext
       ? {
           gscIntelligence: true,
@@ -551,15 +627,38 @@ const isEmptyWorkflowInput = (input) => {
   return false;
 };
 
+/** Manual/webhook trigger envelopes are not useful as AI {{input}} evidence. */
+const isTriggerOnlyEnvelope = (input) => {
+  if (!input || typeof input !== "object" || Array.isArray(input)) return false;
+  const keys = Object.keys(input);
+  if (keys.length === 0) return true;
+  if (keys.length === 1 && (input.source != null || input.triggered === true)) {
+    return true;
+  }
+  if (
+    keys.length <= 3 &&
+    (input.triggered === true || input.kind === "manual" || input.kind === "webhook") &&
+    (input.source != null || input.input != null || input.kind != null)
+  ) {
+    return true;
+  }
+  return false;
+};
+
 /**
- * Prefer explicit run input; when empty, use incoming/current item payloads so
- * chained nodes (e.g. GSC → Result with mapFrom `{{input}}`) resolve usefully.
+ * Prefer explicit run input; when empty/trigger-only, use incoming/current item
+ * payloads so chained nodes (Merge → AI with `{{input}}`) resolve usefully.
  */
 const resolveExpressionInput = (context) => {
   const workflowInput = context?.input;
-  if (!isEmptyWorkflowInput(workflowInput)) return workflowInput;
-
   const incoming = Array.isArray(context?.inputItems) ? context.inputItems : [];
+  const preferUpstream =
+    isEmptyWorkflowInput(workflowInput) || isTriggerOnlyEnvelope(workflowInput);
+
+  if (!preferUpstream && !isEmptyWorkflowInput(workflowInput)) {
+    return workflowInput;
+  }
+
   if (incoming.length === 1) return getItemPayload(incoming[0]);
   if (incoming.length > 1) return incoming.map((item) => getItemPayload(item));
 
@@ -567,6 +666,7 @@ const resolveExpressionInput = (context) => {
     context?.item ?? context?.currentItem ?? null;
   if (current != null) return getItemPayload(current);
 
+  if (!preferUpstream) return workflowInput ?? {};
   return workflowInput ?? {};
 };
 
@@ -2553,6 +2653,8 @@ module.exports = {
   deriveItems,
   isEmptyWorkflowInput,
   resolveExpressionInput,
+  resolveRuntimePromptPayload,
+  attachRuntimeDataToPrompt,
   getItemPayload,
   getByPath,
   ExpressionReferenceError,

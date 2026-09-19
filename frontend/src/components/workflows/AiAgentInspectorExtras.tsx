@@ -13,6 +13,8 @@ import {
   providerResourceExplanation,
   sanitizeResourceSummaryForDisplay,
 } from "@/modules/workflows/aiAgentUx";
+import { workflowAlertCompact } from "@/modules/workflows/workflowAlertStyles";
+import { cn } from "@/lib/utils";
 import type { WorkflowNodeData, WorkflowNodeType } from "@/modules/workflows/types";
 import type { WorkflowDefinition } from "@/modules/workflows/types";
 
@@ -143,7 +145,7 @@ export function AiAgentInspectorExtras({
       )}
 
       {showExecution && aiError && (
-        <div className="rounded-md border border-destructive/40 bg-destructive/5 p-3 text-[11px] text-destructive">
+        <div className={cn(workflowAlertCompact("error"), "p-3 text-[11px]")}>
           {aiError.message}
         </div>
       )}

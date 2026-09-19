@@ -11,12 +11,14 @@ Native Google integrations for workflows. Tokens live only in encrypted `workflo
 
 | Product | Policy | Author UX |
 | --- | --- | --- |
-| Gmail (`google_gmail`) | `PLATFORM_MANAGED_ONLY` | Sign in with Google only. No Client ID/Secret. |
-| Search Console (`google_gsc`) | `HYBRID_CUSTOM_PRIMARY` | Connect → credential modal with Client ID/Secret |
+| Gmail (`google_gmail`) | `HYBRID_MANAGED_PRIMARY` | Manage → Managed OAuth2 (recommended), Custom OAuth2, Service Account (not yet). Permissions are granted on Google’s consent screen. |
+| Search Console (`google_gsc`) | `HYBRID_CUSTOM_PRIMARY` | Connect → custom OAuth app (Client ID/Secret). Setup credential selectable when platform OAuth exists. |
 | Analytics (`google_ga4`) | `HYBRID_CUSTOM_PRIMARY` | Same hybrid CUSTOM_APP-primary flow |
 | Sheets (`google_sheets`) | `HYBRID_CUSTOM_PRIMARY` | Same hybrid CUSTOM_APP-primary flow |
 
-`platformManagedAvailable` / `GOOGLE_OAUTH_*` matter **only** for `PLATFORM_MANAGED_ONLY` (Gmail). A valid GSC/GA4/Sheets `CUSTOM_APP` connection must never show Gmail’s “sign-in is not available” warning.
+`platformManagedAvailable` / `GOOGLE_OAUTH_*` matter for Managed OAuth2 paths. `CUSTOM_APP` connections ignore platform client env and never show Gmail’s “sign-in is not available” warning.
+
+Credentials are **workspace-scoped**: every Gmail node picks a `credentialId`. Multiple nodes/workflows can reuse one account, or each node can use a different connected account via Connect another account.
 
 ### Provider change discipline
 
@@ -28,7 +30,7 @@ Any future authentication UX change for one Google provider **MUST** run the Goo
 | --- | --- | --- |
 | `google_gsc` | Search Console | `webmasters.readonly` |
 | `google_ga4` | Google Analytics (GA4) | `analytics.readonly` |
-| `google_gmail` | Gmail | `gmail.modify`, `gmail.send`, `gmail.compose` |
+| `google_gmail` | Gmail | `gmail.modify`, `gmail.send`, `gmail.compose` (requested at Google consent; no in-node permission toggles) |
 | `google_sheets` | Google Sheets | `spreadsheets` |
 
 ## Predefined Google OAuth
@@ -42,12 +44,18 @@ Normal author flow is **frontend-configured** (`CUSTOM_APP`):
 3. Save → Connect → Google account chooser (`prompt=select_account consent`) → callback
 4. Encrypted credential becomes selectable; node picks resources (property/site/sheet)
 
-### Gmail (PLATFORM_MANAGED_ONLY)
+When platform OAuth is configured, Setup credential may also offer Managed OAuth2 as an optional path. When it is not configured, Setup stays locked to custom Google OAuth app (no dead-end Managed option).
 
-1. Sign in with Google
-2. OpsAi uses operator-owned `GOOGLE_OAUTH_CLIENT_*`
-3. Google account chooser → consent → callback
-4. No Client ID/Secret fields for workflow authors
+### Gmail (HYBRID_MANAGED_PRIMARY)
+
+1. Connect / Manage opens the credential modal
+2. Setup credential: **Managed OAuth2 (recommended)**, **Custom OAuth2**, or Service Account (disabled for now)
+3. Managed uses operator-owned `GOOGLE_OAUTH_CLIENT_*`; Custom uses the author’s Client ID/Secret (same pattern as GSC)
+4. Sign in with Google → Google account chooser → Google consent screen (permissions are chosen / shown by Google, not OpsAi)
+5. OpsAi probes Gmail API; connect fails clearly if Gmail API is disabled, the OAuth app is unverified/testing without this user, or scopes were denied
+6. Sharing tab: who can reuse the connection (not secrets)
+
+If Managed shows `Error 403: access_denied` / “has not completed the Google verification process”, either add the Google account as a **test user** on the OpsAi Cloud project, or switch Setup to **Custom OAuth2** with a client that already has Gmail API + scopes configured.
 
 Google authorization/token endpoints are owned by the provider registry — authors do **not** enter them for predefined Google types.
 
@@ -56,7 +64,7 @@ Google authorization/token endpoints are owned by the provider registry — auth
 | Mode | Client ID / Secret source |
 | --- | --- |
 | `CUSTOM_APP` | Per-credential (encrypted secret + safe config). Primary for GSC/GA4/Sheets. |
-| `PLATFORM_MANAGED` | Server `GOOGLE_OAUTH_CLIENT_*`. Required for native Gmail. |
+| `PLATFORM_MANAGED` | Server `GOOGLE_OAUTH_CLIENT_*`. Default recommended path for native Gmail. |
 
 Redirect URI (register in the author’s Google Cloud OAuth client for CUSTOM_APP):
 
@@ -106,7 +114,7 @@ Server-side refresh uses the stored refresh token with the credential’s OAuth 
 
 Search Analytics: **Get Queries** / **Get Pages**. Fields: credential, site URL, date range (today / yesterday / last 7 / 28 / 30 / custom), row limit.
 
-Output items: `{ key, query|page, clicks, impressions, ctr, position }`.
+Output items: `{ query|page, clicks, impressions, ctr, position }` (table headers: Top Queries or Top Pages by operation, then clicks, impressions, CTR, Position).
 
 ## Google Analytics (`googleAnalytics`)
 

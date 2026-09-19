@@ -66,6 +66,7 @@ function renderSpecial(
         <CredentialPicker
           key={param.name}
           workspaceId={context.workspaceId}
+          workflowId={context.workflowId}
           value={String(values[param.name] || "")}
           onChange={(credentialId) =>
             onChange({ ...values, [param.name]: credentialId })

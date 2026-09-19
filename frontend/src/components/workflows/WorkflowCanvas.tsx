@@ -19,6 +19,10 @@ import {
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import { toast } from "sonner";
+import {
+  workflowAlertBadge,
+  workflowAlertPanel,
+} from "@/modules/workflows/workflowAlertStyles";
 
 import { WorkflowNode } from "./WorkflowNode";
 import { WorkflowEdge } from "./WorkflowEdge";
@@ -35,6 +39,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { cn } from "@/lib/utils";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -81,8 +86,10 @@ import {
   isValidSwitchSourceHandle,
   normalizeDefinitionSwitchNodes,
   normalizeSwitchRules,
+  pruneInvalidMergeEdges,
   pruneInvalidSwitchEdges,
   prunePinnedPortOutputs,
+  resolveNodeInputPorts,
 } from "@/modules/workflows/dynamicPorts";
 import {
   resolveEngineType,
@@ -96,7 +103,7 @@ import {
   serializeSelection,
   writeClipboard,
 } from "@/modules/workflows/workflowClipboard";
-import { workflowsApi } from "@/modules/workflows/api";
+import { workflowsApi, workflowCredentialsApi } from "@/modules/workflows/api";
 import {
   isAuxiliaryEdge,
   validateTypedConnection,
@@ -118,6 +125,33 @@ const UI_ONLY_DATA_KEYS = new Set([
 
 function isExecutionAffectingPatch(patch: WorkflowNodeData): boolean {
   return Object.keys(patch).some((key) => !UI_ONLY_DATA_KEYS.has(key));
+}
+
+function credentialIdFromNode(node: Node): string {
+  const data = (node.data || {}) as WorkflowNodeData;
+  return String(data.credentialId || "").trim();
+}
+
+/** Drop Google (etc.) credential rows no longer referenced by any remaining node. */
+async function removeOrphanedNodeCredentials(
+  removedNodes: Node[],
+  remainingNodes: Node[]
+) {
+  const stillUsed = new Set(
+    remainingNodes.map(credentialIdFromNode).filter(Boolean)
+  );
+  const orphanIds = [
+    ...new Set(
+      removedNodes
+        .map(credentialIdFromNode)
+        .filter((id) => id && !stillUsed.has(id))
+    ),
+  ];
+  await Promise.all(
+    orphanIds.map((id) =>
+      workflowCredentialsApi.remove(id).catch(() => null)
+    )
+  );
 }
 
 type RightPanel = "library" | "copilot" | null;
@@ -161,8 +195,10 @@ const nodeTypes = {
   aiChatModel: WorkflowNode,
   aiCalculatorTool: WorkflowNode,
   aiHttpTool: WorkflowNode,
+  gscMcpTool: WorkflowNode,
   respondToWebhook: WorkflowNode,
   googleSearchConsole: WorkflowNode,
+  gscMcp: WorkflowNode,
   googleAnalytics: WorkflowNode,
   gmail: WorkflowNode,
   gmailTrigger: WorkflowNode,
@@ -179,6 +215,7 @@ const defaultEdgeOptions = {
   type: "workflow",
   animated: false,
   reconnectable: true,
+  style: { stroke: "#7dd3fc", strokeWidth: 2 },
 };
 
 const START_TYPES = new Set([
@@ -251,14 +288,17 @@ const isValidWorkflowConnection = (
     existingEdges: edges,
     sourceId: connection.source,
     targetId: connection.target,
+    targetNodeData: (targetNode.data || {}) as WorkflowNodeData,
+    sourceNodeData: (sourceNode.data || {}) as WorkflowNodeData,
   });
   if (!typed.ok) return false;
 
   if (connection.targetHandle) {
-    const contract = getNodeContract(
-      targetType as import("@/modules/workflows/types").WorkflowNodeType
+    const ports = resolveNodeInputPorts(
+      targetType as import("@/modules/workflows/types").WorkflowNodeType,
+      (targetNode.data || {}) as WorkflowNodeData
     );
-    const portDef = contract.inputs.find((p) => p.id === connection.targetHandle);
+    const portDef = ports.find((p) => p.id === connection.targetHandle);
     if (portDef?.maxConnections === 1) {
       const portTaken = edges.some(
         (e) =>
@@ -293,6 +333,8 @@ const getConnectionRejectMessage = (
       existingEdges: edges,
       sourceId: connection.source || undefined,
       targetId: connection.target || undefined,
+      targetNodeData: (targetNode.data || {}) as WorkflowNodeData,
+      sourceNodeData: (sourceNode.data || {}) as WorkflowNodeData,
     });
     if (!typed.ok) return typed.message;
   }
@@ -474,7 +516,12 @@ const defaultDataForType = (type: WorkflowNodeType): WorkflowNodeData => {
         fieldName: "",
       };
     case "merge":
-      return { label: "Merge", nodeType: "merge", mode: "append" };
+      return {
+        label: "Merge",
+        nodeType: "merge",
+        mode: "append",
+        numberOfInputs: 2,
+      };
     case "code":
       return {
         label: "Code",
@@ -1817,11 +1864,13 @@ function WorkflowCanvasInner({
 
     // Triggers/schedules/webhooks are deletable — Execute will require a start node later.
     pushHistory();
-    setNodes((prev) => prev.filter((n) => n.id !== id));
+    const remaining = nodes.filter((n) => n.id !== id);
+    setNodes(remaining);
     setEdges((prev) => prev.filter((e) => e.source !== id && e.target !== id));
     setSelected(null);
     setLocalError(null);
     void invalidateEditorCache({ type: "delete", nodeId: id });
+    void removeOrphanedNodeCredentials([node], remaining);
     toast.success(`Deleted “${String(node.data?.label || node.type)}”`);
   }, [selectedId, nodes, setNodes, setEdges, setSelected, pushHistory, invalidateEditorCache]);
 
@@ -2228,6 +2277,15 @@ function WorkflowCanvasInner({
       }
     }
 
+    if (selectedType === "merge" && patch.numberOfInputs !== undefined) {
+      const merged = { ...prev, ...patch };
+      nextPatch = merged;
+      const pruned = pruneInvalidMergeEdges(edges, selectedId, merged);
+      if (pruned.length !== edges.length) {
+        setEdges(pruned);
+      }
+    }
+
     if (isExecutionAffectingPatch(nextPatch)) {
       if (
         prev.pinned &&
@@ -2622,10 +2680,15 @@ function WorkflowCanvasInner({
       )}
 
       {isSimplePassThrough && (
-        <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm">
+        <div
+          className={cn(
+            workflowAlertPanel("warning"),
+            "flex flex-wrap items-center justify-between gap-3"
+          )}
+        >
           <div>
             <span className="font-medium">This only passes input through.</span>{" "}
-            <span className="text-muted-foreground">
+            <span className="opacity-80">
               Insert an AI step (or a Bot node to use a Keyword Assistant) for
               a real answer.
             </span>
@@ -2645,11 +2708,9 @@ function WorkflowCanvasInner({
 
       {(localError || (latestRun?.status === "failed" && latestRun.error)) &&
         !resultsDialogOpen && (
-          <div className="rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+          <div className={workflowAlertPanel("error")}>
             <div className="flex flex-wrap items-center gap-2">
-              <span className="rounded bg-blue-600 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white">
-                Error
-              </span>
+              <span className={workflowAlertBadge("error")}>Error</span>
               {(localErrorNodeId ||
                 latestRun?.steps?.find((s) => s.status === "failed")
                   ?.nodeId) && (
@@ -2691,6 +2752,20 @@ function WorkflowCanvasInner({
             }))}
             edges={flowEdges}
             onNodesChange={(changes) => {
+              const removedIds = changes
+                .filter(
+                  (c): c is { type: "remove"; id: string } => c.type === "remove"
+                )
+                .map((c) => c.id);
+              if (removedIds.length > 0) {
+                const removedNodes = nodes.filter((n) =>
+                  removedIds.includes(n.id)
+                );
+                const remaining = nodes.filter(
+                  (n) => !removedIds.includes(n.id)
+                );
+                void removeOrphanedNodeCredentials(removedNodes, remaining);
+              }
               const hasMove = changes.some(
                 (c) => c.type === "position" && c.dragging === false
               );

@@ -22,13 +22,15 @@ const FILTER_DEFAULTS = Object.freeze({
     limit: 50,
   }),
   content_decay: Object.freeze({
-    comparisonPeriod: "snapshot",
-    dropPercentage: 20,
+    // Always prior vs current — snapshot is not a valid decay mode
+    comparisonPeriod: "prior_period",
+    minPreviousImpressions: 50,
+    minCurrentImpressions: 20,
+    minClickDropPercent: 20,
+    minPositionWorsening: 1,
     limit: 50,
-    // Snapshot heuristic defaults
-    minImpressions: 40,
-    maxCtr: 0.02,
-    minPosition: 10,
+    // Legacy alias accepted in validateIntelligenceFilters
+    dropPercentage: 20,
   }),
   keyword_cannibalization: Object.freeze({
     minPages: 2,
@@ -37,7 +39,7 @@ const FILTER_DEFAULTS = Object.freeze({
   }),
 });
 
-const COMPARISON_PERIODS = Object.freeze(["snapshot", "prior_period"]);
+const COMPARISON_PERIODS = Object.freeze(["prior_period"]);
 
 const toFiniteNumber = (value, fallback) => {
   const n = Number(value);
@@ -136,28 +138,45 @@ const validateIntelligenceFilters = (capability, raw = {}) => {
   }
 
   if (id === "content_decay") {
-    const comparisonPeriod = String(
-      src.comparisonPeriod || defaults.comparisonPeriod
+    const comparisonPeriodRaw = String(
+      src.comparisonPeriod != null ? src.comparisonPeriod : defaults.comparisonPeriod
     ).trim();
-    const dropPercentage = toFiniteNumber(
-      src.dropPercentage,
-      defaults.dropPercentage
-    );
-    const limit = toPositiveInt(src.limit, defaults.limit);
-    const minImpressions = toPositiveInt(
-      src.minImpressions,
-      defaults.minImpressions
-    );
-    const maxCtr = toFiniteNumber(src.maxCtr, defaults.maxCtr);
-    const minPosition = toFiniteNumber(src.minPosition, defaults.minPosition);
-
-    if (!COMPARISON_PERIODS.includes(comparisonPeriod)) {
+    if (comparisonPeriodRaw === "snapshot") {
       return invalid(
-        `comparisonPeriod must be one of: ${COMPARISON_PERIODS.join(", ")}`
+        "Content Decay requires current-period and previous-period GSC data. A single snapshot cannot establish decay."
       );
     }
-    if (dropPercentage < 0 || dropPercentage > 100) {
-      return invalid("dropPercentage must be between 0 and 100");
+    const comparisonPeriod = "prior_period";
+
+    const minPreviousImpressions = toPositiveInt(
+      src.minPreviousImpressions ?? src.minImpressions,
+      defaults.minPreviousImpressions
+    );
+    const minCurrentImpressions = toPositiveInt(
+      src.minCurrentImpressions,
+      defaults.minCurrentImpressions
+    );
+    const minClickDropPercent = toFiniteNumber(
+      src.minClickDropPercent ?? src.dropPercentage,
+      defaults.minClickDropPercent
+    );
+    const minPositionWorsening = toFiniteNumber(
+      src.minPositionWorsening,
+      defaults.minPositionWorsening
+    );
+    const limit = toPositiveInt(src.limit, defaults.limit);
+
+    if (minPreviousImpressions < 0) {
+      return invalid("minPreviousImpressions must be >= 0");
+    }
+    if (minCurrentImpressions < 0) {
+      return invalid("minCurrentImpressions must be >= 0");
+    }
+    if (minClickDropPercent < 0 || minClickDropPercent > 100) {
+      return invalid("minClickDropPercent must be between 0 and 100");
+    }
+    if (minPositionWorsening < 0 || minPositionWorsening > 100) {
+      return invalid("minPositionWorsening must be between 0 and 100");
     }
     if (limit < 0 || limit > 5000) {
       return invalid("limit must be between 0 and 5000 (0 = unlimited)");
@@ -167,11 +186,13 @@ const validateIntelligenceFilters = (capability, raw = {}) => {
       ok: true,
       filters: {
         comparisonPeriod,
-        dropPercentage,
+        minPreviousImpressions,
+        minCurrentImpressions,
+        minClickDropPercent,
+        minPositionWorsening,
+        // legacy alias
+        dropPercentage: minClickDropPercent,
         limit,
-        minImpressions,
-        maxCtr: clamp(maxCtr, 0, 1),
-        minPosition: clamp(minPosition, 1, 100),
       },
     };
   }
@@ -241,11 +262,13 @@ const extractFiltersFromNodeData = (capability, data = {}) => {
   if (id === "content_decay") {
     return {
       comparisonPeriod: src.comparisonPeriod,
-      dropPercentage: src.dropPercentage,
+      dropPercentage: src.dropPercentage ?? src.minClickDropPercent,
+      minClickDropPercent: src.minClickDropPercent ?? src.dropPercentage,
+      minPreviousImpressions:
+        src.minPreviousImpressions ?? src.minImpressions,
+      minCurrentImpressions: src.minCurrentImpressions,
+      minPositionWorsening: src.minPositionWorsening,
       limit: src.decayLimit ?? src.limit,
-      minImpressions: src.minImpressions,
-      maxCtr: src.maxCtr,
-      minPosition: src.minPosition,
     };
   }
   if (id === "keyword_cannibalization") {
@@ -283,16 +306,19 @@ const FILTER_INPUT_SCHEMAS = Object.freeze({
   content_decay: {
     type: "object",
     properties: {
-      rows: { type: "array" },
-      previousRows: { type: "array" },
-      comparisonPeriod: {
-        type: "string",
-        enum: ["snapshot", "prior_period"],
-        default: "snapshot",
+      rows: { type: "array", description: "Current-period GSC rows" },
+      currentRows: { type: "array", description: "Alias for current-period rows" },
+      previousRows: {
+        type: "array",
+        description: "Previous-period GSC rows (required)",
       },
-      dropPercentage: { type: "number", default: 20 },
+      minPreviousImpressions: { type: "number", default: 50 },
+      minCurrentImpressions: { type: "number", default: 20 },
+      minClickDropPercent: { type: "number", default: 20 },
+      minPositionWorsening: { type: "number", default: 1 },
       limit: { type: "number", default: 50 },
     },
+    required: ["previousRows"],
   },
   keyword_cannibalization: {
     type: "object",

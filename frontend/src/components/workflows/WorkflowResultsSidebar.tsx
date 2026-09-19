@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { sortWorkflowRunSteps } from "@/modules/workflows/runStepDisplay";
+import { workflowAlertCompact } from "@/modules/workflows/workflowAlertStyles";
 import type {
   WorkflowDefinition,
   WorkflowErrorRouting,
@@ -16,6 +17,11 @@ import {
   ErrorRoutingSummary,
   ErrorRunBadge,
 } from "./ErrorRoutingSummary";
+import {
+  looksLikeMarkdownProse,
+  plainPreview,
+  WorkflowProseContent,
+} from "./WorkflowProseContent";
 
 export type WorkflowResultsPanelProps = {
   latestRun?: WorkflowRun | null;
@@ -114,10 +120,12 @@ function ResolvedFields({ resolved }: { resolved: Record<string, unknown> }) {
 
 function StepDetails({
   step,
+  formatStepOutput,
   onTogglePin,
   pinned,
 }: {
   step: WorkflowRunStep;
+  formatStepOutput: (output: unknown) => string;
   onTogglePin?: (nodeId: string) => void;
   pinned?: boolean;
 }) {
@@ -126,6 +134,10 @@ function StepDetails({
   const resolved = input.resolved || null;
   const incoming = input.incoming || {};
   const incomingIds = Object.keys(incoming);
+  const outputSummary =
+    step.output != null ? formatStepOutput(step.output) : "";
+  const showProseOutput =
+    Boolean(outputSummary) && looksLikeMarkdownProse(outputSummary);
 
   return (
     <div className="mt-2 border-t pt-2">
@@ -207,6 +219,14 @@ function StepDetails({
             </div>
             <JsonBlock value={input.contextInput ?? null} />
           </div>
+        </div>
+      ) : showProseOutput ? (
+        <div className="space-y-2">
+          <WorkflowProseContent text={outputSummary} />
+          <details className="text-[10px] text-muted-foreground">
+            <summary className="cursor-pointer">Raw JSON</summary>
+            <JsonBlock value={step.output ?? null} />
+          </details>
         </div>
       ) : (
         <JsonBlock value={step.output ?? null} />
@@ -353,7 +373,12 @@ export function WorkflowResultsPanel({
               )}
 
             {latestRun.error && (
-              <div className="rounded-md border border-destructive/40 bg-destructive/10 p-2.5 text-sm text-destructive whitespace-pre-wrap">
+              <div
+                className={cn(
+                  workflowAlertCompact("error"),
+                  "whitespace-pre-wrap text-sm"
+                )}
+              >
                 {latestRun.error}
               </div>
             )}
@@ -365,9 +390,7 @@ export function WorkflowResultsPanel({
                 <div className="mb-1 text-[11px] font-semibold uppercase text-muted-foreground">
                   Final result
                 </div>
-                <div className="max-h-[min(50vh,420px)] overflow-y-auto overscroll-contain whitespace-pre-wrap text-sm leading-relaxed">
-                  {formatStepOutput(latestRun.output)}
-                </div>
+                <WorkflowProseContent text={formatStepOutput(latestRun.output)} />
               </div>
             )}
 
@@ -433,7 +456,12 @@ export function WorkflowResultsPanel({
                       </div>
 
                       {step.error && (
-                        <div className="mt-1 text-xs text-destructive whitespace-pre-wrap">
+                        <div
+                          className={cn(
+                            workflowAlertCompact("error"),
+                            "mt-1 text-xs whitespace-pre-wrap"
+                          )}
+                        >
                           {step.error}
                         </div>
                       )}
@@ -442,13 +470,14 @@ export function WorkflowResultsPanel({
                         step.output != null &&
                         step.status === "succeeded" && (
                           <div className="mt-1 line-clamp-3 whitespace-pre-wrap text-sm">
-                            {formatStepOutput(step.output)}
+                            {plainPreview(formatStepOutput(step.output))}
                           </div>
                         )}
 
                       {isOpen && (
                         <StepDetails
                           step={step}
+                          formatStepOutput={formatStepOutput}
                           onTogglePin={onTogglePin}
                           pinned={isPinned?.(step.nodeId)}
                         />

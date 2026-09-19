@@ -69,14 +69,14 @@ function WorkflowEdgeComponent({
         : edgeData.runStatus === "failed"
           ? "#ef4444"
           : selected
-            ? "hsl(var(--primary))"
+            ? "#60a5fa"
             : isContinue
               ? "hsl(var(--muted-foreground) / 0.85)"
               : isAuxiliary
-                ? "hsl(var(--muted-foreground) / 0.55)"
+                ? "hsl(var(--muted-foreground) / 0.45)"
                 : hovered
-                  ? "hsl(var(--foreground) / 0.55)"
-                  : "hsl(var(--muted-foreground) / 0.65)";
+                  ? "#93c5fd"
+                  : "#7dd3fc";
 
   const showControls = hovered || selected;
 

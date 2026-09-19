@@ -1,6 +1,6 @@
 const { v4: uuidv4 } = require("uuid");
 const { pool } = require("../config/database");
-const { executeNode, deriveItems } = require("./workflowNodes.service");
+const { executeNode, deriveItems, getItemPayload, isEmptyWorkflowInput } = require("./workflowNodes.service");
 const { compactValue } = require("../utils/workflowDebug");
 const {
   normalizeNodeOutput,
@@ -2203,10 +2203,20 @@ const buildExpressionPreviewContext = (
   const safeIndex =
     Number.isInteger(itemIndex) && itemIndex >= 0 ? itemIndex : 0;
   const currentItem = inputItems[safeIndex] ?? null;
+  let expressionInput = runInput || {};
+  if (isEmptyWorkflowInput(expressionInput)) {
+    if (currentItem != null) {
+      expressionInput = getItemPayload(currentItem);
+    } else if (inputItems.length === 1) {
+      expressionInput = getItemPayload(inputItems[0]);
+    } else if (inputItems.length > 1) {
+      expressionInput = inputItems.map((item) => getItemPayload(item));
+    }
+  }
 
   return {
     context: {
-      input: runInput || {},
+      input: expressionInput,
       steps,
       items,
       graph,

@@ -5,8 +5,11 @@
 
 import ELK, { type ElkExtendedEdge, type ElkNode } from "elkjs/lib/elk.bundled.js";
 import type { Edge, Node } from "@xyflow/react";
-import { getNodeContract } from "./nodeContract";
-import { resolveNodeOutputPorts } from "./dynamicPorts";
+import {
+  getMergeInputCount,
+  resolveNodeInputPorts,
+  resolveNodeOutputPorts,
+} from "./dynamicPorts";
 import type { WorkflowNodeData, WorkflowNodeType } from "./types";
 import { LOOP_PORTS, isLoopContinueEdge } from "./loopValidation";
 import { isAuxiliaryEdge } from "./connectionPorts";
@@ -90,8 +93,15 @@ function measureNode(node: Node): LayoutNodeSize {
     return { width: w, height: h };
   }
   const t = nodeTypeOf(node);
+  const data = (node.data || {}) as WorkflowNodeData;
   if (t === "switch") return { width: 200, height: 120 };
-  if (t === "loop" || t === "merge" || t === "condition") {
+  if (t === "merge") {
+    const inputs = getMergeInputCount(data);
+    // Keep room for Input 1..N handles spaced vertically on the card.
+    const height = Math.max(100, 72 + inputs * 22);
+    return { width: 220, height };
+  }
+  if (t === "loop" || t === "condition") {
     return { width: 200, height: 100 };
   }
   return { ...DEFAULT_SIZE };
@@ -111,11 +121,12 @@ function outputPortOrder(node: Node): string[] {
   }
 }
 
-function inputPortOrder(node: Node): string[] {
+/** Input port ids for ELK — must match canvas (dynamic Merge inputs). */
+export function inputPortOrder(node: Node): string[] {
   const type = nodeTypeOf(node) as WorkflowNodeType;
+  const data = (node.data || {}) as WorkflowNodeData;
   try {
-    const contract = getNodeContract(type);
-    return contract.inputs
+    return resolveNodeInputPorts(type, data)
       .filter((p) => p.direction === "in")
       .map((p) => p.id);
   } catch {
@@ -254,6 +265,58 @@ function orderHintForComponents(nodes: Node[]): string {
 }
 
 /**
+ * After ELK, reassign Y among same-layer Merge fan-in sources so
+ * Input 1 is top … Input N is bottom. Does not change edge handles.
+ */
+function alignMergeFanInSources(
+  positions: LayoutPositionMap,
+  nodes: Node[],
+  forwardEdges: Edge[]
+): void {
+  for (const node of nodes) {
+    if (nodeTypeOf(node) !== "merge") continue;
+    const portIds = inputPortOrder(node);
+    if (portIds.length < 2) continue;
+
+    const sourcesInOrder: string[] = [];
+    for (const portId of portIds) {
+      const edge = forwardEdges.find(
+        (e) =>
+          e.target === node.id && String(e.targetHandle || "") === portId
+      );
+      if (edge?.source) sourcesInOrder.push(edge.source);
+    }
+    if (sourcesInOrder.length < 2) continue;
+
+    const uniqueSources = [...new Set(sourcesInOrder)];
+    if (uniqueSources.length < 2) continue;
+
+    const xs = uniqueSources.map((id) => positions[id]?.x ?? 0);
+    const sameLayer = Math.max(...xs) - Math.min(...xs) <= 120;
+    if (!sameLayer) continue;
+
+    // Stable Y slots from current layout (sorted top→bottom).
+    const ySlots = uniqueSources
+      .map((id) => positions[id]?.y ?? 0)
+      .sort((a, b) => a - b);
+
+    // First occurrence of each source in port order gets a slot.
+    const assigned = new Set<string>();
+    let slot = 0;
+    for (const sourceId of sourcesInOrder) {
+      if (assigned.has(sourceId)) continue;
+      if (!positions[sourceId]) continue;
+      positions[sourceId] = {
+        ...positions[sourceId],
+        y: Math.round(ySlots[slot] ?? positions[sourceId].y),
+      };
+      assigned.add(sourceId);
+      slot += 1;
+    }
+  }
+}
+
+/**
  * Layout workflow nodes. Does not mutate edges or node data.
  */
 export async function layoutWorkflowGraph(options: {
@@ -310,6 +373,9 @@ export async function layoutWorkflowGraph(options: {
         };
       }
     }
+
+    // Keep Merge Input 1..N sources top→bottom so Tidy does not cross wires.
+    alignMergeFanInSources(positions, nodes, forwardEdges);
 
     // Part 12A: place auxiliary providers near their consumer (not in execution rank).
     const byConsumer = new Map<string, string[]>();

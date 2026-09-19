@@ -141,6 +141,8 @@ function summarizeBusinessFields(obj: Record<string, unknown>): string | null {
     "count",
     "logs",
     "__callableReturnItems",
+    "__gscIntelligence",
+    "__gscCapabilitySection",
   ]);
   const entries = Object.entries(obj).filter(([k, v]) => {
     if (skip.has(k)) return false;
@@ -159,6 +161,49 @@ function summarizeBusinessFields(obj: Record<string, unknown>): string | null {
   return null;
 }
 
+/** Compact summary for GSC IntelligenceContext (Merge / MCP Tools → AI). */
+function summarizeGscIntelligenceContext(
+  value: unknown
+): string | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const ctx = value as Record<string, unknown>;
+  const isContext =
+    ctx.kind === "gsc_intelligence_context" ||
+    ctx.__gscIntelligence === true ||
+    (ctx.source === "google_search_console" && Array.isArray(ctx.capabilities));
+  if (!isContext) return null;
+  const caps = Array.isArray(ctx.capabilities) ? ctx.capabilities : [];
+  const capNames = caps
+    .map((s) =>
+      s && typeof s === "object"
+        ? String((s as { capability?: unknown }).capability || "")
+        : ""
+    )
+    .filter(Boolean);
+  const resultCount = caps.reduce((sum, s) => {
+    if (!s || typeof s !== "object") return sum;
+    const section = s as { count?: unknown; results?: unknown[] };
+    const n =
+      typeof section.count === "number"
+        ? section.count
+        : Array.isArray(section.results)
+          ? section.results.length
+          : 0;
+    return sum + n;
+  }, 0);
+  const property =
+    ctx.property != null && String(ctx.property).trim()
+      ? String(ctx.property)
+      : null;
+  const parts = [
+    "GSC intelligence",
+    capNames.length ? capNames.join(" + ") : null,
+    `${resultCount} result${resultCount === 1 ? "" : "s"}`,
+    property ? property : null,
+  ].filter(Boolean);
+  return parts.join(" · ");
+}
+
 /**
  * Compact, human-readable summary for a step's own canonical output.
  */
@@ -168,6 +213,21 @@ export function formatStepOutput(output: unknown): string {
   if (typeof output !== "object") return String(output);
 
   const obj = output as Record<string, unknown>;
+  const gscDirect = summarizeGscIntelligenceContext(obj);
+  if (gscDirect) return gscDirect;
+  if (obj.gscIntelligenceContext === true || obj.gscIntelligenceContext) {
+    const fromItems =
+      Array.isArray(obj.items) && obj.items[0]
+        ? summarizeGscIntelligenceContext(
+            (obj.items[0] as { json?: unknown }).json ?? obj.items[0]
+          )
+        : null;
+    if (fromItems) {
+      return typeof obj.count === "number" && obj.count > 1
+        ? `${obj.count} items — ${fromItems}`
+        : fromItems;
+    }
+  }
   if (typeof obj.text === "string" && obj.text.trim()) return obj.text;
 
   if (obj.result != null) {
@@ -201,6 +261,12 @@ export function formatStepOutput(output: unknown): string {
   if (Array.isArray(obj.items) && obj.items.length > 0) {
     const first = (obj.items[0] as { json?: unknown })?.json ?? obj.items[0];
     if (first && typeof first === "object" && !Array.isArray(first)) {
+      const gscNested = summarizeGscIntelligenceContext(first);
+      if (gscNested) {
+        return obj.items.length > 1
+          ? `${obj.items.length} items — ${gscNested}`
+          : gscNested;
+      }
       const nestedBiz = summarizeBusinessFields(first as Record<string, unknown>);
       if (nestedBiz) {
         return obj.items.length > 1

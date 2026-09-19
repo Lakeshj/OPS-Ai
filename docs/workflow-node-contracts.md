@@ -7,7 +7,7 @@ Backend mirror: `backend/config/nodeContract.js`
 
 ## Cross-cutting engine invariants
 
-1. **Ports from registry** — `inputs.length > 0` → show INPUT panel; merge has 2 main inputs; condition has true/false outputs; result has no outputs.
+1. **Ports from registry** — `inputs.length > 0` → show INPUT panel; merge has 2–10 main inputs (Number of Inputs); condition has true/false outputs; result has no outputs.
 2. **pairedItem policies** — `identity1to1` | `fanOut` | `identityBySurvival` | `fanIn` | `multiPort` | `routing` | `manual` | `none`
 3. **Dirty graph** — param/edge/pin/disabled/typedPort change → node + all downstream descendants; pins cut propagation in manual runs.
 4. **Expression errors** — broken thread / ambiguous thread (see `EXPRESSION_ERRORS` in nodeContract.ts).
@@ -40,7 +40,7 @@ Backend mirror: `backend/config/nodeContract.js`
 | sort | main | main | N→N reorder | identityBySurvival |
 | removeDuplicates | main | main | N→≤N | identityBySurvival (+ stateful) |
 | aggregate | main | main | N→1 | fanIn |
-| merge | main×2 | main | barrier | multiPort |
+| merge | main×2–10 (Number of Inputs) | main | barrier | multiPort |
 | code | main | main+error | arbitrary | manual |
 | condition | main | true+false | N split | routing |
 | document | main | main | N→N | identity1to1 |

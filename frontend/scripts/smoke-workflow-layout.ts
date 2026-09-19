@@ -10,7 +10,9 @@ import type { Edge, Node } from "@xyflow/react";
 import {
   assertNoNodeOverlap,
   hasForwardCycle,
+  inputPortOrder,
   layoutWorkflowGraph,
+  measureNode,
   projectForwardEdges,
 } from "../src/modules/workflows/workflowLayout";
 
@@ -100,6 +102,60 @@ async function main() {
     assert.equal(r.ok, true);
     if (!r.ok) return;
     assert.notEqual(r.positions.a.y, r.positions.b.y);
+  });
+
+  await check("Merge 3 inputs: dynamic ports registered (no input3→input1 collapse)", () => {
+    const merge = n("m", "merge", 0, 0, { numberOfInputs: 3 });
+    // Drop measured so measureNode uses merge sizing path
+    delete (merge as { measured?: unknown }).measured;
+    assert.deepEqual(inputPortOrder(merge), ["input1", "input2", "input3"]);
+    const size = measureNode(merge);
+    assert.ok(size.height >= 100, `merge height ${size.height}`);
+    assert.ok(size.height > 100, "3-input merge should be taller than default 100");
+  });
+
+  await check("Merge 3 inputs: Tidy keeps source Y order aligned with Input 1..3", async () => {
+    const nodes = [
+      n("t", "trigger"),
+      n("s1", "gscMcpTool", 0, 0),
+      n("s2", "gscMcpTool", 0, 80),
+      n("s3", "gscMcpTool", 0, 160),
+      n("m", "merge", 200, 80, { numberOfInputs: 3 }),
+    ];
+    // Avoid measured override so ELK sees taller merge
+    for (const node of nodes) {
+      if (node.type === "merge") delete (node as { measured?: unknown }).measured;
+    }
+    const edges = [
+      e("1", "t", "s1"),
+      e("2", "t", "s2"),
+      e("3", "t", "s3"),
+      e("4", "s1", "m", null, "input1"),
+      e("5", "s2", "m", null, "input2"),
+      e("6", "s3", "m", null, "input3"),
+    ];
+    const beforeHandles = edges.map((x) => ({
+      id: x.id,
+      targetHandle: x.targetHandle,
+    }));
+    const r = await layoutWorkflowGraph({ nodes, edges });
+    assert.equal(r.ok, true);
+    if (!r.ok) return;
+    // Positions only — handles must not be rewritten
+    assert.deepEqual(
+      edges.map((x) => ({ id: x.id, targetHandle: x.targetHandle })),
+      beforeHandles
+    );
+    // Input1 source above Input2 above Input3 (port order)
+    assert.ok(
+      r.positions.s1.y <= r.positions.s2.y,
+      `input1 source y=${r.positions.s1.y} should be <= input2 y=${r.positions.s2.y}`
+    );
+    assert.ok(
+      r.positions.s2.y <= r.positions.s3.y,
+      `input2 source y=${r.positions.s2.y} should be <= input3 y=${r.positions.s3.y}`
+    );
+    assert.ok(r.positions.m.x > r.positions.s1.x);
   });
 
   await check("Merge positioned after both branch predecessors", async () => {

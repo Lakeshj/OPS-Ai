@@ -153,9 +153,11 @@ const startGoogleOAuth = asyncHandler(async (req, res) => {
     await googleOAuth.startGoogleOAuth(
       {
         workspaceId: req.body?.workspaceId,
+        workflowId: req.body?.workflowId,
         product: req.body?.product,
         name: req.body?.name,
         credentialId: req.body?.credentialId,
+        gmailPermissions: req.body?.gmailPermissions,
       },
       req.user
     )
@@ -287,9 +289,54 @@ const listSheetTabs = asyncHandler(async (req, res) => {
   );
 });
 
+const listGscMcpTools = asyncHandler(async (req, res) => {
+  const host = require("../../services/mcpPluginHost.service");
+  const payload = await host.listGscMcpTools({
+    credentialId: String(req.query.credentialId || "").trim() || undefined,
+    workspaceId: String(req.query.workspaceId || "").trim() || undefined,
+    audience: String(req.query.audience || "assistant").trim() || "assistant",
+    authUser: req.user,
+  });
+  res.json(payload);
+});
+
+const executeGscMcpTool = asyncHandler(async (req, res) => {
+  const host = require("../../services/mcpPluginHost.service");
+  const result = await host.executeGscMcpTool({
+    toolId: req.body?.toolId,
+    toolArgs: req.body?.toolArgs || {},
+    mode: req.body?.mode || "raw",
+    credentialId: String(req.body?.credentialId || "").trim(),
+    workspaceId: String(req.body?.workspaceId || "").trim() || undefined,
+    authUser: req.user,
+  });
+  res.json(result);
+});
+
+const gscMcpIntentHints = asyncHandler(async (req, res) => {
+  const host = require("../../services/mcpPluginHost.service");
+  res.json(host.intentHints(String(req.body?.text || req.query.text || "")));
+});
+
 const googleOAuthCallback = asyncHandler(async (req, res) => {
   const googleOAuth = require("../../services/googleOAuth.service");
   try {
+    if (req.query.error) {
+      const reason = String(req.query.error_description || req.query.error || "")
+        .slice(0, 180);
+      const friendly =
+        /access_denied/i.test(String(req.query.error))
+          ? "Google blocked sign-in (access_denied). If the app is in Testing, add this Google account as a test user — or use Custom OAuth2 with your own Google Cloud client. Unverified apps cannot be used by arbitrary Gmail accounts."
+          : reason || "Google connect failed";
+      googleOAuth.applyOAuthPopupResponseHeaders(res);
+      res.status(400).send(
+        googleOAuth.oauthCallbackHtml({
+          ok: false,
+          error: friendly,
+        })
+      );
+      return;
+    }
     const result = await googleOAuth.finishGoogleOAuth(req.query.code, req.query.state);
     googleOAuth.applyOAuthPopupResponseHeaders(res);
     res.send(
@@ -299,6 +346,17 @@ const googleOAuthCallback = asyncHandler(async (req, res) => {
       })
     );
   } catch (err) {
+    try {
+      console.warn(
+        "[google-oauth] callback failed",
+        JSON.stringify({
+          code: err?.code || null,
+          message: String(err?.message || "OAuth failed").slice(0, 160),
+        })
+      );
+    } catch {
+      // ignore
+    }
     googleOAuth.applyOAuthPopupResponseHeaders(res);
     res.status(400).send(
       googleOAuth.oauthCallbackHtml({
@@ -782,6 +840,9 @@ module.exports = {
   listGa4Properties,
   listGmailLabels,
   listSheetTabs,
+  listGscMcpTools,
+  executeGscMcpTool,
+  gscMcpIntentHints,
   googleOAuthCallback,
   copilotContext,
   copilotValidatePlan,

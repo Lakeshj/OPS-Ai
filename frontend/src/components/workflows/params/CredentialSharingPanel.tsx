@@ -81,7 +81,11 @@ export function CredentialSharingPanel({
           <SelectTrigger className="h-10">
             <SelectValue placeholder="All users and projects" />
           </SelectTrigger>
-          <SelectContent>
+          <SelectContent
+            position="popper"
+            className="z-[200]"
+            onCloseAutoFocus={(e) => e.preventDefault()}
+          >
             {SHARING_OPTIONS.map((opt) => {
               const Icon = opt.icon;
               return (

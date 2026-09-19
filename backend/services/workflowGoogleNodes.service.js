@@ -117,15 +117,17 @@ const gscQuery = async (node, context, item) => {
     const batch = Array.isArray(res.body?.rows) ? res.body.rows : [];
     for (const row of batch) {
       const keys = Array.isArray(row.keys) ? row.keys : [];
+      const value = keys[0] || "";
+      // Canonical table columns: query|page, clicks, impressions, ctr, position.
+      // Do not also emit `key` — it duplicates query/page.
       const json = {
-        key: keys[0] || "",
         clicks: Number(row.clicks) || 0,
         impressions: Number(row.impressions) || 0,
         ctr: Number(row.ctr) || 0,
         position: Number(row.position) || 0,
       };
-      if (dim === "query") json.query = keys[0] || "";
-      if (dim === "page") json.page = keys[0] || "";
+      if (dim === "page") json.page = value;
+      else json.query = value;
       rows.push({ json });
     }
     if (batch.length === 0 || !data.returnAll) break;

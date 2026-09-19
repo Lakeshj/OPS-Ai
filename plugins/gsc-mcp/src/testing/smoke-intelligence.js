@@ -115,6 +115,10 @@ const main = async () => {
 
   const decayScore = scoreContentDecay({ clickDrop: 20, positionDelta: 2.5 });
   assert.equal(decayScore.score, Math.round(20 + 2.5 * 10));
+  assert.equal(
+    decayScore.score_breakdown.formula,
+    "click_drop_score + position_drop_score"
+  );
 
   const conflictScore = scoreKeywordConflict({
     pageCount: 2,
@@ -139,6 +143,13 @@ const main = async () => {
 
   // --- Empty data ---
   for (const id of ESSENTIAL_INTELLIGENCE_IDS) {
+    if (id === "content_decay") {
+      // Decay requires two periods — empty/missing prior is validation, not empty success
+      const emptyDecay = runIntelligence(id, { rows: [] });
+      assert.equal(emptyDecay.ok, false, "content_decay empty current must fail");
+      assert.equal(emptyDecay.error.code, "MCP_VALIDATION");
+      continue;
+    }
     const empty = runIntelligence(id, { rows: [] });
     assert.equal(empty.ok, true, `${id} empty should ok`);
     const schema = validateIntelligenceOutput(empty.data, id);
@@ -186,25 +197,27 @@ const main = async () => {
     "ranking scores must be descending"
   );
 
-  const decaySnap = runIntelligence("content_decay", { rows: SAMPLE_ROWS });
-  assert.ok(validateIntelligenceOutput(decaySnap.data, "content_decay").ok);
-  for (const row of decaySnap.data.opportunities) {
-    assertOpportunityShape(row, [OPPORTUNITY_TYPES.CONTENT_DECAY]);
-  }
+  const decayMissing = runIntelligence("content_decay", { rows: SAMPLE_ROWS });
+  assert.equal(decayMissing.ok, false);
+  assert.equal(decayMissing.error.code, "MCP_VALIDATION");
 
   const decayPrev = runIntelligence("content_decay", {
     rows: SAMPLE_ROWS,
     previousRows: PREVIOUS_ROWS,
-    comparisonPeriod: "prior_period",
-    dropPercentage: 10,
+    minClickDropPercent: 10,
+    minPreviousImpressions: 40,
+    minCurrentImpressions: 20,
   });
   assert.ok(validateIntelligenceOutput(decayPrev.data, "content_decay").ok);
   assert.ok(decayPrev.data.count >= 1);
+  for (const row of decayPrev.data.opportunities) {
+    assertOpportunityShape(row, [OPPORTUNITY_TYPES.CONTENT_DECAY]);
+  }
   const decayHit = decayPrev.data.opportunities.find(
     (o) => o.entity.label === "low ctr keyword"
   );
   assert.ok(decayHit);
-  assert.ok(/fell from|worsened/i.test(decayHit.reason));
+  assert.ok(/decreased from|worsened from/i.test(decayHit.reason));
   assert.equal(decayHit.opportunity_type, OPPORTUNITY_TYPES.CONTENT_DECAY);
 
   const conflict = runIntelligence("keyword_cannibalization", {

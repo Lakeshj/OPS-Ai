@@ -12,6 +12,7 @@ import {
   formatOutputMetadataSummary,
   selectNodeOutputData,
 } from "@/modules/workflows/nodeOutputData";
+import { workflowAlertCompact } from "@/modules/workflows/workflowAlertStyles";
 import {
   loopBatchOccurrences,
   loopDoneOccurrence,
@@ -333,7 +334,7 @@ export function NodeOutputPanel({
       )}
 
       {effectiveResult?.status === "failed" && (
-        <div className="rounded border border-destructive/40 bg-destructive/10 p-2 text-[10px] text-destructive">
+        <div className={cn(workflowAlertCompact("error"), "text-[10px]")}>
           {
             parseAiErrorFromUnknown(effectiveResult.error).message ||
             effectiveResult.error ||

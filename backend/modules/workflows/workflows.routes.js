@@ -40,6 +40,9 @@ const {
   listGa4Properties,
   listGmailLabels,
   listSheetTabs,
+  listGscMcpTools,
+  executeGscMcpTool,
+  gscMcpIntentHints,
   copilotContext,
   copilotValidatePlan,
   copilotApplyPlan,
@@ -74,6 +77,9 @@ router.get("/google-oauth/gsc-sites", listGscSites);
 router.get("/google-oauth/ga4-properties", listGa4Properties);
 router.get("/google-oauth/gmail-labels", listGmailLabels);
 router.get("/google-oauth/sheet-tabs", listSheetTabs);
+router.get("/plugins/gsc-mcp/tools", listGscMcpTools);
+router.post("/plugins/gsc-mcp/execute", executeGscMcpTool);
+router.post("/plugins/gsc-mcp/intent", gscMcpIntentHints);
 
 // Part 14D.4 — unified + n8n import (before /:id)
 router.post("/import/preview", previewWorkflowImport);

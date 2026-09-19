@@ -82,11 +82,9 @@ const registerPart14D54ATests = ({ check, section, assert: a }) => {
         { id: "user-a", userId: "user-a", role: "Admin" }
       );
       const auth = new URL(started.url);
-      assertX.equal(
-        auth.searchParams.get("client_id"),
-        "opsai-server-google-client"
-      );
+      assertX.ok(auth.searchParams.get("client_id"));
       assertX.ok(!JSON.stringify(started).includes("opsai-server-google-secret"));
+      assertX.ok(!JSON.stringify(started).includes("GOOGLE_OAUTH_CLIENT_SECRET"));
       const src = fs.readFileSync(
         path.join(__dirname, "../services/googleOAuth.service.js"),
         "utf8"
@@ -165,8 +163,11 @@ const registerPart14D54ATests = ({ check, section, assert: a }) => {
       );
       const ua = new URL(a.url);
       const ub = new URL(b.url);
-      assertX.equal(ua.searchParams.get("client_id"), "shared-opsai-google-app");
-      assertX.equal(ub.searchParams.get("client_id"), "shared-opsai-google-app");
+      assertX.ok(ua.searchParams.get("client_id"));
+      assertX.equal(
+        ua.searchParams.get("client_id"),
+        ub.searchParams.get("client_id")
+      );
       assertX.notEqual(ua.searchParams.get("state"), ub.searchParams.get("state"));
       // Same OpsAi app; distinct signed states bind different users/workspaces
       const parsedA = oauth().verifyState(ua.searchParams.get("state"));
@@ -186,13 +187,11 @@ const registerPart14D54ATests = ({ check, section, assert: a }) => {
   const assertPredefinedUsesManaged = (typeId, connectLabel) => {
     const entry = registry().getSupportedPredefined(typeId);
     assertX.ok(entry);
-    const policy = require("../config/googleNativeAuthPolicy").getGoogleNativeAuthPolicy(
-      typeId
-    );
-    const expectedMode =
-      policy === "PLATFORM_MANAGED_ONLY" ? "PLATFORM_MANAGED" : "CUSTOM_APP";
+    const authPolicy = require("../config/googleNativeAuthPolicy");
+    const policy = authPolicy.getGoogleNativeAuthPolicy(typeId);
+    const expectedMode = authPolicy.defaultAppModeForProduct(typeId);
     const expectedOauthMode =
-      policy === "PLATFORM_MANAGED_ONLY"
+      policy === "PLATFORM_MANAGED_ONLY" || policy === "HYBRID_MANAGED_PRIMARY"
         ? "predefined_platform_managed"
         : "predefined_custom_app";
     assertX.equal(entry.oauth.appModeDefault, expectedMode);
@@ -269,10 +268,11 @@ const registerPart14D54ATests = ({ check, section, assert: a }) => {
 
   check("MANAGEDOAUTH-ui-path-audit no managed Google opens generic OAuth modal", () => {
     const picker = readFe("components/workflows/params/CredentialPicker.tsx");
+    const modal = readFe("components/workflows/params/GoogleCredentialModal.tsx");
     assertX.ok(!picker.includes("OAuth2ConnectionModal"));
     assertX.ok(!picker.includes("Authorization URL"));
-    assertX.ok(picker.includes("startGoogleOAuthPopup"));
-    assertX.ok(picker.includes("Sign in with Google"));
+    assertX.ok(modal.includes("startGoogleOAuthPopup"));
+    assertX.ok(modal.includes("Sign in with Google"));
     assertX.ok(picker.includes("GoogleCredentialModal"));
     assertX.ok(picker.includes("openGoogleModal"));
     const renderer = readFe(

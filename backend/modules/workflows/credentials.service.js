@@ -9,7 +9,11 @@ const {
   OAUTH_APP_MODE,
   redirectUri: googleRedirectUri,
   platformClientConfigured,
+  normalizeSelectedGmailPermissions,
 } = require("../../services/googleOAuth.service");
+const {
+  allocateUniqueCredentialName,
+} = require("../../services/credentialName.util");
 
 const HTTP_CREDENTIAL_TYPES = new Set([
   "bearer",
@@ -79,6 +83,8 @@ const formatCredential = (row) => {
       : undefined,
     accountEmail:
       isGoogle && cfg.accountEmail ? String(cfg.accountEmail) : undefined,
+    workflowId:
+      isGoogle && cfg.workflowId ? String(cfg.workflowId) : undefined,
   };
 };
 
@@ -149,6 +155,10 @@ const create = async ({ workspaceId, name, type, secret, config }, authUser) => 
         : checked.defaults.allowedDomains;
     const customScopes = String(config?.customScopes || "").trim();
     const sharingScope = normalizeSharingScope(config?.sharingScope);
+    const gmailPermissions =
+      type === "google_gmail"
+        ? normalizeSelectedGmailPermissions(config?.gmailPermissions)
+        : undefined;
     configJson = JSON.stringify({
       oauthAppMode: checked.mode,
       clientId:
@@ -157,6 +167,7 @@ const create = async ({ workspaceId, name, type, secret, config }, authUser) => 
           : undefined,
       allowedDomains,
       customScopes: customScopes || undefined,
+      ...(gmailPermissions ? { gmailPermissions } : {}),
       sharingScope,
       connected: false,
     });
@@ -200,6 +211,7 @@ const create = async ({ workspaceId, name, type, secret, config }, authUser) => 
   }
 
   const id = uuidv4();
+  const uniqueName = await allocateUniqueCredentialName(workspaceId, name);
   await pool.execute(
     `INSERT INTO workflow_credentials
       (id, workspace_id, name, type, secret_json, config_json, created_by)
@@ -207,7 +219,7 @@ const create = async ({ workspaceId, name, type, secret, config }, authUser) => 
     [
       id,
       workspaceId,
-      name,
+      uniqueName,
       type,
       encryptSecret(secretPayload),
       configJson,
@@ -275,12 +287,21 @@ const update = async (credentialId, { name, secret, config }, authUser) => {
     config?.customScopes !== undefined
       ? String(config.customScopes || "").trim()
       : existingConfig.customScopes || "";
+  const gmailPermissions =
+    row.type === "google_gmail"
+      ? normalizeSelectedGmailPermissions(
+          config?.gmailPermissions !== undefined
+            ? config.gmailPermissions
+            : existingConfig.gmailPermissions
+        )
+      : undefined;
   const nextConfig = {
     ...existingConfig,
     oauthAppMode: mode,
     clientId: mode === OAUTH_APP_MODE.CUSTOM_APP ? nextClientId : undefined,
     allowedDomains,
     customScopes: customScopes || undefined,
+    ...(gmailPermissions ? { gmailPermissions } : {}),
     sharingScope:
       config?.sharingScope !== undefined
         ? normalizeSharingScope(config.sharingScope)
@@ -298,7 +319,13 @@ const update = async (credentialId, { name, secret, config }, authUser) => {
         SET name = ?, secret_json = ?, config_json = ?
       WHERE id = ?`,
     [
-      name != null ? String(name).trim() : row.name,
+      name != null
+        ? await allocateUniqueCredentialName(
+            row.workspace_id,
+            String(name).trim(),
+            { excludeId: credentialId }
+          )
+        : row.name,
       encryptSecret(nextSecretObj),
       JSON.stringify(nextConfig),
       credentialId,
@@ -357,6 +384,11 @@ const getEditorView = async (id, authUser) => {
           cfg.allowedDomains ||
           (entry ? [...(entry.allowedDomains || [])] : []),
         customScopes: cfg.customScopes || "",
+        gmailPermissions: Array.isArray(cfg.gmailPermissions)
+          ? cfg.gmailPermissions
+          : [],
+        gmailPermissionOptions: require("../../services/googleOAuth.service")
+          .GMAIL_PERMISSION_OPTIONS,
         sharingScope: normalizeSharingScope(cfg.sharingScope),
         sharingLabel: sharingLabel(normalizeSharingScope(cfg.sharingScope)),
         defaultScopes: entry?.oauth?.defaultScopes

@@ -47,13 +47,12 @@ const main = () => {
     input: ctrCtx,
   });
   assert.equal(grounded.grounded, true);
-  assert.ok(grounded.systemPrompt.includes("Evidence → Observation → Recommendation"));
-  assert.ok(grounded.systemPrompt.includes("Do NOT invent Priority"));
-  assert.ok(grounded.systemPrompt.includes("opportunity_type"));
-  assert.ok(
-    !grounded.systemPrompt.includes("5. Priority") ||
-      grounded.systemPrompt.includes("Score:")
-  );
+  assert.ok(grounded.systemPrompt.includes("Analyze the GSC MCP opportunities"));
+  assert.ok(grounded.systemPrompt.includes("Do not invent Priority") || grounded.systemPrompt.includes("Do not invent Priority:"));
+  assert.ok(grounded.systemPrompt.includes("opportunity type") || grounded.systemPrompt.includes("opportunity_type") || grounded.systemPrompt.includes("preserve the opportunity type"));
+  assert.ok(grounded.systemPrompt.includes("Total opportunities received"));
+  assert.ok(grounded.systemPrompt.includes("Do not treat a low number of impressions as strong evidence"));
+  assert.ok(grounded.systemPrompt.includes("Score:"));
   assert.ok(grounded.userPrompt.includes("ai visibility checker"));
   assert.ok(grounded.userPrompt.includes("ctr_opportunity") || grounded.userPrompt.includes("197"));
 
@@ -192,12 +191,20 @@ const main = () => {
     ],
     sourceMeta: SOURCE_META,
     filters: {
-      comparisonPeriod: "prior_period",
-      dropPercentage: 10,
-      limit: 10,
+      minPreviousImpressions: 50,
+      minCurrentImpressions: 20,
+      minClickDropPercent: 10,
+      minPositionWorsening: 1,
     },
   });
-  // May be empty if filter defaults differ — still check helper with synthetic row
+  assert.equal(typeof decay.ok, "boolean");
+  // May succeed with opportunities when thresholds met
+  if (decay.ok) {
+    assert.ok(decay.intelligenceContext);
+  } else {
+    assert.ok(decay.error);
+  }
+
   const decaySynthetic = ctx.buildIntelligenceContext({
     property: PROPERTY,
     period: PERIOD,

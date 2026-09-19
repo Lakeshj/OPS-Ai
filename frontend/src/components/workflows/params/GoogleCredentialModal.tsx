@@ -67,6 +67,8 @@ type Props = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   workspaceId: string;
+  /** When set, Gmail OAuth binds the connection to this workflow only. */
+  workflowId?: string;
   product: WorkflowCredentialType;
   credentialId?: string;
   initialName?: string;
@@ -92,6 +94,7 @@ export function GoogleCredentialModal({
   open,
   onOpenChange,
   workspaceId,
+  workflowId,
   product,
   credentialId,
   initialName,
@@ -163,10 +166,13 @@ export function GoogleCredentialModal({
     autoConnectStarted.current = false;
     setActiveId(credentialId || "");
     // Keep managed as the normal UI. Native Gmail is always managed-only.
+    // Hybrid providers default to custom (and stay custom when platform OAuth is off).
     setSetupMode(
       managedOnly || isPlatformManagedOnlyGoogle(product)
         ? "managed"
-        : initialSetupMode
+        : platformManagedAvailable
+          ? initialSetupMode
+          : "custom"
     );
     setForm({
       name: initialName || meta?.label || "Google",
@@ -376,15 +382,22 @@ export function GoogleCredentialModal({
       return;
     }
 
+    // Managed + no saved row yet: create-on-callback (no orphan "not connected" stub).
+    const createOnCallback = isManaged && !activeId;
     let id = activeId;
-    if (!id) {
-      id = (await saveConnection()) || "";
-    } else if (!isManaged && (form.clientSecret.trim() || !hasClientSecret)) {
-      id = (await saveConnection()) || "";
-    } else if (!validate()) {
+    if (!createOnCallback) {
+      if (!id) {
+        id = (await saveConnection()) || "";
+      } else if (!isManaged && (form.clientSecret.trim() || !hasClientSecret)) {
+        id = (await saveConnection()) || "";
+      } else if (!validate()) {
+        return;
+      }
+      if (!id) return;
+    } else if (!form.name.trim()) {
+      setErrors({ name: "This field is required" });
       return;
     }
-    if (!id) return;
 
     setConnecting(true);
     setOauthAttempted(true);
@@ -396,9 +409,10 @@ export function GoogleCredentialModal({
     try {
       const result = await startGoogleOAuthPopup({
         workspaceId,
+        workflowId,
         product,
         name: form.name.trim(),
-        credentialId: id,
+        ...(createOnCallback ? {} : { credentialId: id }),
       });
       setConnecting(false);
       if (result.ok) {
@@ -547,7 +561,30 @@ export function GoogleCredentialModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="flex h-[min(90vh,640px)] min-h-[min(560px,90vh)] max-h-[min(90vh,720px)] max-w-3xl flex-col gap-0 overflow-hidden p-0 sm:rounded-lg">
+      <DialogContent
+        className="flex h-[min(90vh,640px)] min-h-[min(560px,90vh)] max-h-[min(90vh,720px)] max-w-3xl flex-col gap-0 overflow-hidden p-0 sm:rounded-lg"
+        onPointerDownOutside={(event) => {
+          // Radix Select portals outside the dialog; don't dismiss when using Setup/Sharing selects.
+          const target = event.target as HTMLElement | null;
+          if (
+            target?.closest?.(
+              "[data-radix-select-content], [data-radix-popper-content-wrapper]"
+            )
+          ) {
+            event.preventDefault();
+          }
+        }}
+        onInteractOutside={(event) => {
+          const target = event.target as HTMLElement | null;
+          if (
+            target?.closest?.(
+              "[data-radix-select-content], [data-radix-popper-content-wrapper]"
+            )
+          ) {
+            event.preventDefault();
+          }
+        }}
+      >
         <DialogHeader className="shrink-0 border-b px-4 py-3 pr-12">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
@@ -626,24 +663,56 @@ export function GoogleCredentialModal({
                       <Label className="text-sm font-medium">
                         Setup credential
                       </Label>
-                      <Select
-                        value={setupMode}
-                        onValueChange={(next) =>
-                          setSetupMode(next as GoogleCredentialSetupMode)
-                        }
-                      >
-                        <SelectTrigger className="h-8 w-[220px] text-xs">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="managed">
-                            Managed OAuth2 (recommended)
-                          </SelectItem>
-                          <SelectItem value="custom">
-                            Use custom Google OAuth app
-                          </SelectItem>
-                        </SelectContent>
-                      </Select>
+                      {platformManagedAvailable || product === "google_gmail" ? (
+                        <Select
+                          value={setupMode}
+                          onValueChange={(next) => {
+                            if (next === "service_account") {
+                              toast.info(
+                                "Service Account for Gmail is not available yet. Use Managed or Custom OAuth2."
+                              );
+                              return;
+                            }
+                            setSetupMode(next as GoogleCredentialSetupMode);
+                          }}
+                        >
+                          <SelectTrigger className="h-8 w-[260px] text-xs">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent
+                            position="popper"
+                            className="z-[200]"
+                            onCloseAutoFocus={(e) => e.preventDefault()}
+                          >
+                            {product === "google_gmail" ? (
+                              <>
+                                <SelectItem value="managed">
+                                  Managed OAuth2 (recommended)
+                                </SelectItem>
+                                <SelectItem value="custom">
+                                  Custom OAuth2
+                                </SelectItem>
+                                <SelectItem value="service_account" disabled>
+                                  Service Account
+                                </SelectItem>
+                              </>
+                            ) : (
+                              <>
+                                <SelectItem value="custom">
+                                  Custom OAuth2
+                                </SelectItem>
+                                <SelectItem value="managed">
+                                  Managed OAuth2 (optional)
+                                </SelectItem>
+                              </>
+                            )}
+                          </SelectContent>
+                        </Select>
+                      ) : (
+                        <span className="text-xs text-muted-foreground">
+                          Custom OAuth2
+                        </span>
+                      )}
                     </div>
                   ) : null}
 
@@ -789,7 +858,11 @@ export function GoogleCredentialModal({
                       <SelectTrigger className="h-9">
                         <SelectValue />
                       </SelectTrigger>
-                      <SelectContent>
+                      <SelectContent
+                        position="popper"
+                        className="z-[200]"
+                        onCloseAutoFocus={(e) => e.preventDefault()}
+                      >
                         <SelectItem value="all">All</SelectItem>
                         <SelectItem value="specific">Specific Domains</SelectItem>
                         <SelectItem value="none">None</SelectItem>

@@ -3,10 +3,8 @@ const {
   OPPORTUNITY_TYPES,
   wrapIntelligence,
   buildEntity,
-  buildMetrics,
   buildOpportunity,
   scoreContentDecay,
-  fmtPct,
   fmtPos,
   round,
 } = require("../contracts/intelligenceOutput");
@@ -15,126 +13,189 @@ const {
   applyLimit,
 } = require("../contracts/intelligenceFilters");
 
+const entityKey = (r) => {
+  const n = normalizeRow(r);
+  return n.query || n.page || "";
+};
+
+const validationError = (message) => {
+  const err = new Error(message);
+  err.code = "MCP_VALIDATION";
+  throw err;
+};
+
 /**
- * Content decay with configurable comparison period, drop %, and limit.
- * - snapshot: deep position + weak CTR heuristic (ignores previousRows)
- * - prior_period: requires previousRows; enforces dropPercentage on clicks
+ * Content decay — prior period vs current period only.
+ * A single snapshot cannot establish decay.
  */
 const contentDecay = (input = {}) => {
-  const rows = Array.isArray(input.rows) ? input.rows : [];
-  const previous = Array.isArray(input.previousRows) ? input.previousRows : [];
+  const currentRaw = Array.isArray(input.currentRows)
+    ? input.currentRows
+    : Array.isArray(input.rows)
+      ? input.rows
+      : [];
+  const previousRaw = Array.isArray(input.previousRows)
+    ? input.previousRows
+    : [];
+
+  if (String(input.comparisonPeriod || "").trim() === "snapshot") {
+    validationError(
+      "Content Decay requires current-period and previous-period GSC data. A single snapshot cannot establish decay."
+    );
+  }
+
   const validated = validateIntelligenceFilters("content_decay", input);
   if (!validated.ok) {
     const err = new Error(validated.error.message);
     err.code = validated.error.code;
     throw err;
   }
-  const {
-    comparisonPeriod,
-    dropPercentage,
-    limit,
-    minImpressions,
-    maxCtr,
-    minPosition,
-  } = validated.filters;
 
-  if (comparisonPeriod === "prior_period") {
-    if (!previous.length) {
-      return wrapIntelligence("content_decay", []);
-    }
-
-    const prevMap = new Map(
-      previous.map((r) => {
-        const n = normalizeRow(r);
-        return [n.query || n.page, n];
-      })
+  if (!currentRaw.length) {
+    validationError(
+      "Content Decay requires current-period and previous-period GSC data. A single snapshot cannot establish decay."
     );
-    const out = rows
-      .map(normalizeRow)
-      .map((r) => {
-        const key = r.query || r.page;
-        const p = prevMap.get(key);
-        if (!p) return null;
-        const clickDrop = p.clicks - r.clicks;
-        const positionDelta = r.position - p.position;
-        if (clickDrop <= 0 && positionDelta <= 0) return null;
-
-        const dropPct =
-          p.clicks > 0 ? (clickDrop / p.clicks) * 100 : clickDrop > 0 ? 100 : 0;
-
-        // When dropPercentage is set, require click decline to meet the threshold.
-        if (dropPercentage > 0) {
-          if (clickDrop <= 0 || dropPct < dropPercentage) return null;
-        }
-
-        const entity = buildEntity(r);
-        const metrics = buildMetrics(r, {
-          previous_clicks: p.clicks,
-          previous_position: fmtPos(p.position),
-          click_drop: clickDrop,
-          position_delta: round(positionDelta, 1),
-          drop_percentage: round(dropPct, 1),
-          comparison_period: "prior_period",
-        });
-        const { score, score_breakdown } = scoreContentDecay({
-          clickDrop,
-          positionDelta,
-        });
-
-        const parts = [];
-        if (clickDrop > 0) {
-          parts.push(
-            `clicks fell from ${p.clicks} to ${r.clicks} (−${clickDrop}, ${round(dropPct, 1)}%)`
-          );
-        }
-        if (positionDelta > 0) {
-          parts.push(
-            `average position worsened from ${fmtPos(p.position)} to ${fmtPos(r.position)} (+${round(positionDelta, 1)})`
-          );
-        }
-
-        return buildOpportunity({
-          opportunity_type: OPPORTUNITY_TYPES.CONTENT_DECAY,
-          entity,
-          metrics,
-          reason: `${entity.label} declined vs the prior period: ${parts.join("; ")}. Current CTR is ${fmtPct(r.ctr)} on ${r.impressions} impressions.`,
-          recommendation: `Refresh the content for "${entity.label}" (update stats, examples, and headings), reclaim lost internal links, and re-target the primary query to recover the ${clickDrop > 0 ? `${clickDrop} lost clicks` : "lost ranking positions"}.`,
-          score,
-          score_breakdown,
-        });
-      })
-      .filter(Boolean)
-      .sort((a, b) => b.score - a.score);
-    return wrapIntelligence("content_decay", applyLimit(out, limit));
+  }
+  if (!previousRaw.length) {
+    validationError(
+      "Content Decay requires current-period and previous-period GSC data. A single snapshot cannot establish decay."
+    );
   }
 
-  // Snapshot mode — ignore previousRows
-  const out = rows
+  const {
+    minPreviousImpressions,
+    minCurrentImpressions,
+    minClickDropPercent,
+    minPositionWorsening,
+    limit,
+  } = validated.filters;
+
+  const prevMap = new Map();
+  for (const row of previousRaw) {
+    const key = entityKey(row);
+    if (!key) continue;
+    prevMap.set(key, normalizeRow(row));
+  }
+
+  const out = currentRaw
     .map(normalizeRow)
-    .filter(
-      (r) =>
-        r.impressions >= minImpressions &&
-        r.ctr < maxCtr &&
-        r.position > minPosition
-    )
-    .map((r) => {
-      const entity = buildEntity(r);
-      const metrics = buildMetrics(r, { comparison_period: "snapshot" });
+    .map((cur) => {
+      const key = cur.query || cur.page;
+      if (!key) return null;
+      const prev = prevMap.get(key);
+      if (!prev) return null;
+
+      const current_clicks = cur.clicks;
+      const previous_clicks = prev.clicks;
+      const click_change = current_clicks - previous_clicks;
+      const click_change_percent =
+        previous_clicks > 0
+          ? round((click_change / previous_clicks) * 100, 1)
+          : click_change < 0
+            ? -100
+            : 0;
+
+      const current_impressions = cur.impressions;
+      const previous_impressions = prev.impressions;
+      const impression_change = current_impressions - previous_impressions;
+      const impression_change_percent =
+        previous_impressions > 0
+          ? round((impression_change / previous_impressions) * 100, 1)
+          : 0;
+
+      const current_ctr = cur.ctr;
+      const previous_ctr = prev.ctr;
+      const ctr_change = round(current_ctr - previous_ctr, 4);
+
+      const current_position = cur.position;
+      const previous_position = prev.position;
+      const position_change = round(current_position - previous_position, 1);
+
+      // Evidence gates
+      if (previous_impressions < minPreviousImpressions) return null;
+      if (current_impressions < minCurrentImpressions) return null;
+
+      const clickDropAbs = previous_clicks - current_clicks; // >0 means decline
+      const clickDropPct =
+        previous_clicks > 0
+          ? (clickDropAbs / previous_clicks) * 100
+          : clickDropAbs > 0
+            ? 100
+            : 0;
+      const positionWorsening = position_change; // >0 means worse (higher SERP number)
+
+      const hasClickDecline =
+        clickDropAbs > 0 && clickDropPct >= minClickDropPercent;
+      const hasPositionDecline = positionWorsening >= minPositionWorsening;
+
+      // Must show real deterioration — not merely zero clicks or a weak position
+      if (!hasClickDecline && !hasPositionDecline) return null;
+
+      // Both periods at zero clicks with no meaningful position worsening already filtered
+      if (previous_clicks === 0 && current_clicks === 0 && !hasPositionDecline) {
+        return null;
+      }
+
+      const entity = buildEntity(cur);
+      const metrics = {
+        current_clicks,
+        previous_clicks,
+        click_change,
+        click_change_percent,
+        current_impressions,
+        previous_impressions,
+        impression_change,
+        impression_change_percent,
+        current_ctr: round(current_ctr, 4),
+        previous_ctr: round(previous_ctr, 4),
+        ctr_change,
+        current_position: fmtPos(current_position),
+        previous_position: fmtPos(previous_position),
+        position_change,
+        // aliases kept for AI grounding / older consumers
+        clicks: current_clicks,
+        impressions: current_impressions,
+        ctr: round(current_ctr, 4),
+        position: fmtPos(current_position),
+        comparison_period: "prior_period",
+      };
+
       const { score, score_breakdown } = scoreContentDecay({
-        impressions: r.impressions,
-        ctr: r.ctr,
+        clickDrop: Math.max(0, clickDropAbs),
+        positionDelta: Math.max(0, positionWorsening),
+        clickDropPercent: round(clickDropPct, 1),
       });
+
+      const parts = [];
+      if (clickDropAbs > 0) {
+        parts.push(
+          `clicks decreased from ${previous_clicks} to ${current_clicks} (${round(click_change_percent, 1)}%)`
+        );
+      }
+      if (positionWorsening > 0) {
+        parts.push(
+          `average position worsened from ${fmtPos(previous_position)} to ${fmtPos(current_position)}`
+        );
+      }
+      if (impression_change !== 0) {
+        parts.push(
+          `impressions ${impression_change > 0 ? "rose" : "fell"} from ${previous_impressions} to ${current_impressions}`
+        );
+      }
+
       return buildOpportunity({
         opportunity_type: OPPORTUNITY_TYPES.CONTENT_DECAY,
         entity,
         metrics,
-        reason: `${entity.label} sits at position ${fmtPos(r.position)} with ${r.impressions} impressions but only ${r.clicks} clicks (${fmtPct(r.ctr)} CTR). Deep ranking plus near-zero engagement usually means stale or mismatched content.`,
-        recommendation: `Audit "${entity.label}" for outdated sections and intent mismatch, then rewrite the intro and H2s around the query and add a fresh example or FAQ to regain engagement.`,
+        reason: `${entity.label}: ${parts.join("; ")}.`,
+        recommendation: `Review the page/query for "${entity.label}" for potential content or SERP changes between the previous and current period. Do not assume staleness without further evidence.`,
         score,
         score_breakdown,
       });
     })
+    .filter(Boolean)
     .sort((a, b) => b.score - a.score);
+
   return wrapIntelligence("content_decay", applyLimit(out, limit));
 };
 

@@ -1,29 +1,67 @@
-import { useTheme } from "next-themes"
-import { Toaster as Sonner, toast } from "sonner"
+"use client";
 
-type ToasterProps = React.ComponentProps<typeof Sonner>
+import { useEffect, useState } from "react";
+import {
+  ToastContainer,
+  cssTransition,
+  type Theme,
+} from "react-toastify";
+import "react-toastify/dist/ReactToastify.css";
 
-const Toaster = ({ ...props }: ToasterProps) => {
-  const { theme = "system" } = useTheme()
+import { toast } from "@/lib/toast";
+
+const FadeIn = cssTransition({
+  enter: "opsai-toast-enter",
+  exit: "opsai-toast-exit",
+  collapse: true,
+  collapseDuration: 280,
+});
+
+/**
+ * OpsAi toast host — premium surfaces opposite the app theme:
+ * dark app → light toast; light app → dark toast.
+ * Soft fade-in for stacked notifications.
+ */
+export function Toaster() {
+  const [toastTheme, setToastTheme] = useState<Theme>("light");
+  const [mode, setMode] = useState<"dark" | "light">("dark");
+
+  useEffect(() => {
+    const sync = () => {
+      const appDark = document.documentElement.classList.contains("dark");
+      setMode(appDark ? "dark" : "light");
+      setToastTheme(appDark ? "light" : "dark");
+    };
+    sync();
+    const observer = new MutationObserver(sync);
+    observer.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ["class"],
+    });
+    return () => observer.disconnect();
+  }, []);
 
   return (
-    <Sonner
-      theme={theme as ToasterProps["theme"]}
-      className="toaster group"
-      toastOptions={{
-        classNames: {
-          toast:
-            "group toast group-[.toaster]:bg-background group-[.toaster]:text-foreground group-[.toaster]:border-border group-[.toaster]:shadow-lg",
-          description: "group-[.toast]:text-muted-foreground",
-          actionButton:
-            "group-[.toast]:bg-primary group-[.toast]:text-primary-foreground",
-          cancelButton:
-            "group-[.toast]:bg-muted group-[.toast]:text-muted-foreground",
-        },
-      }}
-      {...props}
+    <ToastContainer
+      position="top-right"
+      autoClose={4200}
+      hideProgressBar={false}
+      newestOnTop
+      stacked
+      closeOnClick
+      rtl={false}
+      pauseOnFocusLoss
+      draggable
+      pauseOnHover
+      theme={toastTheme}
+      transition={FadeIn}
+      limit={5}
+      style={{ zIndex: 99999 }}
+      toastClassName={`opsai-toast opsai-toast--${mode}`}
+      progressClassName="opsai-toast-progress"
+      className={`opsai-toast-container opsai-toast-container--${mode}`}
     />
-  )
+  );
 }
 
-export { Toaster, toast }
+export { toast };

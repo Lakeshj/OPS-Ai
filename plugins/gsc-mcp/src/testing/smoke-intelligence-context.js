@@ -103,7 +103,8 @@ const main = () => {
     groundedCtr.userPrompt.includes('"capability": "ctr_opportunities"') ||
       groundedCtr.userPrompt.includes('"capability":"ctr_opportunities"')
   );
-  assert.ok(groundedCtr.systemPrompt.includes("Analyze only the supplied"));
+  assert.ok(groundedCtr.systemPrompt.includes("Analyze the GSC MCP opportunities"));
+  assert.ok(groundedCtr.systemPrompt.includes("Use only the structured MCP output"));
   assert.ok(groundedCtr.userPrompt.includes("gemini visibility tracker"));
 
   // 2. Multiple capabilities → correctly separated
@@ -120,6 +121,12 @@ const main = () => {
   // 3. CTR + Ranking + Content Decay → no data loss
   const decay = runCap("content_decay", DECAY_ROWS, {
     previousRows: PREVIOUS_DECAY,
+    filters: {
+      minPreviousImpressions: 40,
+      minCurrentImpressions: 20,
+      minClickDropPercent: 10,
+      minPositionWorsening: 1,
+    },
   });
   assert.equal(decay.ok, true);
   const triple = ctx.combineIntelligenceInputs([
@@ -259,9 +266,11 @@ const main = () => {
 
   // 10. AI cannot produce unrelated generic opportunities from empty GSC result
   assert.ok(
-    groundedEmpty.systemPrompt.includes(
-      "Do not introduce external industries"
-    )
+    groundedEmpty.systemPrompt.includes("Do not independently search for or invent") ||
+      groundedEmpty.systemPrompt.includes("Never fabricate missing GSC data")
+  );
+  assert.ok(
+    groundedEmpty.systemPrompt.includes("No actionable GSC evidence was returned")
   );
   assert.ok(
     !ctx.rejectsUnrelatedGenericOpportunities(
@@ -303,6 +312,10 @@ const main = () => {
   assert.equal(rankScore.score, Math.round(300 / 7));
   const decayScore = scoreContentDecay({ clickDrop: 20, positionDelta: 2.5 });
   assert.equal(decayScore.score, Math.round(20 + 2.5 * 10));
+  assert.equal(
+    decayScore.score_breakdown.formula,
+    "click_drop_score + position_drop_score"
+  );
 
   // Single capability still produces full IntelligenceContext contract
   const singleBuilt = ctx.tryBuildFromWorkflowItems(ctr.items);

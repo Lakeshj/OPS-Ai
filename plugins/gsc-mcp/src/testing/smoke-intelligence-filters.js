@@ -81,7 +81,8 @@ const main = () => {
   assert.ok(intelligenceFilters);
   assert.equal(FILTER_DEFAULTS.ctr_opportunities.minImpressions, 50);
   assert.equal(FILTER_DEFAULTS.ranking_opportunities.minPosition, 5);
-  assert.equal(FILTER_DEFAULTS.content_decay.comparisonPeriod, "snapshot");
+  assert.equal(FILTER_DEFAULTS.content_decay.comparisonPeriod, "prior_period");
+  assert.equal(FILTER_DEFAULTS.content_decay.minPreviousImpressions, 50);
   assert.equal(FILTER_DEFAULTS.keyword_cannibalization.minPages, 2);
 
   // --- Default values ---
@@ -163,28 +164,28 @@ const main = () => {
   });
   assert.equal(rankEmpty.data.count, 0);
 
-  // --- Content decay: snapshot vs prior_period + drop % ---
-  const decaySnap = runIntelligence("content_decay", {
+  // --- Content decay: prior period only + thresholds ---
+  const decaySnapRejected = runIntelligence("content_decay", {
     rows: SAMPLE_ROWS,
+    previousRows: PREVIOUS_ROWS,
     comparisonPeriod: "snapshot",
-    limit: 5,
   });
-  assert.equal(decaySnap.ok, true);
-  assert.ok(validateIntelligenceOutput(decaySnap.data, "content_decay").ok);
+  assert.equal(decaySnapRejected.ok, false);
+  assert.equal(decaySnapRejected.error.code, "MCP_VALIDATION");
 
   const decayNoPrior = runIntelligence("content_decay", {
     rows: SAMPLE_ROWS,
-    comparisonPeriod: "prior_period",
-    dropPercentage: 20,
+    minClickDropPercent: 20,
   });
-  assert.equal(decayNoPrior.ok, true);
-  assert.equal(decayNoPrior.data.count, 0);
+  assert.equal(decayNoPrior.ok, false);
+  assert.equal(decayNoPrior.error.code, "MCP_VALIDATION");
 
   const decayPrior = runIntelligence("content_decay", {
     rows: SAMPLE_ROWS,
     previousRows: PREVIOUS_ROWS,
-    comparisonPeriod: "prior_period",
-    dropPercentage: 20,
+    minClickDropPercent: 20,
+    minPreviousImpressions: 40,
+    minCurrentImpressions: 20,
   });
   assert.equal(decayPrior.ok, true);
   assert.ok(decayPrior.data.count >= 1);
@@ -192,7 +193,7 @@ const main = () => {
     (o) => o.entity.label === "low ctr keyword"
   );
   assert.ok(decayHit);
-  assert.ok(decayHit.metrics.drop_percentage >= 20);
+  assert.ok(Math.abs(decayHit.metrics.click_change_percent) >= 20);
 
   const decayStrictDrop = runIntelligence("content_decay", {
     rows: SAMPLE_ROWS,
@@ -206,9 +207,9 @@ const main = () => {
         position: 5,
       },
     ],
-    comparisonPeriod: "prior_period",
-    // 0 clicks from 50 is 100% — still passes; use a tiny drop case instead
-    dropPercentage: 50,
+    minClickDropPercent: 50,
+    minPreviousImpressions: 40,
+    minCurrentImpressions: 20,
   });
   // Create a mild decline that fails the 50% bar
   const mildDecline = runIntelligence("content_decay", {
@@ -232,8 +233,10 @@ const main = () => {
         position: 5,
       },
     ],
-    comparisonPeriod: "prior_period",
-    dropPercentage: 50,
+    minClickDropPercent: 50,
+    minPositionWorsening: 5,
+    minPreviousImpressions: 40,
+    minCurrentImpressions: 20,
   });
   assert.equal(mildDecline.data.count, 0);
   assert.ok(decayStrictDrop.data.count >= 0); // 100% drop still qualifies at 50%

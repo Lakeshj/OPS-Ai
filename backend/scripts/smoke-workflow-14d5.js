@@ -485,6 +485,30 @@ const registerPart14D5Tests = ({ check, section, assert: a }) => {
     }
   });
 
+  check("GOOGLEAUTH-16b JWT userId (no authUser.id) is stored in OAuth state", async () => {
+    const prevId = process.env.GOOGLE_OAUTH_CLIENT_ID;
+    const prevSecret = process.env.GOOGLE_OAUTH_CLIENT_SECRET;
+    process.env.GOOGLE_OAUTH_CLIENT_ID = "opsai-test-google-client";
+    process.env.GOOGLE_OAUTH_CLIENT_SECRET = "opsai-test-google-secret";
+    try {
+      // Real JWT payload shape from auth.service signToken — only `userId`, no `id`.
+      const started = await oauth().startGoogleOAuth(
+        { workspaceId: "ws-oauth", product: "google_gmail" },
+        { userId: "jwt-user-42", role: "Admin" }
+      );
+      const auth = new URL(started.url);
+      const state = auth.searchParams.get("state");
+      const parsed = oauth().verifyState(state);
+      assertX.equal(parsed.userId, "jwt-user-42");
+      assertX.equal(parsed.product, "google_gmail");
+    } finally {
+      if (prevId == null) delete process.env.GOOGLE_OAUTH_CLIENT_ID;
+      else process.env.GOOGLE_OAUTH_CLIENT_ID = prevId;
+      if (prevSecret == null) delete process.env.GOOGLE_OAUTH_CLIENT_SECRET;
+      else process.env.GOOGLE_OAUTH_CLIENT_SECRET = prevSecret;
+    }
+  });
+
   check("SMOKE-SCHEMA-1 workflow_jobs ON DELETE CASCADE", async () => {
     const { pool } = require("../config/database");
     const [rows] = await pool.query(
@@ -556,11 +580,19 @@ const registerPart14D5Tests = ({ check, section, assert: a }) => {
     const { result, captured } = await runGsc({ operation: "getQueries" });
     assertX.deepEqual(captured.body.dimensions, ["query"]);
     assertX.equal(result.items[0].json.query, "seo tools");
+    assertX.equal(result.items[0].json.key, undefined);
+    assertX.deepEqual(
+      Object.keys(result.items[0].json).sort(),
+      ["clicks", "ctr", "impressions", "position", "query"].sort()
+    );
   });
 
   check("GSC-5 page dimension", async () => {
-    const { captured } = await runGsc({ operation: "getPages" });
+    const { result, captured } = await runGsc({ operation: "getPages" });
     assertX.deepEqual(captured.body.dimensions, ["page"]);
+    assertX.equal(result.items[0].json.page, "seo tools");
+    assertX.equal(result.items[0].json.key, undefined);
+    assertX.equal(result.items[0].json.query, undefined);
   });
 
   check("GSC-6 custom date", async () => {
@@ -1713,6 +1745,102 @@ const registerPart14D5Tests = ({ check, section, assert: a }) => {
       "utf8"
     );
     assertX.ok(src.includes("requireBot: false"));
+  });
+
+  check("AIGEN-18 attaches upstream runtime data when prompt omits {{input}}", async () => {
+    let captured = null;
+    await aiGen().withAiGenerateTestComplete(
+      async (args) => {
+        captured = args;
+        return "ok";
+      },
+      async () => {
+        await exec(
+          "aiGenerate",
+          {
+            prompt: "Summarize the GSC results.",
+            model: "m",
+            outputFormat: "text",
+          },
+          {
+            inputItems: [
+              {
+                json: {
+                  query: "AI automation",
+                  ctr: 0.085,
+                  clicks: 1250,
+                  impressions: 14700,
+                },
+              },
+            ],
+          }
+        );
+      }
+    );
+    assertX.ok(captured, "testComplete should capture prompt args");
+    assertX.ok(
+      String(captured.prompt).includes("AI automation"),
+      "prompt must include upstream query"
+    );
+    assertX.ok(
+      String(captured.prompt).includes("1250") &&
+        String(captured.prompt).includes("14700"),
+      "prompt must include upstream clicks/impressions"
+    );
+    assertX.ok(
+      String(captured.prompt).includes("Workflow runtime data"),
+      "prompt must attach runtime data section"
+    );
+  });
+
+  check("AIGEN-19 GSC IntelligenceContext grounding still injects metrics", async () => {
+    const {
+      buildIntelligenceContext,
+    } = require("../../plugins/gsc-mcp/src/contracts/intelligenceContext");
+    const intel = buildIntelligenceContext({
+      property: "sc-domain:govisible.ai",
+      period: { start: "2026-08-01", end: "2026-08-31" },
+      capabilities: [
+        {
+          capability: "ctr_opportunities",
+          results: [
+            {
+              opportunity_type: "ctr_opportunity",
+              entity: { query: "AI automation", label: "AI automation" },
+              metrics: {
+                impressions: 14700,
+                clicks: 1250,
+                ctr: 0.085,
+                position: 8.5,
+              },
+              score: 42,
+              reason: "high impressions",
+              recommendation: "improve snippet",
+            },
+          ],
+        },
+      ],
+    });
+    let captured = null;
+    await aiGen().withAiGenerateTestComplete(
+      async (args) => {
+        captured = args;
+        return "ok";
+      },
+      async () => {
+        await exec(
+          "aiGenerate",
+          { prompt: "Summarize the GSC results.", model: "m" },
+          { inputItems: [{ json: intel }] }
+        );
+      }
+    );
+    assertX.ok(String(captured.prompt).includes("AI automation"));
+    assertX.ok(String(captured.prompt).includes("14700"));
+    assertX.ok(
+      String(captured.systemPrompt || "").includes("SEO intelligence analyst") ||
+        String(captured.prompt).includes("intelligence context")
+    );
   });
 
   check("XLSX-1 available", () => {

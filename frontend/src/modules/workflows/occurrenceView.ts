@@ -76,22 +76,28 @@ export function nodeResultFromRunSteps(
   };
 }
 
+/**
+ * Prefer the latest production run step over a stale editor-session cache.
+ * Multi-occurrence Loop results still prefer the richer multi-occ source.
+ */
 export function mergeSessionWithRun(
   sessionResult: WorkflowEditorNodeResult | null | undefined,
   run: WorkflowRun | null | undefined,
   nodeId: string
 ): WorkflowEditorNodeResult | null {
-  if (
-    sessionResult?.occurrences &&
-    sessionResult.occurrences.length > 1
-  ) {
-    return sessionResult;
-  }
   const fromRun = nodeResultFromRunSteps(nodeId, run?.steps);
   if (fromRun?.occurrences && fromRun.occurrences.length > 1) {
     return fromRun;
   }
-  return sessionResult || fromRun;
+  if (
+    sessionResult?.occurrences &&
+    sessionResult.occurrences.length > 1 &&
+    !fromRun
+  ) {
+    return sessionResult;
+  }
+  // Full Execute updates latestRun but not always the editor session — prefer run.
+  return fromRun || sessionResult || null;
 }
 
 export function loopBatchOccurrences(

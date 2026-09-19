@@ -7,9 +7,11 @@ import type { WorkflowCredentialType } from "@/modules/workflows/types";
 
 type StartGoogleOAuthPopupArgs = {
   workspaceId: string;
+  workflowId?: string;
   product: WorkflowCredentialType;
   name?: string;
   credentialId?: string;
+  gmailPermissions?: string[];
 };
 
 type StartGoogleOAuthPopupResult =

@@ -24,6 +24,8 @@ const executeAiGenerate = async (node, context) => {
   const {
     runLlmNodeForItem,
     interpolate,
+    attachRuntimeDataToPrompt,
+    resolveRuntimePromptPayload,
   } = require("./workflowNodes.service");
   const data = node.data || {};
   if (!String(data.provider || data.model || "").trim() && !data.model) {
@@ -55,6 +57,7 @@ const executeAiGenerate = async (node, context) => {
       let userPrompt = interpolate(data.prompt || "{{input}}", itemContext);
       let systemPrompt = interpolate(data.systemPrompt || "", itemContext);
       const model = interpolate(data.model || "gpt-4o-mini", itemContext);
+      let groundedOk = false;
       try {
         const grounded = applyAiGrounding({
           systemPrompt,
@@ -64,6 +67,7 @@ const executeAiGenerate = async (node, context) => {
         if (grounded.grounded) {
           systemPrompt = grounded.systemPrompt;
           userPrompt = grounded.userPrompt;
+          groundedOk = true;
         }
       } catch (err) {
         if (
@@ -72,6 +76,11 @@ const executeAiGenerate = async (node, context) => {
         ) {
           throw err;
         }
+      }
+      if (!groundedOk) {
+        const runtimePayload =
+          resolveRuntimePromptPayload(itemContext) ?? payloadOf(src);
+        userPrompt = attachRuntimeDataToPrompt(userPrompt, runtimePayload).prompt;
       }
       const text = await testComplete({
         prompt: userPrompt,

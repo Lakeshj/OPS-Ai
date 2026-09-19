@@ -140,6 +140,14 @@ const NODE_PORT_CONTRACTS = {
     inputs: [
       mainIn("input1", "Input 1", 1),
       mainIn("input2", "Input 2", 1),
+      mainIn("input3", "Input 3", 1),
+      mainIn("input4", "Input 4", 1),
+      mainIn("input5", "Input 5", 1),
+      mainIn("input6", "Input 6", 1),
+      mainIn("input7", "Input 7", 1),
+      mainIn("input8", "Input 8", 1),
+      mainIn("input9", "Input 9", 1),
+      mainIn("input10", "Input 10", 1),
     ],
     outputs: [mainOut()],
   },
@@ -175,6 +183,8 @@ const NODE_PORT_CONTRACTS = {
   ai: { inputs: [mainIn()], outputs: [mainOut()] },
   aiGenerate: { inputs: [mainIn()], outputs: [mainOut()] },
   googleSearchConsole: { inputs: [mainIn()], outputs: [mainOut()] },
+  gscMcpTool: { inputs: [mainIn()], outputs: [mainOut()] },
+  gscMcp: { inputs: [mainIn()], outputs: [mainOut()] },
   googleAnalytics: { inputs: [mainIn()], outputs: [mainOut()] },
   gmail: { inputs: [mainIn()], outputs: [mainOut()] },
   gmailTrigger: { inputs: [], outputs: [mainOut()] },
@@ -455,7 +465,7 @@ const validateTypedConnection = ({
       message:
         inn.connectionKind === CONNECTION_KIND.AUXILIARY
           ? `This port expects an ${expect}.`
-          : out.connectionKind === CONNECTION_KIND.AUXILIARY
+            : inn.connectionKind === CONNECTION_KIND.AUXILIARY
             ? `Cannot connect ${DATA_TYPE_LABEL[out.dataType] || out.dataType} to workflow data.`
             : "Incompatible connection types.",
     };
@@ -480,7 +490,9 @@ const validateTypedConnection = ({
             ? "Only one Chat Model can be connected."
             : inn.dataType === DATA_TYPE.AI_MEMORY
               ? "Only one memory can be connected."
-              : `Only one connection allowed on ${label}.`,
+              : inn.id === "main" || inn.kind === "main"
+                ? `Only one connection allowed on ${label}. To combine multiple streams, add a Merge node (set Number of Inputs to 3+) then connect Merge → this node.`
+                : `Only one connection allowed on ${label}.`,
       };
     }
   }

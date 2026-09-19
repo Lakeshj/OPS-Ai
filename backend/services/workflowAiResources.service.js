@@ -693,6 +693,37 @@ const attachToolExecutor = (descriptor) => {
       },
     };
   }
+  if (descriptor.toolKind === "gsc_mcp") {
+    const host = require("./mcpPluginHost.service");
+    return {
+      ...descriptor,
+      async execute(args, ctx) {
+        const toolArgs =
+          args && typeof args === "object" && !Array.isArray(args)
+            ? { ...args }
+            : {};
+        if (!toolArgs.siteUrl && descriptor.defaultSiteUrl) {
+          toolArgs.siteUrl = descriptor.defaultSiteUrl;
+        }
+        const result = await host.executeGscMcpTool({
+          toolId: descriptor.gscToolId,
+          toolArgs,
+          mode: "raw",
+          credentialId: descriptor.credentialId,
+          workspaceId: ctx?.workspaceId || descriptor.workspaceId,
+          authUser: ctx?.authUser,
+        });
+        const text = JSON.stringify(
+          result.ok
+            ? { ok: true, toolId: result.toolId, data: result.data }
+            : { ok: false, error: result.error }
+        );
+        return text.length > MAX_TOOL_RESULT_CHARS
+          ? `${text.slice(0, MAX_TOOL_RESULT_CHARS)}\n…[truncated]`
+          : text;
+      },
+    };
+  }
   throw new AiRuntimeError(
     `No tool executor for kind "${descriptor.toolKind}"`,
     AI_ERROR.PROVIDER_UNSUPPORTED

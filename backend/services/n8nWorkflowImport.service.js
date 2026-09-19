@@ -71,9 +71,28 @@ const N8N_OPERATOR_TO_OPSAI = Object.freeze({
 const MERGE_PORT_BY_INDEX = Object.freeze({
   0: "input1",
   1: "input2",
+  2: "input3",
+  3: "input4",
+  4: "input5",
+  5: "input6",
+  6: "input7",
+  7: "input8",
+  8: "input9",
+  9: "input10",
 });
 
-const MERGE_PORT_IDS_ORDER = ["input1", "input2"];
+const MERGE_PORT_IDS_ORDER = [
+  "input1",
+  "input2",
+  "input3",
+  "input4",
+  "input5",
+  "input6",
+  "input7",
+  "input8",
+  "input9",
+  "input10",
+];
 
 const AI_CONN_TYPES = new Set([
   "ai_languageModel",

@@ -17,6 +17,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { workflowsApi } from "@/modules/workflows/api";
+import { workflowAlertCompact } from "@/modules/workflows/workflowAlertStyles";
 import type { Workflow, WorkflowDefinition, WorkflowRun } from "@/modules/workflows/types";
 import {
   prepareCopilotHistoryApply,
@@ -575,10 +576,10 @@ export function WorkflowCopilotDrawer({
       </div>
 
       {failedRun && !waitingRun ? (
-        <div className="border-b bg-destructive/5 px-3 py-2 text-xs">
+        <div className={cn(workflowAlertCompact("error"), "border-b border-x-0 rounded-none px-3 py-2 text-xs")}>
           <div className="font-medium">Last run failed</div>
           {failedNode ? (
-            <div className="text-muted-foreground">
+            <div className="opacity-90">
               Failed node: {failedNode.nodeId}
             </div>
           ) : null}

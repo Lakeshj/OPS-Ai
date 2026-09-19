@@ -46,6 +46,7 @@ import {
   findLoopRegionForNode,
 } from "@/modules/workflows/loopValidation";
 import {
+  extractItemsFromOutput,
   mergeSessionWithRun,
   resolveOccurrenceInputItems,
   type LoopPortView,
@@ -217,6 +218,8 @@ export function WorkflowNodeDialog({
         if (node.data?.label) nodeLabels[node.id] = String(node.data.label);
       }
     }
+    // Seed from editor session, then overlay the latest run so Result / expression
+    // previews refresh after Execute (session cache can lag behind latestRun).
     if (editorSession?.nodeResults) {
       for (const [id, r] of Object.entries(editorSession.nodeResults)) {
         if (r.output !== undefined) steps[id] = r.output;
@@ -228,6 +231,14 @@ export function WorkflowNodeDialog({
             if (Array.isArray(occ.items)) stepItems[id] = occ.items;
           }
         }
+      }
+    }
+    if (latestRun?.steps) {
+      for (const step of latestRun.steps) {
+        if (!step?.nodeId || step.output === undefined) continue;
+        steps[step.nodeId] = step.output;
+        const items = extractItemsFromOutput(step.output);
+        if (items.length) stepItems[step.nodeId] = items;
       }
     }
     if (definition?.nodes) {
@@ -254,6 +265,7 @@ export function WorkflowNodeDialog({
     };
   }, [
     editorSession,
+    latestRun,
     runInput,
     inputPreview.items,
     occurrenceInputItems,

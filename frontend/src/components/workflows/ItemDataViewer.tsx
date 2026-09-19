@@ -6,6 +6,11 @@ import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { cn } from "@/lib/utils";
 import type { WorkflowItem } from "@/modules/workflows/types";
 import { ChevronDown, ChevronRight, Search } from "lucide-react";
+import {
+  looksLikeMarkdownProse,
+  plainPreview,
+  WorkflowProseContent,
+} from "./WorkflowProseContent";
 
 type ViewMode = "table" | "schema" | "json" | "binary";
 
@@ -35,6 +40,12 @@ type SchemaField = {
 };
 
 const COLUMN_PRIORITY = [
+  "query",
+  "page",
+  "clicks",
+  "impressions",
+  "ctr",
+  "position",
   "message",
   "timestamp",
   "Readable date",
@@ -56,6 +67,17 @@ const COLUMN_PRIORITY = [
   "rowCount",
   "sheet",
 ];
+
+const COLUMN_LABELS: Record<string, string> = {
+  query: "Top Queries",
+  page: "Top Pages",
+  clicks: "clicks",
+  impressions: "impressions",
+  ctr: "CTR",
+  position: "Position",
+};
+
+const tableColumnLabel = (key: string) => COLUMN_LABELS[key] || key;
 
 function isSpreadsheetPayload(value: unknown): value is SpreadsheetPayload {
   return (
@@ -99,6 +121,14 @@ function flattenItemJson(json: Record<string, unknown>): Record<string, unknown>
   const input = out.input;
   if (input && typeof input === "object" && !Array.isArray(input)) {
     for (const [key, value] of Object.entries(input as Record<string, unknown>)) {
+      if (!(key in out)) out[key] = value;
+    }
+  }
+  // Result node wraps the mapped payload as `{ result: <value> }`. Promote a
+  // plain object payload into columns so Table view isn't empty.
+  const result = out.result;
+  if (result && typeof result === "object" && !Array.isArray(result)) {
+    for (const [key, value] of Object.entries(result as Record<string, unknown>)) {
       if (!(key in out)) out[key] = value;
     }
   }
@@ -211,15 +241,26 @@ function normalizeItems(
   return [{ json: { value: data } }];
 }
 
-function shouldHideInputColumn(rows: WorkflowItem[]): boolean {
+function shouldHideNestedObjectColumn(
+  rows: WorkflowItem[],
+  column: "input" | "result"
+): boolean {
   for (const row of rows) {
-    const input = row.json?.input;
-    if (!input || typeof input !== "object" || Array.isArray(input)) continue;
-    const childKeys = Object.keys(input as object);
+    const nested = row.json?.[column];
+    if (!nested || typeof nested !== "object" || Array.isArray(nested)) continue;
+    const childKeys = Object.keys(nested as object);
     if (childKeys.length === 0) continue;
     if (childKeys.every((k) => k in (row.json || {}))) return true;
   }
   return false;
+}
+
+function shouldHideInputColumn(rows: WorkflowItem[]): boolean {
+  return shouldHideNestedObjectColumn(rows, "input");
+}
+
+function shouldHideResultColumn(rows: WorkflowItem[]): boolean {
+  return shouldHideNestedObjectColumn(rows, "result");
 }
 
 function sortTableKeys(keys: string[]): string[] {
@@ -234,9 +275,12 @@ function sortTableKeys(keys: string[]): string[] {
 
 function collectTableKeys(rows: WorkflowItem[]): string[] {
   const keys = new Set<string>();
+  const hideInput = shouldHideInputColumn(rows);
+  const hideResult = shouldHideResultColumn(rows);
   for (const row of rows) {
     for (const key of Object.keys(row.json || {})) {
-      if (key === "input" && shouldHideInputColumn(rows)) continue;
+      if (key === "input" && hideInput) continue;
+      if (key === "result" && hideResult) continue;
       if (looksLikeNodeIdKey(key)) continue;
       const val = (row.json || {})[key];
       if (val != null && typeof val === "object" && !Array.isArray(val)) continue;
@@ -249,7 +293,10 @@ function collectTableKeys(rows: WorkflowItem[]): string[] {
 
 function formatCellValue(value: unknown, maxLen = 200): string {
   if (value == null) return "";
-  if (typeof value === "string") return value;
+  if (typeof value === "string") {
+    const plain = looksLikeMarkdownProse(value) ? plainPreview(value) : value;
+    return plain.length > maxLen ? `${plain.slice(0, maxLen)}…` : plain;
+  }
   if (typeof value === "number" || typeof value === "boolean") {
     return String(value);
   }
@@ -259,6 +306,16 @@ function formatCellValue(value: unknown, maxLen = 200): string {
   } catch {
     return String(value);
   }
+}
+
+/** Long AI/Result prose fields shown as rendered markdown above the table. */
+function extractProseField(json: Record<string, unknown> | undefined): string | null {
+  if (!json || typeof json !== "object") return null;
+  for (const key of ["result", "text", "message", "summary"]) {
+    const v = json[key];
+    if (typeof v === "string" && looksLikeMarkdownProse(v)) return v;
+  }
+  return null;
 }
 
 function flattenSchemaFields(
@@ -413,12 +470,16 @@ function SchemaFieldRow({ field }: { field: SchemaField }) {
 function SchemaView({ rows, query }: { rows: WorkflowItem[]; query: string }) {
   const q = query.trim().toLowerCase();
   const hideInput = shouldHideInputColumn(rows);
+  const hideResult = shouldHideResultColumn(rows);
 
   return (
     <div className="max-h-[min(42vh,360px)] overflow-auto rounded-lg border bg-card">
       {rows.map((row, itemIndex) => {
         const fields = flattenSchemaFields(row.json).filter((f) => {
           if (hideInput && f.key === "input") return false;
+          if (hideResult && (f.key === "result" || f.key.startsWith("result."))) {
+            return false;
+          }
           if (looksLikeNodeIdKey(f.key.split(".")[0])) return false;
           if (!q) return true;
           return (
@@ -465,7 +526,9 @@ function TableView({
   if (filteredKeys.length === 0) {
     return (
       <p className="py-4 text-center text-xs text-muted-foreground">
-        No fields match your search
+        {q
+          ? "No fields match your search"
+          : "No tabular fields — switch to JSON or Schema"}
       </p>
     );
   }
@@ -483,7 +546,7 @@ function TableView({
                 key={k}
                 className="whitespace-nowrap px-3 py-2 text-left font-medium text-foreground"
               >
-                {k}
+                {tableColumnLabel(k)}
               </th>
             ))}
           </tr>
@@ -554,6 +617,10 @@ export function ItemDataViewer({
   );
 
   const tableKeys = collectTableKeys(rows);
+  const selectedRow = rows[Math.min(selectedItemIndex, rows.length - 1)];
+  const prosePreview = extractProseField(
+    selectedRow?.json as Record<string, unknown> | undefined
+  );
 
   return (
     <div className={cn("flex min-h-0 flex-col gap-2", className)}>
@@ -618,6 +685,15 @@ export function ItemDataViewer({
           {rows.length} item{rows.length === 1 ? "" : "s"}
         </span>
       </div>
+
+      {prosePreview && (mode === "table" || mode === "schema") && (
+        <div className="rounded-lg border border-dashed border-border bg-muted/20 px-3 py-2">
+          <div className="mb-1 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+            Preview
+          </div>
+          <WorkflowProseContent text={prosePreview} compact />
+        </div>
+      )}
 
       {mode === "json" && (
         <pre className="max-h-[min(42vh,360px)] overflow-auto rounded-lg border bg-muted/20 p-3 font-mono text-[11px] leading-relaxed text-foreground">

@@ -25,6 +25,7 @@ import {
   type ExpressionPreviewStatus,
 } from "@/modules/workflows/expressionPreview";
 import type { WorkflowDefinition, WorkflowItem } from "@/modules/workflows/types";
+import { WorkflowProseContent } from "./WorkflowProseContent";
 
 export type ExpressionFieldContext = {
   workflowId?: string;
@@ -223,22 +224,16 @@ export function ExpressionField({
       );
     }
     if (previewStatus === "RESOLVED" && preview) {
-      return (
-        <pre className="whitespace-pre-wrap break-all font-mono text-[10px]">
-          {formatPreviewValue(preview.value)}
-        </pre>
-      );
+      const text = formatPreviewValue(preview.value);
+      return <WorkflowProseContent text={text} compact />;
     }
     if (
       previewStatus === "NO_DATA" &&
       preview?.value !== undefined &&
       preview.value !== ""
     ) {
-      return (
-        <pre className="whitespace-pre-wrap break-all font-mono text-[10px]">
-          {formatPreviewValue(preview.value)}
-        </pre>
-      );
+      const text = formatPreviewValue(preview.value);
+      return <WorkflowProseContent text={text} compact />;
     }
     const message = preview ? previewStatusMessage(preview) : "";
     if (!message) {

@@ -22,8 +22,9 @@ import { startGoogleOAuthPopup } from "@/modules/workflows/googleOAuthPopup";
 import {
   defaultGoogleSetupMode,
   getGoogleNativeAuthPolicy,
+  isHybridGoogleCredential,
+  isHybridManagedPrimaryGoogle,
   isPlatformManagedOnlyGoogle,
-  shouldShowPlatformManagedUnavailableWarning,
 } from "@/modules/workflows/googleNativeAuthPolicy";
 import {
   GoogleCredentialModal,
@@ -32,6 +33,8 @@ import {
 
 type Props = {
   workspaceId?: string;
+  /** When set, Gmail connections are filtered to this workflow only. */
+  workflowId?: string;
   value: string;
   onChange: (credentialId: string) => void;
   label?: string;
@@ -41,10 +44,9 @@ type Props = {
 const isGoogleType = (type: WorkflowCredentialType) =>
   Boolean(CREDENTIAL_TYPE_FIELDS[type]?.oauth);
 
-const CONNECT_ANOTHER = "__connect_another__";
-
 export function CredentialPicker({
   workspaceId,
+  workflowId,
   value,
   onChange,
   label = "Authentication",
@@ -53,7 +55,6 @@ export function CredentialPicker({
   const [credentials, setCredentials] = useState<WorkflowCredential[]>([]);
   const [adding, setAdding] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [connecting, setConnecting] = useState(false);
   const [name, setName] = useState("");
   const [googleModalOpen, setGoogleModalOpen] = useState(false);
   const [googleRedirectUri, setGoogleRedirectUri] = useState(() => {
@@ -74,6 +75,7 @@ export function CredentialPicker({
     useState<GoogleCredentialSetupMode>("custom");
   const [googleAutoConnect, setGoogleAutoConnect] = useState(false);
   const [removing, setRemoving] = useState(false);
+  const [connecting, setConnecting] = useState(false);
   const defaultType =
     allowedTypes && allowedTypes.length === 1
       ? allowedTypes[0]
@@ -85,17 +87,14 @@ export function CredentialPicker({
     Object.keys(CREDENTIAL_TYPE_FIELDS) as WorkflowCredentialType[]
   ).filter((key) => !allowedTypes || allowedTypes.includes(key));
 
-  const listed = credentials.filter(
-    (c) => !allowedTypes || allowedTypes.includes(c.type)
-  );
-
   const googleOnly =
     Boolean(allowedTypes?.length) && allowedTypes!.every(isGoogleType);
   const googleProduct =
     googleOnly && allowedTypes!.length === 1 ? allowedTypes![0] : null;
   const nativeAuthPolicy = getGoogleNativeAuthPolicy(googleProduct);
   const gmailManagedOnly = isPlatformManagedOnlyGoogle(googleProduct);
-  const hybridCustomPrimary = nativeAuthPolicy === "HYBRID_CUSTOM_PRIMARY";
+  const hybridGoogle = isHybridGoogleCredential(googleProduct);
+  const gmailManagedPrimary = isHybridManagedPrimaryGoogle(googleProduct);
 
   const reload = useCallback(() => {
     if (!workspaceId) return;
@@ -108,6 +107,37 @@ export function CredentialPicker({
   useEffect(() => {
     reload();
   }, [reload]);
+
+  const listed = credentials.filter((c) => {
+    if (allowedTypes && !allowedTypes.includes(c.type)) return false;
+    // Gmail is per-node: never list other inboxes. Only this node's account.
+    if (c.type === "google_gmail") {
+      return Boolean(value) && c.id === value;
+    }
+    return true;
+  });
+
+  // Drop a Gmail selection that belongs to another workflow, or a failed stub.
+  useEffect(() => {
+    if (!value) return;
+    const selectedCred = credentials.find((c) => c.id === value);
+    if (!selectedCred || selectedCred.type !== "google_gmail") return;
+    if (workflowId) {
+      const bound = String(selectedCred.workflowId || "");
+      if (bound && bound !== String(workflowId)) {
+        onChange("");
+        return;
+      }
+    }
+    // Never keep a "not connected" stub on the node after a failed/aborted login.
+    if (selectedCred.connected === false) {
+      onChange("");
+      void workflowCredentialsApi
+        .remove(selectedCred.id)
+        .then(reload)
+        .catch(() => null);
+    }
+  }, [workflowId, value, credentials, onChange, reload]);
 
   useEffect(() => {
     if (!googleOnly) return;
@@ -139,28 +169,50 @@ export function CredentialPicker({
     setGoogleModalOpen(true);
   };
 
-  const connectGoogleDirect = async (credentialId?: string) => {
-    if (!workspaceId || !googleProduct || !gmailManagedOnly) return;
+  const googleMeta = googleProduct
+    ? CREDENTIAL_TYPE_FIELDS[googleProduct]
+    : null;
+
+  /**
+   * Gmail managed sign-in: always create-on-callback (nothing stored until Google
+   * succeeds). Optionally replace the previous account on this node.
+   */
+  const connectGmailManagedDirect = async () => {
+    if (!workspaceId || !googleProduct || !gmailManagedPrimary) return;
     if (!platformManagedAvailable) {
-      toast.error(
-        "Google sign-in is not available on this OpsAi instance yet. Please contact your workspace administrator."
+      openGoogleModal(undefined, { setupMode: "custom" });
+      toast.message(
+        "Managed Google sign-in is unavailable. Configure Custom OAuth2, or contact your admin."
       );
       return;
     }
+    const previousId = value || "";
     setConnecting(true);
     try {
       const result = await startGoogleOAuthPopup({
         workspaceId,
+        workflowId:
+          googleProduct === "google_gmail" ? workflowId : undefined,
         product: googleProduct,
-        name: googleMeta?.label || googleProduct,
-        credentialId,
+        name: googleMeta?.label || "Gmail",
+        // Omit credentialId — nothing is stored until OAuth succeeds.
       });
       if (result.ok) {
-        reload();
         onChange(result.credentialId);
-        toast.success("Google account connected");
+        if (previousId && previousId !== result.credentialId) {
+          await workflowCredentialsApi.remove(previousId).catch(() => null);
+        }
+        reload();
+        toast.success("Gmail connected");
       } else {
-        toast.error(result.error);
+        // Failed / cancelled — do not keep a stub credential on this node.
+        const errText = result.error || "Google connect failed";
+        toast.error(errText);
+        if (/access_denied|verification|test user|blocked/i.test(errText)) {
+          toast.message(
+            "Managed sign-in is fine for Gmail — Google blocked this inbox on the shared app (Testing mode). Add it as a Test user, or optionally use Manage → Custom OAuth2."
+          );
+        }
       }
     } catch (err) {
       toast.error(
@@ -175,11 +227,13 @@ export function CredentialPicker({
 
   const save = async () => {
     if (isGoogleType(type) && googleProduct) {
-      if (gmailManagedOnly) {
-        void connectGoogleDirect();
+      if (gmailManagedPrimary) {
+        void connectGmailManagedDirect();
         return;
       }
-      openGoogleModal(undefined, { setupMode: "custom" });
+      openGoogleModal(undefined, {
+        setupMode: defaultGoogleSetupMode(googleProduct),
+      });
       return;
     }
     setSaving(true);
@@ -211,7 +265,7 @@ export function CredentialPicker({
   );
   const selectedIsCustomApp =
     selectedAppMode === "CUSTOM_APP" ||
-    (!selectedAppMode && hybridCustomPrimary);
+    (!selectedAppMode && nativeAuthPolicy === "HYBRID_CUSTOM_PRIMARY");
 
   const removeSelected = async () => {
     if (!selected) return;
@@ -234,9 +288,6 @@ export function CredentialPicker({
     }
   };
 
-  const googleMeta = googleProduct
-    ? CREDENTIAL_TYPE_FIELDS[googleProduct]
-    : null;
   const emptySelectLabel = googleOnly
     ? "Select connected account"
     : "Select connection";
@@ -257,122 +308,45 @@ export function CredentialPicker({
       ? "Add API key"
       : "Add connection";
 
-  const showManagedUnavailableWarning =
-    shouldShowPlatformManagedUnavailableWarning({
-      product: googleProduct,
-      platformManagedAvailable,
-      selectedAppMode: selectedAppMode || null,
-    });
-
   return (
     <div className="space-y-2 rounded-md border p-2.5">
       <Label className="text-xs font-semibold uppercase tracking-wide">
         {fieldLabel}
       </Label>
-      <Select
-        value={value || "none"}
-        onValueChange={(v) => {
-          if (v === CONNECT_ANOTHER) {
-            if (!googleProduct) return;
-            if (gmailManagedOnly) {
-              void connectGoogleDirect();
-            } else {
-              openGoogleModal(undefined, { setupMode: "custom" });
-            }
-            return;
-          }
-          onChange(v === "none" ? "" : v);
-        }}
-      >
-        <SelectTrigger>
-          <SelectValue placeholder={emptySelectLabel} />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value="none">{emptySelectLabel}</SelectItem>
-          {listed.map((c) => (
-            <SelectItem key={c.id} value={c.id}>
-              {c.accountEmail
-                ? `${c.name} (${c.accountEmail})`
-                : c.connected === false
-                  ? `${c.name} (not connected)`
-                  : c.name}
-            </SelectItem>
-          ))}
-          {googleOnly && googleProduct ? (
-            <SelectItem value={CONNECT_ANOTHER}>{connectAnother}</SelectItem>
-          ) : null}
-        </SelectContent>
-      </Select>
-
-      {googleOnly && googleProduct && gmailManagedOnly ? (
-        <div className="space-y-2">
-          {showManagedUnavailableWarning ? (
-            <p className="rounded-md border border-amber-500/40 bg-amber-500/10 px-2 py-1.5 text-[11px] text-amber-900 dark:text-amber-100">
-              Google sign-in is not available on this OpsAi instance yet. Please
-              contact your workspace administrator.
-            </p>
-          ) : selected && selected.connected === false ? (
-            <p className="rounded-md border border-amber-500/40 bg-amber-500/10 px-2 py-1.5 text-[11px] text-amber-900 dark:text-amber-100">
-              This account is not connected yet. Click Sign in with Google to
-              authorize, or delete it if you no longer need it.
-            </p>
-          ) : selected ? (
-            <p className="text-[11px] text-muted-foreground">
-              {selected.accountEmail
-                ? `Connected as ${selected.accountEmail}.`
-                : "Account connected. OpsAi stores tokens encrypted."}
-            </p>
-          ) : (
-            <p className="text-[11px] text-muted-foreground">
-              Sign in with Google to authorize your Gmail account. OpsAi stores
-              the connection encrypted.
-            </p>
-          )}
-
-          <div className="flex flex-wrap items-center gap-2">
-            <Button
-              type="button"
-              size="sm"
-              disabled={connecting || !platformManagedAvailable}
-              className="gap-2 bg-white text-gray-800 hover:bg-gray-100 dark:bg-white dark:text-gray-900"
-              onClick={() =>
-                void connectGoogleDirect(
-                  selected?.connected === false ? selected.id : undefined
-                )
-              }
-            >
-              <GoogleMark />
-              {connecting ? "Connecting…" : "Sign in with Google"}
-            </Button>
-
-            {selected ? (
-              <>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="outline"
-                  onClick={() =>
-                    openGoogleModal(selected.id, { setupMode: "managed" })
-                  }
-                >
-                  Manage
-                </Button>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="destructive"
-                  disabled={removing}
-                  onClick={() => void removeSelected()}
-                >
-                  {removing ? "Removing…" : "Delete"}
-                </Button>
-              </>
-            ) : null}
-          </div>
+      {/* Gmail: no shared account dropdown — only this node's inbox. */}
+      {gmailManagedPrimary ? (
+        <div className="rounded-md border border-border/60 bg-muted/20 px-2.5 py-2 text-sm">
+          {selected?.accountEmail ||
+            (selected
+              ? selected.name
+              : "No Gmail connected on this node yet")}
         </div>
-      ) : null}
+      ) : (
+        <Select
+          value={value || "none"}
+          onValueChange={(v) => {
+            onChange(v === "none" ? "" : v);
+          }}
+        >
+          <SelectTrigger>
+            <SelectValue placeholder={emptySelectLabel} />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="none">{emptySelectLabel}</SelectItem>
+            {listed.map((c) => (
+              <SelectItem key={c.id} value={c.id}>
+                {c.accountEmail
+                  ? `${c.name} (${c.accountEmail})`
+                  : c.connected === false
+                    ? `${c.name} (not connected)`
+                    : c.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      )}
 
-      {googleOnly && googleProduct && hybridCustomPrimary ? (
+      {googleOnly && googleProduct && hybridGoogle ? (
         <div className="space-y-2">
           {selected && selected.connected === false ? (
             <p className="rounded-md border border-amber-500/40 bg-amber-500/10 px-2 py-1.5 text-[11px] text-amber-900 dark:text-amber-100">
@@ -382,30 +356,47 @@ export function CredentialPicker({
           ) : selected ? (
             <p className="text-[11px] text-muted-foreground">
               {selected.accountEmail
-                ? `Connected as ${selected.accountEmail}.`
+                ? `This node uses ${selected.accountEmail}.`
                 : selectedIsCustomApp
                   ? "Connection ready. OpsAi stores tokens encrypted."
                   : "Account connected. OpsAi stores tokens encrypted."}
             </p>
           ) : (
             <p className="text-[11px] text-muted-foreground">
-              Configure your Google OAuth client, then connect a Google account.
-              OpsAi stores the connection encrypted.
+              {googleProduct === "google_gmail"
+                ? "Sign in with Google (managed). Nothing is stored until login succeeds. Each Gmail node keeps its own inbox — older accounts are not reused here."
+                : "Connect a Google account for this node. Add another node to use a different account."}
             </p>
           )}
+
           <div className="flex flex-wrap gap-2">
             {selected ? (
               <>
+                {gmailManagedPrimary ? (
+                  <Button
+                    type="button"
+                    size="sm"
+                    disabled={connecting}
+                    className="gap-2 bg-white text-gray-800 hover:bg-gray-100 dark:bg-white dark:text-gray-900"
+                    onClick={() => void connectGmailManagedDirect()}
+                  >
+                    <GoogleMark />
+                    {connecting ? "Connecting…" : "Change Gmail account"}
+                  </Button>
+                ) : null}
                 <Button
                   type="button"
                   size="sm"
+                  variant="outline"
                   onClick={() =>
                     openGoogleModal(selected.id, {
                       autoConnect: selected.connected === false,
                       setupMode:
                         selectedAppMode === "PLATFORM_MANAGED"
                           ? "managed"
-                          : "custom",
+                          : selectedAppMode === "CUSTOM_APP"
+                            ? "custom"
+                            : defaultGoogleSetupMode(googleProduct),
                     })
                   }
                 >
@@ -425,20 +416,36 @@ export function CredentialPicker({
               <Button
                 type="button"
                 size="sm"
-                onClick={() =>
-                  openGoogleModal(undefined, { setupMode: "custom" })
+                disabled={connecting}
+                className={
+                  gmailManagedPrimary
+                    ? "gap-2 bg-white text-gray-800 hover:bg-gray-100 dark:bg-white dark:text-gray-900"
+                    : undefined
                 }
+                onClick={() => {
+                  if (gmailManagedPrimary) {
+                    void connectGmailManagedDirect();
+                    return;
+                  }
+                  openGoogleModal(undefined, {
+                    setupMode: defaultGoogleSetupMode(googleProduct),
+                  });
+                }}
               >
-                {connectPrimary}
+                {gmailManagedPrimary ? <GoogleMark /> : null}
+                {connecting ? "Connecting…" : connectPrimary}
               </Button>
             )}
-            {listed.length > 0 ? (
+            {listed.length > 0 && !gmailManagedPrimary ? (
               <Button
                 type="button"
                 size="sm"
                 variant="ghost"
+                disabled={connecting}
                 onClick={() =>
-                  openGoogleModal(undefined, { setupMode: "custom" })
+                  openGoogleModal(undefined, {
+                    setupMode: defaultGoogleSetupMode(googleProduct),
+                  })
                 }
               >
                 {connectAnother}
@@ -533,14 +540,15 @@ export function CredentialPicker({
             if (!next) setGoogleAutoConnect(false);
           }}
           workspaceId={workspaceId}
+          workflowId={
+            googleProduct === "google_gmail" ? workflowId : undefined
+          }
           product={googleProduct}
           credentialId={editingCredentialId}
           initialName={googleMeta?.label}
           redirectUri={googleRedirectUri}
           initialSetupMode={
-            gmailManagedOnly
-              ? "managed"
-              : googleSetupMode || defaultGoogleSetupMode(googleProduct)
+            googleSetupMode || defaultGoogleSetupMode(googleProduct)
           }
           managedOnly={gmailManagedOnly}
           platformManagedAvailable={platformManagedAvailable}
@@ -584,3 +592,4 @@ function GoogleMark() {
     </svg>
   );
 }
+

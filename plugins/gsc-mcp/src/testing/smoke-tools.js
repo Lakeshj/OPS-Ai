@@ -37,7 +37,14 @@ const main = async () => {
   const ranking = plugin.runIntelligence("ranking_opportunities", { rows });
   assert.equal(ranking.ok, true);
 
-  const decay = plugin.runIntelligence("content_decay", { rows });
+  const decay = plugin.runIntelligence("content_decay", {
+    rows,
+    previousRows: rows.map((r) => ({
+      ...r,
+      clicks: (r.clicks || 0) + 10,
+      position: Math.max(1, (r.position || 10) - 3),
+    })),
+  });
   assert.equal(decay.ok, true);
 
   const sheet = plugin.runAction("prepare_sheet_rows", {

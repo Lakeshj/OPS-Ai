@@ -57,12 +57,24 @@ const runAgentForItem = async ({
   const systemInstruction =
     data.systemInstruction || data.systemPrompt || "";
 
-  const userPrompt = String(
+  let userPrompt = String(
     interpolate(promptTemplate, exprCtx) ?? ""
   ).trim();
   const systemText = systemInstruction
     ? String(resolveExpression(systemInstruction, exprCtx) ?? "").trim()
     : "";
+
+  // Ensure Agent sees upstream item evidence even when the prompt omitted {{item}}.
+  try {
+    const {
+      attachRuntimeDataToPrompt,
+    } = require("./workflowNodes.service");
+    if (payload && typeof payload === "object" && Object.keys(payload).length) {
+      userPrompt = attachRuntimeDataToPrompt(userPrompt, payload).prompt;
+    }
+  } catch {
+    // keep interpolated prompt
+  }
 
   if (!userPrompt) {
     throw new AiRuntimeError(

@@ -243,7 +243,8 @@ const publicEntry = (e) => {
     /** Predefined Google: not generic OAuth2. Policy is per-product. */
     oauthManaged: isPredefinedGoogle,
     oauthMode: isPredefinedGoogle
-      ? e.oauth?.nativeAuthPolicy === "PLATFORM_MANAGED_ONLY"
+      ? e.oauth?.nativeAuthPolicy === "PLATFORM_MANAGED_ONLY" ||
+        e.oauth?.nativeAuthPolicy === "HYBRID_MANAGED_PRIMARY"
         ? "predefined_platform_managed"
         : "predefined_custom_app"
       : e.dbType === "oauth2"

@@ -2777,8 +2777,19 @@ const mergeCtx = (portInputsMap) => {
   };
 };
 
-check("TEST 5-1 Merge contract defines input1 and input2 ports", () => {
-  assert.deepStrictEqual(MERGE_PORT_IDS, ["input1", "input2"]);
+check("TEST 5-1 Merge contract defines input1..input10 ports", () => {
+  assert.deepStrictEqual(MERGE_PORT_IDS, [
+    "input1",
+    "input2",
+    "input3",
+    "input4",
+    "input5",
+    "input6",
+    "input7",
+    "input8",
+    "input9",
+    "input10",
+  ]);
 });
 
 check("TEST 5-2 connection validator enforces per-port cardinality", () => {
@@ -4208,8 +4219,19 @@ check("TEST 6B-26 static HTTP/set ports unchanged", () => {
   assert.strictEqual(http.pairedItemPolicy, "identity1to1");
   assert.strictEqual(setNode.pairedItemPolicy, "identity1to1");
   assert.strictEqual(cond.pairedItemPolicy, "routing");
-  assert.strictEqual(merge.mergeInputs, 2);
-  assert.deepStrictEqual(MERGE_PORT_IDS, ["input1", "input2"]);
+  assert.strictEqual(merge.mergeInputs, 10);
+  assert.deepStrictEqual(MERGE_PORT_IDS, [
+    "input1",
+    "input2",
+    "input3",
+    "input4",
+    "input5",
+    "input6",
+    "input7",
+    "input8",
+    "input9",
+    "input10",
+  ]);
 });
 
 section("Part 7 schedule recurrence");

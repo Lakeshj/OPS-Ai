@@ -10,6 +10,9 @@ const AppError = require("../utils/AppError");
 const { pool } = require("../config/database");
 const { encryptSecret, decryptSecret } = require("./secretBox.service");
 const { assertWorkspaceAccess } = require("./authorization.service");
+const {
+  allocateUniqueCredentialName,
+} = require("./credentialName.util");
 
 const GOOGLE_PRODUCTS = Object.freeze({
   google_gsc: {
@@ -37,6 +40,35 @@ const GOOGLE_PRODUCTS = Object.freeze({
     scopes: ["https://www.googleapis.com/auth/spreadsheets"],
   },
 });
+
+/** Author-facing Gmail permission toggles (maps to OAuth scopes). */
+const GMAIL_PERMISSION_OPTIONS = Object.freeze([
+  {
+    id: "modify",
+    label: "Read and manage mail",
+    description: "List, read, label, and delete messages (required for most Gmail steps)",
+    scope: "https://www.googleapis.com/auth/gmail.modify",
+    defaultEnabled: true,
+  },
+  {
+    id: "send",
+    label: "Send email",
+    description: "Send messages on your behalf",
+    scope: "https://www.googleapis.com/auth/gmail.send",
+    defaultEnabled: true,
+  },
+  {
+    id: "compose",
+    label: "Create drafts",
+    description: "Create and update drafts",
+    scope: "https://www.googleapis.com/auth/gmail.compose",
+    defaultEnabled: true,
+  },
+]);
+
+const GMAIL_SCOPE_BY_ID = Object.freeze(
+  Object.fromEntries(GMAIL_PERMISSION_OPTIONS.map((p) => [p.id, p.scope]))
+);
 
 const GOOGLE_TYPES = new Set(Object.keys(GOOGLE_PRODUCTS));
 
@@ -288,9 +320,21 @@ const sanitizeGoogleError = (status, body, options = {}) => {
             : status >= 500
               ? "GOOGLE_UNAVAILABLE"
               : "GOOGLE_ERROR";
-  const forbiddenMessage =
-    product === "google_gmail"
-      ? "Google denied Gmail access. Check that the connected account granted the required Gmail permissions."
+  const bodyText =
+    typeof body === "string"
+      ? body
+      : body != null
+        ? JSON.stringify(body)
+        : "";
+  const gmailApiDisabled =
+    product === "google_gmail" &&
+    /SERVICE_DISABLED|accessNotConfigured|Gmail API has not been used|API has not been used in project/i.test(
+      bodyText
+    );
+  const forbiddenMessage = gmailApiDisabled
+    ? "Gmail API is not enabled on the OpsAi Google Cloud project. Ask an admin to enable Gmail API, add Gmail scopes on the OAuth consent screen, then reconnect and grant permissions."
+    : product === "google_gmail"
+      ? "Google denied Gmail access. Reconnect and enable the Gmail permissions you need (read/manage, send, drafts). If this keeps failing, enable Gmail API on the OpsAi Google Cloud project."
       : "Google denied access to this resource. Check property permissions.";
   const message =
     status === 401
@@ -308,7 +352,6 @@ const sanitizeGoogleError = (status, body, options = {}) => {
   err.code = code;
   err.statusCode = status >= 400 && status < 600 ? status : 502;
   err.providerStatus = status;
-  void body;
   return err;
 };
 
@@ -569,16 +612,61 @@ const googleApiRequest = async ({
   return result;
 };
 
-const scopesForProduct = (product, cfg = {}) => {
+const normalizeSelectedGmailPermissions = (raw) => {
+  const ids = Array.isArray(raw)
+    ? raw.map((v) => String(v || "").trim()).filter(Boolean)
+    : String(raw || "")
+        .split(/[,\s]+/)
+        .map((s) => s.trim())
+        .filter(Boolean);
+  const allowed = new Set(Object.keys(GMAIL_SCOPE_BY_ID));
+  const picked = [...new Set(ids.filter((id) => allowed.has(id)))];
+  if (picked.length) return picked;
+  return GMAIL_PERMISSION_OPTIONS.filter((p) => p.defaultEnabled).map((p) => p.id);
+};
+
+const scopesFromGmailPermissions = (permissionIds) => {
+  const ids = normalizeSelectedGmailPermissions(permissionIds);
+  return ids.map((id) => GMAIL_SCOPE_BY_ID[id]).filter(Boolean);
+};
+
+const scopesForProduct = (product, cfg = {}, selectedScopes) => {
+  // GSC/GA4/Sheets: request email so we can label multiple accounts.
+  // Gmail already resolves email via users/me/profile — do not add identity
+  // scopes here (keeps consent tighter for sensitive Gmail APIs).
+  const withOptionalIdentity = (scopes) => {
+    if (product === "google_gmail") return [...new Set(scopes.filter(Boolean))];
+    return [
+      ...new Set([
+        ...scopes,
+        "openid",
+        "https://www.googleapis.com/auth/userinfo.email",
+      ].filter(Boolean)),
+    ];
+  };
+
+  if (Array.isArray(selectedScopes) && selectedScopes.length) {
+    const cleaned = selectedScopes
+      .map((s) => String(s || "").trim())
+      .filter((s) => /^https:\/\/www\.googleapis\.com\/auth\//.test(s));
+    if (cleaned.length) return withOptionalIdentity(cleaned);
+  }
+  if (product === "google_gmail") {
+    if (Array.isArray(cfg.gmailPermissions) && cfg.gmailPermissions.length) {
+      return withOptionalIdentity(
+        scopesFromGmailPermissions(cfg.gmailPermissions)
+      );
+    }
+  }
   const custom = String(cfg.customScopes || "").trim();
   if (custom) {
-    return custom.split(/\s+/).filter(Boolean);
+    return withOptionalIdentity(custom.split(/\s+/).filter(Boolean));
   }
-  return [...(GOOGLE_PRODUCTS[product]?.scopes || [])];
+  return withOptionalIdentity([...(GOOGLE_PRODUCTS[product]?.scopes || [])]);
 };
 
 const startGoogleOAuth = async (
-  { workspaceId, product, name, credentialId },
+  { workspaceId, workflowId, product, name, credentialId, gmailPermissions },
   authUser
 ) => {
   await assertWorkspaceAccess(authUser, workspaceId);
@@ -586,11 +674,17 @@ const startGoogleOAuth = async (
     throw new AppError("Unknown Google product", 400, "VALIDATION_ERROR");
   }
 
+  const boundWorkflowId = String(workflowId || "").trim() || null;
+
   let app;
   let scopes;
   let credConfig = {};
   let credSecret = {};
   let displayName = String(name || GOOGLE_PRODUCTS[product].label).slice(0, 80);
+  let permissionIds =
+    product === "google_gmail"
+      ? normalizeSelectedGmailPermissions(gmailPermissions)
+      : [];
 
   if (credentialId) {
     const cred = await loadCredential(credentialId, workspaceId);
@@ -605,24 +699,58 @@ const startGoogleOAuth = async (
     credSecret = cred.secret || {};
     displayName = cred.name || displayName;
     app = resolveOAuthApp(credSecret, credConfig);
-    scopes = scopesForProduct(product, credConfig);
+    if (product === "google_gmail" && !gmailPermissions) {
+      permissionIds = normalizeSelectedGmailPermissions(
+        credConfig.gmailPermissions
+      );
+    }
+    scopes = scopesForProduct(
+      product,
+      {
+        ...credConfig,
+        ...(product === "google_gmail"
+          ? { gmailPermissions: permissionIds }
+          : {}),
+      },
+      undefined
+    );
   } else {
     // Legacy: create-on-callback with PLATFORM_MANAGED only
     app = resolveOAuthApp(
       {},
       { oauthAppMode: OAUTH_APP_MODE.PLATFORM_MANAGED }
     );
-    scopes = scopesForProduct(product, {});
+    scopes = scopesForProduct(
+      product,
+      product === "google_gmail" ? { gmailPermissions: permissionIds } : {},
+      undefined
+    );
+  }
+
+  if (!scopes.length) {
+    throw new AppError(
+      "Select at least one Gmail permission before signing in.",
+      400,
+      "VALIDATION_ERROR"
+    );
+  }
+
+  const actorUserId = String(authUser?.userId || authUser?.id || "").trim();
+  if (!actorUserId) {
+    throw new AppError("Not authenticated", 401, "UNAUTHORIZED");
   }
 
   const state = signState({
     flow: "google",
     workspaceId,
-    userId: authUser.id,
+    workflowId: boundWorkflowId,
+    userId: actorUserId,
     product,
     name: displayName,
     credentialId: credentialId || null,
     oauthAppMode: app.mode,
+    gmailPermissions: product === "google_gmail" ? permissionIds : undefined,
+    requestedScopes: scopes,
     exp: hooks.now() + 10 * 60 * 1000,
     nonce: crypto.randomBytes(8).toString("hex"),
   });
@@ -632,10 +760,23 @@ const startGoogleOAuth = async (
     response_type: "code",
     scope: scopes.join(" "),
     access_type: "offline",
+    // Always force the Google account picker (no silent reuse of the last browser session).
     prompt: "select_account consent",
     include_granted_scopes: "false",
     state,
   });
+  // Never bind a previous Google identity into the authorize URL.
+  params.delete("login_hint");
+  params.delete("authuser");
+
+  const authUrl = `${AUTH_URL}?${params.toString()}`;
+  // Fresh Gmail connects: route through AccountChooser so "Use another account"
+  // is always available (otherwise Google often sticks to authuser=0/1).
+  const url =
+    product === "google_gmail" && !credentialId
+      ? `https://accounts.google.com/AccountChooser?continue=${encodeURIComponent(authUrl)}`
+      : authUrl;
+
   let callbackOrigin = "";
   try {
     callbackOrigin = new URL(app.redirectUri).origin;
@@ -643,11 +784,13 @@ const startGoogleOAuth = async (
     callbackOrigin = "";
   }
   return {
-    url: `${AUTH_URL}?${params.toString()}`,
+    url,
     state,
     callbackOrigin,
     redirectUri: app.redirectUri,
     oauthAppMode: app.mode,
+    scopes,
+    gmailPermissions: product === "google_gmail" ? permissionIds : undefined,
   };
 };
 
@@ -696,14 +839,45 @@ const finishGoogleOAuth = async (code, state) => {
     throw sanitizeGoogleError(res.status === 401 ? 401 : 400, null);
   }
   const json = res.body && typeof res.body === "object" ? res.body : {};
+  const requestedScopes = Array.isArray(parsed.requestedScopes)
+    ? parsed.requestedScopes.map((s) => String(s || "").trim()).filter(Boolean)
+    : scopesForProduct(
+        parsed.product,
+        {
+          ...(existing?.config || {}),
+          ...(parsed.product === "google_gmail"
+            ? { gmailPermissions: parsed.gmailPermissions }
+            : {}),
+        },
+        undefined
+      );
+  const grantedScopes = String(
+    json.scope || requestedScopes.join(" ")
+  )
+    .split(/\s+/)
+    .map((s) => s.trim())
+    .filter(Boolean);
+  if (parsed.product === "google_gmail") {
+    const missing = requestedScopes.filter((scope) => !grantedScopes.includes(scope));
+    if (missing.length) {
+      throw new AppError(
+        "Google did not grant the selected Gmail permissions. On the consent screen, allow the Gmail access you selected, then try again.",
+        400,
+        "GOOGLE_OAUTH_SCOPES"
+      );
+    }
+  }
   const tokenSecret = {
     accessToken: json.access_token,
     refreshToken: json.refresh_token || existing?.secret?.refreshToken || "",
     tokenType: json.token_type || "Bearer",
     expiryMs: hooks.now() + Number(json.expires_in || 3600) * 1000,
-    scopes: String(
-      json.scope || scopesForProduct(parsed.product, existing?.config || {}).join(" ")
-    ).split(/\s+/),
+    scopes: grantedScopes.length
+      ? grantedScopes
+      : String(
+          json.scope ||
+            scopesForProduct(parsed.product, existing?.config || {}).join(" ")
+        ).split(/\s+/),
     revoked: false,
     oauthAppMode: app.mode,
   };
@@ -715,8 +889,8 @@ const finishGoogleOAuth = async (code, state) => {
   }
 
   let accountEmail = existing?.config?.accountEmail || "";
-  if (parsed.product === "google_gmail" && tokenSecret.accessToken) {
-    try {
+  if (tokenSecret.accessToken) {
+    if (parsed.product === "google_gmail") {
       const profile = await callTransport(
         "https://gmail.googleapis.com/gmail/v1/users/me/profile",
         {
@@ -727,15 +901,43 @@ const finishGoogleOAuth = async (code, state) => {
           timeoutMs: 10000,
         }
       );
+      if (!profile?.ok) {
+        throw sanitizeGoogleError(profile?.status || 403, profile?.body, {
+          product: "google_gmail",
+        });
+      }
       const email =
         profile?.body && typeof profile.body === "object"
           ? String(profile.body.emailAddress || "").trim()
           : "";
       if (email) accountEmail = email;
-    } catch {
-      // Identity display is best-effort; do not fail the connection.
+    } else if (!accountEmail) {
+      try {
+        const profile = await callTransport(
+          "https://www.googleapis.com/oauth2/v2/userinfo",
+          {
+            method: "GET",
+            headers: {
+              Authorization: `Bearer ${tokenSecret.accessToken}`,
+            },
+            timeoutMs: 10000,
+          }
+        );
+        if (profile?.ok && profile.body && typeof profile.body === "object") {
+          const email = String(profile.body.email || "").trim();
+          if (email) accountEmail = email;
+        }
+      } catch {
+        // Labeling is best-effort for GSC/GA4/Sheets.
+      }
     }
   }
+
+  const gmailPermissions =
+    parsed.product === "google_gmail"
+      ? normalizeSelectedGmailPermissions(parsed.gmailPermissions)
+      : undefined;
+  const boundWorkflowId = String(parsed.workflowId || "").trim() || null;
 
   if (existing) {
     const nextConfig = {
@@ -743,11 +945,32 @@ const finishGoogleOAuth = async (code, state) => {
       oauthAppMode: app.mode,
       connected: true,
       ...(accountEmail ? { accountEmail } : {}),
+      ...(gmailPermissions ? { gmailPermissions } : {}),
+      ...(boundWorkflowId
+        ? { workflowId: boundWorkflowId }
+        : existing.config?.workflowId
+          ? { workflowId: existing.config.workflowId }
+          : {}),
     };
     if (app.mode === OAUTH_APP_MODE.CUSTOM_APP && existing.config?.clientId) {
       nextConfig.clientId = existing.config.clientId;
     }
     await saveCredentialSecret(existing.id, tokenSecret, nextConfig);
+    if (accountEmail) {
+      const nextName = await allocateUniqueCredentialName(
+        parsed.workspaceId,
+        `${GOOGLE_PRODUCTS[parsed.product].label} (${accountEmail})`,
+        { excludeId: existing.id }
+      );
+      try {
+        await pool.execute(
+          `UPDATE workflow_credentials SET name = ? WHERE id = ?`,
+          [nextName, existing.id]
+        );
+      } catch {
+        // Name refresh is best-effort.
+      }
+    }
     return {
       credentialId: existing.id,
       workspaceId: parsed.workspaceId,
@@ -756,6 +979,20 @@ const finishGoogleOAuth = async (code, state) => {
   }
 
   const id = uuidv4();
+  const createdBy = String(parsed.userId || "").trim();
+  if (!createdBy) {
+    throw new AppError(
+      "Google connect failed — signed-in user missing from OAuth state. Try Sign in with Google again.",
+      400,
+      "GOOGLE_OAUTH_STATE"
+    );
+  }
+  const displayName = await allocateUniqueCredentialName(
+    parsed.workspaceId,
+    accountEmail
+      ? `${GOOGLE_PRODUCTS[parsed.product].label} (${accountEmail})`
+      : parsed.name || GOOGLE_PRODUCTS[parsed.product].label
+  );
   await pool.execute(
     `INSERT INTO workflow_credentials
       (id, workspace_id, name, type, secret_json, config_json, created_by)
@@ -763,15 +1000,17 @@ const finishGoogleOAuth = async (code, state) => {
     [
       id,
       parsed.workspaceId,
-      parsed.name || GOOGLE_PRODUCTS[parsed.product].label,
+      displayName,
       parsed.product,
       encryptSecret(tokenSecret),
       JSON.stringify({
         oauthAppMode: OAUTH_APP_MODE.PLATFORM_MANAGED,
         connected: true,
         ...(accountEmail ? { accountEmail } : {}),
+        ...(gmailPermissions ? { gmailPermissions } : {}),
+        ...(boundWorkflowId ? { workflowId: boundWorkflowId } : {}),
       }),
-      parsed.userId,
+      createdBy,
     ]
   );
   return { credentialId: id, workspaceId: parsed.workspaceId, product: parsed.product };
@@ -868,6 +1107,14 @@ const sanitizeCallbackError = (err) => {
   if (/GOOGLE_OAUTH_CLIENT|process\.env|CLIENT_SECRET|CLIENT_ID\s*\//i.test(raw)) {
     return "Google sign-in is not available on this OpsAi instance yet. Please contact your workspace administrator.";
   }
+  // Preserve actionable Google/Gmail scope messages; scrub only raw token material.
+  if (
+    /gmail api|gmail scope|access_denied|insufficient.?permission|enable the gmail/i.test(
+      raw
+    )
+  ) {
+    return raw.slice(0, 220);
+  }
   if (/token|bearer|secret|authorization|refresh/i.test(raw)) {
     return "Google connect failed";
   }
@@ -876,9 +1123,15 @@ const sanitizeCallbackError = (err) => {
     code === "GOOGLE_OAUTH_NOT_CONFIGURED" ||
     code === "GOOGLE_OAUTH_APP_REQUIRED" ||
     code === "GOOGLE_OAUTH_FAILED" ||
+    code === "GOOGLE_OAUTH_SCOPES" ||
+    code === "GOOGLE_FORBIDDEN" ||
     code.startsWith("GOOGLE_")
   ) {
     return raw;
+  }
+  // Foreign-key / DB identity failures should not leak SQL.
+  if (/foreign key|created_by|ER_NO_REFERENCED/i.test(raw)) {
+    return "Google connect failed — signed-in user could not be saved. Sign out and back into OpsAi, then try again.";
   }
   return "Google connect failed";
 };
@@ -928,6 +1181,7 @@ const applyOAuthPopupResponseHeaders = (res) => {
 module.exports = {
   GOOGLE_PRODUCTS,
   GOOGLE_TYPES,
+  GMAIL_PERMISSION_OPTIONS,
   OAUTH_APP_MODE,
   AUTH_URL,
   TOKEN_URL,
@@ -949,6 +1203,9 @@ module.exports = {
   resetOauthNonceStore,
   sanitizeCallbackError,
   allowedFrontendOrigins,
+  normalizeSelectedGmailPermissions,
+  scopesFromGmailPermissions,
+  scopesForProduct,
   upsertGoogleOAuthCredential,
   testGoogleCredential,
   oauthCallbackHtml,

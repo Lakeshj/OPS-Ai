@@ -1,7 +1,8 @@
 /**
  * Canonical native Google provider authentication policies.
  *
- * Gmail is PLATFORM_MANAGED_ONLY. GSC / GA4 / Sheets are HYBRID_CUSTOM_PRIMARY.
+ * Gmail is HYBRID_MANAGED_PRIMARY — Manage offers Managed (recommended) + Custom.
+ * GSC / GA4 / Sheets are HYBRID_CUSTOM_PRIMARY — custom OAuth app is primary.
  * Never decide native connection UX from generic "isGoogle" alone.
  */
 
@@ -13,13 +14,14 @@ export type GoogleCredentialProduct =
 
 export type GoogleNativeAuthPolicy =
   | "PLATFORM_MANAGED_ONLY"
+  | "HYBRID_MANAGED_PRIMARY"
   | "HYBRID_CUSTOM_PRIMARY";
 
 export const GOOGLE_NATIVE_AUTH_POLICY: Record<
   GoogleCredentialProduct,
   GoogleNativeAuthPolicy
 > = {
-  google_gmail: "PLATFORM_MANAGED_ONLY",
+  google_gmail: "HYBRID_MANAGED_PRIMARY",
   google_gsc: "HYBRID_CUSTOM_PRIMARY",
   google_ga4: "HYBRID_CUSTOM_PRIMARY",
   google_sheets: "HYBRID_CUSTOM_PRIMARY",
@@ -49,17 +51,36 @@ export function isPlatformManagedOnlyGoogle(
   return getGoogleNativeAuthPolicy(type) === "PLATFORM_MANAGED_ONLY";
 }
 
+export function isHybridManagedPrimaryGoogle(
+  type: string | null | undefined
+): boolean {
+  return getGoogleNativeAuthPolicy(type) === "HYBRID_MANAGED_PRIMARY";
+}
+
 export function isHybridCustomPrimaryGoogle(
   type: string | null | undefined
 ): boolean {
   return getGoogleNativeAuthPolicy(type) === "HYBRID_CUSTOM_PRIMARY";
 }
 
+/** Any hybrid Google provider that can use Managed or Custom in the credential modal. */
+export function isHybridGoogleCredential(
+  type: string | null | undefined
+): boolean {
+  const policy = getGoogleNativeAuthPolicy(type);
+  return (
+    policy === "HYBRID_MANAGED_PRIMARY" || policy === "HYBRID_CUSTOM_PRIMARY"
+  );
+}
+
 /** Default setup mode when opening the credential modal for a provider. */
 export function defaultGoogleSetupMode(
   type: string | null | undefined
 ): "managed" | "custom" {
-  return isPlatformManagedOnlyGoogle(type) ? "managed" : "custom";
+  if (isPlatformManagedOnlyGoogle(type) || isHybridManagedPrimaryGoogle(type)) {
+    return "managed";
+  }
+  return "custom";
 }
 
 /**
@@ -74,7 +95,10 @@ export function shouldShowPlatformManagedUnavailableWarning(args: {
   if (args.platformManagedAvailable) return false;
   const policy = getGoogleNativeAuthPolicy(args.product);
   if (policy === "PLATFORM_MANAGED_ONLY") return true;
-  if (policy === "HYBRID_CUSTOM_PRIMARY") {
+  if (
+    policy === "HYBRID_CUSTOM_PRIMARY" ||
+    policy === "HYBRID_MANAGED_PRIMARY"
+  ) {
     return args.selectedAppMode === "PLATFORM_MANAGED";
   }
   return false;

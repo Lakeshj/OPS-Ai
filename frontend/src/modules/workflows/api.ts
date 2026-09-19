@@ -368,9 +368,11 @@ export const workflowCredentialsApi = {
 
   startGoogleOAuth: (payload: {
     workspaceId: string;
+    workflowId?: string;
     product: WorkflowCredential["type"];
     name?: string;
     credentialId?: string;
+    gmailPermissions?: string[];
   }) =>
     apiClient.post<{
       url: string;
@@ -378,6 +380,8 @@ export const workflowCredentialsApi = {
       callbackOrigin: string;
       redirectUri?: string;
       oauthAppMode?: string;
+      scopes?: string[];
+      gmailPermissions?: string[];
     }>("/workflows/google-oauth/start", payload),
 
   test: (credentialId: string) =>

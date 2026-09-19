@@ -33,11 +33,19 @@ const registerPart14D54BTests = ({ check, section, assert: a }) => {
     assertX.ok(picker().includes("GoogleCredentialModal"));
   });
 
-  check("FRONTOAUTH-3 native Gmail Connect opens Google sign-in directly", () => {
+  check("FRONTOAUTH-3 native Gmail Connect opens Google OAuth directly", () => {
     const types = readFe("modules/workflows/types.ts");
     assertX.ok(types.includes('connectAction: "Connect Gmail"'));
-    assertX.ok(picker().includes("startGoogleOAuthPopup"));
-    assertX.ok(picker().includes("Sign in with Google"));
+    assertX.ok(picker().includes("connectGmailManagedDirect"));
+    assertX.ok(picker().includes("hybridGoogle"));
+    assertX.ok(modal().includes("Sign in with Google"));
+    assertX.ok(modal().includes("Managed OAuth2 (recommended)"));
+    assertX.equal(
+      require("../config/googleNativeAuthPolicy").getGoogleNativeAuthPolicy(
+        "google_gmail"
+      ),
+      "HYBRID_MANAGED_PRIMARY"
+    );
   });
 
   check("FRONTOAUTH-4 native Sheets Connect opens Sheets credential setup modal", () => {

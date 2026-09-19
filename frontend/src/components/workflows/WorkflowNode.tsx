@@ -11,8 +11,10 @@ import {
 import { AlertCircle, Check, Pin, Plus, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { nodeHasMissingConfig } from "@/modules/workflows/nodeValidation";
-import { getNodeContract } from "@/modules/workflows/nodeRegistry";
-import { resolveNodeOutputPorts } from "@/modules/workflows/dynamicPorts";
+import {
+  resolveNodeInputPorts,
+  resolveNodeOutputPorts,
+} from "@/modules/workflows/dynamicPorts";
 import {
   getAiAgentReadiness,
   getAiResourceDisplay,
@@ -20,6 +22,12 @@ import {
   isAiAgentType,
   isAiResourceProviderType,
 } from "@/modules/workflows/aiAgentUx";
+import {
+  getNodeCardDescription,
+  getNodeCardIcon,
+  getNodeCardTitle,
+  getNodeVisualCategory,
+} from "@/modules/workflows/nodeCardPresentation";
 import type { WorkflowNodeData } from "@/modules/workflows/types";
 import { WorkflowNodeToolbar } from "./WorkflowNodeToolbar";
 import { WorkflowNodeContextMenu } from "./WorkflowNodeContextMenu";
@@ -27,45 +35,12 @@ import { useWorkflowCanvasActions } from "./WorkflowCanvasContext";
 import { Button } from "@/components/ui/button";
 
 const base =
-  "min-w-[170px] max-w-[220px] rounded-lg border bg-card px-3 py-2 shadow-sm text-sm relative";
-
-const typeStyles: Record<string, string> = {
-  trigger: "border-emerald-500/60",
-  schedule: "border-teal-500/60",
-  webhook: "border-cyan-500/60",
-  ai: "border-blue-500/60",
-  bot: "border-fuchsia-500/60",
-  aiAgent: "border-blue-600/70",
-  aiChatModel: "border-dashed border-blue-500/50",
-  aiCalculatorTool: "border-dashed border-sky-600/50",
-  aiHttpTool: "border-dashed border-amber-600/50",
-  respondToWebhook: "border-cyan-600/60",
-  http: "border-amber-500/60",
-  condition: "border-violet-500/60",
-  set: "border-sky-500/60",
-  splitOut: "border-orange-500/60",
-  filter: "border-yellow-600/60",
-  limit: "border-slate-500/60",
-  sort: "border-slate-500/60",
-  removeDuplicates: "border-slate-500/60",
-  aggregate: "border-purple-500/60",
-  merge: "border-green-600/60",
-  switch: "border-indigo-600/60",
-  code: "border-zinc-500/60",
-  document: "border-indigo-500/60",
-  spreadsheet: "border-lime-600/60",
-  email: "border-pink-500/60",
-  wait: "border-stone-500/60",
-  loop: "border-teal-600/60",
-  result: "border-rose-500/60",
-  noop: "border-border",
-  integration: "border-dashed border-muted-foreground/50",
-};
+  "min-w-[200px] max-w-[260px] rounded-xl border bg-card/95 px-3 py-2.5 text-sm relative backdrop-blur-[2px]";
 
 const statusStyles: Record<string, string> = {
-  succeeded: "ring-2 ring-emerald-500/70",
-  failed: "ring-2 ring-destructive/70",
-  running: "ring-2 ring-amber-500/70",
+  succeeded: "ring-2 ring-emerald-500/50",
+  failed: "ring-2 ring-destructive/60",
+  running: "ring-2 ring-amber-500/50",
   pending: "",
   skipped: "opacity-60",
 };
@@ -79,22 +54,8 @@ const START_TYPES = new Set([
   "gmailTrigger",
 ]);
 
-const TYPE_LABEL: Record<string, string> = {
-  aiAgent: "Basic AI Agent",
-  aiChatModel: "Chat Model",
-  aiCalculatorTool: "Calculator",
-  aiHttpTool: "HTTP Tool",
-  respondToWebhook: "Respond",
-  bot: "Bot",
-  ai: "AI Model",
-  aiGenerate: "AI Generate",
-  googleSearchConsole: "Search Console",
-  googleAnalytics: "Analytics",
-  gmail: "Gmail",
-  gmailTrigger: "Gmail Trigger",
-  googleSheets: "Sheets",
-  xlsxBuilder: "XLSX Builder",
-};
+const HANDLE_MAIN =
+  "!h-3 !w-3 !border-2 !border-sky-300/80 !bg-white dark:!bg-slate-100";
 
 function StatusBadge({
   runStatus,
@@ -149,7 +110,7 @@ function StatusBadge({
   }
   if (runStatus === "running") {
     return (
-      <span className="rounded-full bg-amber-500/15 px-1.5 py-0.5 text-[9px] capitalize text-amber-700">
+      <span className="rounded-full bg-amber-500/15 px-1.5 py-0.5 text-[9px] capitalize text-amber-700 dark:text-amber-300">
         running
       </span>
     );
@@ -163,38 +124,52 @@ function WorkflowNodeComponent({ id, data, type, selected }: NodeProps) {
   const nodes = useStore((s) => s.nodes);
   const [hovered, setHovered] = useState(false);
   const nodeType = String(type || data?.nodeType || "ai");
-  const label = String(data?.label || TYPE_LABEL[nodeType] || nodeType);
   const runStatus = data?.runStatus ? String(data.runStatus) : "";
   const preview = data?.runPreview ? String(data.runPreview) : "";
   const nodeData = (data || {}) as WorkflowNodeData;
+  const visual = useMemo(() => getNodeVisualCategory(nodeType), [nodeType]);
+  const Icon = useMemo(() => getNodeCardIcon(nodeType), [nodeType]);
+  const title = useMemo(
+    () => getNodeCardTitle(nodeType, nodeData),
+    [nodeType, nodeData]
+  );
+  const description = useMemo(
+    () => getNodeCardDescription(nodeType, nodeData, preview),
+    [nodeType, nodeData, preview]
+  );
   const resourceDisplay = useMemo(
     () => getAiResourceDisplay(nodeType, nodeData as Record<string, unknown>),
     [nodeType, nodeData]
   );
+  const isResourceProvider = isAiResourceProviderType(nodeType);
   const agentReadiness = useMemo(() => {
     if (!isAiAgentType(nodeType)) return null;
     return getAiAgentReadiness(id, edges, nodes);
-  }, [id, nodeType, edges, nodes]);
-  const paramMissing =
-    !runStatus || runStatus === "pending"
-      ? nodeHasMissingConfig(nodeType, nodeData)
-      : false;
-  const missingConfig =
-    paramMissing || Boolean(agentReadiness?.missingModel);
+  }, [nodeType, id, nodes, edges]);
+
+  const paramMissing = nodeHasMissingConfig(
+    nodeType as import("@/modules/workflows/types").WorkflowNodeType,
+    nodeData
+  );
+  const missingConfig = paramMissing || Boolean(agentReadiness?.missingModel);
   const isPlaceholder =
-    nodeType === "integration" || nodeData.available === false;
-  const isResourceProvider = isAiResourceProviderType(nodeType);
+    nodeType === "integration" ||
+    nodeType === "migrationUnsupported" ||
+    nodeData.available === false;
+
   const actions = canvas?.getNodeActions(id) ?? {};
   const showToolbar = hovered && !selected;
-  const contract = getNodeContract(
-    nodeType as import("@/modules/workflows/types").WorkflowNodeType
+
+  const inputPorts = resolveNodeInputPorts(
+    nodeType as import("@/modules/workflows/types").WorkflowNodeType,
+    nodeData
   );
-  const mainInputPorts = contract.inputs.filter(
+  const mainInputPorts = inputPorts.filter(
     (p) => p.direction === "in" && p.kind === "main"
   );
   const auxiliaryInputPorts = isAiAgentType(nodeType)
     ? getVisibleAiAuxiliaryInputPorts(nodeType)
-    : contract.inputs.filter(
+    : inputPorts.filter(
         (p) =>
           p.direction === "in" &&
           (p.connectionKind === "auxiliary" ||
@@ -210,7 +185,10 @@ function WorkflowNodeComponent({ id, data, type, selected }: NodeProps) {
   const mainOutputPorts = outputPorts.filter(
     (p) =>
       p.direction === "out" &&
-      (p.kind === "main" || p.kind === "true" || p.kind === "false" || p.kind === "fallback")
+      (p.kind === "main" ||
+        p.kind === "true" ||
+        p.kind === "false" ||
+        p.kind === "fallback")
   );
   const auxiliaryOutputPorts = outputPorts.filter(
     (p) =>
@@ -221,20 +199,38 @@ function WorkflowNodeComponent({ id, data, type, selected }: NodeProps) {
         p.kind === "ai_memory")
   );
   const hasMainOutput = mainOutputPorts.length > 0;
-  const typeChip = TYPE_LABEL[nodeType] || nodeType;
+
+  const subtitle =
+    isResourceProvider && resourceDisplay.role === "model"
+      ? [
+          resourceDisplay.providerLabel,
+          resourceDisplay.modelLabel,
+        ]
+          .filter(Boolean)
+          .join(" / ") || description
+      : isResourceProvider && resourceDisplay.toolName
+        ? resourceDisplay.toolName
+        : agentReadiness
+          ? agentReadiness.missingModel
+            ? "Model required"
+            : `Model · ${agentReadiness.toolCount} tool${agentReadiness.toolCount === 1 ? "" : "s"}`
+          : description;
 
   const nodeBody = (
     <div
       className={cn(
         base,
         "relative transition-[box-shadow,transform] duration-200",
-        typeStyles[nodeType] || "border-border",
-        selected && "ring-2 ring-primary",
+        visual.borderClass,
+        visual.glowClass,
+        visual.dashed && "border-dashed",
+        selected && "ring-2 ring-primary/80",
         runStatus && statusStyles[runStatus],
         missingConfig && !runStatus && "ring-1 ring-amber-500/50",
         nodeData.disabled && "border-dashed opacity-50",
-        showToolbar &&
-          "z-10 shadow-lg shadow-black/10 ring-1 ring-foreground/10 dark:shadow-black/30"
+        showToolbar && "z-10",
+        // Room for inside-left Input 1..N labels on Merge / multi-input nodes
+        mainInputPorts.length > 1 && "pl-14"
       )}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
@@ -245,36 +241,47 @@ function WorkflowNodeComponent({ id, data, type, selected }: NodeProps) {
         visible={showToolbar}
         actions={actions}
       />
+
       {!START_TYPES.has(nodeType) &&
         mainInputPorts.length > 0 &&
         (mainInputPorts.length > 1 ? (
           <>
-            {mainInputPorts.map((port, index) => (
-              <Handle
-                key={port.id}
-                type="target"
-                position={Position.Left}
-                id={port.id}
-                title={
-                  port.description
-                    ? `${port.label || port.id}: ${port.description}`
-                    : port.label || port.id
-                }
-                style={{
-                  top: `${((index + 1) / (mainInputPorts.length + 1)) * 100}%`,
-                }}
-                className="!h-3 !w-3 !border-2 !bg-background !border-muted-foreground"
-              />
-            ))}
+            {mainInputPorts.map((port, index) => {
+              const top = `${((index + 1) / (mainInputPorts.length + 1)) * 100}%`;
+              return (
+                <React.Fragment key={port.id}>
+                  <Handle
+                    type="target"
+                    position={Position.Left}
+                    id={port.id}
+                    title={
+                      port.description
+                        ? `${port.label || port.id}: ${port.description}`
+                        : port.label || port.id
+                    }
+                    style={{ top }}
+                    className={HANDLE_MAIN}
+                  />
+                  <span
+                    className="pointer-events-none absolute left-2 z-[1] -translate-y-1/2 whitespace-nowrap text-[9px] font-medium text-muted-foreground"
+                    style={{ top }}
+                    aria-hidden
+                  >
+                    {port.label || `Input ${index + 1}`}
+                  </span>
+                </React.Fragment>
+              );
+            })}
           </>
         ) : (
           <Handle
             type="target"
             position={Position.Left}
             id={mainInputPorts[0]?.id || "main"}
-            className="!h-3 !w-3 !border-2 !bg-background !border-muted-foreground"
+            className={HANDLE_MAIN}
           />
         ))}
+
       {auxiliaryInputPorts.map((port, index) => (
         <Handle
           key={port.id}
@@ -290,7 +297,7 @@ function WorkflowNodeComponent({ id, data, type, selected }: NodeProps) {
           style={{
             left: `${((index + 1) / (auxiliaryInputPorts.length + 1)) * 100}%`,
           }}
-          className="!h-2.5 !w-2.5 !rounded-sm !border-2 !border-foreground/50 !bg-muted"
+          className="!h-2.5 !w-2.5 !rounded-sm !border-2 !border-violet-400/60 !bg-violet-500/20"
           onClick={(e) => {
             e.stopPropagation();
             if (isAiAgentType(nodeType) && canvas?.onAddResource) {
@@ -305,7 +312,7 @@ function WorkflowNodeComponent({ id, data, type, selected }: NodeProps) {
             <button
               key={port.id}
               type="button"
-              className="nodrag nopan truncate max-w-[40%] hover:text-foreground"
+              className="nodrag nopan max-w-[40%] truncate hover:text-foreground"
               title={
                 port.description
                   ? `${port.label}: ${port.description}`
@@ -321,14 +328,23 @@ function WorkflowNodeComponent({ id, data, type, selected }: NodeProps) {
           ))}
         </div>
       )}
-      <div className="flex items-center justify-between gap-2">
-        <div className="flex items-center gap-1 text-[10px] uppercase tracking-wide text-muted-foreground">
-          {typeChip}
+
+      {/* Header: category tag + status */}
+      <div className="mb-2 flex items-start justify-between gap-2">
+        <div className="flex min-w-0 items-center gap-1.5">
+          <span
+            className={cn(
+              "truncate text-[9px] font-semibold uppercase tracking-[0.08em]",
+              visual.tagClass
+            )}
+          >
+            {visual.label}
+          </span>
           {nodeData.disabled && (
-            <span className="normal-case text-destructive">off</span>
+            <span className="text-[9px] text-destructive">off</span>
           )}
           {nodeData.pinned && (
-            <Pin className="h-3 w-3 text-primary" aria-label="Output pinned" />
+            <Pin className="h-3 w-3 shrink-0 text-primary" aria-label="Output pinned" />
           )}
         </div>
         <StatusBadge
@@ -338,106 +354,41 @@ function WorkflowNodeComponent({ id, data, type, selected }: NodeProps) {
           failTitle={preview || undefined}
         />
       </div>
-      <div className="font-medium text-foreground">{label}</div>
-      {nodeType === "respondToWebhook" && (
-        <div className="mt-0.5 text-[10px] text-muted-foreground">
-          Status: {Number(nodeData.statusCode) || 200}
-          {" · "}
-          {String(nodeData.responseType || "json").toLowerCase() === "text"
-            ? "Text"
-            : "JSON"}
-        </div>
-      )}
-      {nodeType === "webhook" && nodeData.responseMode === "respondNode" && (
-        <div className="mt-0.5 text-[10px] text-muted-foreground">
-          Respond via node
-        </div>
-      )}
-      {isResourceProvider && (
-        <div className="mt-0.5 text-[10px] text-muted-foreground">
-          {resourceDisplay.subtitle}
-          {resourceDisplay.role === "model" &&
-            (resourceDisplay.providerLabel || resourceDisplay.modelLabel) && (
-              <span className="block truncate">
-                {[resourceDisplay.providerLabel, resourceDisplay.modelLabel]
-                  .filter(Boolean)
-                  .join(" / ")}
-              </span>
-            )}
-          {resourceDisplay.role === "tool" && resourceDisplay.toolName && (
-            <span className="block truncate">{resourceDisplay.toolName}</span>
+
+      {/* Body: icon + title + description */}
+      <div className="flex items-start gap-2.5">
+        <div
+          className={cn(
+            "flex h-9 w-9 shrink-0 items-center justify-center rounded-lg",
+            visual.iconWrapClass
           )}
+        >
+          <Icon className="h-4 w-4" strokeWidth={2} />
         </div>
-      )}
-      {agentReadiness && (
-        <div className="mt-1 space-y-0.5 text-[10px] leading-snug text-muted-foreground">
+        <div className="min-w-0 flex-1 pt-0.5">
+          <div className="truncate font-semibold leading-tight text-foreground">
+            {title}
+          </div>
           <div
             className={cn(
-              agentReadiness.missingModel &&
+              "mt-0.5 line-clamp-2 text-[11px] leading-snug text-muted-foreground",
+              runStatus === "failed" && "text-destructive",
+              agentReadiness?.missingModel &&
                 "font-medium text-amber-700 dark:text-amber-300"
             )}
-            title={
-              agentReadiness.modelConnected
-                ? agentReadiness.modelLabel || "Model connected"
-                : "Connect a Chat Model"
-            }
+            title={subtitle}
           >
-            {agentReadiness.missingModel
-              ? "Model required"
-              : agentReadiness.modelLabel
-                ? `Model: ${agentReadiness.modelLabel}`
-                : "Model connected"}
-          </div>
-          <div
-            title={
-              agentReadiness.toolNames.length
-                ? agentReadiness.toolNames.join(", ")
-                : "No tools connected"
-            }
-          >
-            Tools: {agentReadiness.toolCount}
+            {isPlaceholder && !preview
+              ? "Placeholder · not executable yet"
+              : paramMissing &&
+                  !preview &&
+                  !isPlaceholder &&
+                  !agentReadiness?.missingModel
+                ? "Needs configuration"
+                : subtitle}
           </div>
         </div>
-      )}
-      {nodeData.notesInFlow && nodeData.notes && (
-        <div className="mt-1 line-clamp-2 text-[10px] italic text-muted-foreground">
-          {nodeData.notes}
-        </div>
-      )}
-      {preview && (
-        <div
-          className={
-            runStatus === "failed"
-              ? "mt-1 line-clamp-2 text-[10px] leading-snug text-destructive"
-              : "mt-1 line-clamp-2 text-[10px] leading-snug text-muted-foreground"
-          }
-        >
-          {runStatus === "failed" ? `Failed · ${preview}` : preview}
-        </div>
-      )}
-      {isPlaceholder && !preview && (
-        <div className="mt-1 text-[10px] text-muted-foreground">
-          Placeholder · not executable yet
-        </div>
-      )}
-      {mainInputPorts.length > 1 && (
-        <div className="mt-1 flex flex-col gap-0.5 text-[9px] text-muted-foreground">
-          {mainInputPorts.map((port) => (
-            <span
-              key={port.id}
-              title={port.description || undefined}
-              className="truncate"
-            >
-              {port.label || port.id}
-            </span>
-          ))}
-        </div>
-      )}
-      {paramMissing && !preview && !isPlaceholder && !agentReadiness?.missingModel && (
-        <div className="mt-1 text-[10px] text-amber-700 dark:text-amber-300">
-          Needs configuration
-        </div>
-      )}
+      </div>
 
       {nodeType === "condition" ? (
         <>
@@ -445,51 +396,57 @@ function WorkflowNodeComponent({ id, data, type, selected }: NodeProps) {
             type="source"
             position={Position.Right}
             id="true"
-            style={{ top: "35%" }}
-            className="!h-3 !w-3 !border-2 !bg-emerald-500"
+            style={{ top: "38%" }}
+            className="!h-3 !w-3 !border-2 !border-emerald-400 !bg-emerald-500"
           />
           <Handle
             type="source"
             position={Position.Right}
             id="false"
-            style={{ top: "70%" }}
-            className="!h-3 !w-3 !border-2 !bg-rose-500"
+            style={{ top: "72%" }}
+            className="!h-3 !w-3 !border-2 !border-rose-400 !bg-rose-500"
           />
-          <div className="mt-1 flex justify-between text-[10px] text-muted-foreground">
-            <span>true</span>
-            <span>false</span>
-          </div>
+          <span
+            className="pointer-events-none absolute left-full ml-1.5 -translate-y-1/2 rounded-full bg-emerald-500 px-1.5 py-0.5 text-[9px] font-semibold text-white"
+            style={{ top: "38%" }}
+          >
+            true
+          </span>
+          <span
+            className="pointer-events-none absolute left-full ml-1.5 -translate-y-1/2 rounded-full bg-rose-500 px-1.5 py-0.5 text-[9px] font-semibold text-white"
+            style={{ top: "72%" }}
+          >
+            false
+          </span>
         </>
       ) : hasMainOutput && mainOutputPorts.length > 1 ? (
         <>
-          {mainOutputPorts.map((port, index) => (
-            <Handle
-              key={port.id}
-              type="source"
-              position={Position.Right}
-              id={port.id}
-              title={
-                port.description
-                  ? `${port.label || port.id}: ${port.description}`
-                  : port.label || port.id
-              }
-              style={{
-                top: `${((index + 1) / (mainOutputPorts.length + 1)) * 100}%`,
-              }}
-              className="!h-3 !w-3 !border-2 !bg-background !border-muted-foreground"
-            />
-          ))}
-          <div className="mt-1 flex flex-col gap-0.5 text-[9px] text-muted-foreground">
-            {mainOutputPorts.map((port) => (
-              <span
-                key={port.id}
-                className="truncate"
-                title={port.description || undefined}
-              >
-                {port.label || port.id}
-              </span>
-            ))}
-          </div>
+          {mainOutputPorts.map((port, index) => {
+            const top = `${((index + 1) / (mainOutputPorts.length + 1)) * 100}%`;
+            return (
+              <React.Fragment key={port.id}>
+                <Handle
+                  type="source"
+                  position={Position.Right}
+                  id={port.id}
+                  title={
+                    port.description
+                      ? `${port.label || port.id}: ${port.description}`
+                      : port.label || port.id
+                  }
+                  style={{ top }}
+                  className={HANDLE_MAIN}
+                />
+                <span
+                  className="pointer-events-none absolute left-full ml-1.5 -translate-y-1/2 whitespace-nowrap rounded-full bg-muted px-1.5 py-0.5 text-[9px] font-medium text-muted-foreground"
+                  style={{ top }}
+                  aria-hidden
+                >
+                  {port.label || port.id}
+                </span>
+              </React.Fragment>
+            );
+          })}
         </>
       ) : hasMainOutput ? (
         <>
@@ -497,7 +454,7 @@ function WorkflowNodeComponent({ id, data, type, selected }: NodeProps) {
             type="source"
             position={Position.Right}
             id={mainOutputPorts[0]?.id || "main"}
-            className="!h-3 !w-3 !border-2 !bg-background !border-muted-foreground"
+            className={HANDLE_MAIN}
             style={nodeData.onError === "route" ? { top: "38%" } : undefined}
           />
           {nodeData.onError === "route" && (
@@ -507,15 +464,19 @@ function WorkflowNodeComponent({ id, data, type, selected }: NodeProps) {
                 position={Position.Right}
                 id="error"
                 style={{ top: "72%" }}
-                className="!h-3 !w-3 !border-2 !bg-destructive"
+                className="!h-3 !w-3 !border-2 !border-destructive !bg-destructive"
               />
-              <div className="mt-1 text-right text-[10px] text-destructive">
+              <span
+                className="pointer-events-none absolute left-full ml-1.5 -translate-y-1/2 whitespace-nowrap rounded-full bg-destructive px-1.5 py-0.5 text-[9px] font-semibold text-white"
+                style={{ top: "72%" }}
+              >
                 on error
-              </div>
+              </span>
             </>
           )}
         </>
       ) : null}
+
       {auxiliaryOutputPorts.map((port, index) => (
         <Handle
           key={port.id}
@@ -531,11 +492,11 @@ function WorkflowNodeComponent({ id, data, type, selected }: NodeProps) {
           style={{
             left: `${((index + 1) / (auxiliaryOutputPorts.length + 1)) * 100}%`,
           }}
-          className="!h-2.5 !w-2.5 !rounded-sm !border-2 !border-foreground/50 !bg-muted"
+          className="!h-2.5 !w-2.5 !rounded-sm !border-2 !border-violet-400/60 !bg-violet-500/20"
         />
       ))}
       {auxiliaryOutputPorts.length > 0 && (
-        <div className="mt-1 text-center text-[9px] text-muted-foreground">
+        <div className="mt-1.5 text-center text-[9px] text-muted-foreground">
           {auxiliaryOutputPorts.map((p) => p.label || p.id).join(" · ")}
         </div>
       )}

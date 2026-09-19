@@ -6,7 +6,9 @@ Part 14D.5 native capabilities used by SEO and marketing automations. n8n import
 
 | Engine type | Library id | Role |
 | --- | --- | --- |
-| `googleSearchConsole` | `google-search-console` | GSC Search Analytics |
+| `googleSearchConsole` | `google-search-console` | Primary user-facing GSC Search Analytics (auth + property) |
+| `gscMcpTool` | `gsc-mcp-tools` | Main-flow processor on upstream GSC rows (no auth) |
+| `gscMcp` | — | Soft-deprecated; not in library |
 | `googleAnalytics` | `google-analytics` | GA4 reports |
 | `gmail` / `gmailTrigger` | `gmail` / `gmail-trigger` | Mail send/read + polling trigger |
 | `googleSheets` | `google-sheets` | Tabular read/write |

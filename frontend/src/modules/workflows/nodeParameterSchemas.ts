@@ -1016,28 +1016,48 @@ export const NODE_PARAMETER_SCHEMAS: Record<WorkflowNodeType, ParamDescriptor[]>
         default: 50,
         displayOptions: { show: { capability: ["ranking_opportunities"] } },
       },
-      // Content Decay filters
+      // Content Decay filters — prior period vs current only (no snapshot)
       {
-        name: "comparisonPeriod",
-        displayName: "Comparison period",
-        type: "options",
-        default: "snapshot",
+        name: "_decayComparisonNotice",
+        displayName: "Comparison",
+        type: "notice",
         displayOptions: { show: { capability: ["content_decay"] } },
-        options: [
-          { name: "Snapshot (single period)", value: "snapshot" },
-          { name: "Prior period (needs previousRows)", value: "prior_period" },
-        ],
         description:
-          "Snapshot uses weak CTR + deep position. Prior period compares against previousRows.",
+          "Previous period vs Current period. Supply previousRows (prior-period GSC rows) from an upstream GSC run. A single snapshot cannot establish decay.",
       },
       {
-        name: "dropPercentage",
-        displayName: "Drop percentage",
+        name: "minPreviousImpressions",
+        displayName: "Min previous impressions",
+        type: "number",
+        default: 50,
+        displayOptions: { show: { capability: ["content_decay"] } },
+        description: "Ignore entities with fewer impressions in the previous period.",
+      },
+      {
+        name: "minCurrentImpressions",
+        displayName: "Min current impressions",
+        type: "number",
+        default: 20,
+        displayOptions: { show: { capability: ["content_decay"] } },
+        description: "Ignore entities with fewer impressions in the current period.",
+      },
+      {
+        name: "minClickDropPercent",
+        displayName: "Min click drop %",
         type: "number",
         default: 20,
         displayOptions: { show: { capability: ["content_decay"] } },
         description:
-          "Minimum click drop % vs prior period (prior_period mode only).",
+          "Minimum click decline % vs previous period (or use position worsening).",
+      },
+      {
+        name: "minPositionWorsening",
+        displayName: "Min position worsening",
+        type: "number",
+        default: 1,
+        displayOptions: { show: { capability: ["content_decay"] } },
+        description:
+          "Minimum increase in average position (worse rank) to count as decay.",
       },
       {
         name: "decayLimit",
