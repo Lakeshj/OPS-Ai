@@ -53,9 +53,11 @@ const ALLOWED_NODE_TYPES = new Set([
   "aiChatModel",
   "aiCalculatorTool",
   "aiHttpTool",
+  "gscMcpTool",
   "respondToWebhook",
   // Part 14D.5 — native Google / SEO / AI Generate / XLSX
   "googleSearchConsole",
+  "gscMcp",
   "googleAnalytics",
   "gmail",
   "gmailTrigger",

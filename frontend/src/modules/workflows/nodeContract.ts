@@ -227,6 +227,8 @@ export interface NodeContract {
   edgeCases: string[];
   /** Dynamic output ports resolved from node data (e.g. Switch rules). */
   dynamicOutputs?: { resolver: "switchOutputs" };
+  /** Dynamic input ports resolved from node data (e.g. Merge numberOfInputs). */
+  dynamicInputs?: { resolver: "mergeInputs" };
   /** Optional panel-level renderer (triggers, complex pickers) */
   parametersPanel?: "standard" | "trigger" | "bot" | "placeholder";
   /** When parametersPanel is placeholder — drives inspector copy */
@@ -950,48 +952,16 @@ export const NODE_CONTRACTS: Record<WorkflowNodeType, NodeContract> = {
     cardinality: "N-to-N",
     pairedItemPolicy: "multiPort",
     pairedItemNotes:
-      "append: {item, input}; by-position: [{item:i,input:0},{item:i,input:1}]",
+      "append: {item, input}; by-position: [{item:i,input:0},{item:i,input:1},...]",
     settings: SETTINGS_ACTION,
     capabilities: CAP_ACTION,
-    params: [
-      {
-        name: "mode",
-        displayName: "Mode",
-        type: "options",
-        default: "append",
-        options: [
-          { name: "Append", value: "append" },
-          { name: "Combine by Position", value: "combineByPosition" },
-          { name: "Combine by Key", value: "combineByKey" },
-        ],
-      },
-      {
-        name: "matchFields",
-        displayName: "Match Fields",
-        type: "collection",
-        displayOptions: { show: { mode: ["combineByKey"] } },
-        fields: [
-          { name: "field1", displayName: "Input 1 Field", type: "string" },
-          { name: "field2", displayName: "Input 2 Field", type: "string" },
-        ],
-      },
-      {
-        name: "joinMode",
-        displayName: "Output",
-        type: "options",
-        default: "keepMatches",
-        displayOptions: { show: { mode: ["combineByKey"] } },
-        options: [
-          { name: "Keep Matches", value: "keepMatches" },
-          { name: "Keep Non-Matches", value: "keepNonMatches" },
-          { name: "Enrich Input 1", value: "enrichInput1" },
-        ],
-      },
-    ],
+    dynamicInputs: { resolver: "mergeInputs" },
+    params: [],
     dirtyTriggers: ["params", "edges", "pin", "disabled"],
     edgeCases: [
+      "Number of Inputs 2–10 (default 2)",
+      "Combine by Key uses Input 1 + Input 2 only",
       "Blocking barrier — do not emit until ALL connected inputs have data",
-      "INPUT panel: one tab per port; render independently (don't block display)",
       "input field in pairedItem is mandatory",
     ],
   },
@@ -1230,6 +1200,27 @@ export const NODE_CONTRACTS: Record<WorkflowNodeType, NodeContract> = {
     params: [],
     dirtyTriggers: ["params", "edges", "pin", "disabled"],
     edgeCases: ["Read-only Search Analytics", "Google account required"],
+  },
+
+  gscMcp: {
+    type: "gscMcp",
+    version: 1,
+    category: "SEO",
+    label: "GSC MCP (deprecated)",
+    inputs: [mainIn()],
+    outputs: [mainOut, errorOut],
+    cardinality: "1-to-N",
+    pairedItemPolicy: "fanOut",
+    settings: SETTINGS_ACTION,
+    capabilities: CAP_ACTION,
+    isSideEffecting: true,
+    params: [],
+    dirtyTriggers: ["params", "edges", "pin", "disabled"],
+    edgeCases: [
+      "Not user-facing — removed from Node Library",
+      "Use googleSearchConsole, then gscMcpTool to process rows",
+      "Execution refuses with MCP_NOT_USER_FACING",
+    ],
   },
 
   googleAnalytics: {
@@ -1940,6 +1931,27 @@ export const NODE_CONTRACTS: Record<WorkflowNodeType, NodeContract> = {
     edgeCases: [
       "Auxiliary provider — not a scheduled WorkflowItem step",
       "POST/PUT/PATCH/DELETE may repeat under at-least-once Agent retries",
+    ],
+  },
+
+  gscMcpTool: {
+    type: "gscMcpTool",
+    version: 1,
+    category: "SEO",
+    label: "GSC MCP Tools",
+    inputs: [mainIn()],
+    outputs: [mainOut, errorOut],
+    cardinality: "N-to-leqN",
+    pairedItemPolicy: "fanOut",
+    settings: SETTINGS_ACTION,
+    capabilities: CAP_ACTION,
+    isSideEffecting: false,
+    params: [],
+    dirtyTriggers: ["params", "edges", "pin", "disabled"],
+    edgeCases: [
+      "Main-flow processor — no Google OAuth on this node",
+      "Requires upstream Google Search Console analytics rows",
+      "Runs OpsAi intelligence/action capabilities on previous-node data",
     ],
   },
 };

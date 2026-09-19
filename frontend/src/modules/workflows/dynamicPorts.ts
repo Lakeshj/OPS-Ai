@@ -1,5 +1,5 @@
 /**
- * Dynamic output port resolution (Part 6 — Switch).
+ * Dynamic port resolution (Switch outputs, Merge inputs).
  */
 
 import type { NodePortDef } from "./nodeContract";
@@ -8,8 +8,13 @@ import { NODE_CONTRACTS } from "./nodeContract";
 
 export const SWITCH_FALLBACK_HANDLE = "fallback";
 export const SWITCH_OUTPUT_RESOLVER = "switchOutputs";
+export const MERGE_INPUT_RESOLVER = "mergeInputs";
+
+export const MERGE_INPUT_MIN = 2;
+export const MERGE_INPUT_MAX = 10;
 
 export type DynamicOutputResolverId = typeof SWITCH_OUTPUT_RESOLVER;
+export type DynamicInputResolverId = typeof MERGE_INPUT_RESOLVER;
 
 export interface SwitchRule {
   id: string;
@@ -32,6 +37,35 @@ export const legacyStableRuleId = (nodeId: string, index: number): string => {
   }
   return `rule_${(hash >>> 0).toString(16).padStart(8, "0")}`;
 };
+
+export const clampMergeInputCount = (value: unknown): number => {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return MERGE_INPUT_MIN;
+  return Math.min(MERGE_INPUT_MAX, Math.max(MERGE_INPUT_MIN, Math.round(n)));
+};
+
+export const getMergeInputCount = (
+  nodeData: WorkflowNodeData = {}
+): number => clampMergeInputCount(nodeData.numberOfInputs ?? MERGE_INPUT_MIN);
+
+export const resolveMergeInputPorts = (
+  nodeData: WorkflowNodeData = {}
+): NodePortDef[] => {
+  const count = getMergeInputCount(nodeData);
+  return Array.from({ length: count }, (_, i) => ({
+    id: `input${i + 1}`,
+    kind: "main" as const,
+    direction: "in" as const,
+    maxConnections: 1,
+    label: `Input ${i + 1}`,
+    connectionKind: "execution" as const,
+    dataType: "workflow-items" as const,
+  }));
+};
+
+export const getMergeInputPortIds = (
+  nodeData: WorkflowNodeData = {}
+): string[] => resolveMergeInputPorts(nodeData).map((p) => p.id);
 
 export const normalizeSwitchRules = (
   nodeData: WorkflowNodeData = {},
@@ -116,6 +150,17 @@ export const resolveNodeOutputPorts = (
   );
 };
 
+export const resolveNodeInputPorts = (
+  nodeType: WorkflowNodeType,
+  nodeData: WorkflowNodeData = {}
+): NodePortDef[] => {
+  const contract = NODE_CONTRACTS[nodeType];
+  if (contract.dynamicInputs?.resolver === MERGE_INPUT_RESOLVER) {
+    return resolveMergeInputPorts(nodeData);
+  }
+  return (contract.inputs || []).filter((p) => p.direction === "in");
+};
+
 export const pruneInvalidSwitchEdges = <
   T extends { source: string; sourceHandle?: string | null }
 >(
@@ -128,6 +173,21 @@ export const pruneInvalidSwitchEdges = <
     if (edge.source !== nodeId) return true;
     if (!edge.sourceHandle) return false;
     return valid.has(String(edge.sourceHandle));
+  });
+};
+
+export const pruneInvalidMergeEdges = <
+  T extends { target: string; targetHandle?: string | null }
+>(
+  edges: T[],
+  nodeId: string,
+  nodeData: WorkflowNodeData
+): T[] => {
+  const valid = new Set(getMergeInputPortIds(nodeData));
+  return edges.filter((edge) => {
+    if (edge.target !== nodeId) return true;
+    if (!edge.targetHandle) return true;
+    return valid.has(String(edge.targetHandle));
   });
 };
 

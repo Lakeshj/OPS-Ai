@@ -1,0 +1,27 @@
+{
+  "rows": [
+    {
+      "query": "seo workflow",
+      "clicks": 12,
+      "impressions": 800,
+      "ctr": 0.015,
+      "position": 9.5
+    },
+    {
+      "query": "gsc mcp",
+      "page": "https://example.com/a",
+      "clicks": 5,
+      "impressions": 200,
+      "ctr": 0.025,
+      "position": 11
+    },
+    {
+      "query": "gsc mcp",
+      "page": "https://example.com/b",
+      "clicks": 3,
+      "impressions": 150,
+      "ctr": 0.02,
+      "position": 14
+    }
+  ]
+}

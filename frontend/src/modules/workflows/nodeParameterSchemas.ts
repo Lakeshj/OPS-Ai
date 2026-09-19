@@ -500,15 +500,56 @@ export const NODE_PARAMETER_SCHEMAS: Record<WorkflowNodeType, ParamDescriptor[]>
 
     merge: [
       {
+        name: "numberOfInputs",
+        displayName: "Number of Inputs",
+        type: "options",
+        default: 2,
+        description:
+          "How many input ports to show (2–10). Increase this before connecting a 3rd or 4th stream.",
+        options: [
+          { name: "2", value: 2 },
+          { name: "3", value: 3 },
+          { name: "4", value: 4 },
+          { name: "5", value: 5 },
+          { name: "6", value: 6 },
+          { name: "7", value: 7 },
+          { name: "8", value: 8 },
+          { name: "9", value: 9 },
+          { name: "10", value: 10 },
+        ],
+      },
+      {
         name: "mode",
         displayName: "Mode",
         type: "options",
         default: "append",
         options: [
-          { name: "Append — all items from both inputs", value: "append" },
+          { name: "Append — all items from all inputs", value: "append" },
           { name: "Combine by Position", value: "combineByPosition" },
           { name: "Combine by Key", value: "combineByKey" },
           { name: "Combine — merge fields into one item (legacy)", value: "combine" },
+        ],
+      },
+      {
+        name: "matchFields",
+        displayName: "Match Fields",
+        type: "collection",
+        displayOptions: { show: { mode: ["combineByKey"] } },
+        fields: [
+          { name: "field1", displayName: "Input 1 Field", type: "string" },
+          { name: "field2", displayName: "Input 2 Field", type: "string" },
+        ],
+      },
+      {
+        name: "joinMode",
+        displayName: "Output",
+        type: "options",
+        default: "keepMatches",
+        displayOptions: { show: { mode: ["combineByKey"] } },
+        options: [
+          { name: "Keep Matches", value: "keepMatches" },
+          { name: "Keep Non-Matches", value: "keepNonMatches" },
+          { name: "Enrich Input 1", value: "enrichInput1" },
         ],
       },
     ],
@@ -882,6 +923,154 @@ export const NODE_PARAMETER_SCHEMAS: Record<WorkflowNodeType, ParamDescriptor[]>
       },
     ],
 
+    gscMcpTool: [
+      {
+        name: "_upstreamNotice",
+        displayName: "Upstream data",
+        type: "notice",
+        description:
+          "Connect Google Search Console → this node. Auth and property selection stay on the GSC node. GSC MCP Tools only processes previous-node rows.",
+      },
+      {
+        name: "capability",
+        displayName: "Capability",
+        type: "options",
+        default: "ctr_opportunities",
+        description:
+          "Intelligence or action applied to upstream GSC analytics rows.",
+        options: [
+          { name: "CTR opportunities", value: "ctr_opportunities" },
+          { name: "Ranking opportunities", value: "ranking_opportunities" },
+          { name: "Content decay", value: "content_decay" },
+          { name: "Keyword cannibalization", value: "keyword_cannibalization" },
+          { name: "Query gap analysis", value: "query_gap_analysis" },
+          {
+            name: "Page optimization suggestions",
+            value: "page_optimization_suggestions",
+          },
+          { name: "Prepare sheet rows", value: "prepare_sheet_rows" },
+          { name: "Prepare email digest", value: "prepare_email_digest" },
+        ],
+      },
+      // CTR Opportunities filters
+      {
+        name: "minImpressions",
+        displayName: "Min impressions",
+        type: "number",
+        default: 50,
+        displayOptions: { show: { capability: ["ctr_opportunities"] } },
+        description: "Ignore rows below this impression count.",
+      },
+      {
+        name: "maxPosition",
+        displayName: "Max position",
+        type: "number",
+        default: 20,
+        displayOptions: { show: { capability: ["ctr_opportunities"] } },
+        description: "Only include rows ranking at this position or better (lower = better).",
+      },
+      {
+        name: "minScore",
+        displayName: "Min score",
+        type: "number",
+        default: 0,
+        displayOptions: { show: { capability: ["ctr_opportunities"] } },
+        description: "Drop opportunities scoring below this threshold.",
+      },
+      {
+        name: "limit",
+        displayName: "Limit",
+        type: "number",
+        default: 50,
+        displayOptions: { show: { capability: ["ctr_opportunities"] } },
+        description: "Max opportunities to return (0 = unlimited).",
+      },
+      // Ranking Opportunities filters
+      {
+        name: "rankingMinImpressions",
+        displayName: "Min impressions",
+        type: "number",
+        default: 30,
+        displayOptions: { show: { capability: ["ranking_opportunities"] } },
+      },
+      {
+        name: "minPosition",
+        displayName: "Min position",
+        type: "number",
+        default: 5,
+        displayOptions: { show: { capability: ["ranking_opportunities"] } },
+        description: "Start of the position range (inclusive).",
+      },
+      {
+        name: "rankingMaxPosition",
+        displayName: "Max position",
+        type: "number",
+        default: 20,
+        displayOptions: { show: { capability: ["ranking_opportunities"] } },
+        description: "End of the position range (inclusive).",
+      },
+      {
+        name: "rankingLimit",
+        displayName: "Limit",
+        type: "number",
+        default: 50,
+        displayOptions: { show: { capability: ["ranking_opportunities"] } },
+      },
+      // Content Decay filters
+      {
+        name: "comparisonPeriod",
+        displayName: "Comparison period",
+        type: "options",
+        default: "snapshot",
+        displayOptions: { show: { capability: ["content_decay"] } },
+        options: [
+          { name: "Snapshot (single period)", value: "snapshot" },
+          { name: "Prior period (needs previousRows)", value: "prior_period" },
+        ],
+        description:
+          "Snapshot uses weak CTR + deep position. Prior period compares against previousRows.",
+      },
+      {
+        name: "dropPercentage",
+        displayName: "Drop percentage",
+        type: "number",
+        default: 20,
+        displayOptions: { show: { capability: ["content_decay"] } },
+        description:
+          "Minimum click drop % vs prior period (prior_period mode only).",
+      },
+      {
+        name: "decayLimit",
+        displayName: "Limit",
+        type: "number",
+        default: 50,
+        displayOptions: { show: { capability: ["content_decay"] } },
+      },
+      // Keyword cannibalization filters
+      {
+        name: "minPages",
+        displayName: "Minimum pages",
+        type: "number",
+        default: 2,
+        displayOptions: { show: { capability: ["keyword_cannibalization"] } },
+        description: "Minimum distinct URLs ranking for the same query.",
+      },
+      {
+        name: "cannibalMinImpressions",
+        displayName: "Minimum impressions",
+        type: "number",
+        default: 0,
+        displayOptions: { show: { capability: ["keyword_cannibalization"] } },
+      },
+      {
+        name: "cannibalLimit",
+        displayName: "Limit",
+        type: "number",
+        default: 50,
+        displayOptions: { show: { capability: ["keyword_cannibalization"] } },
+      },
+    ],
+
     googleSearchConsole: [
       {
         name: "credentialId",
@@ -971,6 +1160,17 @@ export const NODE_PARAMETER_SCHEMAS: Record<WorkflowNodeType, ParamDescriptor[]>
           { name: "Final", value: "final" },
           { name: "All", value: "all" },
         ],
+      },
+    ],
+
+    // Soft-deprecated: not in Node Library. MCP is Assistant / Agent / future intel only.
+    gscMcp: [
+      {
+        name: "_deprecatedNotice",
+        displayName: "Deprecated",
+        type: "notice",
+        description:
+          "GSC MCP is not a user-facing workflow node. Use Google Search Console for analytics, or GSC MCP Tools on an AI Agent. Replace this node.",
       },
     ],
 

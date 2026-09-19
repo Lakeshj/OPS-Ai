@@ -1,0 +1,28 @@
+{
+  "name": "@opsai/plugin-gsc-mcp",
+  "version": "0.1.0",
+  "description": "OpsAi GSC MCP plugin — Phase 1 external MCP connector",
+  "main": "src/index.js",
+  "type": "commonjs",
+  "scripts": {
+    "test": "node src/testing/smoke-connection.js && node src/testing/smoke-tools.js && node src/testing/smoke-intelligence.js && node src/testing/smoke-intelligence-filters.js && node src/testing/smoke-intelligence-context.js",
+    "smoke": "npm test"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "files": [
+    "src",
+    "manifest.json",
+    "config.default.json",
+    "docs",
+    "README.md"
+  ],
+  "keywords": [
+    "opsai",
+    "mcp",
+    "google-search-console",
+    "gsc"
+  ],
+  "license": "UNLICENSED"
+}

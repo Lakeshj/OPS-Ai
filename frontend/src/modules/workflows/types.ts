@@ -47,8 +47,10 @@ export type WorkflowNodeType =
   | "aiChatModel"
   | "aiCalculatorTool"
   | "aiHttpTool"
+  | "gscMcpTool"
   | "respondToWebhook"
   | "googleSearchConsole"
+  | "gscMcp"
   | "googleAnalytics"
   | "gmail"
   | "gmailTrigger"
@@ -229,6 +231,8 @@ export interface WorkflowCredential {
   sharingLabel?: string;
   oauthAppMode?: string;
   accountEmail?: string;
+  /** When set, this Google connection is limited to one workflow. */
+  workflowId?: string;
 }
 
 export type WorkflowCredentialSecret = Record<string, string>;

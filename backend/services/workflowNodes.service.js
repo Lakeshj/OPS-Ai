@@ -12,9 +12,9 @@ const {
   parseStepsKey,
 } = require("./workflowExpression.service");
 const {
-  MERGE_PORT_IDS,
   PORT_STATES,
   normalizeMergeMode,
+  portIdToInputIndex,
 } = require("./workflowMultiInput.service");
 const { cloneJsonData, cloneItem, normalizeNodeOutput } = require("./workflowProvenance.service");
 const {
@@ -283,7 +283,7 @@ const runLlmNode = async (node, context, options = {}) => {
     }
   }
 
-  const userPrompt = interpolate(promptTemplate, {
+  let userPrompt = interpolate(promptTemplate, {
     input: context.input,
     steps: context.steps,
     item: context.item,
@@ -296,6 +296,41 @@ const runLlmNode = async (node, context, options = {}) => {
       item: context.item,
       items: context.items,
     });
+  }
+
+  // GSC IntelligenceContext: structure AI input at the data-contract level.
+  let intelligenceContext = null;
+  try {
+    const {
+      applyAiGrounding,
+    } = require("../../plugins/gsc-mcp/src/contracts/intelligenceContext");
+    const groundingInput =
+      context.item != null
+        ? context.item
+        : Array.isArray(context.inputItems) && context.inputItems.length
+          ? context.inputItems.length === 1
+            ? context.inputItems[0]
+            : context.inputItems
+          : context.input;
+    const grounded = applyAiGrounding({
+      systemPrompt,
+      userPrompt: String(userPrompt || ""),
+      input: groundingInput,
+    });
+    if (grounded.grounded) {
+      systemPrompt = grounded.systemPrompt;
+      userPrompt = grounded.userPrompt;
+      intelligenceContext = grounded.intelligenceContext;
+    }
+  } catch (err) {
+    if (err?.code === "MCP_PROPERTY_REQUIRED" || err?.code === "MCP_INTEL_CONTEXT_INVALID") {
+      throw failWith(err.message, {
+        provider,
+        model: model || "gpt-4o-mini",
+        code: err.code,
+      });
+    }
+    // Non-GSC paths: ignore require/grounding issues
   }
 
   const wantsJson = String(data.outputFormat || "text") === "json";
@@ -312,6 +347,15 @@ const runLlmNode = async (node, context, options = {}) => {
     systemPrompt,
     promptTemplate,
     userPrompt: String(userPrompt || ""),
+    ...(intelligenceContext
+      ? {
+          gscIntelligence: true,
+          property: intelligenceContext.property,
+          capabilities: (intelligenceContext.capabilities || []).map(
+            (s) => s.capability
+          ),
+        }
+      : {}),
   };
 
   if (!String(userPrompt || "").trim()) {
@@ -496,6 +540,34 @@ const getItemPayload = (item) => {
   const { pairedItem, binary, json, ...rest } = item;
   if (Object.keys(rest).length > 0) return rest;
   return item;
+};
+
+/** True when run/workflow input has nothing useful for `{{input}}`. */
+const isEmptyWorkflowInput = (input) => {
+  if (input == null) return true;
+  if (typeof input === "string") return input.trim() === "";
+  if (Array.isArray(input)) return input.length === 0;
+  if (typeof input === "object") return Object.keys(input).length === 0;
+  return false;
+};
+
+/**
+ * Prefer explicit run input; when empty, use incoming/current item payloads so
+ * chained nodes (e.g. GSC → Result with mapFrom `{{input}}`) resolve usefully.
+ */
+const resolveExpressionInput = (context) => {
+  const workflowInput = context?.input;
+  if (!isEmptyWorkflowInput(workflowInput)) return workflowInput;
+
+  const incoming = Array.isArray(context?.inputItems) ? context.inputItems : [];
+  if (incoming.length === 1) return getItemPayload(incoming[0]);
+  if (incoming.length > 1) return incoming.map((item) => getItemPayload(item));
+
+  const current =
+    context?.item ?? context?.currentItem ?? null;
+  if (current != null) return getItemPayload(current);
+
+  return workflowInput ?? {};
 };
 
 /** Reads `a.b.0.c` out of an item, tolerating missing links. */
@@ -1783,6 +1855,33 @@ const handlers = {
     // Legacy flat combine (no port separation) — backward compatible.
     if (!portInputs && mode === "combine") {
       const flat = context.inputItems || [];
+      try {
+        const {
+          tryBuildFromWorkflowItems,
+          validateIntelligenceContext,
+        } = require("../../plugins/gsc-mcp/src/contracts/intelligenceContext");
+        const built = tryBuildFromWorkflowItems(flat);
+        if (built.ok && built.context) {
+          const validated = validateIntelligenceContext(built.context, {
+            requireProperty: true,
+          });
+          if (!validated.ok) {
+            throw Object.assign(new Error(validated.error.message), {
+              code: validated.error.code,
+            });
+          }
+          return wrapOutput([{ json: cloneJsonData(built.context) }], {
+            mode,
+            gscIntelligenceContext: true,
+            legacy: true,
+            itemsIn: flat.length,
+          });
+        }
+      } catch (err) {
+        if (err?.code === "MCP_PROPERTY_REQUIRED" || err?.code === "MCP_INTEL_CONTEXT_INVALID") {
+          throw err;
+        }
+      }
       const combined = flat.reduce(
         (acc, item) =>
           item && typeof item === "object" && !Array.isArray(item)
@@ -1795,15 +1894,48 @@ const handlers = {
 
     if (!portInputs) {
       const flat = context.inputItems || [];
+      try {
+        const {
+          tryBuildFromWorkflowItems,
+          validateIntelligenceContext,
+        } = require("../../plugins/gsc-mcp/src/contracts/intelligenceContext");
+        const built = tryBuildFromWorkflowItems(flat);
+        if (built.ok && built.context) {
+          const validated = validateIntelligenceContext(built.context, {
+            requireProperty: true,
+          });
+          if (!validated.ok) {
+            throw Object.assign(new Error(validated.error.message), {
+              code: validated.error.code,
+            });
+          }
+          return wrapOutput([{ json: cloneJsonData(built.context) }], {
+            mode,
+            gscIntelligenceContext: true,
+            itemsIn: flat.length,
+          });
+        }
+      } catch (err) {
+        if (err?.code === "MCP_PROPERTY_REQUIRED" || err?.code === "MCP_INTEL_CONTEXT_INVALID") {
+          throw err;
+        }
+      }
       return wrapOutput(flat, { mode, itemsIn: flat.length });
     }
 
     const input1Items = getPortItems("input1");
     const input2Items = getPortItems("input2");
+    const activePortIds = Object.keys(portInputs || {}).sort(
+      (a, b) =>
+        portIdToInputIndex(a) - portIdToInputIndex(b)
+    );
+    const portCounts = Object.fromEntries(
+      activePortIds.map((portId) => [portId, getPortItems(portId).length])
+    );
 
     if (mode === "append") {
       const items = [];
-      for (const portId of MERGE_PORT_IDS) {
+      for (const portId of activePortIds) {
         const port = portInputs[portId];
         if (!port || port.state === PORT_STATES.SKIPPED) continue;
         for (let i = 0; i < port.items.length; i += 1) {
@@ -1814,30 +1946,70 @@ const handlers = {
           items.push(item);
         }
       }
+
+      // GSC intelligence: preserve capability sections instead of flattening.
+      try {
+        const {
+          tryBuildFromWorkflowItems,
+          validateIntelligenceContext,
+        } = require("../../plugins/gsc-mcp/src/contracts/intelligenceContext");
+        const built = tryBuildFromWorkflowItems(items);
+        if (built.ok && built.context) {
+          const validated = validateIntelligenceContext(built.context, {
+            requireProperty: true,
+          });
+          if (!validated.ok) {
+            throw Object.assign(new Error(validated.error.message), {
+              code: validated.error.code,
+            });
+          }
+          return wrapOutput([{ json: cloneJsonData(built.context) }], {
+            mode,
+            gscIntelligenceContext: true,
+            capabilityCount: built.context.capabilities?.length || 0,
+            input1Count: input1Items.length,
+            input2Count: input2Items.length,
+            portCounts,
+          });
+        }
+      } catch (err) {
+        if (err?.code === "MCP_PROPERTY_REQUIRED" || err?.code === "MCP_INTEL_CONTEXT_INVALID") {
+          throw err;
+        }
+      }
+
       return wrapOutput(items, {
         mode,
         input1Count: input1Items.length,
         input2Count: input2Items.length,
+        portCounts,
       });
     }
 
     if (mode === "combineByPosition") {
-      const count = Math.min(input1Items.length, input2Items.length);
+      const portLists = activePortIds.map((portId) => getPortItems(portId));
+      const count =
+        portLists.length === 0
+          ? 0
+          : Math.min(...portLists.map((list) => list.length));
       const items = [];
       for (let i = 0; i < count; i += 1) {
-        const j1 = payloadOf(input1Items[i]);
-        const j2 = payloadOf(input2Items[i]);
-        const merged = { ...cloneJsonData(j1), ...cloneJsonData(j2) };
-        const item = {
-          json: merged,
-          pairedItem: [
-            { item: i, input: 0 },
-            { item: i, input: 1 },
-          ],
-        };
-        const b1 = binaryOf(input1Items[i]);
-        const b2 = binaryOf(input2Items[i]);
-        if (b1 || b2) item.binary = { ...(b1 || {}), ...(b2 || {}) };
+        let merged = {};
+        const pairedItem = [];
+        let binary = {};
+        let hasBinary = false;
+        portLists.forEach((list, inputIndex) => {
+          const src = list[i];
+          merged = { ...merged, ...cloneJsonData(payloadOf(src)) };
+          pairedItem.push({ item: i, input: inputIndex });
+          const b = binaryOf(src);
+          if (b) {
+            binary = { ...binary, ...b };
+            hasBinary = true;
+          }
+        });
+        const item = { json: merged, pairedItem };
+        if (hasBinary) item.binary = binary;
         items.push(item);
       }
       return wrapOutput(items, {
@@ -1845,6 +2017,7 @@ const handlers = {
         matchedPositions: count,
         input1Count: input1Items.length,
         input2Count: input2Items.length,
+        portCounts,
       });
     }
 
@@ -1925,6 +2098,11 @@ const handlers = {
         field2,
         input1Count: input1Items.length,
         input2Count: input2Items.length,
+        portCounts,
+        note:
+          activePortIds.length > 2
+            ? "Combine by Key uses Input 1 and Input 2 only; extra inputs are ignored in this mode."
+            : undefined,
       });
     }
 
@@ -1934,15 +2112,19 @@ const handlers = {
           (acc, item) => ({ ...acc, ...cloneJsonData(payloadOf(item)) }),
           {}
         );
-      const combined = { ...fold(input1Items), ...fold(input2Items) };
+      let combined = {};
+      for (const portId of activePortIds) {
+        combined = { ...combined, ...fold(getPortItems(portId)) };
+      }
       return wrapOutput([combined], {
         mode,
         input1Count: input1Items.length,
         input2Count: input2Items.length,
+        portCounts,
       });
     }
 
-    return wrapOutput([], { mode, input1Count: 0, input2Count: 0 });
+    return wrapOutput([], { mode, input1Count: 0, input2Count: 0, portCounts });
   },
 
   switch: async (node, context) => {
@@ -2234,6 +2416,14 @@ const handlers = {
     const { executeGoogleNode } = require("./workflowGoogleNodes.service");
     return executeGoogleNode(node, context);
   },
+  gscMcpTool: async (node, context) => {
+    const { executeGscMcpToolsProcessor } = require("./mcpPluginHost.service");
+    return executeGscMcpToolsProcessor(node, context);
+  },
+  gscMcp: async (node, context) => {
+    const { executeGscMcpNode } = require("./mcpPluginHost.service");
+    return executeGscMcpNode(node, context);
+  },
   googleAnalytics: async (node, context) => {
     const { executeGoogleNode } = require("./workflowGoogleNodes.service");
     return executeGoogleNode(node, context);
@@ -2303,8 +2493,12 @@ const handlers = {
       }
     }
 
-    let mapped = interpolate(effectiveMapFrom, {
-      input: context.input,
+    const expressionInput = resolveExpressionInput(context);
+    // Keep Result mapFrom on the historical { input, steps } channel.
+    // Passing graph/runData here activates provenance-aware steps.* resolution and
+    // breaks the long-standing any-text-step rewrite on multi-item Set outputs.
+    let mapped = resolveExpression(effectiveMapFrom, {
+      input: expressionInput,
       steps: context.steps,
     });
 
@@ -2357,6 +2551,8 @@ module.exports = {
   resolveExpression,
   compareValues,
   deriveItems,
+  isEmptyWorkflowInput,
+  resolveExpressionInput,
   getItemPayload,
   getByPath,
   ExpressionReferenceError,

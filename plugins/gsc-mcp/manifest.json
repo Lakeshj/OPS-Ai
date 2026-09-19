@@ -1,0 +1,24 @@
+{
+  "id": "gsc-mcp",
+  "name": "Google Search Console MCP",
+  "version": "0.1.2",
+  "phase": 1,
+  "capabilities": [
+    "mcp.client",
+    "tool.discovery",
+    "tool.execution",
+    "ai.assistant",
+    "capability.registry",
+    "workflow.processor",
+    "intelligence.postprocess",
+    "action.handoff"
+  ],
+  "transports": ["stdio", "native-stub"],
+  "credentialTypes": [],
+  "engineNodeType": "gscMcpTool",
+  "libraryId": "gsc-mcp-tools",
+  "userFacingWorkflowNode": true,
+  "authOnNode": false,
+  "consumers": ["workflow.gsc.upstream", "ai.assistant", "future.gsc.intelligence.nodes"],
+  "notes": "GSC MCP Tools is a main-flow processor. Google OAuth and property selection live on googleSearchConsole only."
+}

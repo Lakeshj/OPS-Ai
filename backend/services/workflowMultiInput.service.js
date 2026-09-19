@@ -1,13 +1,38 @@
 /**
- * Multi-input port collection for blocking nodes (Merge V1).
+ * Multi-input port collection for blocking nodes (Merge).
  * Keeps per-port streams distinct until the node handler combines them.
+ *
+ * Merge supports 2–10 inputs via node.data.numberOfInputs (default 2).
  */
 
 const { getEngineContract } = require("../config/nodeContract");
 const { cloneItem } = require("./workflowProvenance.service");
 
-/** Merge main input port ids from nodeContract (input1, input2). */
-const MERGE_PORT_IDS = ["input1", "input2"];
+const MERGE_INPUT_MIN = 2;
+const MERGE_INPUT_MAX = 10;
+
+/** Build input1..inputN port ids. */
+const getMergePortIds = (count) => {
+  const n = Math.min(
+    MERGE_INPUT_MAX,
+    Math.max(MERGE_INPUT_MIN, Number(count) || MERGE_INPUT_MIN)
+  );
+  return Array.from({ length: n }, (_, i) => `input${i + 1}`);
+};
+
+/** Max supported merge ports (for validation / known-handle checks). */
+const MERGE_PORT_IDS = getMergePortIds(MERGE_INPUT_MAX);
+
+const clampMergeInputCount = (value) => {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return MERGE_INPUT_MIN;
+  return Math.min(MERGE_INPUT_MAX, Math.max(MERGE_INPUT_MIN, Math.round(n)));
+};
+
+const getMergeInputCount = (node) =>
+  clampMergeInputCount(node?.data?.numberOfInputs ?? MERGE_INPUT_MIN);
+
+const getMergePortIdsForNode = (node) => getMergePortIds(getMergeInputCount(node));
 
 const PORT_STATES = {
   PENDING: "pending",
@@ -43,7 +68,7 @@ const stableEdgeSort = (a, b) => {
 };
 
 /**
- * Assign legacy merge edges (no targetHandle) to input1/input2 by stable edge id.
+ * Assign legacy merge edges (no targetHandle) to input1..inputN by stable edge id.
  * Returns a copy of edges with targetHandle filled when missing.
  */
 const normalizeMergeIncomingEdges = (graph, nodeId) => {
@@ -53,6 +78,7 @@ const normalizeMergeIncomingEdges = (graph, nodeId) => {
     return (incomingMap.get(nodeId) || []).map((e) => ({ ...e }));
   }
 
+  const portIds = getMergePortIdsForNode(node);
   const edges = [...(incomingMap.get(nodeId) || [])].map((e) => ({ ...e }));
   const legacy = edges
     .filter((e) => !e.targetHandle)
@@ -67,15 +93,15 @@ const normalizeMergeIncomingEdges = (graph, nodeId) => {
   let portIdx = 0;
   for (const edge of legacy) {
     while (
-      portIdx < MERGE_PORT_IDS.length &&
-      usedPorts.has(MERGE_PORT_IDS[portIdx])
+      portIdx < portIds.length &&
+      usedPorts.has(portIds[portIdx])
     ) {
       portIdx += 1;
     }
-    if (portIdx >= MERGE_PORT_IDS.length) break;
-    edge.targetHandle = MERGE_PORT_IDS[portIdx];
+    if (portIdx >= portIds.length) break;
+    edge.targetHandle = portIds[portIdx];
     edge._legacyNormalized = true;
-    usedPorts.add(MERGE_PORT_IDS[portIdx]);
+    usedPorts.add(portIds[portIdx]);
     portIdx += 1;
   }
 
@@ -87,6 +113,8 @@ const normalizeMergeIncomingEdges = (graph, nodeId) => {
  */
 const validateMergeWiring = (graph, nodeId) => {
   const issues = [];
+  const node = graph.byId.get(nodeId);
+  const portIds = getMergePortIdsForNode(node);
   const edges = normalizeMergeIncomingEdges(graph, nodeId);
   const byPort = new Map();
 
@@ -103,8 +131,14 @@ const validateMergeWiring = (graph, nodeId) => {
         `Merge port ${port} has ${portEdges.length} connections (max 1)`
       );
     }
-    if (!MERGE_PORT_IDS.includes(port)) {
-      issues.push(`Merge has unknown target port: ${port}`);
+    if (!portIds.includes(port)) {
+      if (MERGE_PORT_IDS.includes(port)) {
+        issues.push(
+          `Merge port ${port} is outside numberOfInputs=${portIds.length}. Increase Number of Inputs.`
+        );
+      } else {
+        issues.push(`Merge has unknown target port: ${port}`);
+      }
     }
   }
 
@@ -115,11 +149,10 @@ const validateMergeWiring = (graph, nodeId) => {
     );
   }
 
-  const legacyOverflow =
-    edges.filter((e) => !e.targetHandle).length +
-    edges.filter((e) => e.targetHandle && !MERGE_PORT_IDS.includes(e.targetHandle))
-      .length;
-  if (legacyOverflow > MERGE_PORT_IDS.length) {
+  const assignedOrLegacy = edges.filter(
+    (e) => !e.targetHandle || portIds.includes(e.targetHandle)
+  );
+  if (assignedOrLegacy.filter((e) => !e.targetHandle).length > portIds.length) {
     issues.push(`Merge has more incoming edges than supported input ports`);
   }
 
@@ -213,9 +246,10 @@ const collectPortInputs = (graph, nodeId, context, options = {}) => {
   const edgeState = options.edgeState || null;
   const upstreamStatuses = options.upstreamStatuses || {};
   const edges = normalizeMergeIncomingEdges(graph, nodeId);
+  const portIds = getMergePortIdsForNode(node);
   const ports = {};
 
-  for (const portId of MERGE_PORT_IDS) {
+  for (const portId of portIds) {
     const edge = edges.find((e) => e.targetHandle === portId);
     if (!edge) continue;
 
@@ -244,10 +278,16 @@ const collectPortInputs = (graph, nodeId, context, options = {}) => {
 /**
  * Flatten port inputs in port order for legacy callers (append ordering).
  */
-const flattenPortItems = (portInputs) => {
+const flattenPortItems = (portInputs, portIds = MERGE_PORT_IDS) => {
   if (!portInputs) return [];
   const items = [];
-  for (const portId of MERGE_PORT_IDS) {
+  const ordered =
+    Array.isArray(portIds) && portIds.length
+      ? portIds
+      : Object.keys(portInputs).sort(
+          (a, b) => portIdToInputIndex(a) - portIdToInputIndex(b)
+        );
+  for (const portId of ordered) {
     const port = portInputs[portId];
     if (!port || port.state === PORT_STATES.SKIPPED) continue;
     for (const item of port.items) items.push(cloneItem(item));
@@ -304,7 +344,10 @@ const prepareNodeExecutionInputs = (graph, nodeId, context, options = {}) => {
 
   const portInputs = collectPortInputs(graph, nodeId, context, options);
   context.portInputs = portInputs;
-  context.inputItems = flattenPortItems(portInputs);
+  context.inputItems = flattenPortItems(
+    portInputs,
+    getMergePortIdsForNode(node)
+  );
   return context;
 };
 
@@ -316,9 +359,10 @@ const buildPortInputPreview = (graph, nodeId, context, options = {}) => {
   if (!node || !isMultiInputNode(node)) return null;
 
   const portInputs = collectPortInputs(graph, nodeId, context, options);
+  const portIds = getMergePortIdsForNode(node);
   const preview = {};
 
-  for (const portId of MERGE_PORT_IDS) {
+  for (const portId of portIds) {
     const port = portInputs?.[portId];
     if (!port) {
       preview[portId] = {
@@ -353,6 +397,12 @@ const normalizeMergeMode = (mode) => {
 
 module.exports = {
   MERGE_PORT_IDS,
+  MERGE_INPUT_MIN,
+  MERGE_INPUT_MAX,
+  getMergePortIds,
+  getMergePortIdsForNode,
+  getMergeInputCount,
+  clampMergeInputCount,
   PORT_STATES,
   portIdToInputIndex,
   inputIndexToPortId,

@@ -49,11 +49,33 @@ const executeAiGenerate = async (node, context) => {
       inputItems: [src],
     };
     if (testComplete) {
-      const userPrompt = interpolate(data.prompt || "{{input}}", itemContext);
+      const {
+        applyAiGrounding,
+      } = require("../../plugins/gsc-mcp/src/contracts/intelligenceContext");
+      let userPrompt = interpolate(data.prompt || "{{input}}", itemContext);
+      let systemPrompt = interpolate(data.systemPrompt || "", itemContext);
       const model = interpolate(data.model || "gpt-4o-mini", itemContext);
+      try {
+        const grounded = applyAiGrounding({
+          systemPrompt,
+          userPrompt,
+          input: payloadOf(src) ?? itemContext.input,
+        });
+        if (grounded.grounded) {
+          systemPrompt = grounded.systemPrompt;
+          userPrompt = grounded.userPrompt;
+        }
+      } catch (err) {
+        if (
+          err?.code === "MCP_PROPERTY_REQUIRED" ||
+          err?.code === "MCP_INTEL_CONTEXT_INVALID"
+        ) {
+          throw err;
+        }
+      }
       const text = await testComplete({
         prompt: userPrompt,
-        systemPrompt: interpolate(data.systemPrompt || "", itemContext),
+        systemPrompt,
         model,
         item: payloadOf(src),
         index: i,

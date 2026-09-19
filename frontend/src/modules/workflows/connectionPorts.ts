@@ -5,7 +5,8 @@
  */
 
 import { getNodeContract, type NodePortDef, type PortKind } from "./nodeContract";
-import type { WorkflowNodeType } from "./types";
+import type { WorkflowNodeData, WorkflowNodeType } from "./types";
+import { resolveNodeInputPorts, resolveNodeOutputPorts } from "./dynamicPorts";
 
 export type ConnectionKind = "execution" | "auxiliary";
 
@@ -68,14 +69,37 @@ export const isExecutionPort = (port: NodePortDef | null | undefined): boolean =
 
 const findInputPort = (
   nodeType: WorkflowNodeType | string,
-  handleId: string | null | undefined
+  handleId: string | null | undefined,
+  nodeData?: WorkflowNodeData
 ): NodePortDef | null => {
   try {
-    const ports = getNodeContract(nodeType as WorkflowNodeType).inputs || [];
+    const ports = resolveNodeInputPorts(
+      nodeType as WorkflowNodeType,
+      nodeData || {}
+    );
     if (handleId == null || handleId === "" || handleId === "default") {
       return ports.find((p) => p.id === "main") || ports[0] || null;
     }
-    return ports.find((p) => p.id === handleId) || null;
+    const found = ports.find((p) => p.id === handleId);
+    if (found) return found;
+    // Allow connecting to merge ports up to max even if UI count not raised yet
+    // so validation can return a clearer message from maxConnections / unknown port.
+    if (
+      nodeType === "merge" &&
+      /^input([1-9]|10)$/.test(String(handleId))
+    ) {
+      const index = Number(String(handleId).replace("input", ""));
+      return {
+        id: String(handleId),
+        kind: "main",
+        direction: "in",
+        maxConnections: 1,
+        label: `Input ${index}`,
+        connectionKind: "execution",
+        dataType: "workflow-items",
+      };
+    }
+    return null;
   } catch {
     return null;
   }
@@ -83,10 +107,17 @@ const findInputPort = (
 
 const findOutputPort = (
   nodeType: WorkflowNodeType | string,
-  handleId: string | null | undefined
+  handleId: string | null | undefined,
+  nodeData?: WorkflowNodeData
 ): NodePortDef | null => {
   try {
-    const ports = getNodeContract(nodeType as WorkflowNodeType).outputs || [];
+    const ports =
+      nodeType === "switch"
+        ? resolveNodeOutputPorts(
+            nodeType as WorkflowNodeType,
+            nodeData || {}
+          )
+        : getNodeContract(nodeType as WorkflowNodeType).outputs || [];
     if (handleId == null || handleId === "" || handleId === "default") {
       return ports.find((p) => p.id === "main") || ports[0] || null;
     }
@@ -125,9 +156,19 @@ export const validateTypedConnection = (args: {
   }>;
   sourceId?: string;
   targetId?: string;
+  targetNodeData?: WorkflowNodeData;
+  sourceNodeData?: WorkflowNodeData;
 }): TypedConnectionResult => {
-  const outPort = findOutputPort(args.sourceType, args.sourceHandle);
-  const inPort = findInputPort(args.targetType, args.targetHandle);
+  const outPort = findOutputPort(
+    args.sourceType,
+    args.sourceHandle,
+    args.sourceNodeData
+  );
+  const inPort = findInputPort(
+    args.targetType,
+    args.targetHandle,
+    args.targetNodeData
+  );
   if (!outPort) {
     return {
       ok: false,
@@ -136,10 +177,14 @@ export const validateTypedConnection = (args: {
     };
   }
   if (!inPort) {
+    const mergeHint =
+      args.targetType === "merge"
+        ? " Increase Number of Inputs on the Merge node first."
+        : "";
     return {
       ok: false,
       code: "UNKNOWN_TYPED_PORT",
-      message: `Unknown input port: ${args.targetHandle || "main"}`,
+      message: `Unknown input port: ${args.targetHandle || "main"}.${mergeHint}`,
     };
   }
   const out = enrichPort(outPort);
@@ -176,7 +221,10 @@ export const validateTypedConnection = (args: {
             ? "Only one Chat Model can be connected."
             : inn.dataType === "ai-memory"
               ? "Only one memory can be connected."
-              : `Only one connection allowed on ${inn.label || inn.id}.`,
+              : inn.id === "main" ||
+                  (inn.kind === "main" && args.targetType !== "merge")
+                ? `Only one connection allowed on ${inn.label || inn.id}. To combine multiple streams, add a Merge node, set Number of Inputs to 3+, then connect Merge → this node.`
+                : `Only one connection allowed on ${inn.label || inn.id}.`,
       };
     }
   }

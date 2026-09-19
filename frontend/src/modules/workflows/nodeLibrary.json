@@ -1268,6 +1268,17 @@
       "engineType": "aiHttpTool"
     },
     {
+      "id": "gsc-mcp-tools",
+      "name": "GSC MCP Tools",
+      "category": "SEO",
+      "type": "Action",
+      "description": "Process Google Search Console rows with OpsAi intelligence/action capabilities. Connect after the GSC node — no separate Google login.",
+      "icon": "search",
+      "provider": "OpsAi",
+      "available": true,
+      "engineType": "gscMcpTool"
+    },
+    {
       "id": "ai-bot",
       "name": "Bot (@assistant)",
       "category": "AI",

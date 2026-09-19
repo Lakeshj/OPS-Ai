@@ -77,10 +77,15 @@ export {
 };
 export {
   resolveNodeOutputPorts,
+  resolveNodeInputPorts,
+  resolveMergeInputPorts,
   normalizeSwitchRules,
   getSwitchOutputPortIds,
   isValidSwitchSourceHandle,
   pruneInvalidSwitchEdges,
+  pruneInvalidMergeEdges,
   duplicateSwitchNodeData,
   SWITCH_FALLBACK_HANDLE,
+  MERGE_INPUT_MIN,
+  MERGE_INPUT_MAX,
 } from "./dynamicPorts";
