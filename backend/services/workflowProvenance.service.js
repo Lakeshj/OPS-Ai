@@ -286,6 +286,11 @@ const resolveProvenancePolicy = (
   const inputCount = Number(resultMetadata.inputCount) || 0;
   const outputCount = Number(resultMetadata.outputCount) || 0;
 
+  // Multi-capability processor always fans out opportunity rows.
+  if (nodeType === "gscMcpTool") {
+    return "fanOut";
+  }
+
   if (nodeType === "http") {
     if (resultMetadata.fanOut || (inputCount === 1 && outputCount > 1)) {
       return "fanOut";
@@ -357,7 +362,13 @@ const applyNodeProvenance = (
 
     case "fanOut": {
       const field = String(options.nodeData?.fieldName || "").trim();
-      if (!field && inputs.length === outputs.length) {
+      // GSC MCP Tools multi-capability output must never be remapped 1:1 just
+      // because opportunity count happens to equal upstream row count.
+      if (
+        nodeType !== "gscMcpTool" &&
+        !field &&
+        inputs.length === outputs.length
+      ) {
         return applyIdentity1to1(inputs, outputs);
       }
       const sourceIndex =

@@ -30,6 +30,7 @@ import { BotAssistantField } from "./special/BotAssistantField";
 import { DocumentPickerField } from "./special/DocumentPickerField";
 import { SpreadsheetPickerField } from "./special/SpreadsheetPickerField";
 import { WorkflowPickerField } from "./special/WorkflowPickerField";
+import { CapabilitySettingsField } from "./CapabilitySettingsField";
 import type { KeywordAssistant, WorkspaceDocument } from "@/modules/shared/types";
 
 export type ParameterRenderContext = {
@@ -80,6 +81,15 @@ function renderSpecial(
         <HttpAuthField
           key={param.name}
           workspaceId={context.workspaceId}
+          values={values}
+          onChange={onChange}
+        />
+      );
+    case "capabilitySettings":
+      return (
+        <CapabilitySettingsField
+          key={param.name}
+          param={param}
           values={values}
           onChange={onChange}
         />

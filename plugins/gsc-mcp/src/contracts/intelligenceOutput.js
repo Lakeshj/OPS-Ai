@@ -20,6 +20,50 @@ const OPPORTUNITY_TYPES = Object.freeze({
   KEYWORD_CONFLICT: "keyword_conflict",
 });
 
+/** Stable capability id → opportunity_type (never inherit from another capability). */
+const CAPABILITY_OPPORTUNITY_TYPE = Object.freeze({
+  ctr_opportunities: OPPORTUNITY_TYPES.CTR,
+  ranking_opportunities: OPPORTUNITY_TYPES.RANKING,
+  content_decay: OPPORTUNITY_TYPES.CONTENT_DECAY,
+  keyword_cannibalization: OPPORTUNITY_TYPES.KEYWORD_CONFLICT,
+});
+
+const OPPORTUNITY_TYPE_CAPABILITY = Object.freeze({
+  [OPPORTUNITY_TYPES.CTR]: "ctr_opportunities",
+  [OPPORTUNITY_TYPES.RANKING]: "ranking_opportunities",
+  [OPPORTUNITY_TYPES.CONTENT_DECAY]: "content_decay",
+  [OPPORTUNITY_TYPES.KEYWORD_CONFLICT]: "keyword_cannibalization",
+});
+
+const opportunityTypeForCapability = (capability) => {
+  const id = String(capability || "").trim();
+  return CAPABILITY_OPPORTUNITY_TYPE[id] || null;
+};
+
+const capabilityForOpportunityType = (opportunityType) => {
+  const t = String(opportunityType || "").trim();
+  return OPPORTUNITY_TYPE_CAPABILITY[t] || null;
+};
+
+/**
+ * Force row identity for a capability run. Prevents cross-capability metadata
+ * bleed when multiple capabilities execute in one GSC MCP Tools node.
+ */
+const stampOpportunityIdentity = (row, capability) => {
+  const id = String(capability || "").trim();
+  const expectedType = opportunityTypeForCapability(id);
+  const base =
+    row && typeof row === "object" && !Array.isArray(row) ? { ...row } : {};
+  if (!expectedType) {
+    return { ...base, ...(id ? { capability: id } : {}) };
+  }
+  return {
+    ...base,
+    capability: id,
+    opportunity_type: expectedType,
+  };
+};
+
 const REQUIRED_TOP_KEYS = Object.freeze(["opportunities", "count", "kind"]);
 
 const REQUIRED_ROW_KEYS = Object.freeze([
@@ -240,6 +284,11 @@ const scoreKeywordConflict = ({ pageCount, impressions }) => {
 
 module.exports = {
   OPPORTUNITY_TYPES,
+  CAPABILITY_OPPORTUNITY_TYPE,
+  OPPORTUNITY_TYPE_CAPABILITY,
+  opportunityTypeForCapability,
+  capabilityForOpportunityType,
+  stampOpportunityIdentity,
   REQUIRED_TOP_KEYS,
   REQUIRED_ROW_KEYS,
   round,

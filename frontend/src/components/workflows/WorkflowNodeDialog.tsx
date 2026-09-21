@@ -46,8 +46,8 @@ import {
   findLoopRegionForNode,
 } from "@/modules/workflows/loopValidation";
 import {
-  extractItemsFromOutput,
-  mergeSessionWithRun,
+  buildResolvedStepMaps,
+  resolveLatestNodeResult,
   resolveOccurrenceInputItems,
   type LoopPortView,
 } from "@/modules/workflows/occurrenceView";
@@ -188,8 +188,13 @@ export function WorkflowNodeDialog({
 
   const nodeResult: WorkflowEditorNodeResult | null = useMemo(() => {
     if (!selectedId) return null;
-    const session = editorSession?.nodeResults?.[selectedId] || null;
-    return mergeSessionWithRun(session, latestRun, selectedId);
+    const dirty = Boolean(editorSession?.dirtyNodes?.[selectedId]?.dirty);
+    return resolveLatestNodeResult({
+      nodeId: selectedId,
+      sessionResult: editorSession?.nodeResults?.[selectedId] || null,
+      run: latestRun,
+      dirty,
+    });
   }, [selectedId, editorSession, latestRun]);
 
   useEffect(() => {
@@ -200,6 +205,7 @@ export function WorkflowNodeDialog({
 
   const occurrenceInputItems = useMemo(() => {
     if (selectedRunIndex == null || !nodeResult?.occurrences) return null;
+    if (nodeResult.cacheState === "dirty") return null;
     const occ = nodeResult.occurrences.find((o) => o.runIndex === selectedRunIndex);
     if (!occ) return null;
     const resolved = resolveOccurrenceInputItems(
@@ -210,52 +216,85 @@ export function WorkflowNodeDialog({
   }, [selectedRunIndex, nodeResult, editorSession]);
 
   const previewContext = useMemo(() => {
-    const steps: Record<string, unknown> = {};
-    const stepItems: Record<string, WorkflowItem[]> = {};
     const nodeLabels: Record<string, string> = {};
     if (definition?.nodes) {
       for (const node of definition.nodes) {
         if (node.data?.label) nodeLabels[node.id] = String(node.data.label);
       }
     }
-    // Seed from editor session, then overlay the latest run so Result / expression
-    // previews refresh after Execute (session cache can lag behind latestRun).
-    if (editorSession?.nodeResults) {
-      for (const [id, r] of Object.entries(editorSession.nodeResults)) {
-        if (r.output !== undefined) steps[id] = r.output;
-        if (Array.isArray(r.items)) stepItems[id] = r.items;
-        if (selectedId === id && selectedRunIndex != null && r.occurrences) {
-          const occ = r.occurrences.find((o) => o.runIndex === selectedRunIndex);
-          if (occ) {
-            if (occ.output !== undefined) steps[id] = occ.output;
-            if (Array.isArray(occ.items)) stepItems[id] = occ.items;
-          }
-        }
+    // OUTPUT panel and AI/expression Preview share one resolver so they cannot
+    // drift (session vs latestRun / dirty config).
+    const resolved = buildResolvedStepMaps({
+      session: editorSession,
+      run: latestRun,
+      definitionNodes: definition?.nodes,
+    });
+    let steps = resolved.steps;
+    let stepItems = resolved.stepItems;
+    if (
+      selectedId &&
+      selectedRunIndex != null &&
+      nodeResult?.occurrences &&
+      nodeResult.cacheState !== "dirty"
+    ) {
+      const occ = nodeResult.occurrences.find(
+        (o) => o.runIndex === selectedRunIndex
+      );
+      if (occ) {
+        steps = { ...steps };
+        stepItems = { ...stepItems };
+        if (occ.output !== undefined) steps[selectedId] = occ.output;
+        if (Array.isArray(occ.items)) stepItems[selectedId] = occ.items;
       }
     }
-    if (latestRun?.steps) {
-      for (const step of latestRun.steps) {
-        if (!step?.nodeId || step.output === undefined) continue;
-        steps[step.nodeId] = step.output;
-        const items = extractItemsFromOutput(step.output);
-        if (items.length) stepItems[step.nodeId] = items;
-      }
+
+    if (
+      typeof window !== "undefined" &&
+      (selectedType === "gscMcpTool" ||
+        selectedType === "ai" ||
+        selectedType === "bot")
+    ) {
+      const upstreamId =
+        definition?.edges?.find((e) => e.target === selectedId)?.source || null;
+      const upstreamDiag = upstreamId
+        ? resolved.diagnostics[upstreamId]
+        : null;
+      const selfDiag = selectedId
+        ? resolved.diagnostics[selectedId]
+        : null;
+      // Temporary sync diagnostics — verify execution IDs / counts match.
+      console.debug("[workflow-sync]", {
+        selectedType,
+        selectedId,
+        selectedCapabilities: selectedData?.capabilities ?? selectedData?.capability,
+        self: selfDiag,
+        upstream: upstreamId
+          ? {
+              resolvedUpstreamNodeId: upstreamId,
+              ...upstreamDiag,
+              resolvedExecutionId: latestRun?.id,
+              resolvedInputItemCount: upstreamDiag?.itemCount ?? 0,
+            }
+          : null,
+        dirty: selectedId
+          ? Boolean(editorSession?.dirtyNodes?.[selectedId]?.dirty)
+          : false,
+      });
     }
-    if (definition?.nodes) {
-      for (const node of definition.nodes) {
-        if (node.data?.pinned && node.data.pinnedOutput !== undefined) {
-          steps[node.id] = node.data.pinnedOutput;
-          if (Array.isArray(node.data.pinnedItems)) {
-            stepItems[node.id] = node.data.pinnedItems as WorkflowItem[];
-          }
-        }
-      }
-    }
+
     return {
       workflowId,
       nodeId: selectedId ?? undefined,
       itemIndex: selectedInputItemIndex,
       runIndex: selectedRunIndex ?? undefined,
+      runId: latestRun?.id,
+      sessionUpdatedAt: [
+        editorSession?.updatedAt || "",
+        latestRun?.finishedAt || latestRun?.id || "",
+        Object.keys(resolved.stepItems)
+          .map((id) => `${id}:${resolved.diagnostics[id]?.itemCount ?? 0}`)
+          .join("|"),
+      ].join("::"),
       definition,
       input: parseRunInput(runInput),
       steps,
@@ -273,12 +312,11 @@ export function WorkflowNodeDialog({
     selectedId,
     selectedInputItemIndex,
     selectedRunIndex,
+    selectedType,
+    selectedData,
     definition,
+    nodeResult,
   ]);
-
-  useEffect(() => {
-    setSelectedInputItemIndex(0);
-  }, [selectedId]);
 
   // Part 10C — occurrence-scoped child invocation for Execute Workflow
   useEffect(() => {

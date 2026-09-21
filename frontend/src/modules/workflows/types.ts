@@ -150,6 +150,8 @@ export interface WorkflowEditorNodeResult {
   cached?: boolean;
   /** Latest occurrence index (compat). */
   executionIndex?: number;
+  /** When this result was last written (editor session / resolver freshness). */
+  updatedAt?: string;
   /** Full occurrence history when a node ran more than once (Loop body / Loop). */
   occurrences?: WorkflowEditorOccurrence[];
 }

@@ -493,6 +493,16 @@ const getEditorSession = asyncHandler(async (req, res) => {
   res.json(await workflowsService.getEditorSession(req.params.id, req.user));
 });
 
+const syncEditorSessionFromRun = asyncHandler(async (req, res) => {
+  res.json(
+    await workflowsService.syncEditorSessionFromRun(
+      req.params.id,
+      req.params.runId,
+      req.user
+    )
+  );
+});
+
 const previewExpression = asyncHandler(async (req, res) => {
   res.json(
     await workflowsService.previewExpression(
@@ -823,6 +833,7 @@ module.exports = {
   executePrevious,
   getNodeInput,
   getEditorSession,
+  syncEditorSessionFromRun,
   previewExpression,
   previewScheduleOccurrences,
   invalidateEditorSession,

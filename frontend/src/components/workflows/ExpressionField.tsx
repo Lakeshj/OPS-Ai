@@ -33,6 +33,10 @@ export type ExpressionFieldContext = {
   itemIndex?: number;
   /** Part 9C — selected Loop body / Batch occurrence */
   runIndex?: number;
+  /** Latest succeeded production run — heals STALE_CACHE previews */
+  runId?: string;
+  /** Bust preview cache when editor session / resolved upstream changes */
+  sessionUpdatedAt?: string;
   definition?: WorkflowDefinition;
   input?: Record<string, unknown>;
   steps?: Record<string, unknown>;
@@ -84,6 +88,13 @@ export function ExpressionField({
 
   const requestSeq = useRef(0);
   const hasExpression = value.includes("{{");
+  const isAiPromptParam =
+    parameterName === "systemPrompt" ||
+    parameterName === "systemInstruction" ||
+    parameterName === "prompt";
+  // Always preview AI prompts — GSC grounding may inject rules even when the
+  // Parameters field is empty / has no {{expressions}}.
+  const shouldPreview = hasExpression || isAiPromptParam;
 
   const autocompleteCtx: AutocompleteContext = useMemo(
     () => ({
@@ -123,7 +134,7 @@ export function ExpressionField({
   }, [updateSuggestions, value.length]);
 
   useEffect(() => {
-    if (!hasExpression) {
+    if (!shouldPreview) {
       setPreview(null);
       setPreviewStatus("IDLE");
       return;
@@ -142,6 +153,8 @@ export function ExpressionField({
           expression: value,
           itemIndex: ctx.itemIndex ?? 0,
           runIndex: ctx.runIndex,
+          runId: ctx.runId,
+          parameterName,
           definition: ctx.definition,
           input: ctx.input,
         })
@@ -164,11 +177,14 @@ export function ExpressionField({
     return () => window.clearTimeout(timer);
   }, [
     value,
-    hasExpression,
+    shouldPreview,
+    parameterName,
     ctx?.workflowId,
     ctx?.nodeId,
     ctx?.itemIndex,
     ctx?.runIndex,
+    ctx?.runId,
+    ctx?.sessionUpdatedAt,
     ctx?.definition,
     ctx?.input,
   ]);
@@ -217,7 +233,7 @@ export function ExpressionField({
   };
 
   const previewBody = useMemo(() => {
-    if (!hasExpression) return null;
+    if (!shouldPreview) return null;
     if (previewStatus === "LOADING") {
       return (
         <span className="italic text-muted-foreground">Resolving…</span>
@@ -242,7 +258,7 @@ export function ExpressionField({
       );
     }
     return <span className="text-amber-700 dark:text-amber-300">{message}</span>;
-  }, [hasExpression, previewStatus, preview]);
+  }, [shouldPreview, previewStatus, preview]);
 
   return (
     <div className={cn("flex flex-col gap-2", className)}>
@@ -301,10 +317,17 @@ export function ExpressionField({
         )}
       </div>
 
-      {hasExpression && (
+      {shouldPreview && (
         <div className="mt-1 rounded border border-dashed bg-muted/20 px-2 py-2 text-[10px]">
           <div className="mb-1 flex items-center gap-2 text-muted-foreground">
-            <span className="font-medium">Preview</span>
+            <span className="font-medium">
+              {preview?.effectivePrompt
+                ? "Effective prompt (sent to model)"
+                : "Preview"}
+            </span>
+            {preview?.gscGrounded ? (
+              <span className="text-[9px] italic">GSC grounding applied</span>
+            ) : null}
             {preview?.usesPinnedData && (
               <span className="text-[9px] italic">uses pinned data</span>
             )}

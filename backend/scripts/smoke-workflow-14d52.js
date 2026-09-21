@@ -18,6 +18,11 @@ const valuesWithParamDefaults = (params, values) => {
 };
 
 const conditionMatches = (fieldValue, allowed) => {
+  if (Array.isArray(fieldValue)) {
+    return fieldValue.some((v) =>
+      allowed.some((a) => String(a) === String(v == null ? "" : v))
+    );
+  }
   const normalized =
     typeof fieldValue === "boolean" || typeof fieldValue === "number"
       ? fieldValue
@@ -135,6 +140,36 @@ const registerPart14D52Tests = ({ check, section, assert }) => {
     );
     assertX.equal(names.includes("to"), false);
     assertX.equal(names.includes("labelIds"), true);
+  });
+
+  check("DISPLAY-DEFAULT-5 multiOptions show when any selected value matches", () => {
+    const params = [
+      {
+        name: "capability",
+        type: "multiOptions",
+        default: ["ctr_opportunities"],
+      },
+      {
+        name: "minImpressions",
+        type: "number",
+        displayOptions: { show: { capability: ["ctr_opportunities"] } },
+      },
+      {
+        name: "rankingLimit",
+        type: "number",
+        displayOptions: { show: { capability: ["ranking_opportunities"] } },
+      },
+    ];
+    const both = getVisibleParams(params, {
+      capability: ["ctr_opportunities", "ranking_opportunities"],
+    }).map((p) => p.name);
+    assertX.equal(both.includes("minImpressions"), true);
+    assertX.equal(both.includes("rankingLimit"), true);
+    const ctrOnly = getVisibleParams(params, {
+      capability: ["ctr_opportunities"],
+    }).map((p) => p.name);
+    assertX.equal(ctrOnly.includes("minImpressions"), true);
+    assertX.equal(ctrOnly.includes("rankingLimit"), false);
   });
 
   check("GOOGLE-AUTH-COPY-1 Google nodes label the account, not Credential", () => {

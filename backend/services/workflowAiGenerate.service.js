@@ -95,6 +95,11 @@ const executeAiGenerate = async (node, context) => {
           text: String(text ?? ""),
           provider: data.provider || "openai",
           model: model || "gpt-4o-mini",
+          promptsUsed: {
+            systemPrompt,
+            userPrompt,
+            gscGrounded: groundedOk,
+          },
         },
       });
       continue;
@@ -108,16 +113,27 @@ const executeAiGenerate = async (node, context) => {
         json: result.output?.json ?? undefined,
         provider: result.output?.provider,
         model: result.output?.model,
+        promptsUsed: result.output?.promptsUsed,
+        systemPrompt: result.output?.systemPrompt,
+        userPrompt: result.output?.userPrompt,
       },
     });
   }
 
+  const firstPrompts = items[0]?.json?.promptsUsed || null;
   return {
     items,
     output: {
       text: items.length === 1 ? items[0].json.text : items.map((it) => it.json.text),
       itemCount: items.length,
       isLlm: true,
+      ...(firstPrompts
+        ? {
+            promptsUsed: firstPrompts,
+            systemPrompt: firstPrompts.systemPrompt,
+            userPrompt: firstPrompts.userPrompt,
+          }
+        : {}),
     },
     resolved: {
       provider: data.provider || "openai",

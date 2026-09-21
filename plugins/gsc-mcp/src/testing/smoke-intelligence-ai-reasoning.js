@@ -47,11 +47,11 @@ const main = () => {
     input: ctrCtx,
   });
   assert.equal(grounded.grounded, true);
-  assert.ok(grounded.systemPrompt.includes("Analyze the GSC MCP opportunities"));
-  assert.ok(grounded.systemPrompt.includes("Do not invent Priority") || grounded.systemPrompt.includes("Do not invent Priority:"));
-  assert.ok(grounded.systemPrompt.includes("opportunity type") || grounded.systemPrompt.includes("opportunity_type") || grounded.systemPrompt.includes("preserve the opportunity type"));
+  assert.ok(grounded.systemPrompt.includes("final GSC intelligence analyst"));
+  assert.ok(grounded.systemPrompt.includes("Do not invent metrics, scores, priorities"));
+  assert.ok(grounded.systemPrompt.includes("opportunity_type"));
   assert.ok(grounded.systemPrompt.includes("Total opportunities received"));
-  assert.ok(grounded.systemPrompt.includes("Do not treat a low number of impressions as strong evidence"));
+  assert.ok(grounded.systemPrompt.includes("Opportunity types represented"));
   assert.ok(grounded.systemPrompt.includes("Score:"));
   assert.ok(grounded.userPrompt.includes("ai visibility checker"));
   assert.ok(grounded.userPrompt.includes("ctr_opportunity") || grounded.userPrompt.includes("197"));
@@ -306,6 +306,77 @@ const main = () => {
       .results[0].opportunity_type,
     "ctr_opportunity"
   );
+
+  // Multi-select capabilities on one GSC MCP Tools node
+  const multi = processUpstreamItems({
+    capability: ["ctr_opportunities", "ranking_opportunities"],
+    inputItems: [
+      {
+        json: {
+          query: "ai visibility checker",
+          page: "https://example.com/a",
+          impressions: 197,
+          clicks: 0,
+          ctr: 0,
+          position: 8.2,
+          siteUrl: "https://example.com/",
+          property: "https://example.com/",
+          startDate: "2026-08-01",
+          endDate: "2026-08-31",
+        },
+      },
+      {
+        json: {
+          query: "deep rank query",
+          page: "https://example.com/b",
+          impressions: 400,
+          clicks: 5,
+          ctr: 0.0125,
+          position: 12.4,
+          siteUrl: "https://example.com/",
+          property: "https://example.com/",
+          startDate: "2026-08-01",
+          endDate: "2026-08-31",
+        },
+      },
+    ],
+    nodeData: {
+      capability: ["ctr_opportunities", "ranking_opportunities"],
+      minImpressions: 10,
+      rankingMinImpressions: 10,
+      minPosition: 5,
+      rankingMaxPosition: 20,
+    },
+  });
+  assert.equal(multi.ok, true, multi.error?.message);
+  assert.ok(Array.isArray(multi.output.capabilities));
+  assert.deepEqual(
+    [...multi.output.capabilities].sort(),
+    ["ctr_opportunities", "ranking_opportunities"]
+  );
+  assert.ok(multi.intelligenceContext);
+  assert.equal(multi.intelligenceContext.capabilities.length, 2);
+  assert.ok(multi.items.length >= 1);
+  for (const item of multi.items) {
+    const row = item.json || {};
+    if (!row.opportunity_type) continue;
+    if (row.capability === "ctr_opportunities") {
+      assert.equal(row.opportunity_type, "ctr_opportunity");
+    } else if (row.capability === "ranking_opportunities") {
+      assert.equal(row.opportunity_type, "ranking_opportunity");
+    } else {
+      assert.fail(`unexpected capability on multi item: ${row.capability}`);
+    }
+  }
+  for (const section of multi.intelligenceContext.capabilities) {
+    const expected =
+      section.capability === "ctr_opportunities"
+        ? "ctr_opportunity"
+        : "ranking_opportunity";
+    for (const row of section.results) {
+      assert.equal(row.opportunity_type, expected);
+    }
+  }
 
   // Scoring formulas unchanged
   const ctrScore = scoreCtrOpportunity({

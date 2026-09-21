@@ -41,17 +41,37 @@ const FILTER_DEFAULTS = Object.freeze({
 
 const COMPARISON_PERIODS = Object.freeze(["prior_period"]);
 
+/** Empty UI inputs become "" — Number("") === 0 and falsely fails validation. */
+const isMissingFilterValue = (value) => {
+  if (value == null) return true;
+  if (typeof value === "string" && value.trim() === "") return true;
+  return false;
+};
+
 const toFiniteNumber = (value, fallback) => {
+  if (isMissingFilterValue(value)) return fallback;
   const n = Number(value);
   return Number.isFinite(n) ? n : fallback;
 };
 
 const toPositiveInt = (value, fallback) => {
-  const n = Math.round(toFiniteNumber(value, fallback));
+  if (isMissingFilterValue(value)) return fallback;
+  const n = Math.round(Number(value));
+  if (!Number.isFinite(n)) return fallback;
   return n >= 0 ? n : fallback;
 };
 
 const clamp = (n, min, max) => Math.min(max, Math.max(min, n));
+
+/** Drop blank strings so defaults apply per capability. */
+const cleanFilterBag = (bag = {}) => {
+  const out = {};
+  for (const [key, value] of Object.entries(bag)) {
+    if (isMissingFilterValue(value)) continue;
+    out[key] = value;
+  }
+  return out;
+};
 
 /**
  * Normalize + validate filters for a capability.
@@ -64,7 +84,8 @@ const validateIntelligenceFilters = (capability, raw = {}) => {
     return { ok: true, filters: { ...(raw && typeof raw === "object" ? raw : {}) } };
   }
 
-  const src = raw && typeof raw === "object" && !Array.isArray(raw) ? raw : {};
+  const srcRaw = raw && typeof raw === "object" && !Array.isArray(raw) ? raw : {};
+  const src = cleanFilterBag(srcRaw);
 
   if (id === "ctr_opportunities") {
     const minImpressions = toPositiveInt(
@@ -242,25 +263,28 @@ const extractFiltersFromNodeData = (capability, data = {}) => {
   const id = String(capability || "");
   const src = data && typeof data === "object" ? data : {};
   if (id === "ctr_opportunities") {
-    return {
+    return cleanFilterBag({
       minImpressions: src.minImpressions,
       maxPosition: src.maxPosition,
       minScore: src.minScore,
       limit: src.limit,
       maxCtr: src.maxCtr,
-      minPosition: src.minPosition,
-    };
+      // Do NOT read ranking's minPosition — shared flat node data contaminates CTR.
+      ...(src.ctrMinPosition != null && !isMissingFilterValue(src.ctrMinPosition)
+        ? { minPosition: src.ctrMinPosition }
+        : {}),
+    });
   }
   if (id === "ranking_opportunities") {
-    return {
+    return cleanFilterBag({
       minImpressions: src.rankingMinImpressions ?? src.minImpressions,
       minPosition: src.minPosition,
       maxPosition: src.rankingMaxPosition ?? src.maxPosition,
       limit: src.rankingLimit ?? src.limit,
-    };
+    });
   }
   if (id === "content_decay") {
-    return {
+    return cleanFilterBag({
       comparisonPeriod: src.comparisonPeriod,
       dropPercentage: src.dropPercentage ?? src.minClickDropPercent,
       minClickDropPercent: src.minClickDropPercent ?? src.dropPercentage,
@@ -269,14 +293,14 @@ const extractFiltersFromNodeData = (capability, data = {}) => {
       minCurrentImpressions: src.minCurrentImpressions,
       minPositionWorsening: src.minPositionWorsening,
       limit: src.decayLimit ?? src.limit,
-    };
+    });
   }
   if (id === "keyword_cannibalization") {
-    return {
+    return cleanFilterBag({
       minPages: src.minPages,
       minImpressions: src.cannibalMinImpressions ?? src.minImpressions,
       limit: src.cannibalLimit ?? src.limit,
-    };
+    });
   }
   return {};
 };
@@ -335,6 +359,7 @@ module.exports = {
   FILTER_DEFAULTS,
   FILTER_INPUT_SCHEMAS,
   COMPARISON_PERIODS,
+  isMissingFilterValue,
   validateIntelligenceFilters,
   applyLimit,
   extractFiltersFromNodeData,

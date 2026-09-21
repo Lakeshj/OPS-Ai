@@ -486,6 +486,15 @@ const runLlmNode = async (node, context, options = {}) => {
       isLlm: true,
       assistantId: assistantMeta?.id || null,
       assistantName: assistantMeta?.name || data.assistantName || null,
+      // Effective prompts actually sent to the model (includes GSC grounding).
+      promptsUsed: {
+        systemPrompt,
+        userPrompt: String(userPrompt || ""),
+        gscGrounded: Boolean(intelligenceContext),
+        runtimeDataAttached: Boolean(runtimeDataAttached),
+      },
+      systemPrompt,
+      userPrompt: String(userPrompt || ""),
     },
   };
 };

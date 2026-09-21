@@ -131,11 +131,24 @@ const executeGscMcpNode = async (node, context) => {
 const executeGscMcpToolsProcessor = async (node, context) => {
   const plugin = getPlugin();
   const data = node.data || {};
-  const capability = String(
-    data.capability || data.operation || "ctr_opportunities"
-  ).trim();
+  // Canonical multi-select: capabilities[]. Keep capability for legacy configs.
+  // Important: [] must win over falling through to "ctr_opportunities".
+  const hasCapabilitiesField = Object.prototype.hasOwnProperty.call(
+    data,
+    "capabilities"
+  );
+  const hasCapabilityField = Object.prototype.hasOwnProperty.call(
+    data,
+    "capability"
+  );
+  const selected = hasCapabilitiesField
+    ? data.capabilities
+    : hasCapabilityField
+      ? data.capability
+      : data.operation ?? "ctr_opportunities";
   const result = plugin.processUpstreamItems({
-    capability,
+    capability: selected,
+    capabilities: Array.isArray(data.capabilities) ? data.capabilities : undefined,
     inputItems: context.inputItems || [],
     title: data.title ? String(data.title) : undefined,
     nodeData: data,
@@ -154,7 +167,36 @@ const executeGscMcpToolsProcessor = async (node, context) => {
       result.error?.message || "GSC MCP Tools processing failed"
     );
     err.code = result.error?.code || "MCP_TOOL_FAILED";
+    err.meta = {
+      receivedCapability: data.capability,
+      receivedCapabilities: data.capabilities,
+      selected,
+      ...(result.output || {}),
+    };
     throw err;
+  }
+  if (result.output && typeof result.output === "object") {
+    const byCap = {};
+    for (const it of result.items || []) {
+      const row = it?.json || it;
+      const cap = row && typeof row === "object" ? String(row.capability || "") : "";
+      if (!cap || !row.opportunity_type) continue;
+      byCap[cap] = (byCap[cap] || 0) + 1;
+    }
+    result.output.runtimeDiagnostics = {
+      nodeId: node.id,
+      receivedCapability: data.capability,
+      receivedCapabilities: data.capabilities,
+      selectedCapabilities:
+        result.output.capabilities || result.resolved?.capabilities,
+      executed: result.output.executed,
+      perCapability: result.output.perCapability,
+      outputItemCount: Array.isArray(result.items) ? result.items.length : 0,
+      outputCapabilities: byCap,
+    };
+    if (typeof console !== "undefined" && console.debug) {
+      console.debug("[gsc-mcp-tools]", result.output.runtimeDiagnostics);
+    }
   }
   return result;
 };

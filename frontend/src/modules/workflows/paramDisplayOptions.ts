@@ -17,9 +17,28 @@ const conditionMatches = (
   fieldValue: unknown,
   allowed: Array<string | number | boolean>
 ): boolean => {
+  // multiOptions stores an array — show when any selected value is allowed.
+  if (Array.isArray(fieldValue)) {
+    return fieldValue.some((v) =>
+      allowed.some((a) => normalizeValue(a) === normalizeValue(v))
+    );
+  }
   const normalized = normalizeValue(fieldValue);
   return allowed.some((a) => normalizeValue(a) === normalized);
 };
+
+function applyParamDefault(
+  next: ParamValues,
+  values: ParamValues,
+  param: ParamDescriptor
+) {
+  if (
+    param.default !== undefined &&
+    !Object.prototype.hasOwnProperty.call(values, param.name)
+  ) {
+    next[param.name] = param.default;
+  }
+}
 
 /** Fill missing keys from schema defaults without mutating stored node data. */
 export function valuesWithParamDefaults(
@@ -28,11 +47,19 @@ export function valuesWithParamDefaults(
 ): ParamValues {
   const next: ParamValues = { ...values };
   for (const param of params) {
-    if (
-      param.default !== undefined &&
-      !Object.prototype.hasOwnProperty.call(values, param.name)
-    ) {
-      next[param.name] = param.default;
+    applyParamDefault(next, values, param);
+    // Nested per-option settings (e.g. capabilitySettings typeOptions)
+    if (param.typeOptions) {
+      for (const nested of Object.values(param.typeOptions)) {
+        for (const child of nested) {
+          applyParamDefault(next, values, child);
+        }
+      }
+    }
+    if (param.fields?.length) {
+      for (const child of param.fields) {
+        applyParamDefault(next, values, child);
+      }
     }
   }
   return next;

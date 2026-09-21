@@ -1925,10 +1925,36 @@ const executePartial = async ({
     }
 
     if (failure) {
+      // Replace prior successful output — never retain stale items after a failed step.
+      const failOutput =
+        failure?.meta && typeof failure.meta === "object"
+          ? {
+              ok: false,
+              error: {
+                code: failure.code || "NODE_FAILED",
+                message:
+                  failure instanceof Error ? failure.message : String(failure),
+              },
+              items: [],
+              count: 0,
+              ...failure.meta,
+            }
+          : {
+              ok: false,
+              error: {
+                code: failure.code || "NODE_FAILED",
+                message:
+                  failure instanceof Error ? failure.message : String(failure),
+              },
+              items: [],
+              count: 0,
+            };
       results[node.id] = {
         nodeId: node.id,
         status: "failed",
         error: failure instanceof Error ? failure.message : String(failure),
+        output: failOutput,
+        items: [],
         executionTimeMs: Date.now() - nodeStart,
         cacheState: "dirty",
       };

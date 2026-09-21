@@ -1042,7 +1042,8 @@ function WorkflowCanvasInner({
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [rightPanel]);
 
-  // After Execute finishes, open the results modal briefly.
+  // After Execute finishes, open the results modal briefly and sync editor
+  // session from the production run so Result expression Preview is not STALE.
   useEffect(() => {
     if (prevRunningRef.current && !running && latestRun) {
       const done =
@@ -1054,12 +1055,22 @@ function WorkflowCanvasInner({
         const t = window.setTimeout(() => {
           setResultsDialogOpen(false);
         }, 12000);
+        if (latestRun.status === "succeeded" && workflowId && latestRun.id) {
+          void workflowsApi
+            .syncEditorSessionFromRun(workflowId, latestRun.id)
+            .then((res) => {
+              if (res?.session) applyEditorSession(res.session);
+            })
+            .catch(() => {
+              /* best-effort */
+            });
+        }
         prevRunningRef.current = Boolean(running);
         return () => window.clearTimeout(t);
       }
     }
     prevRunningRef.current = Boolean(running);
-  }, [running, latestRun]);
+  }, [running, latestRun, workflowId, applyEditorSession]);
 
   useEffect(() => {
     setNodes(toFlowNodes(definition, latestRun));

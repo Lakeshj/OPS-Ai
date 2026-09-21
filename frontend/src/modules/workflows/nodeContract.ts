@@ -146,7 +146,9 @@ export type ParamCustomRenderer =
   | "googleGscSites"
   | "googleGa4Properties"
   | "resourceLocator"
-  | "httpAuth";
+  | "httpAuth"
+  /** Multi-select capabilities with per-option settings table + configure dialog */
+  | "capabilitySettings";
 
 export interface DisplayOptions {
   show?: Record<string, Array<string | number | boolean>>;
@@ -1941,7 +1943,7 @@ export const NODE_CONTRACTS: Record<WorkflowNodeType, NodeContract> = {
     label: "GSC MCP Tools",
     inputs: [mainIn()],
     outputs: [mainOut, errorOut],
-    cardinality: "N-to-leqN",
+    cardinality: "1-to-N",
     pairedItemPolicy: "fanOut",
     settings: SETTINGS_ACTION,
     capabilities: CAP_ACTION,
@@ -1952,6 +1954,7 @@ export const NODE_CONTRACTS: Record<WorkflowNodeType, NodeContract> = {
       "Main-flow processor — no Google OAuth on this node",
       "Requires upstream Google Search Console analytics rows",
       "Runs OpsAi intelligence/action capabilities on previous-node data",
+      "Multi-select executes every selected capability independently",
     ],
   },
 };

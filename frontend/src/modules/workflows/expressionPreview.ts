@@ -17,6 +17,9 @@ export type ExpressionPreviewResponse = {
   targetNodeId?: string | null;
   itemIndex?: number;
   usesPinnedData?: boolean;
+  /** True when preview applied GSC/runtime prompt grounding */
+  gscGrounded?: boolean;
+  effectivePrompt?: boolean;
 };
 
 const REASON_MESSAGES: Record<string, string> = {

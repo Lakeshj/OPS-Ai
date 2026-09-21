@@ -141,6 +141,8 @@ export const NODE_PARAMETER_SCHEMAS: Record<WorkflowNodeType, ParamDescriptor[]>
         type: "string",
         multiline: true,
         expression: true,
+        description:
+          "Extra instructions for the model. When upstream is GSC MCP Tools, OpsAi auto-prepends the GSC analyst rules — open Preview to see the full prompt sent.",
       },
       {
         name: "prompt",
@@ -933,11 +935,12 @@ export const NODE_PARAMETER_SCHEMAS: Record<WorkflowNodeType, ParamDescriptor[]>
       },
       {
         name: "capability",
-        displayName: "Capability",
-        type: "options",
-        default: "ctr_opportunities",
+        displayName: "Capabilities",
+        type: "multiOptions",
+        customRenderer: "capabilitySettings",
+        default: ["ctr_opportunities"],
         description:
-          "Intelligence or action applied to upstream GSC analytics rows.",
+          "Select one or more intelligence/actions. Each selected capability runs independently on the same upstream GSC rows; configure filters from the settings table below.",
         options: [
           { name: "CTR opportunities", value: "ctr_opportunities" },
           { name: "Ranking opportunities", value: "ranking_opportunities" },
@@ -951,143 +954,171 @@ export const NODE_PARAMETER_SCHEMAS: Record<WorkflowNodeType, ParamDescriptor[]>
           { name: "Prepare sheet rows", value: "prepare_sheet_rows" },
           { name: "Prepare email digest", value: "prepare_email_digest" },
         ],
-      },
-      // CTR Opportunities filters
-      {
-        name: "minImpressions",
-        displayName: "Min impressions",
-        type: "number",
-        default: 50,
-        displayOptions: { show: { capability: ["ctr_opportunities"] } },
-        description: "Ignore rows below this impression count.",
-      },
-      {
-        name: "maxPosition",
-        displayName: "Max position",
-        type: "number",
-        default: 20,
-        displayOptions: { show: { capability: ["ctr_opportunities"] } },
-        description: "Only include rows ranking at this position or better (lower = better).",
-      },
-      {
-        name: "minScore",
-        displayName: "Min score",
-        type: "number",
-        default: 0,
-        displayOptions: { show: { capability: ["ctr_opportunities"] } },
-        description: "Drop opportunities scoring below this threshold.",
-      },
-      {
-        name: "limit",
-        displayName: "Limit",
-        type: "number",
-        default: 50,
-        displayOptions: { show: { capability: ["ctr_opportunities"] } },
-        description: "Max opportunities to return (0 = unlimited).",
-      },
-      // Ranking Opportunities filters
-      {
-        name: "rankingMinImpressions",
-        displayName: "Min impressions",
-        type: "number",
-        default: 30,
-        displayOptions: { show: { capability: ["ranking_opportunities"] } },
-      },
-      {
-        name: "minPosition",
-        displayName: "Min position",
-        type: "number",
-        default: 5,
-        displayOptions: { show: { capability: ["ranking_opportunities"] } },
-        description: "Start of the position range (inclusive).",
-      },
-      {
-        name: "rankingMaxPosition",
-        displayName: "Max position",
-        type: "number",
-        default: 20,
-        displayOptions: { show: { capability: ["ranking_opportunities"] } },
-        description: "End of the position range (inclusive).",
-      },
-      {
-        name: "rankingLimit",
-        displayName: "Limit",
-        type: "number",
-        default: 50,
-        displayOptions: { show: { capability: ["ranking_opportunities"] } },
-      },
-      // Content Decay filters — prior period vs current only (no snapshot)
-      {
-        name: "_decayComparisonNotice",
-        displayName: "Comparison",
-        type: "notice",
-        displayOptions: { show: { capability: ["content_decay"] } },
-        description:
-          "Previous period vs Current period. Supply previousRows (prior-period GSC rows) from an upstream GSC run. A single snapshot cannot establish decay.",
-      },
-      {
-        name: "minPreviousImpressions",
-        displayName: "Min previous impressions",
-        type: "number",
-        default: 50,
-        displayOptions: { show: { capability: ["content_decay"] } },
-        description: "Ignore entities with fewer impressions in the previous period.",
-      },
-      {
-        name: "minCurrentImpressions",
-        displayName: "Min current impressions",
-        type: "number",
-        default: 20,
-        displayOptions: { show: { capability: ["content_decay"] } },
-        description: "Ignore entities with fewer impressions in the current period.",
-      },
-      {
-        name: "minClickDropPercent",
-        displayName: "Min click drop %",
-        type: "number",
-        default: 20,
-        displayOptions: { show: { capability: ["content_decay"] } },
-        description:
-          "Minimum click decline % vs previous period (or use position worsening).",
-      },
-      {
-        name: "minPositionWorsening",
-        displayName: "Min position worsening",
-        type: "number",
-        default: 1,
-        displayOptions: { show: { capability: ["content_decay"] } },
-        description:
-          "Minimum increase in average position (worse rank) to count as decay.",
-      },
-      {
-        name: "decayLimit",
-        displayName: "Limit",
-        type: "number",
-        default: 50,
-        displayOptions: { show: { capability: ["content_decay"] } },
-      },
-      // Keyword cannibalization filters
-      {
-        name: "minPages",
-        displayName: "Minimum pages",
-        type: "number",
-        default: 2,
-        displayOptions: { show: { capability: ["keyword_cannibalization"] } },
-        description: "Minimum distinct URLs ranking for the same query.",
-      },
-      {
-        name: "cannibalMinImpressions",
-        displayName: "Minimum impressions",
-        type: "number",
-        default: 0,
-        displayOptions: { show: { capability: ["keyword_cannibalization"] } },
-      },
-      {
-        name: "cannibalLimit",
-        displayName: "Limit",
-        type: "number",
-        default: 50,
-        displayOptions: { show: { capability: ["keyword_cannibalization"] } },
+        typeOptions: {
+          ctr_opportunities: [
+            {
+              name: "minImpressions",
+              displayName: "Min impressions",
+              type: "number",
+              default: 50,
+              description: "Ignore rows below this impression count.",
+            },
+            {
+              name: "maxPosition",
+              displayName: "Max position",
+              type: "number",
+              default: 20,
+              description:
+                "Only include rows ranking at this position or better (lower = better).",
+            },
+            {
+              name: "minScore",
+              displayName: "Min score",
+              type: "number",
+              default: 0,
+              description: "Drop opportunities scoring below this threshold.",
+            },
+            {
+              name: "limit",
+              displayName: "Limit",
+              type: "number",
+              default: 50,
+              description: "Max opportunities to return (0 = unlimited).",
+            },
+          ],
+          ranking_opportunities: [
+            {
+              name: "rankingMinImpressions",
+              displayName: "Min impressions",
+              type: "number",
+              default: 30,
+            },
+            {
+              name: "minPosition",
+              displayName: "Min position",
+              type: "number",
+              default: 5,
+              description: "Start of the position range (inclusive).",
+            },
+            {
+              name: "rankingMaxPosition",
+              displayName: "Max position",
+              type: "number",
+              default: 20,
+              description: "End of the position range (inclusive).",
+            },
+            {
+              name: "rankingLimit",
+              displayName: "Limit",
+              type: "number",
+              default: 50,
+            },
+          ],
+          content_decay: [
+            {
+              name: "_decayComparisonNotice",
+              displayName: "Content decay",
+              type: "notice",
+              description:
+                "Previous period vs Current period. Supply previousRows (prior-period GSC rows) from an upstream GSC run. A single snapshot cannot establish decay.",
+            },
+            {
+              name: "minPreviousImpressions",
+              displayName: "Min previous impressions",
+              type: "number",
+              default: 50,
+              description:
+                "Ignore entities with fewer impressions in the previous period.",
+            },
+            {
+              name: "minCurrentImpressions",
+              displayName: "Min current impressions",
+              type: "number",
+              default: 20,
+              description:
+                "Ignore entities with fewer impressions in the current period.",
+            },
+            {
+              name: "minClickDropPercent",
+              displayName: "Min click drop %",
+              type: "number",
+              default: 20,
+              description:
+                "Minimum click decline % vs previous period (or use position worsening).",
+            },
+            {
+              name: "minPositionWorsening",
+              displayName: "Min position worsening",
+              type: "number",
+              default: 1,
+              description:
+                "Minimum increase in average position (worse rank) to count as decay.",
+            },
+            {
+              name: "decayLimit",
+              displayName: "Limit",
+              type: "number",
+              default: 50,
+            },
+          ],
+          keyword_cannibalization: [
+            {
+              name: "minPages",
+              displayName: "Minimum pages",
+              type: "number",
+              default: 2,
+              description: "Minimum distinct URLs ranking for the same query.",
+            },
+            {
+              name: "cannibalMinImpressions",
+              displayName: "Minimum impressions",
+              type: "number",
+              default: 0,
+            },
+            {
+              name: "cannibalLimit",
+              displayName: "Limit",
+              type: "number",
+              default: 50,
+            },
+          ],
+          query_gap_analysis: [
+            {
+              name: "_queryGapSectionNotice",
+              displayName: "Query gap analysis",
+              type: "notice",
+              description:
+                "Uses upstream GSC rows as-is for query-gap intelligence (no extra filters on this node).",
+            },
+          ],
+          page_optimization_suggestions: [
+            {
+              name: "_pageOptSectionNotice",
+              displayName: "Page optimization suggestions",
+              type: "notice",
+              description:
+                "Uses upstream GSC rows as-is for page-optimization intelligence (no extra filters on this node).",
+            },
+          ],
+          prepare_sheet_rows: [
+            {
+              name: "_sheetSectionNotice",
+              displayName: "Prepare sheet rows",
+              type: "notice",
+              description:
+                "Formats upstream opportunity rows for Google Sheets export.",
+            },
+          ],
+          prepare_email_digest: [
+            {
+              name: "_emailSectionNotice",
+              displayName: "Prepare email digest",
+              type: "notice",
+              description:
+                "Formats upstream opportunity rows for an email digest.",
+            },
+          ],
+        },
       },
     ],
 
@@ -1662,6 +1693,8 @@ export const NODE_PARAMETER_SCHEMAS: Record<WorkflowNodeType, ParamDescriptor[]>
         type: "string",
         multiline: true,
         expression: true,
+        description:
+          "Extra instructions for the model. When upstream is GSC MCP Tools, OpsAi auto-prepends the GSC analyst rules — open Preview to see the full prompt sent.",
       },
       {
         name: "prompt",

@@ -122,6 +122,41 @@ const prepareSessionForDefinition = (workflowId, userId, definition) => {
   return session;
 };
 
+const itemsFromStepOutput = (output) => {
+  if (!output || typeof output !== "object") return undefined;
+  if (Array.isArray(output.items)) return output.items;
+  return undefined;
+};
+
+/**
+ * After a full production Execute, copy succeeded/failed steps into the
+ * editor session and mark those nodes clean so expression Preview is not
+ * stuck on STALE_CACHE from an earlier param change.
+ */
+const seedFromRun = (workflowId, userId, definition, run) => {
+  const session = prepareSessionForDefinition(workflowId, userId, definition);
+  const steps = Array.isArray(run?.steps) ? run.steps : [];
+  for (const step of steps) {
+    if (!step?.nodeId) continue;
+    if (step.status !== "succeeded" && step.status !== "failed") continue;
+    setNodeResult(
+      workflowId,
+      userId,
+      step.nodeId,
+      {
+        status: step.status,
+        output: step.output,
+        items: itemsFromStepOutput(step.output),
+        error: step.error || null,
+        executionIndex: step.executionIndex ?? 0,
+      },
+      definition
+    );
+  }
+  session.updatedAt = new Date().toISOString();
+  return formatSession(getSession(workflowId, userId));
+};
+
 const formatSession = (session) => ({
   workflowId: session.workflowId,
   input: session.input,
@@ -140,5 +175,6 @@ module.exports = {
   getDownstreamIds,
   invalidateEditorSession,
   prepareSessionForDefinition,
+  seedFromRun,
   formatSession,
 };

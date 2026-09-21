@@ -248,6 +248,28 @@ export function NodeOutputPanel({
   const timingMs = effectiveResult?.executionTimeMs ?? result?.executionTimeMs;
   const statusLabel = effectiveResult?.status || result?.status;
 
+  const promptsUsed = useMemo(() => {
+    const out = effectiveResult?.output;
+    if (!out || typeof out !== "object" || Array.isArray(out)) return null;
+    const record = out as Record<string, unknown>;
+    const nested =
+      record.promptsUsed &&
+      typeof record.promptsUsed === "object" &&
+      !Array.isArray(record.promptsUsed)
+        ? (record.promptsUsed as Record<string, unknown>)
+        : null;
+    const systemPrompt = String(
+      nested?.systemPrompt ?? record.systemPrompt ?? ""
+    );
+    const userPrompt = String(nested?.userPrompt ?? record.userPrompt ?? "");
+    if (!systemPrompt && !userPrompt) return null;
+    return {
+      systemPrompt,
+      userPrompt,
+      gscGrounded: Boolean(nested?.gscGrounded ?? record.gscIntelligence),
+    };
+  }, [effectiveResult?.output]);
+
   return (
     <div className="flex min-h-0 flex-col gap-2">
       <div className="flex items-center justify-between">
@@ -340,6 +362,29 @@ export function NodeOutputPanel({
             effectiveResult.error ||
             "Execution failed"
           }
+        </div>
+      )}
+
+      {Boolean(
+        effectiveResult?.cacheState === "dirty" ||
+          (effectiveResult?.output &&
+            typeof effectiveResult.output === "object" &&
+            !Array.isArray(effectiveResult.output) &&
+            (effectiveResult.output as { stale?: boolean }).stale === true)
+      ) && (
+        <div className={cn(workflowAlertCompact("warning"), "text-[10px]")}>
+          {(() => {
+            const out = effectiveResult?.output;
+            if (
+              out &&
+              typeof out === "object" &&
+              !Array.isArray(out) &&
+              typeof (out as { message?: unknown }).message === "string"
+            ) {
+              return String((out as { message: string }).message);
+            }
+            return "Configuration changed since this output was produced. Run the step again to refresh.";
+          })()}
         </div>
       )}
 
@@ -440,6 +485,36 @@ export function NodeOutputPanel({
             emptyMessage={emptyMessage}
             canonicalItemsOnly
           />
+          {promptsUsed && (
+            <details className="rounded border border-dashed bg-muted/15 px-2 py-1.5 text-[10px]">
+              <summary className="cursor-pointer font-medium text-muted-foreground">
+                Prompts used
+                {promptsUsed.gscGrounded ? " · GSC grounded" : ""}
+              </summary>
+              <div className="mt-2 space-y-2">
+                {promptsUsed.systemPrompt ? (
+                  <div>
+                    <div className="mb-0.5 text-[9px] uppercase tracking-wide text-muted-foreground">
+                      System
+                    </div>
+                    <pre className="max-h-40 overflow-auto whitespace-pre-wrap rounded bg-background/80 p-2 font-mono text-[10px] text-foreground">
+                      {promptsUsed.systemPrompt}
+                    </pre>
+                  </div>
+                ) : null}
+                {promptsUsed.userPrompt ? (
+                  <div>
+                    <div className="mb-0.5 text-[9px] uppercase tracking-wide text-muted-foreground">
+                      User
+                    </div>
+                    <pre className="max-h-40 overflow-auto whitespace-pre-wrap rounded bg-background/80 p-2 font-mono text-[10px] text-foreground">
+                      {promptsUsed.userPrompt}
+                    </pre>
+                  </div>
+                ) : null}
+              </div>
+            </details>
+          )}
           {metadataSummary && (
             <p className="text-[10px] text-muted-foreground">{metadataSummary}</p>
           )}

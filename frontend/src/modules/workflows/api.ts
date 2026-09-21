@@ -91,6 +91,14 @@ export const workflowsApi = {
       `/workflows/${workflowId}/editor-session`
     ),
 
+  syncEditorSessionFromRun: (workflowId: string, runId: string) =>
+    apiClient.post<{
+      session: import("./types").WorkflowEditorSession;
+      synced: boolean;
+      runId?: string;
+      reason?: string;
+    }>(`/workflows/${workflowId}/runs/${runId}/sync-editor-session`, {}),
+
   invalidateEditorSession: (
     workflowId: string,
     payload: {
@@ -174,6 +182,7 @@ export const workflowsApi = {
       expression: string;
       itemIndex?: number;
       runIndex?: number;
+      runId?: string;
       parameterName?: string;
       definition?: import("./types").WorkflowDefinition;
       input?: Record<string, unknown>;

@@ -85,7 +85,7 @@ const NODE_ENGINE_CONTRACTS = {
   aiCalculatorTool: { cardinality: "0-to-1", pairedItemPolicy: "none", mergeInputs: 0, isAuxiliaryProvider: true },
   aiHttpTool: { cardinality: "0-to-1", pairedItemPolicy: "none", mergeInputs: 0, isAuxiliaryProvider: true },
   gscMcpTool: {
-    cardinality: "N-to-leqN",
+    cardinality: "1-to-N",
     pairedItemPolicy: "fanOut",
     mergeInputs: 1,
   },

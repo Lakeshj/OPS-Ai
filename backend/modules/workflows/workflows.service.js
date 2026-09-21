@@ -1168,6 +1168,28 @@ const getEditorSession = async (workflowId, authUser) => {
   );
 };
 
+/** Seed editor session from a succeeded production run (clears STALE_CACHE). */
+const syncEditorSessionFromRun = async (workflowId, runId, authUser) => {
+  const workflow = await getById(workflowId, authUser);
+  const run = await getRunById(runId, authUser, { workflowId });
+  if (run.status !== "succeeded") {
+    return {
+      session: editorSession.formatSession(
+        editorSession.getSession(workflowId, authUser.userId)
+      ),
+      synced: false,
+      reason: `Run status is ${run.status}`,
+    };
+  }
+  const session = editorSession.seedFromRun(
+    workflowId,
+    authUser.userId,
+    workflow.definition,
+    run
+  );
+  return { session, synced: true, runId: run.id };
+};
+
 const REASON_TO_PREVIEW_STATUS = {
   [REASONS.TARGET_NOT_EXECUTED]: "UPSTREAM_NOT_EXECUTED",
   [REASONS.TARGET_NOT_IN_PATH]: "BROKEN_REFERENCE",
@@ -1191,14 +1213,14 @@ const previewExpression = async (workflowId, nodeId, body, authUser) => {
       ? Number(body.runIndex)
       : null;
   const userId = authUser.userId;
-  const session = editorSession.prepareSessionForDefinition(
+  let session = editorSession.prepareSessionForDefinition(
     workflowId,
     userId,
     definition
   );
   const runInput = body?.input ?? session.input ?? {};
 
-  const { context, itemIndex: safeIndex, pinnedNodeIds, staleNodeIds } =
+  const buildPreviewContext = () =>
     buildExpressionPreviewContext(
       definition,
       session,
@@ -1208,6 +1230,9 @@ const previewExpression = async (workflowId, nodeId, body, authUser) => {
       runIndex
     );
 
+  let { context, itemIndex: safeIndex, pinnedNodeIds, staleNodeIds } =
+    buildPreviewContext();
+
   const usesPinned = [...pinnedNodeIds].some((id) =>
     expression.includes(`steps.${id}`)
   );
@@ -1215,9 +1240,74 @@ const previewExpression = async (workflowId, nodeId, body, authUser) => {
   const referencedStepIds = [
     ...expression.matchAll(/steps\.([A-Za-z][\w-]*)/g),
   ].map((match) => match[1]);
-  const staleReference = referencedStepIds.find(
+  let staleReference = referencedStepIds.find(
     (id) => staleNodeIds.includes(id) && !pinnedNodeIds.has(id)
   );
+
+  // Full Execute does not update the editor session. If Preview is blocked on a
+  // dirty upstream step but a successful production run has that step, seed the
+  // session from the run so Result mapFrom can resolve again.
+  //
+  // Do NOT heal from an older run after capability/config changes — that was
+  // causing AI Preview to show CTR+Ranking while GSC MCP Tools OUTPUT showed
+  // the newer CTR-only (or empty) execution.
+  if (staleReference) {
+    const {
+      shouldHealStalePreviewFromRun,
+    } = require("../../services/workflowPreviewHeal.util");
+    const dirtyMeta = session.dirtyNodes?.[staleReference] || null;
+    let healRun = null;
+    if (body?.runId) {
+      try {
+        healRun = await getRunById(String(body.runId), authUser, {
+          workflowId,
+        });
+      } catch {
+        healRun = null;
+      }
+    }
+    if (!healRun || healRun.status !== "succeeded") {
+      const [latest] = await pool.execute(
+        `SELECT id FROM workflow_runs
+         WHERE workflow_id = ? AND status = 'succeeded'
+         ORDER BY COALESCE(finished_at, created_at) DESC
+         LIMIT 1`,
+        [workflowId]
+      );
+      if (latest.length) {
+        healRun = await getRunById(latest[0].id, authUser, { workflowId });
+      }
+    }
+    const mayHeal = shouldHealStalePreviewFromRun({ dirtyMeta, healRun });
+    if (
+      mayHeal &&
+      healRun?.status === "succeeded" &&
+      Array.isArray(healRun.steps)
+    ) {
+      const hasReferenced = healRun.steps.some(
+        (s) =>
+          referencedStepIds.includes(s.nodeId) && s.status === "succeeded"
+      );
+      if (hasReferenced) {
+        editorSession.seedFromRun(workflowId, userId, definition, healRun);
+        session = editorSession.prepareSessionForDefinition(
+          workflowId,
+          userId,
+          definition
+        );
+        ({
+          context,
+          itemIndex: safeIndex,
+          pinnedNodeIds,
+          staleNodeIds,
+        } = buildPreviewContext());
+        staleReference = referencedStepIds.find(
+          (id) => staleNodeIds.includes(id) && !pinnedNodeIds.has(id)
+        );
+      }
+    }
+  }
+
   if (staleReference) {
     return {
       status: "STALE_CACHE",
@@ -1230,6 +1320,56 @@ const previewExpression = async (workflowId, nodeId, body, authUser) => {
   }
 
   if (!expression.includes("{{")) {
+    // AI system/user prompts may have no {{}} but still receive GSC grounding
+    // at runtime — preview the effective prompt so the inspector matches generation.
+    const parameterName = body?.parameterName;
+    const {
+      isAiPromptParameter,
+      isAiPromptNodeType,
+      resolveEffectiveAiPrompts,
+      effectivePromptForParameter,
+    } = require("../../services/workflowAiPromptPreview.util");
+    const previewNode = (definition?.nodes || []).find((n) => n.id === nodeId);
+    if (
+      isAiPromptParameter(parameterName) &&
+      isAiPromptNodeType(previewNode?.type || previewNode?.data?.nodeType)
+    ) {
+      try {
+        const systemTemplate =
+          parameterName === "systemPrompt" ||
+          parameterName === "systemInstruction"
+            ? expression
+            : previewNode?.data?.systemPrompt ||
+              previewNode?.data?.systemInstruction ||
+              "";
+        const userTemplate =
+          parameterName === "prompt"
+            ? expression
+            : previewNode?.data?.prompt || "{{input}}";
+        const effective = resolveEffectiveAiPrompts({
+          node: previewNode,
+          context,
+          systemPromptTemplate: systemTemplate,
+          userPromptTemplate: userTemplate,
+        });
+        const value = effectivePromptForParameter(parameterName, effective);
+        return {
+          status: "RESOLVED",
+          value,
+          itemIndex: safeIndex,
+          usesPinnedData: usesPinned,
+          gscGrounded: effective.gscGrounded,
+          effectivePrompt: true,
+        };
+      } catch (err) {
+        return {
+          status: "INVALID_EXPRESSION",
+          message: err instanceof Error ? err.message : "Prompt preview failed",
+          itemIndex: safeIndex,
+          usesPinnedData: usesPinned,
+        };
+      }
+    }
     return {
       status: "IDLE",
       itemIndex: safeIndex,
@@ -1238,6 +1378,45 @@ const previewExpression = async (workflowId, nodeId, body, authUser) => {
   }
 
   try {
+    const parameterName = body?.parameterName;
+    const {
+      isAiPromptParameter,
+      isAiPromptNodeType,
+      resolveEffectiveAiPrompts,
+      effectivePromptForParameter,
+    } = require("../../services/workflowAiPromptPreview.util");
+    const previewNode = (definition?.nodes || []).find((n) => n.id === nodeId);
+    if (
+      isAiPromptParameter(parameterName) &&
+      isAiPromptNodeType(previewNode?.type || previewNode?.data?.nodeType)
+    ) {
+      const systemTemplate =
+        parameterName === "systemPrompt" ||
+        parameterName === "systemInstruction"
+          ? expression
+          : previewNode?.data?.systemPrompt ||
+            previewNode?.data?.systemInstruction ||
+            "";
+      const userTemplate =
+        parameterName === "prompt"
+          ? expression
+          : previewNode?.data?.prompt || "{{input}}";
+      const effective = resolveEffectiveAiPrompts({
+        node: previewNode,
+        context,
+        systemPromptTemplate: systemTemplate,
+        userPromptTemplate: userTemplate,
+      });
+      return {
+        status: "RESOLVED",
+        value: effectivePromptForParameter(parameterName, effective),
+        itemIndex: safeIndex,
+        usesPinnedData: usesPinned,
+        gscGrounded: effective.gscGrounded,
+        effectivePrompt: true,
+      };
+    }
+
     const value = resolveExpression(expression, context);
     if (value === "" || value == null) {
       return {
@@ -1488,6 +1667,7 @@ module.exports = {
   executePrevious,
   getNodeInput,
   getEditorSession,
+  syncEditorSessionFromRun,
   previewExpression,
   previewScheduleOccurrences,
   invalidateEditorSession,
