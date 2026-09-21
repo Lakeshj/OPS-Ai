@@ -366,6 +366,7 @@ const runLlmNode = async (node, context, options = {}) => {
   // GSC IntelligenceContext: structure AI input at the data-contract level.
   let intelligenceContext = null;
   let runtimeDataAttached = false;
+  let userInstructions = String(systemPrompt || "").trim() || null;
   try {
     const {
       applyAiGrounding,
@@ -387,6 +388,7 @@ const runLlmNode = async (node, context, options = {}) => {
       systemPrompt = grounded.systemPrompt;
       userPrompt = grounded.userPrompt;
       intelligenceContext = grounded.intelligenceContext;
+      userInstructions = grounded.userInstructions || userInstructions;
     }
   } catch (err) {
     if (err?.code === "MCP_PROPERTY_REQUIRED" || err?.code === "MCP_INTEL_CONTEXT_INVALID") {
@@ -486,15 +488,18 @@ const runLlmNode = async (node, context, options = {}) => {
       isLlm: true,
       assistantId: assistantMeta?.id || null,
       assistantName: assistantMeta?.name || data.assistantName || null,
-      // Effective prompts actually sent to the model (includes GSC grounding).
+      // Messages sent to the model (debug). Instructions stay primary for UI.
       promptsUsed: {
+        userInstructions,
         systemPrompt,
         userPrompt: String(userPrompt || ""),
         gscGrounded: Boolean(intelligenceContext),
+        groundingApplied: Boolean(intelligenceContext),
         runtimeDataAttached: Boolean(runtimeDataAttached),
       },
       systemPrompt,
       userPrompt: String(userPrompt || ""),
+      userInstructions,
     },
   };
 };

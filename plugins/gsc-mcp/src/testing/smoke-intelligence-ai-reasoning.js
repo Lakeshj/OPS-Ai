@@ -47,12 +47,19 @@ const main = () => {
     input: ctrCtx,
   });
   assert.equal(grounded.grounded, true);
-  assert.ok(grounded.systemPrompt.includes("final GSC intelligence analyst"));
-  assert.ok(grounded.systemPrompt.includes("Do not invent metrics, scores, priorities"));
+  assert.equal(grounded.groundingApplied, true);
+  assert.ok(grounded.systemPrompt.includes("## Instructions"));
+  assert.ok(grounded.systemPrompt.includes("## GSC MCP evidence rules"));
   assert.ok(grounded.systemPrompt.includes("opportunity_type"));
-  assert.ok(grounded.systemPrompt.includes("Total opportunities received"));
-  assert.ok(grounded.systemPrompt.includes("Opportunity types represented"));
-  assert.ok(grounded.systemPrompt.includes("Score:"));
+  assert.ok(grounded.systemPrompt.includes("Do not invent"));
+  assert.ok(
+    !grounded.systemPrompt.includes("Total opportunities received"),
+    "must not force report totals template"
+  );
+  assert.ok(
+    !grounded.systemPrompt.includes("\nOpportunity:\n"),
+    "must not force Opportunity:/Type: template"
+  );
   assert.ok(grounded.userPrompt.includes("ai visibility checker"));
   assert.ok(grounded.userPrompt.includes("ctr_opportunity") || grounded.userPrompt.includes("197"));
 
@@ -90,6 +97,24 @@ const main = () => {
   assert.ok(ctx.observationRespectsOpportunityType(goodCtr, ctrCtx));
   assert.ok(ctx.preservesNumericScoreWithoutInventedPriority(goodCtr, ctrCtx));
   assert.ok(ctx.recommendationCitesEvidence(goodCtr, ctrCtx));
+
+  const inventedSeo = [
+    "Opportunity: ai visibility checker",
+    "Type: ctr_opportunity",
+    "Observation: showing a lack of engagement despite visibility.",
+    "Recommendation: Focus on enhancing content depth for the primary intent.",
+    "This can significantly impact both CTR and rankings.",
+    `Score: ${ctrRow.score}`,
+  ].join("\n");
+  assert.equal(
+    ctx.rejectsUnsupportedSeoExpansion(inventedSeo, ctrCtx),
+    false,
+    "invented SEO expansions must be rejected"
+  );
+  assert.equal(
+    ctx.rejectsUnsupportedOverInterpretation(inventedSeo, ctrCtx),
+    false
+  );
 
   // Deep-rank single-period example from the brief (still CTR, not decay)
   const deepRankCtx = ctx.buildIntelligenceContext({

@@ -137,21 +137,23 @@ export const NODE_PARAMETER_SCHEMAS: Record<WorkflowNodeType, ParamDescriptor[]>
       },
       {
         name: "systemPrompt",
-        displayName: "System prompt",
+        displayName: "Instructions",
         type: "string",
         multiline: true,
         expression: true,
         description:
-          "Extra instructions for the model. When upstream is GSC MCP Tools, OpsAi auto-prepends the GSC analyst rules — open Preview to see the full prompt sent.",
+          "Your task instructions for the AI. When upstream is GSC MCP Tools, evidence rules are applied automatically — they do not replace these instructions.",
       },
       {
         name: "prompt",
-        displayName: "User prompt",
+        displayName: "Workflow input",
         type: "string",
         multiline: true,
         default: "{{input}}",
         expression: true,
         required: true,
+        description:
+          "Upstream workflow data sent with the request. {{input}} resolves to connected node output (for example GSC MCP opportunities), not a second system prompt.",
       },
       {
         name: "outputFormat",
@@ -1689,21 +1691,23 @@ export const NODE_PARAMETER_SCHEMAS: Record<WorkflowNodeType, ParamDescriptor[]>
       },
       {
         name: "systemPrompt",
-        displayName: "System instructions",
+        displayName: "Instructions",
         type: "string",
         multiline: true,
         expression: true,
         description:
-          "Extra instructions for the model. When upstream is GSC MCP Tools, OpsAi auto-prepends the GSC analyst rules — open Preview to see the full prompt sent.",
+          "Your task instructions for the AI. When upstream is GSC MCP Tools, evidence rules are applied automatically — they do not replace these instructions.",
       },
       {
         name: "prompt",
-        displayName: "Prompt",
+        displayName: "Workflow input",
         type: "string",
         multiline: true,
         expression: true,
         required: true,
         default: "{{input}}",
+        description:
+          "Upstream workflow data sent with the request. {{input}} resolves to connected node output (for example GSC MCP opportunities), not a second system prompt.",
       },
       {
         name: "temperature",

@@ -17,8 +17,13 @@ export type ExpressionPreviewResponse = {
   targetNodeId?: string | null;
   itemIndex?: number;
   usesPinnedData?: boolean;
-  /** True when preview applied GSC/runtime prompt grounding */
+  /** True when GSC MCP grounding applied at preview/runtime */
   gscGrounded?: boolean;
+  groundingApplied?: boolean;
+  userInstructions?: string | null;
+  /** instructions | workflow_input | expression */
+  previewKind?: "instructions" | "workflow_input" | "expression";
+  /** @deprecated use previewKind */
   effectivePrompt?: boolean;
 };
 

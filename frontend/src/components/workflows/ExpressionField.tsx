@@ -319,15 +319,21 @@ export function ExpressionField({
 
       {shouldPreview && (
         <div className="mt-1 rounded border border-dashed bg-muted/20 px-2 py-2 text-[10px]">
-          <div className="mb-1 flex items-center gap-2 text-muted-foreground">
+          <div className="mb-1 flex flex-wrap items-center gap-2 text-muted-foreground">
             <span className="font-medium">
-              {preview?.effectivePrompt
-                ? "Effective prompt (sent to model)"
-                : "Preview"}
+              {preview?.previewKind === "instructions"
+                ? "Instructions preview"
+                : preview?.previewKind === "workflow_input"
+                  ? "Workflow input preview"
+                  : hasExpression
+                    ? "Preview"
+                    : "Preview"}
             </span>
-            {preview?.gscGrounded ? (
-              <span className="text-[9px] italic">GSC grounding applied</span>
-            ) : null}
+            {Boolean(preview?.groundingApplied || preview?.gscGrounded) && (
+              <span className="rounded border border-emerald-500/40 bg-emerald-500/10 px-1.5 py-0.5 text-[9px] text-emerald-800 dark:text-emerald-300">
+                GSC MCP grounding: applied
+              </span>
+            )}
             {preview?.usesPinnedData && (
               <span className="text-[9px] italic">uses pinned data</span>
             )}

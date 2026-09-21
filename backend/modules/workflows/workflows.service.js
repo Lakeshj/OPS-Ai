@@ -1353,13 +1353,22 @@ const previewExpression = async (workflowId, nodeId, body, authUser) => {
           userPromptTemplate: userTemplate,
         });
         const value = effectivePromptForParameter(parameterName, effective);
+        const isInstructions =
+          parameterName === "systemPrompt" ||
+          parameterName === "systemInstruction";
         return {
           status: "RESOLVED",
           value,
           itemIndex: safeIndex,
           usesPinnedData: usesPinned,
           gscGrounded: effective.gscGrounded,
-          effectivePrompt: true,
+          groundingApplied: effective.groundingApplied,
+          userInstructions: effective.userInstructions,
+          previewKind: isInstructions
+            ? "instructions"
+            : parameterName === "prompt"
+              ? "workflow_input"
+              : "expression",
         };
       } catch (err) {
         return {
@@ -1413,7 +1422,15 @@ const previewExpression = async (workflowId, nodeId, body, authUser) => {
         itemIndex: safeIndex,
         usesPinnedData: usesPinned,
         gscGrounded: effective.gscGrounded,
-        effectivePrompt: true,
+        groundingApplied: effective.groundingApplied,
+        userInstructions: effective.userInstructions,
+        previewKind:
+          parameterName === "systemPrompt" ||
+          parameterName === "systemInstruction"
+            ? "instructions"
+            : parameterName === "prompt"
+              ? "workflow_input"
+              : "expression",
       };
     }
 

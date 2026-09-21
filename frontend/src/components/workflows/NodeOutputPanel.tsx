@@ -258,15 +258,24 @@ export function NodeOutputPanel({
       !Array.isArray(record.promptsUsed)
         ? (record.promptsUsed as Record<string, unknown>)
         : null;
+    const userInstructions = String(
+      nested?.userInstructions ?? record.userInstructions ?? ""
+    );
     const systemPrompt = String(
       nested?.systemPrompt ?? record.systemPrompt ?? ""
     );
     const userPrompt = String(nested?.userPrompt ?? record.userPrompt ?? "");
-    if (!systemPrompt && !userPrompt) return null;
+    const grounded = Boolean(
+      nested?.groundingApplied ??
+        nested?.gscGrounded ??
+        record.gscIntelligence
+    );
+    if (!userInstructions && !systemPrompt && !userPrompt) return null;
     return {
+      userInstructions,
       systemPrompt,
       userPrompt,
-      gscGrounded: Boolean(nested?.gscGrounded ?? record.gscIntelligence),
+      gscGrounded: grounded,
     };
   }, [effectiveResult?.output]);
 
@@ -488,24 +497,32 @@ export function NodeOutputPanel({
           {promptsUsed && (
             <details className="rounded border border-dashed bg-muted/15 px-2 py-1.5 text-[10px]">
               <summary className="cursor-pointer font-medium text-muted-foreground">
-                Prompts used
-                {promptsUsed.gscGrounded ? " · GSC grounded" : ""}
+                Sent to model
+                {promptsUsed.gscGrounded
+                  ? " · GSC MCP grounding applied"
+                  : ""}
               </summary>
               <div className="mt-2 space-y-2">
-                {promptsUsed.systemPrompt ? (
+                {promptsUsed.userInstructions ? (
                   <div>
                     <div className="mb-0.5 text-[9px] uppercase tracking-wide text-muted-foreground">
-                      System
+                      Instructions
                     </div>
-                    <pre className="max-h-40 overflow-auto whitespace-pre-wrap rounded bg-background/80 p-2 font-mono text-[10px] text-foreground">
-                      {promptsUsed.systemPrompt}
+                    <pre className="max-h-32 overflow-auto whitespace-pre-wrap rounded bg-background/80 p-2 font-mono text-[10px] text-foreground">
+                      {promptsUsed.userInstructions}
                     </pre>
+                  </div>
+                ) : null}
+                {promptsUsed.gscGrounded ? (
+                  <div className="rounded border border-emerald-500/30 bg-emerald-500/5 px-2 py-1 text-[10px] text-emerald-900 dark:text-emerald-200">
+                    GSC MCP grounding — automatically applied (evidence rules;
+                    not a second editable System Prompt)
                   </div>
                 ) : null}
                 {promptsUsed.userPrompt ? (
                   <div>
                     <div className="mb-0.5 text-[9px] uppercase tracking-wide text-muted-foreground">
-                      User
+                      Workflow input / user request
                     </div>
                     <pre className="max-h-40 overflow-auto whitespace-pre-wrap rounded bg-background/80 p-2 font-mono text-[10px] text-foreground">
                       {promptsUsed.userPrompt}

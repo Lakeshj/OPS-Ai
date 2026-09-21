@@ -1,7 +1,7 @@
 /**
- * Resolve the effective AI system/user prompts the same way runLlmNode does,
- * so Expression Preview and OUTPUT can show what the model actually receives
- * (including GSC MCP grounding that is not stored in the Parameters field).
+ * Resolve AI prompts the same way runLlmNode does for GSC grounding.
+ * Preview for Instructions shows the USER-CONTROLLED text; grounding is a flag.
+ * Preview for Workflow input / prompt shows the grounded user message (data).
  */
 
 const {
@@ -25,6 +25,11 @@ const isAiPromptParameter = (parameterName) =>
 
 const isAiPromptNodeType = (nodeType) =>
   AI_NODE_TYPES.has(String(nodeType || ""));
+
+const isInstructionsParameter = (parameterName) => {
+  const name = String(parameterName || "");
+  return name === "systemPrompt" || name === "systemInstruction";
+};
 
 /**
  * @param {{
@@ -66,8 +71,13 @@ const resolveEffectiveAiPrompts = ({
     userPrompt = String(interpolate(userPrompt, exprScope) ?? "");
   }
 
+  const userInstructions = String(systemPrompt || "").trim();
+  let mergedSystemPrompt = systemPrompt;
+  let mergedUserPrompt = userPrompt;
   let gscGrounded = false;
   let runtimeDataAttached = false;
+  let userInstructionsResolved = userInstructions;
+
   try {
     const {
       applyAiGrounding,
@@ -86,8 +96,10 @@ const resolveEffectiveAiPrompts = ({
       input: groundingInput,
     });
     if (grounded.grounded) {
-      systemPrompt = grounded.systemPrompt;
-      userPrompt = grounded.userPrompt;
+      mergedSystemPrompt = grounded.systemPrompt;
+      mergedUserPrompt = grounded.userPrompt;
+      userInstructionsResolved =
+        grounded.userInstructions || userInstructions || null;
       gscGrounded = true;
     }
   } catch (err) {
@@ -101,24 +113,33 @@ const resolveEffectiveAiPrompts = ({
 
   if (!gscGrounded) {
     const runtimePayload = resolveRuntimePromptPayload(context);
-    const attached = attachRuntimeDataToPrompt(userPrompt, runtimePayload);
-    userPrompt = attached.prompt;
+    const attached = attachRuntimeDataToPrompt(mergedUserPrompt, runtimePayload);
+    mergedUserPrompt = attached.prompt;
     runtimeDataAttached = attached.attached;
   }
 
   return {
-    systemPrompt,
-    userPrompt,
+    /** Merged system message actually sent to the model */
+    systemPrompt: mergedSystemPrompt,
+    /** Merged user message actually sent to the model */
+    userPrompt: mergedUserPrompt,
+    /** User-controlled instructions only (for Instructions field preview) */
+    userInstructions: userInstructionsResolved,
     gscGrounded,
+    groundingApplied: gscGrounded,
     runtimeDataAttached,
   };
 };
 
+/**
+ * Value shown in the Parameters field Preview for a given parameter.
+ * Instructions → user text only; Prompt → workflow/user-request message.
+ */
 const effectivePromptForParameter = (parameterName, effective) => {
   const name = String(parameterName || "");
   if (name === "prompt") return effective.userPrompt;
   if (name === "systemPrompt" || name === "systemInstruction") {
-    return effective.systemPrompt;
+    return effective.userInstructions || "";
   }
   return null;
 };
@@ -127,6 +148,7 @@ module.exports = {
   AI_PROMPT_PARAM_NAMES,
   isAiPromptParameter,
   isAiPromptNodeType,
+  isInstructionsParameter,
   resolveEffectiveAiPrompts,
   effectivePromptForParameter,
 };

@@ -103,8 +103,8 @@ const main = () => {
     groundedCtr.userPrompt.includes('"capability": "ctr_opportunities"') ||
       groundedCtr.userPrompt.includes('"capability":"ctr_opportunities"')
   );
-  assert.ok(groundedCtr.systemPrompt.includes("final GSC intelligence analyst"));
-  assert.ok(groundedCtr.systemPrompt.includes("Use ONLY the structured opportunities"));
+  assert.ok(groundedCtr.systemPrompt.includes("## GSC MCP evidence rules"));
+  assert.ok(groundedCtr.systemPrompt.includes("opportunity_type"));
   assert.ok(groundedCtr.userPrompt.includes("gemini visibility tracker"));
 
   // 2. Multiple capabilities → correctly separated
@@ -266,8 +266,8 @@ const main = () => {
 
   // 10. AI cannot produce unrelated generic opportunities from empty GSC result
   assert.ok(
-    groundedEmpty.systemPrompt.includes("Do not create new opportunities from raw GSC data") ||
-      groundedEmpty.systemPrompt.includes("Never fabricate missing GSC data")
+    groundedEmpty.systemPrompt.includes("Do not invent") ||
+      groundedEmpty.systemPrompt.includes("Do not create opportunities from untagged")
   );
   assert.ok(
     groundedEmpty.systemPrompt.includes("No actionable GSC evidence was returned")

@@ -1645,7 +1645,7 @@ export const NODE_CONTRACTS: Record<WorkflowNodeType, NodeContract> = {
     isStateful: true,
     stateScope: "node",
     params: [
-      { name: "systemPrompt", displayName: "System Prompt", type: "string" },
+      { name: "systemPrompt", displayName: "Instructions", type: "string" },
       { name: "maxIterations", displayName: "Max Iterations", type: "number", default: 10 },
     ],
     dirtyTriggers: ["params", "edges", "pin", "disabled", "typedPorts"],
