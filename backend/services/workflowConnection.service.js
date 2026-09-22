@@ -184,6 +184,7 @@ const NODE_PORT_CONTRACTS = {
   aiGenerate: { inputs: [mainIn()], outputs: [mainOut()] },
   googleSearchConsole: { inputs: [mainIn()], outputs: [mainOut()] },
   gscMcpTool: { inputs: [mainIn()], outputs: [mainOut()] },
+  ga4McpTool: { inputs: [mainIn()], outputs: [mainOut()] },
   gscMcp: { inputs: [mainIn()], outputs: [mainOut()] },
   googleAnalytics: { inputs: [mainIn()], outputs: [mainOut()] },
   gmail: { inputs: [mainIn()], outputs: [mainOut()] },

@@ -10,10 +10,28 @@
 import type { WorkflowNodeType } from "./types";
 import { OPERATOR_LABELS } from "./types";
 import type { ParamDescriptor } from "./nodeContract";
+import {
+  GA4_DIMENSION_OPTIONS,
+  GA4_METRIC_OPTIONS,
+} from "./ga4Catalog";
+import {
+  GA4_MCP_CAPABILITY_FILTERS,
+  GA4_MCP_CAPABILITY_OPTIONS,
+} from "./ga4McpCapabilities";
 
 const operatorOptions = Object.entries(OPERATOR_LABELS).map(([value, name]) => ({
   name,
   value,
+}));
+
+const ga4MetricSchemaOptions = GA4_METRIC_OPTIONS.map((o) => ({
+  name: o.name,
+  value: o.value,
+}));
+
+const ga4DimensionSchemaOptions = GA4_DIMENSION_OPTIONS.map((o) => ({
+  name: o.name,
+  value: o.value,
 }));
 
 const HTTP_METHODS = ["GET", "POST", "PUT", "DELETE", "PATCH"].map((m) => ({
@@ -1124,6 +1142,40 @@ export const NODE_PARAMETER_SCHEMAS: Record<WorkflowNodeType, ParamDescriptor[]>
       },
     ],
 
+    ga4McpTool: [
+      {
+        name: "_upstreamNotice",
+        displayName: "Upstream data",
+        type: "notice",
+        description:
+          "Connect Google Analytics → this node. Google connection, property, dates, dimensions and metrics stay on the Google Analytics node.",
+      },
+      {
+        name: "capability",
+        displayName: "Capabilities",
+        type: "multiOptions",
+        customRenderer: "capabilitySettings",
+        default: [],
+        required: true,
+        description:
+          "Select one or more GA4 capabilities. Each runs independently on the same upstream Google Analytics rows.",
+        options: GA4_MCP_CAPABILITY_OPTIONS.map((o) => ({
+          name: o.name,
+          value: o.value,
+          description: o.description,
+        })),
+        typeOptions: {
+          engagement_opportunities:
+            GA4_MCP_CAPABILITY_FILTERS.engagement_opportunities,
+          landing_underperformance:
+            GA4_MCP_CAPABILITY_FILTERS.landing_underperformance,
+          acquisition_concentration:
+            GA4_MCP_CAPABILITY_FILTERS.acquisition_concentration,
+          page_performance: GA4_MCP_CAPABILITY_FILTERS.page_performance,
+        },
+      },
+    ],
+
     googleSearchConsole: [
       {
         name: "credentialId",
@@ -1250,20 +1302,6 @@ export const NODE_PARAMETER_SCHEMAS: Record<WorkflowNodeType, ParamDescriptor[]>
         placeholder: "123456789",
       },
       {
-        name: "resource",
-        displayName: "Resource",
-        type: "options",
-        default: "report",
-        options: [{ name: "Report", value: "report" }],
-      },
-      {
-        name: "operation",
-        displayName: "Operation",
-        type: "options",
-        default: "get",
-        options: [{ name: "Get", value: "get" }],
-      },
-      {
         name: "dateRange",
         displayName: "Date range",
         type: "options",
@@ -1284,6 +1322,7 @@ export const NODE_PARAMETER_SCHEMAS: Record<WorkflowNodeType, ParamDescriptor[]>
         displayName: "Start date",
         type: "string",
         expression: true,
+        placeholder: "YYYY-MM-DD",
         displayOptions: { show: { dateRange: ["custom"] } },
       },
       {
@@ -1291,6 +1330,7 @@ export const NODE_PARAMETER_SCHEMAS: Record<WorkflowNodeType, ParamDescriptor[]>
         displayName: "End date",
         type: "string",
         expression: true,
+        placeholder: "YYYY-MM-DD",
         displayOptions: { show: { dateRange: ["custom"] } },
       },
       {
@@ -1298,55 +1338,20 @@ export const NODE_PARAMETER_SCHEMAS: Record<WorkflowNodeType, ParamDescriptor[]>
         displayName: "Metrics",
         type: "multiOptions",
         default: ["sessions", "totalUsers"],
-        options: [
-          { name: "Sessions", value: "sessions" },
-          { name: "Total users", value: "totalUsers" },
-          { name: "New users", value: "newUsers" },
-          { name: "Active users", value: "activeUsers" },
-          { name: "Views", value: "screenPageViews" },
-          { name: "Event count", value: "eventCount" },
-          { name: "Engagement duration", value: "userEngagementDuration" },
-          { name: "Engagement rate", value: "engagementRate" },
-        ],
+        options: ga4MetricSchemaOptions,
       },
       {
         name: "dimensions",
         displayName: "Dimensions",
         type: "multiOptions",
-        options: [
-          { name: "Date", value: "date" },
-          { name: "Country", value: "country" },
-          { name: "City", value: "city" },
-          { name: "Device", value: "deviceCategory" },
-          { name: "Browser", value: "browser" },
-          { name: "Source", value: "sessionSource" },
-          { name: "Medium", value: "sessionMedium" },
-          { name: "Source / medium", value: "sessionSourceMedium" },
-          { name: "Page location", value: "pageLocation" },
-          { name: "Page path", value: "pagePath" },
-          { name: "Landing page", value: "landingPage" },
-          { name: "Campaign", value: "sessionCampaignName" },
-          { name: "Language", value: "language" },
-        ],
-      },
-      {
-        name: "limit",
-        displayName: "Limit",
-        type: "number",
-        default: 100,
-        displayOptions: { hide: { returnAll: [true] } },
-      },
-      {
-        name: "returnAll",
-        displayName: "Return all (bounded)",
-        type: "boolean",
-        default: false,
+        options: ga4DimensionSchemaOptions,
       },
       {
         name: "orderByField",
         displayName: "Order by",
-        type: "string",
-        placeholder: "sessions",
+        type: "options",
+        customRenderer: "ga4OrderBy",
+        description: "Choose from the metrics and dimensions selected above.",
       },
       {
         name: "orderDirection",
@@ -1361,14 +1366,34 @@ export const NODE_PARAMETER_SCHEMAS: Record<WorkflowNodeType, ParamDescriptor[]>
       {
         name: "dimensionFilter",
         displayName: "Dimension filter",
-        type: "json",
-        description: "Structured filter: { field, operator, value } — equals, contains, beginsWith, inList",
+        type: "collection",
+        customRenderer: "ga4Filter",
+        description: "Optional — one dimension filter (equals, contains, begins with, or in list).",
       },
       {
         name: "metricFilter",
         displayName: "Metric filter",
-        type: "json",
-        description: "Structured filter: { field, operator, value } — equals, gt, lt, between",
+        type: "collection",
+        customRenderer: "ga4Filter",
+        description: "Optional — one metric filter (equals, greater than, less than, or between).",
+      },
+      {
+        name: "limit",
+        displayName: "Limit",
+        type: "number",
+        default: 100,
+        min: 1,
+        max: 10000,
+        description: "Maximum rows to return (up to 10,000).",
+        displayOptions: { hide: { returnAll: [true] } },
+      },
+      {
+        name: "returnAll",
+        displayName: "Return all (max 10,000 rows)",
+        type: "boolean",
+        default: false,
+        description:
+          "Fetch up to 10,000 rows in a single request. Larger result sets are not paginated yet.",
       },
     ],
 

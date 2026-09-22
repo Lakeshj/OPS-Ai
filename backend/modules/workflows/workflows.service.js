@@ -54,6 +54,7 @@ const ALLOWED_NODE_TYPES = new Set([
   "aiCalculatorTool",
   "aiHttpTool",
   "gscMcpTool",
+  "ga4McpTool",
   "respondToWebhook",
   // Part 14D.5 — native Google / SEO / AI Generate / XLSX
   "googleSearchConsole",
@@ -798,17 +799,11 @@ const getRunById = async (runId, authUser, options = {}) => {
     throw new AppError("Run does not belong to this workflow", 404, "NOT_FOUND");
   }
   const run = formatRun(rows[0]);
-  // Prefer start/finish timestamps over created_at alone — same-second inserts
-  // are common and UUID primary keys do not preserve execution order.
+  // Do NOT ORDER BY with SELECT * — GA4/GSC fan-out steps can store multi-MB
+  // JSON and MySQL filesorts the full row into sort_buffer → ER_OUT_OF_SORTMEMORY.
+  // Fetch by run_id only; authoritative UI order is applied in JS below.
   const [steps] = await pool.execute(
-    `SELECT * FROM workflow_run_steps
-     WHERE run_id = ?
-     ORDER BY
-       COALESCE(started_at, created_at) ASC,
-       COALESCE(finished_at, started_at, created_at) ASC,
-       execution_index ASC,
-       created_at ASC,
-       id ASC`,
+    `SELECT * FROM workflow_run_steps WHERE run_id = ?`,
     [runId]
   );
 

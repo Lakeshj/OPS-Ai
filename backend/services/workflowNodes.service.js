@@ -363,47 +363,78 @@ const runLlmNode = async (node, context, options = {}) => {
     model = interpolate(model, exprScope);
   }
 
-  // GSC IntelligenceContext: structure AI input at the data-contract level.
+  // Common MCP IntelligenceContext grounding (GSC + GA4 — same architecture).
   let intelligenceContext = null;
+  let mcpGroundingSource = null;
+  let ga4Grounded = false;
+  let ga4GroundingMode = null;
   let runtimeDataAttached = false;
   let userInstructions = String(systemPrompt || "").trim() || null;
   try {
     const {
-      applyAiGrounding,
-    } = require("../../plugins/gsc-mcp/src/contracts/intelligenceContext");
-    const groundingInput =
-      context.item != null
-        ? context.item
-        : Array.isArray(context.inputItems) && context.inputItems.length
-          ? context.inputItems.length === 1
-            ? context.inputItems[0]
-            : context.inputItems
-          : expressionInput;
-    const grounded = applyAiGrounding({
+      applyMcpAiGrounding,
+      resolveMcpGroundingInput,
+    } = require("./workflowMcpAiGrounding");
+    const groundingInput = resolveMcpGroundingInput(context, expressionInput);
+    const grounded = applyMcpAiGrounding({
       systemPrompt,
       userPrompt: String(userPrompt || ""),
       input: groundingInput,
+      context,
     });
     if (grounded.grounded) {
       systemPrompt = grounded.systemPrompt;
       userPrompt = grounded.userPrompt;
       intelligenceContext = grounded.intelligenceContext;
       userInstructions = grounded.userInstructions || userInstructions;
+      mcpGroundingSource = grounded.source || null;
+      if (grounded.source === "ga4") {
+        ga4Grounded = true;
+        ga4GroundingMode = "ga4_mcp";
+      }
     }
   } catch (err) {
-    if (err?.code === "MCP_PROPERTY_REQUIRED" || err?.code === "MCP_INTEL_CONTEXT_INVALID") {
+    if (
+      err?.code === "MCP_PROPERTY_REQUIRED" ||
+      err?.code === "MCP_INTEL_CONTEXT_INVALID" ||
+      err?.code === "GA4_INTEL_CONTEXT_INVALID"
+    ) {
       throw failWith(err.message, {
         provider,
         model: model || "gpt-4o-mini",
         code: err.code,
       });
     }
-    // Non-GSC paths: ignore require/grounding issues
   }
 
-  // Non-GSC (or untagged) upstream: still inject runtime evidence when the
-  // author prompt did not reference {{input}}/{{item}}.
+  // Native GA4 runReport rows only (not MCP IntelligenceContext).
   if (!intelligenceContext) {
+    try {
+      const {
+        applyGa4NativeAiGrounding,
+        resolveGa4GroundingInput,
+      } = require("./workflowGa4AiGrounding");
+      const groundingInput = resolveGa4GroundingInput(context, expressionInput);
+      const ga4 = applyGa4NativeAiGrounding({
+        systemPrompt,
+        userPrompt: String(userPrompt || ""),
+        input: groundingInput,
+        context,
+      });
+      if (ga4.grounded) {
+        systemPrompt = ga4.systemPrompt;
+        userPrompt = ga4.userPrompt;
+        userInstructions = ga4.userInstructions || userInstructions;
+        ga4Grounded = true;
+        ga4GroundingMode = "ga4_native";
+      }
+    } catch {
+      // Native GA4 grounding is best-effort.
+    }
+  }
+
+  // Non-MCP / non-native-GA4: still inject runtime evidence when needed.
+  if (!intelligenceContext && !ga4Grounded) {
     const runtimePayload = resolveRuntimePromptPayload(context);
     const attached = attachRuntimeDataToPrompt(userPrompt, runtimePayload);
     userPrompt = attached.prompt;
@@ -427,11 +458,29 @@ const runLlmNode = async (node, context, options = {}) => {
     runtimeDataAttached: Boolean(runtimeDataAttached),
     ...(intelligenceContext
       ? {
-          gscIntelligence: true,
-          property: intelligenceContext.property,
-          capabilities: (intelligenceContext.capabilities || []).map(
-            (s) => s.capability
-          ),
+          mcpIntelligence: true,
+          mcpGroundingSource,
+          ...(mcpGroundingSource === "gsc"
+            ? {
+                gscIntelligence: true,
+                property: intelligenceContext.property,
+                capabilities: (intelligenceContext.capabilities || []).map(
+                  (s) => s.capability
+                ),
+              }
+            : {
+                ga4Intelligence: true,
+                property: intelligenceContext.property,
+                capabilities: (intelligenceContext.capabilities || []).map(
+                  (s) => s.capability
+                ),
+              }),
+        }
+      : {}),
+    ...(ga4Grounded
+      ? {
+          ga4Grounded: true,
+          ga4GroundingMode,
         }
       : {}),
   };
@@ -493,8 +542,12 @@ const runLlmNode = async (node, context, options = {}) => {
         userInstructions,
         systemPrompt,
         userPrompt: String(userPrompt || ""),
-        gscGrounded: Boolean(intelligenceContext),
-        groundingApplied: Boolean(intelligenceContext),
+        gscGrounded: mcpGroundingSource === "gsc",
+        ga4Grounded: Boolean(ga4Grounded) || mcpGroundingSource === "ga4",
+        ga4GroundingMode: ga4GroundingMode || null,
+        mcpGroundingSource: mcpGroundingSource || null,
+        groundingApplied:
+          Boolean(intelligenceContext) || Boolean(ga4Grounded),
         runtimeDataAttached: Boolean(runtimeDataAttached),
       },
       systemPrompt,
@@ -662,12 +715,29 @@ const isTriggerOnlyEnvelope = (input) => {
 /**
  * Prefer explicit run input; when empty/trigger-only, use incoming/current item
  * payloads so chained nodes (Merge → AI with `{{input}}`) resolve usefully.
+ * When upstream WorkflowItems look like GSC or GA4 MCP intelligence, prefer
+ * those over stale/manual run input so {{input}} never sticks on {source:"manual"}.
  */
 const resolveExpressionInput = (context) => {
   const workflowInput = context?.input;
   const incoming = Array.isArray(context?.inputItems) ? context.inputItems : [];
+
+  let preferMcpUpstream = false;
+  try {
+    const {
+      looksLikeMcpIntelligenceInput,
+    } = require("./workflowMcpAiGrounding");
+    if (incoming.length > 0 && looksLikeMcpIntelligenceInput(incoming)) {
+      preferMcpUpstream = true;
+    }
+  } catch {
+    preferMcpUpstream = false;
+  }
+
   const preferUpstream =
-    isEmptyWorkflowInput(workflowInput) || isTriggerOnlyEnvelope(workflowInput);
+    preferMcpUpstream ||
+    isEmptyWorkflowInput(workflowInput) ||
+    isTriggerOnlyEnvelope(workflowInput);
 
   if (!preferUpstream && !isEmptyWorkflowInput(workflowInput)) {
     return workflowInput;
@@ -1971,25 +2041,31 @@ const handlers = {
       const flat = context.inputItems || [];
       try {
         const {
-          tryBuildFromWorkflowItems,
-          validateIntelligenceContext,
-        } = require("../../plugins/gsc-mcp/src/contracts/intelligenceContext");
-        const built = tryBuildFromWorkflowItems(flat);
-        if (built.ok && built.context) {
-          const validated = validateIntelligenceContext(built.context, {
-            requireProperty: true,
-          });
-          if (!validated.ok) {
-            throw Object.assign(new Error(validated.error.message), {
-              code: validated.error.code,
+          detectMcpIntelligenceSource,
+        } = require("./workflowMcpAiGrounding");
+        // GA4 MCP items must not enter GSC IntelligenceContext validation.
+        if (detectMcpIntelligenceSource(flat) !== "ga4") {
+          const {
+            tryBuildFromWorkflowItems,
+            validateIntelligenceContext,
+          } = require("../../plugins/gsc-mcp/src/contracts/intelligenceContext");
+          const built = tryBuildFromWorkflowItems(flat);
+          if (built.ok && built.context) {
+            const validated = validateIntelligenceContext(built.context, {
+              requireProperty: true,
+            });
+            if (!validated.ok) {
+              throw Object.assign(new Error(validated.error.message), {
+                code: validated.error.code,
+              });
+            }
+            return wrapOutput([{ json: cloneJsonData(built.context) }], {
+              mode,
+              gscIntelligenceContext: true,
+              legacy: true,
+              itemsIn: flat.length,
             });
           }
-          return wrapOutput([{ json: cloneJsonData(built.context) }], {
-            mode,
-            gscIntelligenceContext: true,
-            legacy: true,
-            itemsIn: flat.length,
-          });
         }
       } catch (err) {
         if (err?.code === "MCP_PROPERTY_REQUIRED" || err?.code === "MCP_INTEL_CONTEXT_INVALID") {
@@ -2010,24 +2086,29 @@ const handlers = {
       const flat = context.inputItems || [];
       try {
         const {
-          tryBuildFromWorkflowItems,
-          validateIntelligenceContext,
-        } = require("../../plugins/gsc-mcp/src/contracts/intelligenceContext");
-        const built = tryBuildFromWorkflowItems(flat);
-        if (built.ok && built.context) {
-          const validated = validateIntelligenceContext(built.context, {
-            requireProperty: true,
-          });
-          if (!validated.ok) {
-            throw Object.assign(new Error(validated.error.message), {
-              code: validated.error.code,
+          detectMcpIntelligenceSource,
+        } = require("./workflowMcpAiGrounding");
+        if (detectMcpIntelligenceSource(flat) !== "ga4") {
+          const {
+            tryBuildFromWorkflowItems,
+            validateIntelligenceContext,
+          } = require("../../plugins/gsc-mcp/src/contracts/intelligenceContext");
+          const built = tryBuildFromWorkflowItems(flat);
+          if (built.ok && built.context) {
+            const validated = validateIntelligenceContext(built.context, {
+              requireProperty: true,
+            });
+            if (!validated.ok) {
+              throw Object.assign(new Error(validated.error.message), {
+                code: validated.error.code,
+              });
+            }
+            return wrapOutput([{ json: cloneJsonData(built.context) }], {
+              mode,
+              gscIntelligenceContext: true,
+              itemsIn: flat.length,
             });
           }
-          return wrapOutput([{ json: cloneJsonData(built.context) }], {
-            mode,
-            gscIntelligenceContext: true,
-            itemsIn: flat.length,
-          });
         }
       } catch (err) {
         if (err?.code === "MCP_PROPERTY_REQUIRED" || err?.code === "MCP_INTEL_CONTEXT_INVALID") {
@@ -2062,29 +2143,35 @@ const handlers = {
       }
 
       // GSC intelligence: preserve capability sections instead of flattening.
+      // Skip when upstream is GA4 MCP — do not require a GSC property.
       try {
         const {
-          tryBuildFromWorkflowItems,
-          validateIntelligenceContext,
-        } = require("../../plugins/gsc-mcp/src/contracts/intelligenceContext");
-        const built = tryBuildFromWorkflowItems(items);
-        if (built.ok && built.context) {
-          const validated = validateIntelligenceContext(built.context, {
-            requireProperty: true,
-          });
-          if (!validated.ok) {
-            throw Object.assign(new Error(validated.error.message), {
-              code: validated.error.code,
+          detectMcpIntelligenceSource,
+        } = require("./workflowMcpAiGrounding");
+        if (detectMcpIntelligenceSource(items) !== "ga4") {
+          const {
+            tryBuildFromWorkflowItems,
+            validateIntelligenceContext,
+          } = require("../../plugins/gsc-mcp/src/contracts/intelligenceContext");
+          const built = tryBuildFromWorkflowItems(items);
+          if (built.ok && built.context) {
+            const validated = validateIntelligenceContext(built.context, {
+              requireProperty: true,
+            });
+            if (!validated.ok) {
+              throw Object.assign(new Error(validated.error.message), {
+                code: validated.error.code,
+              });
+            }
+            return wrapOutput([{ json: cloneJsonData(built.context) }], {
+              mode,
+              gscIntelligenceContext: true,
+              capabilityCount: built.context.capabilities?.length || 0,
+              input1Count: input1Items.length,
+              input2Count: input2Items.length,
+              portCounts,
             });
           }
-          return wrapOutput([{ json: cloneJsonData(built.context) }], {
-            mode,
-            gscIntelligenceContext: true,
-            capabilityCount: built.context.capabilities?.length || 0,
-            input1Count: input1Items.length,
-            input2Count: input2Items.length,
-            portCounts,
-          });
         }
       } catch (err) {
         if (err?.code === "MCP_PROPERTY_REQUIRED" || err?.code === "MCP_INTEL_CONTEXT_INVALID") {
@@ -2533,6 +2620,12 @@ const handlers = {
   gscMcpTool: async (node, context) => {
     const { executeGscMcpToolsProcessor } = require("./mcpPluginHost.service");
     return executeGscMcpToolsProcessor(node, context);
+  },
+  ga4McpTool: async (node, context) => {
+    const {
+      executeGa4McpToolsProcessor,
+    } = require("./ga4McpPluginHost.service");
+    return executeGa4McpToolsProcessor(node, context);
   },
   gscMcp: async (node, context) => {
     const { executeGscMcpNode } = require("./mcpPluginHost.service");

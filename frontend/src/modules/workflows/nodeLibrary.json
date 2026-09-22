@@ -696,6 +696,17 @@
       "engineType": "googleAnalytics"
     },
     {
+      "id": "ga4-mcp-tools",
+      "name": "GA4 MCP Tools",
+      "category": "SEO",
+      "type": "Action",
+      "description": "Analyze and process data from the connected Google Analytics node using GA4 intelligence and page-performance capabilities.",
+      "icon": "chart",
+      "provider": "OpsAi",
+      "available": true,
+      "engineType": "ga4McpTool"
+    },
+    {
       "id": "microsoft-outlook",
       "name": "Microsoft Outlook",
       "category": "Communication",

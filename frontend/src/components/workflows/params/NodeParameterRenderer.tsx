@@ -31,6 +31,8 @@ import { DocumentPickerField } from "./special/DocumentPickerField";
 import { SpreadsheetPickerField } from "./special/SpreadsheetPickerField";
 import { WorkflowPickerField } from "./special/WorkflowPickerField";
 import { CapabilitySettingsField } from "./CapabilitySettingsField";
+import { Ga4FilterField } from "./Ga4FilterField";
+import { Ga4OrderByField } from "./Ga4OrderByField";
 import type { KeywordAssistant, WorkspaceDocument } from "@/modules/shared/types";
 
 export type ParameterRenderContext = {
@@ -88,6 +90,24 @@ function renderSpecial(
     case "capabilitySettings":
       return (
         <CapabilitySettingsField
+          key={param.name}
+          param={param}
+          values={values}
+          onChange={onChange}
+        />
+      );
+    case "ga4Filter":
+      return (
+        <Ga4FilterField
+          key={param.name}
+          param={param}
+          values={values}
+          onChange={onChange}
+        />
+      );
+    case "ga4OrderBy":
+      return (
+        <Ga4OrderByField
           key={param.name}
           param={param}
           values={values}

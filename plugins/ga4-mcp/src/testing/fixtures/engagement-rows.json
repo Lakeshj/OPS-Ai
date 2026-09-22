@@ -1,0 +1,75 @@
+{
+  "A_high_traffic_weak": {
+    "pagePath": "/pricing",
+    "pageTitle": "Pricing",
+    "sessions": 1200,
+    "totalUsers": 980,
+    "engagementRate": 0.18,
+    "screenPageViews": 1500
+  },
+  "B_high_traffic_healthy": {
+    "pagePath": "/docs/getting-started",
+    "pageTitle": "Getting Started",
+    "sessions": 2500,
+    "totalUsers": 2100,
+    "engagementRate": 0.62,
+    "bounceRate": 0.28
+  },
+  "C_low_traffic_weak": {
+    "pagePath": "/blog/tiny-post",
+    "sessions": 40,
+    "engagementRate": 0.12,
+    "bounceRate": 0.8
+  },
+  "D_bounce_only": {
+    "pagePath": "/contact",
+    "sessions": 800,
+    "bounceRate": 0.72,
+    "totalUsers": 650
+  },
+  "E_missing_engagement_signals": {
+    "pagePath": "/about",
+    "sessions": 500,
+    "totalUsers": 400,
+    "screenPageViews": 600
+  },
+  "F_missing_sessions": {
+    "pagePath": "/careers",
+    "engagementRate": 0.1,
+    "bounceRate": 0.85
+  },
+  "G_multi_a": {
+    "pagePath": "/blog/old-guide",
+    "sessions": 1400,
+    "engagementRate": 0.18
+  },
+  "G_multi_b": {
+    "pagePath": "/lp/webinar",
+    "landingPage": "/lp/webinar",
+    "sessions": 900,
+    "engagementRate": 0.22,
+    "bounceRate": 0.68
+  },
+  "G_multi_c": {
+    "landingPage": "/promo/spring",
+    "sessions": 600,
+    "engagementRate": 0.3
+  },
+  "H_tie_zzz": {
+    "pagePath": "/zzz-equal",
+    "sessions": 1000,
+    "engagementRate": 0.2
+  },
+  "H_tie_aaa": {
+    "pagePath": "/aaa-equal",
+    "sessions": 1000,
+    "engagementRate": 0.2
+  },
+  "malformed_note": "not-an-object",
+  "percent_rates": {
+    "pagePath": "/percent-rates",
+    "sessions": 500,
+    "engagementRate": 25,
+    "bounceRate": 70
+  }
+}

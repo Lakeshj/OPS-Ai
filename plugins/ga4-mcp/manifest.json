@@ -1,0 +1,20 @@
+{
+  "id": "ga4-mcp",
+  "name": "Google Analytics 4 MCP Tools",
+  "version": "0.1.0",
+  "phase": 1,
+  "capabilities": [
+    "capability.registry",
+    "workflow.processor",
+    "intelligence.postprocess",
+    "data.ranking"
+  ],
+  "transports": [],
+  "credentialTypes": [],
+  "engineNodeType": "ga4McpTool",
+  "libraryId": "ga4-mcp-tools",
+  "userFacingWorkflowNode": true,
+  "authOnNode": false,
+  "consumers": ["workflow.ga4.upstream", "future.ga4.intelligence.nodes"],
+  "notes": "GA4 MCP Tools is a main-flow upstream-row processor. Google OAuth, property selection, and runReport live on googleAnalytics only. This plugin never calls the Google Analytics API."
+}

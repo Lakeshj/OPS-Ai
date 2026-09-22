@@ -332,7 +332,16 @@ const prepareNodeExecutionInputs = (graph, nodeId, context, options = {}) => {
       (graph.executionIncoming || graph.incoming).get(nodeId) || [];
     const items = [];
     for (const edge of edges) {
-      const upstream = context.items?.[edge.source];
+      // Prefer context.items; fall back to steps[source].items when cache
+      // only persisted nested output.items (GA4 / GSC report fan-out).
+      let upstream = context.items?.[edge.source];
+      if (!Array.isArray(upstream) || upstream.length === 0) {
+        const nested = context.steps?.[edge.source]?.items;
+        if (Array.isArray(nested) && nested.length > 0) {
+          upstream = nested;
+          context.items[edge.source] = nested;
+        }
+      }
       if (Array.isArray(upstream)) {
         for (const item of upstream) items.push(cloneItem(item));
       }

@@ -286,8 +286,8 @@ const resolveProvenancePolicy = (
   const inputCount = Number(resultMetadata.inputCount) || 0;
   const outputCount = Number(resultMetadata.outputCount) || 0;
 
-  // Multi-capability processor always fans out opportunity rows.
-  if (nodeType === "gscMcpTool") {
+  // Multi-capability processor always fans out opportunity/data rows.
+  if (nodeType === "gscMcpTool" || nodeType === "ga4McpTool") {
     return "fanOut";
   }
 

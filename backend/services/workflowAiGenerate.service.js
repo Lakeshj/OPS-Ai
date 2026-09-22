@@ -51,33 +51,59 @@ const executeAiGenerate = async (node, context) => {
       inputItems: [src],
     };
     if (testComplete) {
-      const {
-        applyAiGrounding,
-      } = require("../../plugins/gsc-mcp/src/contracts/intelligenceContext");
       let userPrompt = interpolate(data.prompt || "{{input}}", itemContext);
       let systemPrompt = interpolate(data.systemPrompt || "", itemContext);
       const model = interpolate(data.model || "gpt-4o-mini", itemContext);
       let groundedOk = false;
+      let ga4GroundedOk = false;
+      let mcpGroundingSource = null;
       try {
-        const grounded = applyAiGrounding({
+        const {
+          applyMcpAiGrounding,
+        } = require("./workflowMcpAiGrounding");
+        const grounded = applyMcpAiGrounding({
           systemPrompt,
           userPrompt,
           input: payloadOf(src) ?? itemContext.input,
+          context: itemContext,
         });
         if (grounded.grounded) {
           systemPrompt = grounded.systemPrompt;
           userPrompt = grounded.userPrompt;
-          groundedOk = true;
+          mcpGroundingSource = grounded.source || null;
+          groundedOk = grounded.source === "gsc";
+          ga4GroundedOk = grounded.source === "ga4";
         }
       } catch (err) {
         if (
           err?.code === "MCP_PROPERTY_REQUIRED" ||
-          err?.code === "MCP_INTEL_CONTEXT_INVALID"
+          err?.code === "MCP_INTEL_CONTEXT_INVALID" ||
+          err?.code === "GA4_INTEL_CONTEXT_INVALID"
         ) {
           throw err;
         }
       }
-      if (!groundedOk) {
+      if (!groundedOk && !ga4GroundedOk) {
+        try {
+          const {
+            applyGa4NativeAiGrounding,
+          } = require("./workflowGa4AiGrounding");
+          const ga4 = applyGa4NativeAiGrounding({
+            systemPrompt,
+            userPrompt,
+            input: payloadOf(src) ?? itemContext.input,
+            context: itemContext,
+          });
+          if (ga4.grounded) {
+            systemPrompt = ga4.systemPrompt;
+            userPrompt = ga4.userPrompt;
+            ga4GroundedOk = true;
+          }
+        } catch {
+          // best-effort
+        }
+      }
+      if (!groundedOk && !ga4GroundedOk) {
         const runtimePayload =
           resolveRuntimePromptPayload(itemContext) ?? payloadOf(src);
         userPrompt = attachRuntimeDataToPrompt(userPrompt, runtimePayload).prompt;
@@ -99,6 +125,9 @@ const executeAiGenerate = async (node, context) => {
             systemPrompt,
             userPrompt,
             gscGrounded: groundedOk,
+            ga4Grounded: ga4GroundedOk,
+            mcpGroundingSource,
+            groundingApplied: groundedOk || ga4GroundedOk,
           },
         },
       });

@@ -148,7 +148,11 @@ export type ParamCustomRenderer =
   | "resourceLocator"
   | "httpAuth"
   /** Multi-select capabilities with per-option settings table + configure dialog */
-  | "capabilitySettings";
+  | "capabilitySettings"
+  /** GA4 structured dimension/metric filter object */
+  | "ga4Filter"
+  /** GA4 order-by limited to selected metrics/dimensions */
+  | "ga4OrderBy";
 
 export interface DisplayOptions {
   show?: Record<string, Array<string | number | boolean>>;
@@ -158,6 +162,7 @@ export interface DisplayOptions {
 export interface ParamOption {
   name: string;
   value: string | number | boolean;
+  description?: string;
   displayOptions?: DisplayOptions;
 }
 
@@ -1954,6 +1959,28 @@ export const NODE_CONTRACTS: Record<WorkflowNodeType, NodeContract> = {
       "Main-flow processor — no Google OAuth on this node",
       "Requires upstream Google Search Console analytics rows",
       "Runs OpsAi intelligence/action capabilities on previous-node data",
+      "Multi-select executes every selected capability independently",
+    ],
+  },
+
+  ga4McpTool: {
+    type: "ga4McpTool",
+    version: 1,
+    category: "SEO",
+    label: "GA4 MCP Tools",
+    inputs: [mainIn()],
+    outputs: [mainOut, errorOut],
+    cardinality: "1-to-N",
+    pairedItemPolicy: "fanOut",
+    settings: SETTINGS_ACTION,
+    capabilities: CAP_ACTION,
+    isSideEffecting: false,
+    params: [],
+    dirtyTriggers: ["params", "edges", "pin", "disabled"],
+    edgeCases: [
+      "Main-flow processor — no Google OAuth on this node",
+      "Requires upstream Google Analytics report rows",
+      "Runs GA4 intelligence/data capabilities on previous-node data",
       "Multi-select executes every selected capability independently",
     ],
   },

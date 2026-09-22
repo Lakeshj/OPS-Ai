@@ -9,6 +9,10 @@ const {
 } = require("./googleOAuth.service");
 const { resolveDateRange } = require("./workflowGoogleDateRange");
 const { parseSpreadsheetRef } = require("./resourceLocator");
+const {
+  GA4_METRICS,
+  GA4_DIMENSIONS,
+} = require("./ga4Catalog");
 
 const GSC_ROW_MAX = 5000;
 const GSC_RETURN_ALL_MAX = 10000;
@@ -155,33 +159,6 @@ const gscQuery = async (node, context, item) => {
   };
 };
 
-const GA4_METRICS = new Set([
-  "sessions",
-  "totalUsers",
-  "newUsers",
-  "activeUsers",
-  "screenPageViews",
-  "eventCount",
-  "userEngagementDuration",
-  "engagementRate",
-]);
-
-const GA4_DIMENSIONS = new Set([
-  "date",
-  "country",
-  "city",
-  "deviceCategory",
-  "browser",
-  "sessionSource",
-  "sessionMedium",
-  "sessionSourceMedium",
-  "pageLocation",
-  "pagePath",
-  "landingPage",
-  "sessionCampaignName",
-  "language",
-]);
-
 const parseList = (value) => {
   if (Array.isArray(value)) return value.map((v) => String(v).trim()).filter(Boolean);
   if (typeof value === "string") {
@@ -191,6 +168,21 @@ const parseList = (value) => {
       .filter(Boolean);
   }
   return [];
+};
+
+const parseGa4FilterInput = (raw) => {
+  if (raw == null || raw === "") return null;
+  if (typeof raw === "string") {
+    const trimmed = raw.trim();
+    if (!trimmed) return null;
+    try {
+      return parseGa4FilterInput(JSON.parse(trimmed));
+    } catch {
+      return null;
+    }
+  }
+  if (typeof raw !== "object" || Array.isArray(raw)) return null;
+  return raw;
 };
 
 const ga4FilterExpression = (filter) => {
@@ -221,23 +213,6 @@ const ga4FilterExpression = (filter) => {
     }
     return numeric;
   }
-  const stringFilter = {
-    filter: {
-      fieldName: field,
-      stringFilter: {
-        matchType:
-          op === "contains"
-            ? "CONTAINS"
-            : op === "beginsWith"
-              ? "BEGINS_WITH"
-              : op === "inList"
-                ? "EXACT"
-                : "EXACT",
-        value: String(filter.value ?? ""),
-        caseSensitive: false,
-      },
-    },
-  };
   if (op === "inList") {
     return {
       filter: {
@@ -249,7 +224,21 @@ const ga4FilterExpression = (filter) => {
       },
     };
   }
-  return stringFilter;
+  return {
+    filter: {
+      fieldName: field,
+      stringFilter: {
+        matchType:
+          op === "contains"
+            ? "CONTAINS"
+            : op === "beginsWith"
+              ? "BEGINS_WITH"
+              : "EXACT",
+        value: String(filter.value ?? ""),
+        caseSensitive: false,
+      },
+    },
+  };
 };
 
 const ga4Report = async (node, context, item) => {
@@ -292,18 +281,27 @@ const ga4Report = async (node, context, item) => {
   };
   if (dimensions.length) body.dimensions = dimensions.map((name) => ({ name }));
 
-  const dimFilter = ga4FilterExpression(data.dimensionFilter);
+  const dimFilterRaw = parseGa4FilterInput(data.dimensionFilter);
+  const dimFilter = ga4FilterExpression(dimFilterRaw);
   if (dimFilter) body.dimensionFilter = dimFilter;
-  const metFilter = ga4FilterExpression({ ...(data.metricFilter || {}), kind: "metric" });
-  if (data.metricFilter?.field) body.metricFilter = metFilter;
 
-  if (data.orderByField) {
-    const field = String(data.orderByField);
+  const metFilterRaw = parseGa4FilterInput(data.metricFilter);
+  const metFilter = ga4FilterExpression(
+    metFilterRaw ? { ...metFilterRaw, kind: "metric" } : null
+  );
+  if (metFilter) body.metricFilter = metFilter;
+
+  const orderByField = String(data.orderByField || "").trim();
+  if (orderByField) {
     const desc = data.orderDirection !== "ascending";
-    if (metrics.includes(field)) {
-      body.orderBys = [{ metric: { metricName: field }, desc }];
+    if (metrics.includes(orderByField)) {
+      body.orderBys = [{ metric: { metricName: orderByField }, desc }];
+    } else if (dimensions.includes(orderByField)) {
+      body.orderBys = [{ dimension: { dimensionName: orderByField }, desc }];
     } else {
-      body.orderBys = [{ dimension: { dimensionName: field }, desc }];
+      throw new Error(
+        "Order by must be one of the selected metrics or dimensions"
+      );
     }
   }
 

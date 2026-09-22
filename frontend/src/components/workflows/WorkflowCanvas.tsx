@@ -196,6 +196,7 @@ const nodeTypes = {
   aiCalculatorTool: WorkflowNode,
   aiHttpTool: WorkflowNode,
   gscMcpTool: WorkflowNode,
+  ga4McpTool: WorkflowNode,
   respondToWebhook: WorkflowNode,
   googleSearchConsole: WorkflowNode,
   gscMcp: WorkflowNode,

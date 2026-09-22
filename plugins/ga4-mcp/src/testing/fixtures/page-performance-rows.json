@@ -1,0 +1,63 @@
+{
+  "A_sessions_only": [
+    { "pagePath": "/pricing", "sessions": 850 },
+    { "pagePath": "/blog", "sessions": 400 },
+    { "pagePath": "/", "sessions": 2000 }
+  ],
+  "B_multi_metrics": [
+    {
+      "pagePath": "/pricing",
+      "sessions": 850,
+      "totalUsers": 720,
+      "screenPageViews": 1100,
+      "engagementRate": 0.42,
+      "bounceRate": 0.58
+    },
+    {
+      "pagePath": "/docs",
+      "sessions": 1200,
+      "totalUsers": 1000,
+      "screenPageViews": 2400,
+      "engagementRate": 0.61,
+      "bounceRate": 0.3
+    },
+    {
+      "pagePath": "/about",
+      "sessions": 300,
+      "totalUsers": 280,
+      "screenPageViews": 350,
+      "engagementRate": 0.25,
+      "bounceRate": 0.7
+    }
+  ],
+  "C_landing_fallback": [
+    { "landingPage": "/lp/webinar", "sessions": 900, "screenPageViews": 1000 },
+    { "landingPage": "/lp/trial", "sessions": 400, "screenPageViews": 420 }
+  ],
+  "D_missing_page_dim": [
+    { "sessionDefaultChannelGroup": "Organic Search", "sessions": 5000 }
+  ],
+  "E_missing_metrics": [
+    { "pagePath": "/pricing", "pageTitle": "Pricing" }
+  ],
+  "F_event_name": [
+    { "pagePath": "/pricing", "eventName": "page_view", "sessions": 500, "totalUsers": 450 },
+    { "pagePath": "/pricing", "eventName": "click", "sessions": 200, "totalUsers": 180 },
+    { "pagePath": "/blog", "eventName": "page_view", "sessions": 300, "totalUsers": 290 }
+  ],
+  "G_views_rank": [
+    { "pagePath": "/a", "sessions": 100, "screenPageViews": 5000 },
+    { "pagePath": "/b", "sessions": 900, "screenPageViews": 1000 },
+    { "pagePath": "/c", "sessions": 500, "screenPageViews": 3000 }
+  ],
+  "J_equal_sessions": [
+    { "pagePath": "/zzz-page", "sessions": 500 },
+    { "pagePath": "/aaa-page", "sessions": 500 },
+    { "pagePath": "/mmm-page", "sessions": 500 }
+  ],
+  "K_filter_rows": [
+    { "pagePath": "/big", "sessions": 2000, "totalUsers": 1800 },
+    { "pagePath": "/small", "sessions": 50, "totalUsers": 40 },
+    { "pagePath": "/mid", "sessions": 400, "totalUsers": 350 }
+  ]
+}

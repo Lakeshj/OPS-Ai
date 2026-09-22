@@ -1,0 +1,45 @@
+[
+  {
+    "pagePath": "/",
+    "pageTitle": "Home",
+    "sessions": 9000,
+    "totalUsers": 7500,
+    "screenPageViews": 12000,
+    "engagementRate": 0.42,
+    "bounceRate": 0.38
+  },
+  {
+    "pagePath": "/pricing",
+    "pageTitle": "Pricing",
+    "sessions": 3100,
+    "totalUsers": 2800,
+    "screenPageViews": 4200,
+    "engagementRate": 0.25,
+    "bounceRate": 0.71
+  },
+  {
+    "pagePath": "/blog/old-guide",
+    "pageTitle": "Old Guide",
+    "sessions": 1400,
+    "totalUsers": 1100,
+    "screenPageViews": 1650,
+    "engagementRate": 0.18,
+    "bounceRate": 0.74
+  },
+  {
+    "landingPage": "/lp/webinar",
+    "sessions": 2200,
+    "screenPageViews": 2400,
+    "engagementRate": 0.19
+  },
+  {
+    "sessionDefaultChannelGroup": "Organic Search",
+    "sessions": 6200,
+    "totalUsers": 5100
+  },
+  {
+    "sessionDefaultChannelGroup": "Direct",
+    "sessions": 2100,
+    "totalUsers": 1900
+  }
+]

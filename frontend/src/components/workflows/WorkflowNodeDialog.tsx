@@ -251,6 +251,7 @@ export function WorkflowNodeDialog({
     if (
       typeof window !== "undefined" &&
       (selectedType === "gscMcpTool" ||
+        selectedType === "ga4McpTool" ||
         selectedType === "ai" ||
         selectedType === "bot")
     ) {

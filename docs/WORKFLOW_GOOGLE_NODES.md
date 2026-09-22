@@ -118,9 +118,13 @@ Output items: `{ query|page, clicks, impressions, ctr, position }` (table header
 
 ## Google Analytics (`googleAnalytics`)
 
-GA4 **Report → Get**. Credential, property ID (picker or numeric id), date range (includes last calendar week/month), metrics, dimensions, optional filters / order / limit.
+GA4 **Report**. Credential, property ID (picker / manual / expression), date range (includes last calendar week/month), multi-select metrics and dimensions, optional structured filters / order / limit.
 
-Output: one WorkflowItem per report row with selected dimension/metric keys.
+Curated metrics include traffic (sessions, users, views), engagement (rate, duration, bounceRate), events, key events/conversions, and ecommerce revenue fields. Curated dimensions include date, geo, device, acquisition, page/landing, and `eventName`.
+
+Filters: one optional dimension filter + one optional metric filter (`field` / `operator` / `value` / optional `valueTo`). Order by is limited to selected metrics/dimensions.
+
+Output: one WorkflowItem per report row with selected dimension/metric keys (metrics coerced to numbers). Limit / Return all currently cap at **10,000 rows** in a single request (no pageToken pagination yet).
 
 ## Gmail (`gmail`)
 

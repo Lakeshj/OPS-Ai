@@ -117,21 +117,29 @@ export default function WorkflowEditorPage({
       setWorkflow(wf);
       setName(wf.name);
       let detailed: WorkflowRun | null = null;
-      if (runIdParam) {
-        try {
-          detailed = await workflowsApi.getRun(workflowId, runIdParam);
-        } catch {
-          toast.error("Run not found — showing latest");
+      try {
+        if (runIdParam) {
+          try {
+            detailed = await workflowsApi.getRun(workflowId, runIdParam);
+          } catch {
+            toast.error("Run not found — showing latest");
+            const runs = await workflowsApi.listRuns(workflowId);
+            if (runs[0]) {
+              detailed = await workflowsApi.getRun(workflowId, runs[0].id);
+            }
+          }
+        } else {
           const runs = await workflowsApi.listRuns(workflowId);
           if (runs[0]) {
             detailed = await workflowsApi.getRun(workflowId, runs[0].id);
           }
         }
-      } else {
-        const runs = await workflowsApi.listRuns(workflowId);
-        if (runs[0]) {
-          detailed = await workflowsApi.getRun(workflowId, runs[0].id);
-        }
+      } catch (runErr) {
+        // Workflow definition loaded — do not blank the editor if a fat run
+        // (e.g. large GA4 fan-out) fails to hydrate.
+        console.error(runErr);
+        toast.error("Workflow loaded, but run history could not be loaded");
+        detailed = null;
       }
       setLatestRun(detailed);
       await refreshLineage(detailed);

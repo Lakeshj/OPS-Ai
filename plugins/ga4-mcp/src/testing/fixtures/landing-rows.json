@@ -1,0 +1,86 @@
+{
+  "A_high_sessions_weak": {
+    "landingPage": "/pricing",
+    "sessions": 850,
+    "engagementRate": 0.21,
+    "totalUsers": 720,
+    "screenPageViews": 910
+  },
+  "B_high_sessions_healthy": {
+    "landingPage": "/docs/start",
+    "sessions": 2000,
+    "engagementRate": 0.58,
+    "bounceRate": 0.3,
+    "screenPageViews": 5200,
+    "averageSessionDuration": 95
+  },
+  "C_low_sessions": {
+    "landingPage": "/tiny-lp",
+    "sessions": 80,
+    "engagementRate": 0.1,
+    "bounceRate": 0.85
+  },
+  "D_engagement_rate": {
+    "landingPage": "/lp/webinar",
+    "sessions": 2200,
+    "engagementRate": 0.19,
+    "screenPageViews": 2400
+  },
+  "E_bounce_rate": {
+    "landingPage": "/lp/trial",
+    "sessions": 900,
+    "bounceRate": 0.74,
+    "totalUsers": 810
+  },
+  "F_missing_signal": {
+    "landingPage": "/lp/blank",
+    "sessions": 600,
+    "totalUsers": 500
+  },
+  "G_pagepath_proxy": {
+    "pagePath": "/home-proxy",
+    "sessions": 1800,
+    "engagementRate": 0.2,
+    "screenPageViews": 1950
+  },
+  "H_multi_a": {
+    "landingPage": "/blog/entry",
+    "sessions": 1600,
+    "engagementRate": 0.18
+  },
+  "H_multi_b": {
+    "landingPage": "/promo/spring",
+    "sessions": 700,
+    "engagementRate": 0.28,
+    "screenPageViews": 750
+  },
+  "H_multi_c": {
+    "landingPage": "/lp/demo",
+    "sessions": 1100,
+    "bounceRate": 0.7,
+    "averageSessionDuration": 12
+  },
+  "I_tie_zzz": {
+    "landingPage": "/zzz-land",
+    "sessions": 1500,
+    "engagementRate": 0.2
+  },
+  "I_tie_aaa": {
+    "landingPage": "/aaa-land",
+    "sessions": 1500,
+    "engagementRate": 0.2
+  },
+  "diff_mid_traffic": {
+    "pagePath": "/mid-page",
+    "landingPage": "/mid-page",
+    "sessions": 120,
+    "engagementRate": 0.18,
+    "bounceRate": 0.7
+  },
+  "diff_borderline_er": {
+    "landingPage": "/borderline",
+    "pagePath": "/borderline",
+    "sessions": 2000,
+    "engagementRate": 0.38
+  }
+}

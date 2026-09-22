@@ -377,6 +377,35 @@ const pinnedResult = (node) => {
 
 const nodeTypeOf = (node) => node?.type || node?.data?.nodeType || "noop";
 
+/**
+ * Resolve WorkflowItem[] from a cached / pinned node result.
+ * Prefer top-level `items`; fall back to nested `output.items` (production
+ * persistence and some session seeds store rows only there).
+ * Do NOT invent items from metadata-only envelopes (no fake single row).
+ */
+const resolveCachedWorkflowItems = (cached) => {
+  if (!cached || typeof cached !== "object") return undefined;
+  if (Array.isArray(cached.items) && cached.items.length > 0) {
+    return cached.items;
+  }
+  const nested = cached.output?.items;
+  if (Array.isArray(nested) && nested.length > 0) return nested;
+  if (Array.isArray(cached.items)) return cached.items;
+  if (Array.isArray(nested)) return nested;
+  return undefined;
+};
+
+/** Flat WorkflowItems for a node id from live context (items map or steps.output.items). */
+const resolveContextWorkflowItems = (context, nodeId) => {
+  const fromMap = context?.items?.[nodeId];
+  if (Array.isArray(fromMap) && fromMap.length > 0) return fromMap;
+  const nested = context?.steps?.[nodeId]?.items;
+  if (Array.isArray(nested) && nested.length > 0) return nested;
+  if (Array.isArray(fromMap)) return fromMap;
+  if (Array.isArray(nested)) return nested;
+  return [];
+};
+
 const getUpstreamItemsForEdge = (edge, context) => {
   const portOutputs = context.portOutputs?.[edge.source];
   if (portOutputs && edge.sourceHandle) {
@@ -396,7 +425,7 @@ const getUpstreamItemsForEdge = (edge, context) => {
       return [];
     }
   }
-  const upstream = context.items?.[edge.source];
+  const upstream = resolveContextWorkflowItems(context, edge.source);
   if (!Array.isArray(upstream)) return [];
   return upstream.map((item) => cloneItem(item));
 };
@@ -1818,8 +1847,11 @@ const executePartial = async ({
     if (pinned.output !== undefined) context.steps[node.id] = pinned.output;
     if (pinned.portOutputs) {
       applyPortOutputsToContext(node.id, pinned.portOutputs, context);
-    } else if (Array.isArray(pinned.items)) {
-      context.items[node.id] = pinned.items;
+    } else {
+      const pinnedItems = resolveCachedWorkflowItems(pinned);
+      if (Array.isArray(pinnedItems)) {
+        context.items[node.id] = pinnedItems;
+      }
     }
   }
 
@@ -1830,8 +1862,11 @@ const executePartial = async ({
     if (cached?.output !== undefined) context.steps[nodeId] = cached.output;
     if (cached?.portOutputs) {
       applyPortOutputsToContext(nodeId, cached.portOutputs, context);
-    } else if (Array.isArray(cached?.items)) {
-      context.items[nodeId] = cached.items;
+    } else {
+      const cachedItems = resolveCachedWorkflowItems(cached);
+      if (Array.isArray(cachedItems)) {
+        context.items[nodeId] = cachedItems;
+      }
     }
   }
 
@@ -1847,16 +1882,17 @@ const executePartial = async ({
       isCacheUsableForExecution(status) && !nodesToRun.has(node.id);
     if (hasCached) {
       const cached = editorSession.nodeResults[node.id];
+      const cachedItems = resolveCachedWorkflowItems(cached);
       if (cached?.portOutputs) {
         applyPortOutputsToContext(node.id, cached.portOutputs, context);
-      } else if (Array.isArray(cached?.items)) {
-        context.items[node.id] = cached.items;
+      } else if (Array.isArray(cachedItems)) {
+        context.items[node.id] = cachedItems;
       }
       results[node.id] = {
         nodeId: node.id,
         status: "succeeded",
         output: cached.output,
-        items: cached.items,
+        items: Array.isArray(cachedItems) ? cachedItems : cached.items,
         portOutputs: cached.portOutputs,
         executionTimeMs: 0,
         cached: true,
@@ -1962,7 +1998,6 @@ const executePartial = async ({
       throw failure;
     }
 
-    const output = result.output ?? null;
     let items;
     let portOutputs;
     if (nodeType === "switch" && result.outputsByPort) {
@@ -1978,9 +2013,12 @@ const executePartial = async ({
     }
     if (node.data?.alwaysOutputData && items.length === 0) {
       items = [{ json: {} }];
-      result.output = attachCanonicalItemsToOutput(output, items);
+      result.output = attachCanonicalItemsToOutput(result.output ?? {}, items);
       result.items = items;
     }
+    // Capture AFTER finalize so output.items matches production persistence
+    // and editor-session seeds can recover rows from nested output.items.
+    const output = result.output ?? null;
     context.steps[node.id] = output;
 
     const executionIndex = nextRunIndex(context.runData, node.id);
@@ -2039,8 +2077,11 @@ const getNodeInputPreview = (
     if (pinned.output !== undefined) context.steps[node.id] = pinned.output;
     if (pinned.portOutputs) {
       applyPortOutputsToContext(node.id, pinned.portOutputs, context);
-    } else if (Array.isArray(pinned.items)) {
-      context.items[node.id] = pinned.items;
+    } else {
+      const pinnedItems = resolveCachedWorkflowItems(pinned);
+      if (Array.isArray(pinnedItems)) {
+        context.items[node.id] = pinnedItems;
+      }
     }
   }
 
@@ -2058,8 +2099,11 @@ const getNodeInputPreview = (
     if (cached?.output !== undefined) context.steps[id] = cached.output;
     if (cached?.portOutputs) {
       applyPortOutputsToContext(id, cached.portOutputs, context);
-    } else if (Array.isArray(cached?.items)) {
-      context.items[id] = cached.items;
+    } else {
+      const cachedItems = resolveCachedWorkflowItems(cached);
+      if (Array.isArray(cachedItems)) {
+        context.items[id] = cachedItems;
+      }
     }
   }
 
@@ -2120,7 +2164,8 @@ const seedEditorExpressionData = (definition, sessionOrResults = {}) => {
     if (!pinned) continue;
     pinnedNodeIds.add(node.id);
     if (pinned.output !== undefined) steps[node.id] = pinned.output;
-    if (Array.isArray(pinned.items)) items[node.id] = pinned.items;
+    const pinnedItems = resolveCachedWorkflowItems(pinned);
+    if (Array.isArray(pinnedItems)) items[node.id] = pinnedItems;
   }
 
   for (const [id, cached] of Object.entries(editorSession.nodeResults)) {
@@ -2131,7 +2176,8 @@ const seedEditorExpressionData = (definition, sessionOrResults = {}) => {
       continue;
     }
     if (cached?.output !== undefined) steps[id] = cached.output;
-    if (Array.isArray(cached?.items)) items[id] = cached.items;
+    const cachedItems = resolveCachedWorkflowItems(cached);
+    if (Array.isArray(cachedItems)) items[id] = cachedItems;
   }
 
   return { steps, items, pinnedNodeIds, staleNodeIds };

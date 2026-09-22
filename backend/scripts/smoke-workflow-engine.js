@@ -9534,6 +9534,11 @@ require("./smoke-workflow-14d55b").registerPart14D55BTests({
   section,
   assert,
 });
+require("./smoke-workflow-ga4-ai-grounding").registerGa4AiGroundingTests({
+  check,
+  section,
+  assert,
+});
 require("./smoke-workflow-14d55c").registerPart14D55CTests({
   check,
   section,

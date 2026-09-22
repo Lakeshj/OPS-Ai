@@ -338,6 +338,156 @@ const registerPart14D55BTests = ({ check, section, assert: a }) => {
     assertX.ok(tokenBody.includes("client_secret=ga4-custom-secret"));
     assertX.ok(!tokenBody.includes("GOOGLE_OAUTH_CLIENT"));
   });
-};
 
+  check("GA455B-15 schema hides unused resource/operation and advertises 10k cap", () => {
+    const schema = readFe("modules/workflows/nodeParameterSchemas.ts");
+    const gaBlock = schema.slice(
+      schema.indexOf("googleAnalytics:"),
+      schema.indexOf("gmail:", schema.indexOf("googleAnalytics:"))
+    );
+    assertX.ok(!/name:\s*"resource"/.test(gaBlock));
+    assertX.ok(!/name:\s*"operation"/.test(gaBlock));
+    assertX.match(gaBlock, /Return all \(max 10,000 rows\)/);
+    assertX.match(gaBlock, /customRenderer:\s*"ga4Filter"/);
+    assertX.match(gaBlock, /customRenderer:\s*"ga4OrderBy"/);
+  });
+
+  check("GA455B-16 FE/BE GA4 catalogs stay in parity", () => {
+    const catalog = require("../services/ga4Catalog");
+    const fe = readFe("modules/workflows/ga4Catalog.ts");
+    for (const m of catalog.GA4_METRICS) {
+      assertX.ok(fe.includes(`"${m}"`) || fe.includes(`'${m}'`), `FE missing metric ${m}`);
+    }
+    for (const d of catalog.GA4_DIMENSIONS) {
+      assertX.ok(fe.includes(`"${d}"`) || fe.includes(`'${d}'`), `FE missing dimension ${d}`);
+    }
+    assertX.ok(catalog.GA4_METRICS.has("bounceRate"));
+    assertX.ok(catalog.GA4_METRICS.has("keyEvents"));
+    assertX.ok(catalog.GA4_DIMENSIONS.has("eventName"));
+    assertX.ok(catalog.GA4_DIMENSIONS.has("sessionDefaultChannelGroup"));
+  });
+
+  check("GA455B-17 metric filter + order by dimension request shape", async () => {
+    const store = new Map();
+    store.set("c1", { ...mockCred("google_ga4"), id: "c1" });
+    let captured = null;
+    await withGoogle(
+      async (_url, opts) => {
+        captured = JSON.parse(opts.body);
+        return { status: 200, ok: true, body: emptyReport };
+      },
+      async () => {
+        await exec({
+          credentialId: "c1",
+          propertyId: "123",
+          metrics: ["sessions", "bounceRate"],
+          dimensions: ["pagePath", "eventName"],
+          metricFilter: {
+            field: "sessions",
+            operator: "gt",
+            value: 10,
+          },
+          orderByField: "pagePath",
+          orderDirection: "ascending",
+        });
+      },
+      { store }
+    );
+    assertX.equal(captured.metricFilter.filter.fieldName, "sessions");
+    assertX.equal(captured.metricFilter.filter.numericFilter.operation, "GREATER_THAN");
+    assertX.equal(captured.orderBys[0].dimension.dimensionName, "pagePath");
+    assertX.equal(captured.orderBys[0].desc, false);
+  });
+
+  check("GA455B-18 order by outside selection rejected", async () => {
+    const store = new Map();
+    store.set("c1", { ...mockCred("google_ga4"), id: "c1" });
+    await withGoogle(
+      async () => ({ status: 200, ok: true, body: emptyReport }),
+      async () => {
+        await assertX.rejects(
+          () =>
+            exec({
+              credentialId: "c1",
+              propertyId: "123",
+              metrics: ["sessions"],
+              dimensions: ["date"],
+              orderByField: "bounceRate",
+            }),
+          /Order by must be one of the selected/
+        );
+      },
+      { store }
+    );
+  });
+
+  check("GA455B-19 flat numeric metric output + fan-out items", async () => {
+    const store = new Map();
+    store.set("c1", { ...mockCred("google_ga4"), id: "c1" });
+    const result = await withGoogle(
+      async () => ({
+        status: 200,
+        ok: true,
+        body: {
+          dimensionHeaders: [{ name: "pagePath" }],
+          metricHeaders: [{ name: "sessions" }, { name: "engagementRate" }],
+          rows: [
+            {
+              dimensionValues: [{ value: "/a" }],
+              metricValues: [{ value: "42" }, { value: "0.55" }],
+            },
+            {
+              dimensionValues: [{ value: "/b" }],
+              metricValues: [{ value: "7" }, { value: "0.12" }],
+            },
+          ],
+        },
+      }),
+      async () =>
+        exec({
+          credentialId: "c1",
+          propertyId: "123",
+          metrics: ["sessions", "engagementRate"],
+          dimensions: ["pagePath"],
+        }),
+      { store }
+    );
+    assertX.equal(result.items.length, 2);
+    assertX.equal(result.items[0].json.pagePath, "/a");
+    assertX.strictEqual(result.items[0].json.sessions, 42);
+    assertX.strictEqual(result.items[0].json.engagementRate, 0.55);
+    assertX.equal(typeof result.items[0].json.sessions, "number");
+    assertX.ok(result.items[0].pairedItem);
+    assertX.equal(result.output.rowCount, 2);
+  });
+
+  check("GA455B-20 expanded curated metric accepted in request body", async () => {
+    const store = new Map();
+    store.set("c1", { ...mockCred("google_ga4"), id: "c1" });
+    let captured = null;
+    await withGoogle(
+      async (_url, opts) => {
+        captured = JSON.parse(opts.body);
+        return { status: 200, ok: true, body: emptyReport };
+      },
+      async () => {
+        await exec({
+          credentialId: "c1",
+          propertyId: "123",
+          metrics: ["keyEvents", "totalRevenue"],
+          dimensions: ["sessionDefaultChannelGroup", "eventName"],
+        });
+      },
+      { store }
+    );
+    assertX.deepEqual(
+      captured.metrics.map((m) => m.name),
+      ["keyEvents", "totalRevenue"]
+    );
+    assertX.deepEqual(
+      captured.dimensions.map((d) => d.name),
+      ["sessionDefaultChannelGroup", "eventName"]
+    );
+  });
+};
 module.exports = { registerPart14D55BTests };

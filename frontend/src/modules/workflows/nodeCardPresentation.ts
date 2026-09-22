@@ -91,6 +91,7 @@ const AI = new Set<string>([
   "aiHttpTool",
   "bot",
   "gscMcpTool",
+  "ga4McpTool",
   "aiModelProviderTest",
   "aiToolProviderTest",
   "aiMemoryProviderTest",
@@ -193,6 +194,7 @@ const ICON_BY_TYPE: Record<string, LucideIcon> = {
   aiHttpTool: Globe,
   bot: Bot,
   gscMcpTool: Link2,
+  ga4McpTool: BarChart3,
   integration: Circle,
   migrationUnsupported: AlertCircle,
 };
@@ -238,6 +240,7 @@ const FALLBACK_BLURBS: Record<string, string> = {
   aiHttpTool: "HTTP tool for agents",
   bot: "Run a Keyword Assistant",
   gscMcpTool: "Process GSC rows with intelligence",
+  ga4McpTool: "Process GA4 rows with intelligence",
 };
 
 const libraryByEngine = (() => {

@@ -89,6 +89,11 @@ const NODE_ENGINE_CONTRACTS = {
     pairedItemPolicy: "fanOut",
     mergeInputs: 1,
   },
+  ga4McpTool: {
+    cardinality: "1-to-N",
+    pairedItemPolicy: "fanOut",
+    mergeInputs: 1,
+  },
   respondToWebhook: { cardinality: "N-to-N", pairedItemPolicy: "identity1to1", mergeInputs: 1, isSideEffecting: true },
   googleSearchConsole: { cardinality: "1-to-N", pairedItemPolicy: "fanOut", mergeInputs: 1, isSideEffecting: true },
   gscMcp: { cardinality: "1-to-N", pairedItemPolicy: "fanOut", mergeInputs: 1, isSideEffecting: true },

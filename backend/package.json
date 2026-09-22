@@ -14,6 +14,7 @@
         "test:api": "node scripts/test-api.js",
         "test:workflows": "node scripts/smoke-workflow-engine.js",
         "test:gsc-mcp": "node ../plugins/gsc-mcp/src/testing/smoke-connection.js && node ../plugins/gsc-mcp/src/testing/smoke-tools.js && node ../plugins/gsc-mcp/src/testing/smoke-intelligence.js && node ../plugins/gsc-mcp/src/testing/smoke-intelligence-filters.js && node ../plugins/gsc-mcp/src/testing/smoke-intelligence-context.js && node ../plugins/gsc-mcp/src/testing/smoke-intelligence-ai-reasoning.js && node ../plugins/gsc-mcp/src/testing/smoke-content-decay.js && node ../plugins/gsc-mcp/src/testing/smoke-multi-capability.js && node ../plugins/gsc-mcp/src/testing/smoke-runtime-multi-capability.js && node ../plugins/gsc-mcp/src/testing/smoke-execution-state-sync.js && node ../plugins/gsc-mcp/src/testing/smoke-ai-prompt-architecture.js",
+        "test:ga4-mcp": "node ../plugins/ga4-mcp/src/testing/smoke-scaffold.js && node ../plugins/ga4-mcp/src/testing/smoke-engagement-opportunities.js && node ../plugins/ga4-mcp/src/testing/smoke-landing-underperformance.js && node ../plugins/ga4-mcp/src/testing/smoke-acquisition-concentration.js && node ../plugins/ga4-mcp/src/testing/smoke-page-performance.js && node ../plugins/ga4-mcp/src/testing/smoke-runtime-handoff.js",
         "test:workflows:prepare": "node scripts/prepare-opsai-smoke-db.js",
         "workflows:verify": "node scripts/verify-workflow-run.js",
         "stage1:verify": "node scripts/verify-stage1.js"

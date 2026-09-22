@@ -54,7 +54,7 @@ const setNodeResult = (workflowId, userId, nodeId, result, definition) => {
     nodeId,
     status: result.status || "succeeded",
     output: result.output,
-    items: result.items,
+    items: resolveSessionWorkflowItems(result) ?? result.items,
     portOutputs: result.portOutputs,
     error: result.error || null,
     executionTimeMs: result.executionTimeMs,
@@ -67,7 +67,7 @@ const setNodeResult = (workflowId, userId, nodeId, result, definition) => {
             {
               runIndex: result.executionIndex ?? 0,
               status: result.status || "succeeded",
-              items: result.items,
+              items: resolveSessionWorkflowItems(result) ?? result.items,
               output: result.output,
               portOutputs: result.portOutputs || null,
             },
@@ -128,6 +128,17 @@ const itemsFromStepOutput = (output) => {
   return undefined;
 };
 
+/** Prefer explicit items; fall back to nested output.items (GA4/GSC fan-out). */
+const resolveSessionWorkflowItems = (result) => {
+  if (!result || typeof result !== "object") return undefined;
+  if (Array.isArray(result.items) && result.items.length > 0) return result.items;
+  const nested = itemsFromStepOutput(result.output);
+  if (Array.isArray(nested) && nested.length > 0) return nested;
+  if (Array.isArray(result.items)) return result.items;
+  if (Array.isArray(nested)) return nested;
+  return undefined;
+};
+
 /**
  * After a full production Execute, copy succeeded/failed steps into the
  * editor session and mark those nodes clean so expression Preview is not
@@ -146,7 +157,10 @@ const seedFromRun = (workflowId, userId, definition, run) => {
       {
         status: step.status,
         output: step.output,
-        items: itemsFromStepOutput(step.output),
+        items: resolveSessionWorkflowItems({
+          items: itemsFromStepOutput(step.output),
+          output: step.output,
+        }),
         error: step.error || null,
         executionIndex: step.executionIndex ?? 0,
       },

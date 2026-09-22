@@ -28,11 +28,14 @@ function selectedCapabilities(
   param: ParamDescriptor,
   values: WorkflowNodeData
 ): Array<string | number | boolean> {
-  // Prefer canonical capabilities[] when present.
-  const raw =
-    (Array.isArray(values.capabilities) && values.capabilities.length
-      ? values.capabilities
-      : values[param.name]) ?? null;
+  // Canonical capabilities[] wins even when empty (explicit deselect-all).
+  const hasCapabilitiesField = Object.prototype.hasOwnProperty.call(
+    values,
+    "capabilities"
+  );
+  const raw = hasCapabilitiesField
+    ? values.capabilities
+    : (values[param.name] ?? null);
   const defaultArr = Array.isArray(param.default) ? param.default : [];
   if (Array.isArray(raw)) {
     return raw.filter(
@@ -40,7 +43,11 @@ function selectedCapabilities(
         typeof v === "string" || typeof v === "number" || typeof v === "boolean"
     );
   }
-  if (typeof raw === "string" || typeof raw === "number" || typeof raw === "boolean") {
+  if (
+    typeof raw === "string" ||
+    typeof raw === "number" ||
+    typeof raw === "boolean"
+  ) {
     return [raw];
   }
   return defaultArr.filter(
@@ -49,10 +56,31 @@ function selectedCapabilities(
   );
 }
 
+function readCapabilitySettingsBag(
+  values: WorkflowNodeData
+): Record<string, Record<string, unknown>> {
+  const bag = values.capabilitySettings;
+  if (bag && typeof bag === "object" && !Array.isArray(bag)) {
+    return bag as Record<string, Record<string, unknown>>;
+  }
+  return {};
+}
+
 function fieldValue(
   values: WorkflowNodeData,
-  field: ParamDescriptor
+  field: ParamDescriptor,
+  capabilityId?: string
 ): unknown {
+  if (capabilityId) {
+    const nested = readCapabilitySettingsBag(values)[capabilityId];
+    if (
+      nested &&
+      typeof nested === "object" &&
+      Object.prototype.hasOwnProperty.call(nested, field.name)
+    ) {
+      return nested[field.name];
+    }
+  }
   if (Object.prototype.hasOwnProperty.call(values, field.name)) {
     return values[field.name];
   }
@@ -61,13 +89,16 @@ function fieldValue(
 
 function summarizeFields(
   fields: ParamDescriptor[],
-  values: WorkflowNodeData
+  values: WorkflowNodeData,
+  capabilityId: string
 ): string {
-  const editable = fields.filter((f) => f.type !== "notice" && f.type !== "hidden");
+  const editable = fields.filter(
+    (f) => f.type !== "notice" && f.type !== "hidden"
+  );
   if (!editable.length) return "No extra filters";
   const parts = editable
     .map((f) => {
-      const v = fieldValue(values, f);
+      const v = fieldValue(values, f, capabilityId);
       if (v == null || v === "") return null;
       return `${f.displayName} ${v}`;
     })
@@ -86,6 +117,27 @@ function ConfigureField({
 }) {
   if (field.type === "notice") {
     return <NoticeParamField param={field} />;
+  }
+  if (field.type === "options" && Array.isArray(field.options)) {
+    return (
+      <div className="space-y-1">
+        <Label className="text-xs">{field.displayName}</Label>
+        <select
+          className="flex h-8 w-full rounded-md border border-input bg-background px-2 text-xs"
+          value={value == null || value === "" ? String(field.default ?? "") : String(value)}
+          onChange={(e) => onChange(e.target.value)}
+        >
+          {field.options.map((opt) => (
+            <option key={String(opt.value)} value={String(opt.value)}>
+              {opt.name}
+            </option>
+          ))}
+        </select>
+        {field.description ? (
+          <p className="text-[11px] text-muted-foreground">{field.description}</p>
+        ) : null}
+      </div>
+    );
   }
   if (field.type === "number") {
     return (
@@ -150,6 +202,37 @@ export function CapabilitySettingsField({ param, values, onChange }: Props) {
     });
   };
 
+  const patchCapabilityField = (
+    capabilityId: string,
+    fieldName: string,
+    next: unknown
+  ) => {
+    const prevSettings = { ...readCapabilitySettingsBag(values) };
+    const prevCap = {
+      ...(prevSettings[capabilityId] &&
+      typeof prevSettings[capabilityId] === "object"
+        ? prevSettings[capabilityId]
+        : {}),
+    };
+    if (next === undefined) {
+      delete prevCap[fieldName];
+    } else {
+      prevCap[fieldName] = next as never;
+    }
+    prevSettings[capabilityId] = prevCap;
+    // Nested capabilitySettings is canonical for GA4 isolation.
+    // Flat write kept for GSC (unique field names) / legacy displayOptions.
+    const flatPatch: WorkflowNodeData =
+      next === undefined
+        ? { [fieldName]: undefined }
+        : { [fieldName]: next };
+    onChange({
+      ...values,
+      ...flatPatch,
+      capabilitySettings: prevSettings,
+    });
+  };
+
   const selectedRows = useMemo(
     () =>
       options.filter((opt) =>
@@ -176,12 +259,24 @@ export function CapabilitySettingsField({ param, values, onChange }: Props) {
                 checked={isSelected(opt.value)}
                 onCheckedChange={() => toggle(opt.value)}
               />
-              {opt.name}
+              <span className="flex flex-col gap-0.5">
+                <span>{opt.name}</span>
+                {opt.description ? (
+                  <span className="text-[10px] font-normal text-muted-foreground">
+                    {opt.description}
+                  </span>
+                ) : null}
+              </span>
             </label>
           ))}
         </div>
         {param.description ? (
           <p className="text-[11px] text-muted-foreground">{param.description}</p>
+        ) : null}
+        {selected.length === 0 ? (
+          <p className="text-xs text-amber-700 dark:text-amber-400">
+            Select at least one capability.
+          </p>
         ) : null}
       </div>
 
@@ -207,7 +302,7 @@ export function CapabilitySettingsField({ param, values, onChange }: Props) {
                         {opt.name}
                       </td>
                       <td className="px-3 py-2.5 align-top text-muted-foreground">
-                        {summarizeFields(fields, values)}
+                        {summarizeFields(fields, values, key)}
                       </td>
                       <td className="px-1 py-1.5 align-top">
                         <Button
@@ -256,9 +351,13 @@ export function CapabilitySettingsField({ param, values, onChange }: Props) {
                 <ConfigureField
                   key={field.name}
                   field={field}
-                  value={fieldValue(values, field)}
+                  value={fieldValue(values, field, editingKey || undefined)}
                   onChange={(next) =>
-                    onChange({ ...values, [field.name]: next })
+                    patchCapabilityField(
+                      editingKey || "",
+                      field.name,
+                      next
+                    )
                   }
                 />
               ))

@@ -1,0 +1,7 @@
+{
+  "mode": "upstream_processor",
+  "allowGoogleApi": false,
+  "allowOAuth": false,
+  "allowExternalMcp": false,
+  "notes": "GA4 MCP Tools analyzes upstream googleAnalytics WorkflowItems only. No remote MCP, no Google API, no OAuth."
+}

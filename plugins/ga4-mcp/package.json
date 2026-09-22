@@ -1,0 +1,28 @@
+{
+  "name": "@opsai/plugin-ga4-mcp",
+  "version": "0.1.0",
+  "description": "OpsAi GA4 MCP Tools plugin — upstream-row processor scaffold (Phase 1)",
+  "main": "src/index.js",
+  "type": "commonjs",
+  "scripts": {
+    "test": "node src/testing/smoke-scaffold.js && node src/testing/smoke-engagement-opportunities.js && node src/testing/smoke-landing-underperformance.js && node src/testing/smoke-acquisition-concentration.js && node src/testing/smoke-page-performance.js && node src/testing/smoke-runtime-handoff.js",
+    "smoke": "npm test"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "files": [
+    "src",
+    "manifest.json",
+    "config.default.json",
+    "docs",
+    "README.md"
+  ],
+  "keywords": [
+    "opsai",
+    "mcp",
+    "google-analytics",
+    "ga4"
+  ],
+  "license": "UNLICENSED"
+}

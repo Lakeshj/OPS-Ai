@@ -75,43 +75,68 @@ const resolveEffectiveAiPrompts = ({
   let mergedSystemPrompt = systemPrompt;
   let mergedUserPrompt = userPrompt;
   let gscGrounded = false;
+  let ga4Grounded = false;
+  let mcpGroundingSource = null;
   let runtimeDataAttached = false;
   let userInstructionsResolved = userInstructions;
 
   try {
     const {
-      applyAiGrounding,
-    } = require("../../plugins/gsc-mcp/src/contracts/intelligenceContext");
-    const groundingInput =
-      context.item != null
-        ? context.item
-        : Array.isArray(context.inputItems) && context.inputItems.length
-          ? context.inputItems.length === 1
-            ? context.inputItems[0]
-            : context.inputItems
-          : expressionInput;
-    const grounded = applyAiGrounding({
+      applyMcpAiGrounding,
+      resolveMcpGroundingInput,
+    } = require("./workflowMcpAiGrounding");
+    const groundingInput = resolveMcpGroundingInput(context, expressionInput);
+    const grounded = applyMcpAiGrounding({
       systemPrompt,
       userPrompt,
       input: groundingInput,
+      context,
     });
     if (grounded.grounded) {
       mergedSystemPrompt = grounded.systemPrompt;
       mergedUserPrompt = grounded.userPrompt;
       userInstructionsResolved =
         grounded.userInstructions || userInstructions || null;
-      gscGrounded = true;
+      mcpGroundingSource = grounded.source || null;
+      gscGrounded = grounded.source === "gsc";
+      ga4Grounded = grounded.source === "ga4";
     }
   } catch (err) {
     if (
       err?.code === "MCP_PROPERTY_REQUIRED" ||
-      err?.code === "MCP_INTEL_CONTEXT_INVALID"
+      err?.code === "MCP_INTEL_CONTEXT_INVALID" ||
+      err?.code === "GA4_INTEL_CONTEXT_INVALID"
     ) {
       throw err;
     }
   }
 
-  if (!gscGrounded) {
+  if (!gscGrounded && !ga4Grounded) {
+    try {
+      const {
+        applyGa4NativeAiGrounding,
+        resolveGa4GroundingInput,
+      } = require("./workflowGa4AiGrounding");
+      const groundingInput = resolveGa4GroundingInput(context, expressionInput);
+      const ga4 = applyGa4NativeAiGrounding({
+        systemPrompt: mergedSystemPrompt,
+        userPrompt: mergedUserPrompt,
+        input: groundingInput,
+        context,
+      });
+      if (ga4.grounded) {
+        mergedSystemPrompt = ga4.systemPrompt;
+        mergedUserPrompt = ga4.userPrompt;
+        userInstructionsResolved =
+          ga4.userInstructions || userInstructionsResolved;
+        ga4Grounded = true;
+      }
+    } catch {
+      // best-effort
+    }
+  }
+
+  if (!gscGrounded && !ga4Grounded) {
     const runtimePayload = resolveRuntimePromptPayload(context);
     const attached = attachRuntimeDataToPrompt(mergedUserPrompt, runtimePayload);
     mergedUserPrompt = attached.prompt;
@@ -123,10 +148,12 @@ const resolveEffectiveAiPrompts = ({
     systemPrompt: mergedSystemPrompt,
     /** Merged user message actually sent to the model */
     userPrompt: mergedUserPrompt,
-    /** User-controlled instructions only (for Instructions field preview) */
+    /** User-controlled instructions only for Instructions field preview */
     userInstructions: userInstructionsResolved,
     gscGrounded,
-    groundingApplied: gscGrounded,
+    ga4Grounded,
+    mcpGroundingSource,
+    groundingApplied: gscGrounded || ga4Grounded,
     runtimeDataAttached,
   };
 };

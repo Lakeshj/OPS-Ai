@@ -41,11 +41,13 @@ const registerPost12CUiTests = ({ check, section, assert: a }) => {
     assertX.ok(src.includes("orderedSteps"));
   });
 
-  check("TEST POST-12C-3 getRunById orders by execution timestamps", () => {
+  check("TEST POST-12C-3 getRunById sorts steps in JS (avoids MySQL sort_buffer)", () => {
     const src = fs.readFileSync(servicePath, "utf8");
-    assertX.ok(src.includes("COALESCE(started_at, created_at)"));
-    assertX.ok(src.includes("COALESCE(finished_at, started_at, created_at)"));
     assertX.ok(src.includes("sortWorkflowRunSteps"));
+    assertX.ok(src.includes("SELECT * FROM workflow_run_steps WHERE run_id = ?"));
+    // Must not filesort full JSON rows in MySQL (GA4 fan-out → ER_OUT_OF_SORTMEMORY).
+    assertX.ok(!src.includes("COALESCE(started_at, created_at)"));
+    assertX.ok(!src.includes("COALESCE(finished_at, started_at, created_at)"));
   });
 
   const linearDef = {

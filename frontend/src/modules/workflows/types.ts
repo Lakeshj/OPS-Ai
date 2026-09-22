@@ -48,6 +48,7 @@ export type WorkflowNodeType =
   | "aiCalculatorTool"
   | "aiHttpTool"
   | "gscMcpTool"
+  | "ga4McpTool"
   | "respondToWebhook"
   | "googleSearchConsole"
   | "gscMcp"

@@ -1,0 +1,73 @@
+{
+  "A_channel_group": [
+    { "sessionDefaultChannelGroup": "Organic Search", "sessions": 3100, "totalUsers": 2800 },
+    { "sessionDefaultChannelGroup": "Direct", "sessions": 900, "totalUsers": 850 },
+    { "sessionDefaultChannelGroup": "Paid Search", "sessions": 600, "totalUsers": 520 },
+    { "sessionDefaultChannelGroup": "Social", "sessions": 400, "totalUsers": 380 }
+  ],
+  "B_source_medium": [
+    { "sessionSourceMedium": "google / organic", "sessions": 2800 },
+    { "sessionSourceMedium": "linkedin / social", "sessions": 700 },
+    { "sessionSourceMedium": "direct / none", "sessions": 500 }
+  ],
+  "C_source_only": [
+    { "sessionSource": "google", "sessions": 2200 },
+    { "sessionSource": "newsletter", "sessions": 800 },
+    { "sessionSource": "bing", "sessions": 400 }
+  ],
+  "D_medium_only": [
+    { "sessionMedium": "organic", "sessions": 2500 },
+    { "sessionMedium": "cpc", "sessions": 900 },
+    { "sessionMedium": "email", "sessions": 600 }
+  ],
+  "E_first_user_channel": [
+    { "firstUserDefaultChannelGroup": "Organic Search", "totalUsers": 4000 },
+    { "firstUserDefaultChannelGroup": "Direct", "totalUsers": 1000 },
+    { "firstUserDefaultChannelGroup": "Referral", "totalUsers": 800 }
+  ],
+  "F_pagepath_eventname": [
+    { "pagePath": "/pricing", "eventName": "page_view", "sessions": 1200, "totalUsers": 1000 },
+    { "pagePath": "/pricing", "eventName": "click", "sessions": 800, "totalUsers": 700 },
+    { "pagePath": "/blog", "eventName": "page_view", "sessions": 500, "totalUsers": 450 }
+  ],
+  "G_eventname_only": [
+    { "eventName": "purchase", "sessions": 300, "totalUsers": 280 },
+    { "eventName": "sign_up", "sessions": 200, "totalUsers": 190 }
+  ],
+  "H_mixed_dims": [
+    { "sessionDefaultChannelGroup": "Organic Search", "sessions": 4000 },
+    { "sessionDefaultChannelGroup": "Direct", "sessions": 1000 },
+    { "sessionSourceMedium": "google / organic", "sessions": 3500 },
+    { "sessionSourceMedium": "facebook / social", "sessions": 500 }
+  ],
+  "I_low_concentration": [
+    { "sessionDefaultChannelGroup": "Organic Search", "sessions": 1200 },
+    { "sessionDefaultChannelGroup": "Direct", "sessions": 1100 },
+    { "sessionDefaultChannelGroup": "Paid Search", "sessions": 1000 },
+    { "sessionDefaultChannelGroup": "Social", "sessions": 900 },
+    { "sessionDefaultChannelGroup": "Referral", "sessions": 800 }
+  ],
+  "J_high_concentration": [
+    { "sessionDefaultChannelGroup": "Organic Search", "sessions": 3100 },
+    { "sessionDefaultChannelGroup": "Direct", "sessions": 900 },
+    { "sessionDefaultChannelGroup": "Paid Search", "sessions": 600 },
+    { "sessionDefaultChannelGroup": "Social", "sessions": 400 }
+  ],
+  "L_malformed_valid": {
+    "sessionDefaultChannelGroup": "Organic Search",
+    "sessions": 5000
+  },
+  "M_ordering": [
+    { "sessionDefaultChannelGroup": "Paid Search", "sessions": 2000 },
+    { "sessionDefaultChannelGroup": "Organic Search", "sessions": 4500 },
+    { "sessionDefaultChannelGroup": "Direct", "sessions": 1500 }
+  ],
+  "N_equal_shares": [
+    { "sessionDefaultChannelGroup": "Zebra Channel", "sessions": 2500 },
+    { "sessionDefaultChannelGroup": "Alpha Channel", "sessions": 2500 }
+  ],
+  "pagepath_only": [
+    { "pagePath": "/pricing", "sessions": 2000, "totalUsers": 1800 },
+    { "pagePath": "/blog", "sessions": 1500, "totalUsers": 1400 }
+  ]
+}
