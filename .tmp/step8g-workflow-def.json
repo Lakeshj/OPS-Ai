@@ -1,0 +1,180 @@
+{
+  "name": "GA4 Testing",
+  "definition": {
+    "edges": [
+      {
+        "id": "e-trigger-1789984786253-main-googleAnalytics-1789984791245-466tt9q",
+        "source": "trigger-1789984786253",
+        "target": "googleAnalytics-1789984791245",
+        "sourceHandle": "main",
+        "targetHandle": "main"
+      },
+      {
+        "id": "e-googleAnalytics-1789984791245-main-ga4McpTool-1790083223630-aqhlncm",
+        "source": "googleAnalytics-1789984791245",
+        "target": "ga4McpTool-1790083223630",
+        "sourceHandle": "main"
+      },
+      {
+        "id": "e-ga4McpTool-1790083223630-main-ai-1790083510600-f14n3ku",
+        "source": "ga4McpTool-1790083223630",
+        "target": "ai-1790083510600",
+        "sourceHandle": "main"
+      },
+      {
+        "id": "e-ai-1790083510600-main-result-1789985065797-biapo0e",
+        "source": "ai-1790083510600",
+        "target": "result-1789985065797",
+        "sourceHandle": "main",
+        "targetHandle": "main"
+      }
+    ],
+    "nodes": [
+      {
+        "id": "trigger-1789984786253",
+        "data": {
+          "label": "Manual Trigger",
+          "nodeType": "trigger",
+          "available": true,
+          "libraryId": "manual-trigger",
+          "cacheDirty": false,
+          "libraryCategory": "Triggers"
+        },
+        "type": "trigger",
+        "position": {
+          "x": 48,
+          "y": 86
+        }
+      },
+      {
+        "id": "googleAnalytics-1789984791245",
+        "data": {
+          "label": "Google Analytics",
+          "limit": 60,
+          "metrics": [
+            "sessions",
+            "totalUsers",
+            "engagementRate",
+            "bounceRate"
+          ],
+          "nodeType": "googleAnalytics",
+          "available": true,
+          "dateRange": "last30days",
+          "libraryId": "google-analytics",
+          "cacheDirty": false,
+          "dimensions": [
+            "landingPage"
+          ],
+          "propertyId": "488600391",
+          "credentialId": "8de7f833-e8e5-40ac-b2c9-473463235c9f",
+          "orderByField": "",
+          "orderDirection": "ascending",
+          "propertyIdMode": "account",
+          "libraryCategory": "SEO",
+          "libraryProvider": "Google",
+          "propertyDisplayName": "VISIBLE (488600391)"
+        },
+        "type": "googleAnalytics",
+        "position": {
+          "x": 544,
+          "y": 86
+        }
+      },
+      {
+        "id": "result-1789985065797",
+        "data": {
+          "label": "Result",
+          "mapFrom": "{{steps.ai-1790083510600.text}}",
+          "nodeType": "result",
+          "available": true,
+          "libraryId": "result",
+          "cacheDirty": false,
+          "libraryCategory": "Core"
+        },
+        "type": "result",
+        "position": {
+          "x": 1972,
+          "y": 40
+        }
+      },
+      {
+        "id": "ga4McpTool-1790083223630",
+        "data": {
+          "label": "GA4 MCP Tools",
+          "limit": 50,
+          "minShare": 0,
+          "nodeType": "ga4McpTool",
+          "available": true,
+          "libraryId": "ga4-mcp-tools",
+          "minVolume": 0,
+          "cacheDirty": false,
+          "capability": [
+            "landing_underperformance",
+            "acquisition_concentration",
+            "page_performance",
+            "engagement_opportunities"
+          ],
+          "minSessions": 20,
+          "capabilities": [
+            "landing_underperformance",
+            "acquisition_concentration",
+            "page_performance",
+            "engagement_opportunities"
+          ],
+          "minBounceRate": 0.65,
+          "libraryCategory": "SEO",
+          "libraryProvider": "OpsAi",
+          "maxEngagementRate": 0.35,
+          "capabilitySettings": {
+            "engagement_opportunities": {
+              "limit": 50,
+              "minSessions": 250,
+              "minBounceRate": 0.6,
+              "maxEngagementRate": 0.4
+            },
+            "landing_underperformance": {
+              "minSessions": 150,
+              "minBounceRate": 0.65,
+              "maxEngagementRate": 0.35
+            },
+            "acquisition_concentration": {
+              "minShare": 0.5,
+              "minVolume": 0,
+              "minConcentrationShare": 0
+            }
+          },
+          "minConcentrationShare": 0
+        },
+        "type": "ga4McpTool",
+        "position": {
+          "x": 1040,
+          "y": 75
+        }
+      },
+      {
+        "id": "ai-1790083510600",
+        "data": {
+          "label": "AI",
+          "prompt": "{{input}}",
+          "nodeType": "ai",
+          "provider": "openai",
+          "available": true,
+          "libraryId": "ai-model",
+          "cacheDirty": false,
+          "systemPrompt": "Analyze the structured GA4 MCP landing underperformance opportunities.\n\nReport every qualifying landing-page opportunity provided by the MCP.\n\nFor each result show:\n- Landing page\n- Sessions\n- Engagement rate, if provided\n- Bounce rate, if provided\n- MCP score\n- Reason\n- Recommendation\n\nUse the MCP score exactly as provided.\nDo not recalculate the score.\nDo not invent metrics.\nDo not create additional opportunities.\nDo not confuse landing pages with acquisition channels.\n\nIf there are no qualifying landing underperformance opportunities, state that clearly.",
+          "libraryCategory": "AI",
+          "libraryProvider": "OpsAi"
+        },
+        "type": "ai",
+        "position": {
+          "x": 1476,
+          "y": 51
+        }
+      }
+    ],
+    "version": 1,
+    "settings": {
+      "timezone": "UTC"
+    }
+  }
+}

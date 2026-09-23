@@ -24,6 +24,18 @@ type Props = {
   onChange: (patch: WorkflowNodeData) => void;
 };
 
+/** GA4 MCP capabilities use nested capabilitySettings only (shared filter names). */
+const GA4_MCP_CAPABILITY_IDS = new Set([
+  "engagement_opportunities",
+  "landing_underperformance",
+  "acquisition_concentration",
+  "page_performance",
+]);
+
+function isGa4McpCapabilityId(capabilityId: string | undefined | null): boolean {
+  return Boolean(capabilityId && GA4_MCP_CAPABILITY_IDS.has(String(capabilityId)));
+}
+
 function selectedCapabilities(
   param: ParamDescriptor,
   values: WorkflowNodeData
@@ -79,6 +91,14 @@ function fieldValue(
       Object.prototype.hasOwnProperty.call(nested, field.name)
     ) {
       return nested[field.name];
+    }
+    // GA4: once capabilitySettings exists, never display another cap's flat value.
+    // Missing nested key → schema default (matches runtime CASE C).
+    if (isGa4McpCapabilityId(capabilityId)) {
+      const bag = values.capabilitySettings;
+      if (bag && typeof bag === "object" && !Array.isArray(bag)) {
+        return field.default;
+      }
     }
   }
   if (Object.prototype.hasOwnProperty.call(values, field.name)) {
@@ -220,8 +240,15 @@ export function CapabilitySettingsField({ param, values, onChange }: Props) {
       prevCap[fieldName] = next as never;
     }
     prevSettings[capabilityId] = prevCap;
-    // Nested capabilitySettings is canonical for GA4 isolation.
-    // Flat write kept for GSC (unique field names) / legacy displayOptions.
+    // GA4: nested-only writes (shared names like minSessions/limit/minScore).
+    // GSC / other nodes: keep flat writes (unique/prefixed field names).
+    if (isGa4McpCapabilityId(capabilityId)) {
+      onChange({
+        ...values,
+        capabilitySettings: prevSettings,
+      });
+      return;
+    }
     const flatPatch: WorkflowNodeData =
       next === undefined
         ? { [fieldName]: undefined }

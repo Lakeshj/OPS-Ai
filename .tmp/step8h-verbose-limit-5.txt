@@ -1,0 +1,44 @@
+### GA4 Intelligence Report
+#### Summary — Total MCP rows / capabilities represented
+5 / landing_underperformance
+
+#### Opportunities / Data
+1. **Landing page:** /blog/the-best-generative-engine-optimization-geo-tools  
+   **Sessions:** 19  
+   **Engagement rate:** 10.53%  
+   **Bounce rate:** 89.47%  
+   **MCP score:** 0.44  
+   **Reason:** Landing page /blog/the-best-generative-engine-optimization-geo-tools received 19 sessions with an engagement rate of 10.53% and a bounce rate of 89.47%.  
+   **Recommendation:** Review the landing-page experience and engagement elements for /blog/the-best-generative-engine-optimization-geo-tools.
+
+2. **Landing page:** /blog/understanding-the-4-types-of-ai-search-intent-informational-navigational-comparative-transactional  
+   **Sessions:** 9  
+   **Engagement rate:** 0%  
+   **Bounce rate:** 100%  
+   **MCP score:** 0.27  
+   **Reason:** Landing page /blog/understanding-the-4-types-of-ai-search-intent-informational-navigational-comparative-transactional received 9 sessions with an engagement rate of 0% and a bounce rate of 100%.  
+   **Recommendation:** Review the landing-page experience and engagement elements for /blog/understanding-the-4-types-of-ai-search-intent-informational-navigational-comparative-transactional.
+
+3. **Landing page:** /agency-partner-program  
+   **Sessions:** 8  
+   **Engagement rate:** 0%  
+   **Bounce rate:** 100%  
+   **MCP score:** 0.24  
+   **Reason:** Landing page /agency-partner-program received 8 sessions with an engagement rate of 0% and a bounce rate of 100%.  
+   **Recommendation:** Review the landing-page experience and engagement elements for /agency-partner-program.
+
+4. **Landing page:** /blog/how-generative-engines-parse-intent-llm-prompt-interpretation-explained  
+   **Sessions:** 8  
+   **Engagement rate:** 0%  
+   **Bounce rate:** 100%  
+   **MCP score:** 0.24  
+   **Reason:** Landing page /blog/how-generative-engines-parse-intent-llm-prompt-interpretation-explained received 8 sessions with an engagement rate of 0% and a bounce rate of 100%.  
+   **Recommendation:** Review the landing-page experience and engagement elements for /blog/how-generative-engines-parse-intent-llm-prompt-interpretation-explained.
+
+5. **Landing page:** /perplexity-visibility-tracker  
+   **Sessions:** 8  
+   **Engagement rate:** 0%  
+   **Bounce rate:** 100%  
+   **MCP score:** 0.24  
+   **Reason:** Landing page /perplexity-visibility-tracker received 8 sessions with an engagement rate of 0% and a bounce rate of 100%.  
+   **Recommendation:** Review the landing-page experience and engagement elements for /perplexity-visibility-tracker.

@@ -69,5 +69,21 @@
   "pagepath_only": [
     { "pagePath": "/pricing", "sessions": 2000, "totalUsers": 1800 },
     { "pagePath": "/blog", "sessions": 1500, "totalUsers": 1400 }
+  ],
+  "VERIFIED_LIVE_CHANNEL_9": [
+    { "sessionDefaultChannelGroup": "Direct", "sessions": 649, "totalUsers": 540 },
+    { "sessionDefaultChannelGroup": "Unassigned", "sessions": 356, "totalUsers": 318 },
+    { "sessionDefaultChannelGroup": "Organic Search", "sessions": 235, "totalUsers": 119 },
+    { "sessionDefaultChannelGroup": "Referral", "sessions": 100, "totalUsers": 90 },
+    { "sessionDefaultChannelGroup": "Organic Social", "sessions": 80, "totalUsers": 70 },
+    { "sessionDefaultChannelGroup": "Paid Search", "sessions": 60, "totalUsers": 50 },
+    { "sessionDefaultChannelGroup": "Email", "sessions": 40, "totalUsers": 35 },
+    { "sessionDefaultChannelGroup": "Paid Social", "sessions": 30, "totalUsers": 25 },
+    { "sessionDefaultChannelGroup": "Display", "sessions": 20, "totalUsers": 15 }
+  ],
+  "VERIFIED_LIVE_CHANNEL_3": [
+    { "sessionDefaultChannelGroup": "Direct", "sessions": 649, "totalUsers": 540 },
+    { "sessionDefaultChannelGroup": "Unassigned", "sessions": 356, "totalUsers": 318 },
+    { "sessionDefaultChannelGroup": "Organic Search", "sessions": 235, "totalUsers": 119 }
   ]
 }

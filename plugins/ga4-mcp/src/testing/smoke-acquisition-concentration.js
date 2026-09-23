@@ -312,13 +312,23 @@ const main = () => {
       },
     });
     const acq = result.items.filter(
-      (it) => it.json.capability === "acquisition_concentration"
+      (it) =>
+        it.json.capability === "acquisition_concentration" &&
+        it.json.__ga4CapabilitySection !== true
     );
-    const eng = result.items.filter(
-      (it) => it.json.capability === "engagement_opportunities"
+    const engOpp = result.items.filter(
+      (it) =>
+        it.json.capability === "engagement_opportunities" &&
+        it.json.__ga4CapabilitySection !== true
+    );
+    const engZero = result.items.filter(
+      (it) =>
+        it.json.capability === "engagement_opportunities" &&
+        it.json.__ga4CapabilitySection === true
     );
     assert.equal(acq.length, 1); // 62% >= 50%
-    assert.equal(eng.length, 0);
+    assert.equal(engOpp.length, 0);
+    assert.equal(engZero.length, 1);
     assert.equal(acq[0].json.opportunity_type, "acquisition_concentration");
   }
 
@@ -339,6 +349,11 @@ const main = () => {
       ]),
     });
     for (const it of result.items) {
+      if (it.json.__ga4CapabilitySection === true) {
+        assert.equal(it.json.count, 0);
+        assert.equal(it.json.opportunity_type, undefined);
+        continue;
+      }
       if (it.json.capability === "acquisition_concentration") {
         assert.equal(it.json.opportunity_type, "acquisition_concentration");
         assert.ok(it.json.entity.sessionDefaultChannelGroup);
@@ -421,6 +436,63 @@ const main = () => {
     assert.equal(direct.filters.minVolume, 100);
     assert.equal(direct.selectedDimension, "sessionDefaultChannelGroup");
     assert.equal(direct.concentrationThreshold, 0.35);
+  }
+
+  // ---- STEP 9D: verified live GA4 flat channel rows ----
+  {
+    const {
+      validateUpstreamInput,
+    } = require("../contracts/inputValidation");
+    const {
+      selectAcquisitionDimension,
+    } = require("../capabilities/acquisitionConcentration");
+
+    const upstreamRows = FIX.VERIFIED_LIVE_CHANNEL_9;
+    const inputItems = asItems(upstreamRows);
+    const upstream = validateUpstreamInput(inputItems);
+    assert.equal(upstream.ok, true);
+    assert.equal(upstream.rows.length, 9);
+    assert.ok(
+      upstream.inventory.availableDimensions.includes(
+        "sessionDefaultChannelGroup"
+      )
+    );
+    assert.equal(
+      selectAcquisitionDimension(upstream.rows).selectedDim,
+      "sessionDefaultChannelGroup"
+    );
+
+    const result = runAcq(upstreamRows);
+    assert.equal(result.ok, true);
+    // Upstream GA row count and MCP opportunity count remain distinct
+    assert.equal(upstream.rows.length, 9);
+    assert.equal(result.output.count, 1);
+    assert.notEqual(result.items.length, upstream.rows.length);
+
+    const warnCodes = (result.output.warnings || []).map((w) => w.code);
+    assert.equal(warnCodes.includes("GA4_ACQUISITION_DIM_MISSING"), false);
+    assert.equal(result.items.length, 1);
+    const row = result.items[0].json;
+    assert.equal(row.capability, "acquisition_concentration");
+    assert.equal(row.entity.sessionDefaultChannelGroup, "Direct");
+    assert.equal(row.entity.label, "Direct");
+    assert.equal("pagePath" in (row.entity || {}), false);
+    assert.equal("eventName" in (row.entity || {}), false);
+    assert.ok(row.score > 0);
+    // No cross-event aggregation: eventName absent from input and output entity
+    assert.equal(
+      upstream.rows.every((r) => !Object.prototype.hasOwnProperty.call(r, "eventName")),
+      true
+    );
+
+    // 3-row verified subset also selects Direct
+    const three = runAcq(FIX.VERIFIED_LIVE_CHANNEL_3);
+    assert.equal(three.output.count, 1);
+    assert.equal(
+      three.items[0].json.entity.sessionDefaultChannelGroup,
+      "Direct"
+    );
+    assert.notEqual(three.items.length, FIX.VERIFIED_LIVE_CHANNEL_3.length);
   }
 
   console.log("ga4-mcp smoke-acquisition-concentration: OK");

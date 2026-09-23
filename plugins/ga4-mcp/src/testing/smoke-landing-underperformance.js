@@ -149,6 +149,94 @@ const main = () => {
     );
   }
 
+  // ---- STEP 5 FIX: unresolved landingPage "(not set)" ----
+  {
+    const result = runLanding([FIX.not_set_only]);
+    assert.equal(result.ok, true);
+    assert.equal(result.output.count, 0);
+    assert.equal(result.items.length, 1);
+    // Empty envelope only — no scored opportunity
+    assert.equal(result.items[0].json?.score, undefined);
+    assert.ok(
+      !(result.items || []).some(
+        (it) =>
+          it.json?.opportunity_type === "landing_underperformance" &&
+          it.json?.entity
+      )
+    );
+    const warn = (result.output.warnings || []).find(
+      (w) => w.code === "GA4_LANDING_ENTITY_UNRESOLVED"
+    );
+    assert.ok(warn, "expected GA4_LANDING_ENTITY_UNRESOLVED");
+    assert.match(String(warn.message), /\(not set\)|unresolved/i);
+    assert.equal(
+      (result.output.warnings || []).some(
+        (w) => w.code === "GA4_LANDING_PROXY_PAGEPATH"
+      ),
+      false
+    );
+  }
+
+  // ---- STEP 5 FIX: "(not set)" + pagePath must NOT fall back ----
+  {
+    const result = runLanding([FIX.not_set_with_pagepath]);
+    assert.equal(result.output.count, 0);
+    assert.ok(
+      !(result.items || []).some(
+        (it) => it.json?.entity?.pagePath === "/pricing"
+      )
+    );
+    assert.ok(
+      !(result.items || []).some(
+        (it) => it.json?.entity?.label === "/pricing"
+      )
+    );
+    assert.ok(
+      (result.output.warnings || []).some(
+        (w) => w.code === "GA4_LANDING_ENTITY_UNRESOLVED"
+      )
+    );
+    assert.equal(
+      (result.output.warnings || []).some(
+        (w) => w.code === "GA4_LANDING_PROXY_PAGEPATH"
+      ),
+      false
+    );
+  }
+
+  // ---- STEP 5 FIX: trimmed "(not set) " also unresolved ----
+  {
+    const result = runLanding([FIX.not_set_padded]);
+    assert.equal(result.output.count, 0);
+    assert.ok(
+      (result.output.warnings || []).some(
+        (w) => w.code === "GA4_LANDING_ENTITY_UNRESOLVED"
+      )
+    );
+  }
+
+  // ---- STEP 5 FIX: valid landingPage still evaluates (score unchanged) ----
+  {
+    const result = runLanding([FIX.A_high_sessions_weak]);
+    assert.equal(result.output.count, 1);
+    const row = result.items[0].json;
+    assert.equal(row.entity.landingPage, "/pricing");
+    const expected = scoreLandingUnderperformance({
+      sessions: 850,
+      engagementRate: 0.21,
+      bounceRate: null,
+      viewsPerSession: 910 / 850,
+      averageSessionDuration: null,
+    });
+    assert.equal(row.score, expected.score);
+    assert.equal(
+      (result.output.warnings || []).some(
+        (w) => w.code === "GA4_LANDING_ENTITY_UNRESOLVED"
+      ),
+      false
+    );
+  }
+
   // ---- H. Multiple landings → score desc ordering ----
   {
     const result = runLanding([
@@ -280,13 +368,23 @@ const main = () => {
     });
     assert.equal(result.ok, true);
     const landing = result.items.filter(
-      (it) => it.json.capability === "landing_underperformance"
+      (it) =>
+        it.json.capability === "landing_underperformance" &&
+        it.json.__ga4CapabilitySection !== true
     );
-    const engagement = result.items.filter(
-      (it) => it.json.capability === "engagement_opportunities"
+    const engagementData = result.items.filter(
+      (it) =>
+        it.json.capability === "engagement_opportunities" &&
+        it.json.__ga4CapabilitySection !== true
+    );
+    const engagementZero = result.items.filter(
+      (it) =>
+        it.json.capability === "engagement_opportunities" &&
+        it.json.__ga4CapabilitySection === true
     );
     assert.equal(landing.length, 1);
-    assert.equal(engagement.length, 0); // engagement minSessions isolation
+    assert.equal(engagementData.length, 0); // engagement minSessions isolation
+    assert.equal(engagementZero.length, 1); // STEP 8E zero-result section preserved
     assert.equal(landing[0].json.opportunity_type, "landing_underperformance");
   }
 
@@ -302,6 +400,11 @@ const main = () => {
     assert.equal(result.ok, true);
     for (const it of result.items) {
       const row = it.json;
+      if (row.__ga4CapabilitySection === true) {
+        assert.equal(row.count, 0);
+        assert.equal(row.opportunity_type, undefined);
+        continue;
+      }
       if (row.capability === "landing_underperformance") {
         assert.equal(row.opportunity_type, "landing_underperformance");
       }
@@ -326,13 +429,23 @@ const main = () => {
       inputItems: asItems([FIX.diff_mid_traffic]),
     });
     const midEng = mid.items.filter(
-      (it) => it.json.capability === "engagement_opportunities"
+      (it) =>
+        it.json.capability === "engagement_opportunities" &&
+        it.json.__ga4CapabilitySection !== true
     );
-    const midLand = mid.items.filter(
-      (it) => it.json.capability === "landing_underperformance"
+    const midLandOpp = mid.items.filter(
+      (it) =>
+        it.json.capability === "landing_underperformance" &&
+        it.json.__ga4CapabilitySection !== true
+    );
+    const midLandZero = mid.items.filter(
+      (it) =>
+        it.json.capability === "landing_underperformance" &&
+        it.json.__ga4CapabilitySection === true
     );
     assert.equal(midEng.length, 1);
-    assert.equal(midLand.length, 0);
+    assert.equal(midLandOpp.length, 0);
+    assert.equal(midLandZero.length, 1);
     assert.equal(midEng[0].json.opportunity_type, "low_engagement");
 
     // Borderline ER 0.38: engagement max 0.40 qualifies; landing max 0.35 does not
@@ -344,13 +457,23 @@ const main = () => {
       inputItems: asItems([FIX.diff_borderline_er]),
     });
     const bEng = border.items.filter(
-      (it) => it.json.capability === "engagement_opportunities"
+      (it) =>
+        it.json.capability === "engagement_opportunities" &&
+        it.json.__ga4CapabilitySection !== true
     );
-    const bLand = border.items.filter(
-      (it) => it.json.capability === "landing_underperformance"
+    const bLandOpp = border.items.filter(
+      (it) =>
+        it.json.capability === "landing_underperformance" &&
+        it.json.__ga4CapabilitySection !== true
+    );
+    const bLandZero = border.items.filter(
+      (it) =>
+        it.json.capability === "landing_underperformance" &&
+        it.json.__ga4CapabilitySection === true
     );
     assert.equal(bEng.length, 1);
-    assert.equal(bLand.length, 0);
+    assert.equal(bLandOpp.length, 0);
+    assert.equal(bLandZero.length, 1);
 
     // Same weak landing row: both can fire, but identity + score formulas differ
     const both = processUpstreamItems({
@@ -393,13 +516,27 @@ const main = () => {
       inputItems: asItems([FIX.diff_mid_traffic]),
     });
     assert.ok(
-      result.items.some((it) => it.json.capability === "engagement_opportunities")
+      result.items.some(
+        (it) =>
+          it.json.capability === "engagement_opportunities" &&
+          it.json.__ga4CapabilitySection !== true
+      )
     );
     assert.equal(
       result.items.filter(
-        (it) => it.json.capability === "landing_underperformance"
+        (it) =>
+          it.json.capability === "landing_underperformance" &&
+          it.json.__ga4CapabilitySection !== true
       ).length,
       0
+    );
+    assert.equal(
+      result.items.filter(
+        (it) =>
+          it.json.capability === "landing_underperformance" &&
+          it.json.__ga4CapabilitySection === true
+      ).length,
+      1
     );
   }
 

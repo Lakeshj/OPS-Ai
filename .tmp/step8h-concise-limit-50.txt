@@ -1,0 +1,114 @@
+### GA4 Intelligence Report
+#### Summary — Total MCP rows / capabilities represented
+#### Opportunities / Data
+- Landing page: /blog/the-best-generative-engine-optimization-geo-tools
+  - Sessions: 19
+  - Engagement rate: 0.1053
+  - Bounce rate: 0.8947
+  - MCP score: 0.44
+- Landing page: /blog/understanding-the-4-types-of-ai-search-intent-informational-navigational-comparative-transactional
+  - Sessions: 9
+  - Engagement rate: 0
+  - Bounce rate: 1
+  - MCP score: 0.27
+- Landing page: /agency-partner-program
+  - Sessions: 8
+  - Engagement rate: 0
+  - Bounce rate: 1
+  - MCP score: 0.24
+- Landing page: /blog/how-generative-engines-parse-intent-llm-prompt-interpretation-explained
+  - Sessions: 8
+  - Engagement rate: 0
+  - Bounce rate: 1
+  - MCP score: 0.24
+- Landing page: /perplexity-visibility-tracker
+  - Sessions: 8
+  - Engagement rate: 0
+  - Bounce rate: 1
+  - MCP score: 0.24
+- Landing page: /blog/ai-visibility-tracking-to-optimization-meet-the-govisible-action-center
+  - Sessions: 10
+  - Engagement rate: 0.1
+  - Bounce rate: 0.9
+  - MCP score: 0.23
+- Landing page: /blog/how-brands-can-avoid-ai-confusion-and-misrepresentation
+  - Sessions: 16
+  - Engagement rate: 0.25
+  - Bounce rate: 0.75
+  - MCP score: 0.21
+- Landing page: /visible-partner-program
+  - Sessions: 7
+  - Engagement rate: 0
+  - Bounce rate: 1
+  - MCP score: 0.21
+- Landing page: /framework
+  - Sessions: 11
+  - Engagement rate: 0.1818
+  - Bounce rate: 0.8182
+  - MCP score: 0.2
+- Landing page: /blog/the-role-of-reviews-forums-and-mentions-in-ai-brand-visibility
+  - Sessions: 9
+  - Engagement rate: 0.1111
+  - Bounce rate: 0.8889
+  - MCP score: 0.2
+- Landing page: /pricing
+  - Sessions: 33
+  - Engagement rate: 0.3636
+  - Bounce rate: 0.6364
+  - MCP score: 0.19
+- Landing page: /blog/key-platforms-for-entity-optimization-across-industries
+  - Sessions: 13
+  - Engagement rate: 0.2308
+  - Bounce rate: 0.7692
+  - MCP score: 0.19
+- Landing page: /blog/structured-content-engineering-how-brands-build-ai-readable-content
+  - Sessions: 6
+  - Engagement rate: 0
+  - Bounce rate: 1
+  - MCP score: 0.18
+- Landing page: /gemini-visibility-tracker
+  - Sessions: 6
+  - Engagement rate: 0
+  - Bounce rate: 1
+  - MCP score: 0.18
+- Landing page: /intelligent-entity-optimization
+  - Sessions: 6
+  - Engagement rate: 0
+  - Bounce rate: 1
+  - MCP score: 0.18
+- Landing page: /templates/external-citation-tracker
+  - Sessions: 6
+  - Engagement rate: 0
+  - Bounce rate: 1
+  - MCP score: 0.18
+- Landing page: /voice-of-the-searcher
+  - Sessions: 6
+  - Engagement rate: 0
+  - Bounce rate: 1
+  - MCP score: 0.18
+- Landing page: /learnability-testing-and-visibility-scoring
+  - Sessions: 8
+  - Engagement rate: 0.125
+  - Bounce rate: 0.875
+  - MCP score: 0.17
+- Landing page: /blog/how-govisible-audits-your-brand-across-ai-engines-a-deep-dive-into-multi-engine-visibility
+  - Sessions: 5
+  - Engagement rate: 0
+  - Bounce rate: 1
+  - MCP score: 0.15
+- Landing page: /blog/track-ai-bot-traffic-on-your-website-monitor-ai-crawlers-user-agents-and-crawl-activity
+  - Sessions: 5
+  - Engagement rate: 0
+  - Bounce rate: 1
+  - MCP score: 0.15
+- Landing page: /blog/common-mistakes-to-avoid-in-intent-mapping-for-ai-search
+  - Sessions: 9
+  - Engagement rate: 0.2222
+  - Bounce rate: 0.7778
+  - MCP score: 0.14
+- Landing page: /blog
+  - Sessions: 7
+  - Engagement rate: 0.1429
+  - Bounce rate: 0.8571
+  - MCP score: 0.14
+- Landing page: /blog/the-knowledge-graph-layer-how-ai-models-understand

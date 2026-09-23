@@ -409,20 +409,35 @@ const validateCapabilityFilters = (capability, raw = {}) => {
 
 /**
  * Extract per-capability filter bag from nodeData.
- * Prefers capabilitySettings[id]; otherwise picks only this capability's keys
- * from flat nodeData (never a shared cross-capability bag).
+ *
+ * Precedence (filter isolation):
+ * A) No capabilitySettings → legacy flat fallback (pick this capability's keys).
+ * B) capabilitySettings[id] is an object → use ONLY that nested bag.
+ * C) capabilitySettings exists but [id] missing → {} (defaults via validate);
+ *    do NOT read flat nodeData (prevents multi-cap shared-name leakage).
  */
 const extractFiltersFromNodeData = (capabilityId, nodeData = {}) => {
   const id = String(capabilityId || "").trim();
-  const settings =
-    nodeData?.capabilitySettings &&
-    typeof nodeData.capabilitySettings === "object"
-      ? nodeData.capabilitySettings[id]
-      : null;
+  const data = nodeData && typeof nodeData === "object" ? nodeData : {};
+  const hasSettingsBag =
+    Object.prototype.hasOwnProperty.call(data, "capabilitySettings") &&
+    data.capabilitySettings != null &&
+    typeof data.capabilitySettings === "object" &&
+    !Array.isArray(data.capabilitySettings);
+
+  // CASE A — legacy flat configuration
+  if (!hasSettingsBag) {
+    return pickCapabilityFilterKeys(id, data);
+  }
+
+  const settings = data.capabilitySettings[id];
+  // CASE B — nested bag for this capability
   if (settings && typeof settings === "object" && !Array.isArray(settings)) {
     return pickCapabilityFilterKeys(id, settings);
   }
-  return pickCapabilityFilterKeys(id, nodeData || {});
+
+  // CASE C — settings bag present but this capability has no entry
+  return {};
 };
 
 module.exports = {

@@ -75,13 +75,34 @@ const readFinite = (row, key) => {
 };
 
 /**
- * Prefer landingPage. Allow pagePath only as explicit proxy for page/landing pulls.
- * @returns {{ entity: object, usedProxy: boolean } | null}
+ * True when landingPage is present but not a usable landing-page entity.
+ * Includes GA4's "(not set)", blank strings, null, and undefined.
+ */
+const isUnresolvedLandingValue = (value) => {
+  if (value == null) return true;
+  const trimmed = String(value).trim();
+  if (!trimmed) return true;
+  return trimmed.toLowerCase() === "(not set)";
+};
+
+/**
+ * Prefer landingPage. Allow pagePath only when landingPage key is absent.
+ * Explicit unresolved landingPage ("(not set)", "", null, undefined) must NOT
+ * fall back to pagePath for that row.
+ * @returns {{
+ *   entity: object,
+ *   usedProxy: boolean,
+ *   unresolved?: boolean,
+ *   unresolvedValue?: any,
+ * } | null}
  */
 const resolveEntity = (row) => {
-  const landingPage = hasOwn(row, "landingPage")
-    ? String(row.landingPage).trim()
-    : "";
+  const hasLandingKey =
+    row != null &&
+    typeof row === "object" &&
+    !Array.isArray(row) &&
+    Object.prototype.hasOwnProperty.call(row, "landingPage");
+
   const pagePath = hasOwn(row, "pagePath")
     ? String(row.pagePath).trim()
     : "";
@@ -89,7 +110,16 @@ const resolveEntity = (row) => {
     ? String(row.pageTitle).trim()
     : "";
 
-  if (landingPage) {
+  if (hasLandingKey) {
+    if (isUnresolvedLandingValue(row.landingPage)) {
+      return {
+        unresolved: true,
+        usedProxy: false,
+        entity: null,
+        unresolvedValue: row.landingPage,
+      };
+    }
+    const landingPage = String(row.landingPage).trim();
     return {
       usedProxy: false,
       entity: {
@@ -430,6 +460,8 @@ const landingUnderperformance = (input = {}) => {
   }
 
   let usedProxy = false;
+  let unresolvedLandingRows = 0;
+  const unresolvedSamples = [];
   const opportunities = [];
 
   for (const row of rows) {
@@ -437,6 +469,19 @@ const landingUnderperformance = (input = {}) => {
 
     // Independent row evaluation only — never aggregate across eventName.
     const resolved = resolveEntity(row);
+    if (resolved && resolved.unresolved) {
+      unresolvedLandingRows += 1;
+      if (unresolvedSamples.length < 3) {
+        unresolvedSamples.push(
+          resolved.unresolvedValue === undefined
+            ? "undefined"
+            : resolved.unresolvedValue === null
+              ? "null"
+              : String(resolved.unresolvedValue)
+        );
+      }
+      continue;
+    }
     if (!resolved) continue;
     if (resolved.usedProxy) usedProxy = true;
 
@@ -501,6 +546,18 @@ const landingUnderperformance = (input = {}) => {
     });
   }
 
+  if (unresolvedLandingRows > 0) {
+    warnings.push(
+      buildWarning({
+        code: ERROR.GA4_LANDING_ENTITY_UNRESOLVED,
+        capability: CAPABILITY_ID,
+        message: `${unresolvedLandingRows} row(s) had an unresolved landingPage value (e.g. "(not set)") and cannot be evaluated as a specific landing-page entity. Those rows were skipped and pagePath was not used as a fallback.`,
+        unresolvedCount: unresolvedLandingRows,
+        samples: unresolvedSamples,
+      })
+    );
+  }
+
   if (usedProxy) {
     warnings.push(
       buildWarning({
@@ -555,4 +612,5 @@ module.exports = {
   resolveEntity,
   resolveViewsPerSession,
   compareOpportunities,
+  isUnresolvedLandingValue,
 };

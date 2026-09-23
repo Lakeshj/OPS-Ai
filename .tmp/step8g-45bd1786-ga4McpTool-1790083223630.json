@@ -1,0 +1,595 @@
+{
+  "run_id": "45bd1786-4e6d-4596-8479-159fce286c0e",
+  "step_id": "dbfa423c-7cad-479a-b8e6-5e4d86412e39",
+  "node_id": "ga4McpTool-1790083223630",
+  "node_type": "ga4McpTool",
+  "status": "succeeded",
+  "output": {
+    "ok": true,
+    "count": 0,
+    "items": [
+      {
+        "json": {
+          "count": 0,
+          "period": {
+            "end": null,
+            "start": null
+          },
+          "source": "google_analytics",
+          "filters": {
+            "limit": 50,
+            "minScore": 0,
+            "minSessions": 150,
+            "minBounceRate": 0.65,
+            "maxEngagementRate": 0.35,
+            "maxViewsPerSession": 1.2,
+            "maxAverageSessionDuration": 25
+          },
+          "results": [],
+          "category": "intelligence",
+          "property": null,
+          "warnings": [
+            {
+              "code": "GA4_LANDING_ENTITY_UNRESOLVED",
+              "message": "2 row(s) had an unresolved landingPage value (e.g. \"(not set)\") and cannot be evaluated as a specific landing-page entity. Those rows were skipped and pagePath was not used as a fallback.",
+              "samples": [
+                "(not set)",
+                ""
+              ],
+              "capability": "landing_underperformance",
+              "unresolvedCount": 2
+            },
+            {
+              "code": "GA4_NO_MATCHES",
+              "filters": {
+                "limit": 50,
+                "minScore": 0,
+                "minSessions": 150,
+                "minBounceRate": 0.65,
+                "maxEngagementRate": 0.35,
+                "maxViewsPerSession": 1.2,
+                "maxAverageSessionDuration": 25
+              },
+              "message": "No landing underperformance opportunities matched the configured filters.",
+              "capability": "landing_underperformance"
+            }
+          ],
+          "capability": "landing_underperformance",
+          "__ga4Intelligence": true,
+          "__ga4CapabilitySection": true
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      }
+    ],
+    "label": "Landing Underperformance",
+    "period": {
+      "end": null,
+      "start": null
+    },
+    "filters": {
+      "limit": 50,
+      "minScore": 0,
+      "minSessions": 150,
+      "minBounceRate": 0.65,
+      "maxEngagementRate": 0.35,
+      "maxViewsPerSession": 1.2,
+      "maxAverageSessionDuration": 25
+    },
+    "itemsIn": 60,
+    "category": "intelligence",
+    "executed": [
+      "landing_underperformance"
+    ],
+    "itemsOut": 0,
+    "property": null,
+    "scaffold": false,
+    "warnings": [
+      {
+        "code": "GA4_LANDING_ENTITY_UNRESOLVED",
+        "message": "2 row(s) had an unresolved landingPage value (e.g. \"(not set)\") and cannot be evaluated as a specific landing-page entity. Those rows were skipped and pagePath was not used as a fallback.",
+        "samples": [
+          "(not set)",
+          ""
+        ],
+        "capability": "landing_underperformance",
+        "unresolvedCount": 2
+      },
+      {
+        "code": "GA4_NO_MATCHES",
+        "filters": {
+          "limit": 50,
+          "minScore": 0,
+          "minSessions": 150,
+          "minBounceRate": 0.65,
+          "maxEngagementRate": 0.35,
+          "maxViewsPerSession": 1.2,
+          "maxAverageSessionDuration": 25
+        },
+        "message": "No landing underperformance opportunities matched the configured filters.",
+        "capability": "landing_underperformance"
+      }
+    ],
+    "inventory": {
+      "allKeys": [
+        "bounceRate",
+        "engagementRate",
+        "landingPage",
+        "sessions",
+        "totalUsers"
+      ],
+      "availableMetrics": [
+        "bounceRate",
+        "engagementRate",
+        "sessions",
+        "totalUsers"
+      ],
+      "availableDimensions": [
+        "landingPage"
+      ]
+    },
+    "capability": "landing_underperformance",
+    "implemented": true,
+    "capabilities": [
+      "landing_underperformance"
+    ],
+    "runtimeDiagnostics": {
+      "nodeId": "ga4McpTool-1790083223630",
+      "handoff": {
+        "nodeId": "ga4McpTool-1790083223630",
+        "rowsDetected": true,
+        "inputItemCount": 60,
+        "firstItemTopKeys": [
+          "json",
+          "pairedItem"
+        ],
+        "firstItemJsonKeys": [
+          "landingPage",
+          "sessions",
+          "totalUsers",
+          "engagementRate",
+          "bounceRate"
+        ]
+      },
+      "executed": [
+        "landing_underperformance"
+      ],
+      "outputItemCount": 1,
+      "outputCapabilities": {
+        "landing_underperformance": 1
+      },
+      "receivedCapability": [
+        "landing_underperformance"
+      ],
+      "receivedCapabilities": [
+        "landing_underperformance"
+      ],
+      "selectedCapabilities": [
+        "landing_underperformance"
+      ]
+    },
+    "intelligenceContext": {
+      "kind": "ga4_intelligence_context",
+      "period": {
+        "end": null,
+        "start": null
+      },
+      "source": "google_analytics",
+      "property": null,
+      "warnings": [
+        {
+          "code": "GA4_LANDING_ENTITY_UNRESOLVED",
+          "message": "2 row(s) had an unresolved landingPage value (e.g. \"(not set)\") and cannot be evaluated as a specific landing-page entity. Those rows were skipped and pagePath was not used as a fallback.",
+          "samples": [
+            "(not set)",
+            ""
+          ],
+          "capability": "landing_underperformance",
+          "unresolvedCount": 2
+        },
+        {
+          "code": "GA4_NO_MATCHES",
+          "filters": {
+            "limit": 50,
+            "minScore": 0,
+            "minSessions": 150,
+            "minBounceRate": 0.65,
+            "maxEngagementRate": 0.35,
+            "maxViewsPerSession": 1.2,
+            "maxAverageSessionDuration": 25
+          },
+          "message": "No landing underperformance opportunities matched the configured filters.",
+          "capability": "landing_underperformance"
+        }
+      ],
+      "capabilities": [
+        {
+          "count": 0,
+          "filters": {
+            "limit": 50,
+            "minScore": 0,
+            "minSessions": 150,
+            "minBounceRate": 0.65,
+            "maxEngagementRate": 0.35,
+            "maxViewsPerSession": 1.2,
+            "maxAverageSessionDuration": 25
+          },
+          "results": [],
+          "category": "intelligence",
+          "capability": "landing_underperformance",
+          "__ga4CapabilitySection": true
+        }
+      ],
+      "__ga4Intelligence": true
+    }
+  },
+  "input": {
+    "itemsIn": 60,
+    "incoming": {
+      "googleAnalytics-1789984791245": {
+        "items": [
+          {
+            "json": {
+              "sessions": 431,
+              "bounceRate": 0.4547563805104408,
+              "totalUsers": 295,
+              "landingPage": "/",
+              "engagementRate": 0.5452436194895591
+            },
+            "pairedItem": {
+              "item": 0
+            }
+          },
+          {
+            "json": {
+              "sessions": 105,
+              "bounceRate": 0.9523809523809524,
+              "totalUsers": 65,
+              "landingPage": "(not set)",
+              "engagementRate": 0.047619047619047616
+            },
+            "pairedItem": {
+              "item": 0
+            }
+          },
+          {
+            "json": {
+              "sessions": 98,
+              "bounceRate": 0.42857142857142855,
+              "totalUsers": 77,
+              "landingPage": "/ai-visibility-audit",
+              "engagementRate": 0.5714285714285714
+            },
+            "pairedItem": {
+              "item": 0
+            }
+          },
+          {
+            "json": {
+              "sessions": 98,
+              "bounceRate": 0.4897959183673469,
+              "totalUsers": 91,
+              "landingPage": "/book-demo",
+              "engagementRate": 0.5102040816326531
+            },
+            "pairedItem": {
+              "item": 0
+            }
+          },
+          {
+            "json": {
+              "sessions": 33,
+              "bounceRate": 0.6363636363636364,
+              "totalUsers": 29,
+              "landingPage": "/pricing",
+              "engagementRate": 0.3636363636363637
+            },
+            "pairedItem": {
+              "item": 0
+            }
+          },
+          {
+            "json": {
+              "sessions": 19,
+              "bounceRate": 0.8947368421052632,
+              "totalUsers": 18,
+              "landingPage": "/blog/the-best-generative-engine-optimization-geo-tools",
+              "engagementRate": 0.10526315789473684
+            },
+            "pairedItem": {
+              "item": 0
+            }
+          },
+          {
+            "json": {
+              "sessions": 17,
+              "bounceRate": 0.35294117647058826,
+              "totalUsers": 7,
+              "landingPage": "/ai-visibility-index/2026/automotive/services-and-maintenance",
+              "engagementRate": 0.6470588235294118
+            },
+            "pairedItem": {
+              "item": 0
+            }
+          },
+          {
+            "json": {
+              "sessions": 16,
+              "bounceRate": 0.75,
+              "totalUsers": 16,
+              "landingPage": "/blog/how-brands-can-avoid-ai-confusion-and-misrepresentation",
+              "engagementRate": 0.25
+            },
+            "pairedItem": {
+              "item": 0
+            }
+          },
+          {
+            "json": {
+              "sessions": 13,
+              "bounceRate": 0.6153846153846154,
+              "totalUsers": 13,
+              "landingPage": "/blog/all-blogs",
+              "engagementRate": 0.38461538461538464
+            },
+            "pairedItem": {
+              "item": 0
+            }
+          },
+          {
+            "json": {
+              "sessions": 13,
+              "bounceRate": 0.7692307692307693,
+              "totalUsers": 13,
+              "landingPage": "/blog/key-platforms-for-entity-optimization-across-industries",
+              "engagementRate": 0.2307692307692308
+            },
+            "pairedItem": {
+              "item": 0
+            }
+          },
+          {
+            "json": {
+              "sessions": 12,
+              "bounceRate": 0.5,
+              "totalUsers": 11,
+              "landingPage": "/contact-us",
+              "engagementRate": 0.5
+            },
+            "pairedItem": {
+              "item": 0
+            }
+          },
+          {
+            "json": {
+              "sessions": 11,
+              "bounceRate": 0.6363636363636364,
+              "totalUsers": 11,
+              "landingPage": "/about-visible",
+              "engagementRate": 0.3636363636363637
+            },
+            "pairedItem": {
+              "item": 0
+            }
+          },
+          {
+            "json": {
+              "sessions": 11,
+              "bounceRate": 0.3636363636363637,
+              "totalUsers": 7,
+              "landingPage": "/blog/ai-citation-source-monitoring",
+              "engagementRate": 0.6363636363636364
+            },
+            "pairedItem": {
+              "item": 0
+            }
+          },
+          {
+            "json": {
+              "sessions": 11,
+              "bounceRate": 0.6363636363636364,
+              "totalUsers": 11,
+              "landingPage": "/blog/search-query-analysis",
+              "engagementRate": 0.3636363636363637
+            },
+            "pairedItem": {
+              "item": 0
+            }
+          },
+          {
+            "json": {
+              "sessions": 11,
+              "bounceRate": 0.5454545454545454,
+              "totalUsers": 7,
+              "landingPage": "/blog/what-does-ai-think-about-your-brand",
+              "engagementRate": 0.4545454545454546
+            },
+            "pairedItem": {
+              "item": 0
+            }
+          },
+          {
+            "json": {
+              "sessions": 11,
+              "bounceRate": 0.8181818181818182,
+              "totalUsers": 10,
+              "landingPage": "/framework",
+              "engagementRate": 0.18181818181818185
+            },
+            "pairedItem": {
+              "item": 0
+            }
+          },
+          {
+            "json": {
+              "sessions": 10,
+              "bounceRate": 0.9,
+              "totalUsers": 10,
+              "landingPage": "/blog/ai-visibility-tracking-to-optimization-meet-the-govisible-action-center",
+              "engagementRate": 0.1
+            },
+            "pairedItem": {
+              "item": 0
+            }
+          },
+          {
+            "json": {
+              "sessions": 10,
+              "bounceRate": 0.7,
+              "totalUsers": 10,
+              "landingPage": "/blog/how-govisible-helps-you-track-competitor-visibility-across-ai-engines",
+              "engagementRate": 0.3
+            },
+            "pairedItem": {
+              "item": 0
+            }
+          },
+          {
+            "json": {
+              "sessions": 9,
+              "bounceRate": 1,
+              "totalUsers": 9,
+              "landingPage": "",
+              "engagementRate": 0
+            },
+            "pairedItem": {
+              "item": 0
+            }
+          },
+          {
+            "json": {
+              "sessions": 9,
+              "bounceRate": 0.5555555555555556,
+              "totalUsers": 7,
+              "landingPage": "/ai-visibility-index/2026/automotive/passenger-cars",
+              "engagementRate": 0.4444444444444444
+            },
+            "pairedItem": {
+              "item": 0
+            }
+          },
+          {
+            "json": {
+              "sessions": 9,
+              "bounceRate": 0.7777777777777778,
+              "totalUsers": 9,
+              "landingPage": "/blog/common-mistakes-to-avoid-in-intent-mapping-for-ai-search",
+              "engagementRate": 0.2222222222222222
+            },
+            "pairedItem": {
+              "item": 0
+            }
+          },
+          {
+            "json": {
+              "sessions": 9,
+              "bounceRate": 0.4444444444444444,
+              "totalUsers": 9,
+              "landingPage": "/blog/seo-keywords-vs-geo-prompts-whats-changing-in-search-behavior",
+              "engagementRate": 0.5555555555555556
+            },
+            "pairedItem": {
+              "item": 0
+            }
+          },
+          {
+            "json": {
+              "sessions": 9,
+              "bounceRate": 0.8888888888888888,
+              "totalUsers": 9,
+              "landingPage": "/blog/the-role-of-reviews-forums-and-mentions-in-ai-brand-visibility",
+              "engagementRate": 0.1111111111111111
+            },
+            "pairedItem": {
+              "item": 0
+            }
+          },
+          {
+            "json": {
+              "sessions": 9,
+              "bounceRate": 1,
+              "totalUsers": 9,
+              "landingPage": "/blog/understanding-the-4-types-of-ai-search-intent-informational-navigational-comparative-transactional",
+              "engagementRate": 0
+            },
+            "pairedItem": {
+              "item": 0
+            }
+          },
+          {
+            "json": {
+              "sessions": 8,
+              "bounceRate": 1,
+              "totalUsers": 8,
+              "landingPage": "/agency-partner-program",
+              "engagementRate": 0
+            },
+            "pairedItem": {
+              "item": 0
+            }
+          },
+          "…truncated (60 items total)"
+        ],
+        "endDate": "2026-09-23",
+        "rowCount": 60,
+        "startDate": "2026-08-25",
+        "propertyId": "properties/488600391"
+      }
+    },
+    "loopMeta": null,
+    "nodeData": {
+      "label": "GA4 MCP Tools",
+      "limit": 50,
+      "minShare": 0,
+      "nodeType": "ga4McpTool",
+      "available": true,
+      "libraryId": "ga4-mcp-tools",
+      "minVolume": 0,
+      "cacheDirty": false,
+      "capability": [
+        "landing_underperformance"
+      ],
+      "minSessions": 20,
+      "capabilities": [
+        "landing_underperformance"
+      ],
+      "minBounceRate": 0.65,
+      "libraryCategory": "SEO",
+      "libraryProvider": "OpsAi",
+      "maxEngagementRate": 0.35,
+      "capabilitySettings": {
+        "engagement_opportunities": {
+          "limit": 50,
+          "minSessions": 250,
+          "minBounceRate": 0.6,
+          "maxEngagementRate": 0.4
+        },
+        "landing_underperformance": {
+          "minSessions": 150,
+          "minBounceRate": 0.65,
+          "maxEngagementRate": 0.35
+        },
+        "acquisition_concentration": {
+          "minShare": 0.5,
+          "minVolume": 0,
+          "minConcentrationShare": 0
+        }
+      },
+      "minConcentrationShare": 0
+    },
+    "nodeType": "ga4McpTool",
+    "resolved": null,
+    "contextInput": {
+      "source": "manual"
+    },
+    "inputSources": {
+      "main": {
+        "nodeId": "googleAnalytics-1789984791245",
+        "runIndex": 0,
+        "outputPort": "main"
+      }
+    },
+    "executionIndex": 0
+  }
+}

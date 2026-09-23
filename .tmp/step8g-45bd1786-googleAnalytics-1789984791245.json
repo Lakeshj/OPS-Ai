@@ -1,0 +1,813 @@
+{
+  "run_id": "45bd1786-4e6d-4596-8479-159fce286c0e",
+  "step_id": "3b429b46-6566-4870-9f8d-7846596db8f3",
+  "node_id": "googleAnalytics-1789984791245",
+  "node_type": "googleAnalytics",
+  "status": "succeeded",
+  "output": {
+    "items": [
+      {
+        "json": {
+          "sessions": 431,
+          "bounceRate": 0.4547563805104408,
+          "totalUsers": 295,
+          "landingPage": "/",
+          "engagementRate": 0.5452436194895591
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      },
+      {
+        "json": {
+          "sessions": 105,
+          "bounceRate": 0.9523809523809524,
+          "totalUsers": 65,
+          "landingPage": "(not set)",
+          "engagementRate": 0.047619047619047616
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      },
+      {
+        "json": {
+          "sessions": 98,
+          "bounceRate": 0.42857142857142855,
+          "totalUsers": 77,
+          "landingPage": "/ai-visibility-audit",
+          "engagementRate": 0.5714285714285714
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      },
+      {
+        "json": {
+          "sessions": 98,
+          "bounceRate": 0.4897959183673469,
+          "totalUsers": 91,
+          "landingPage": "/book-demo",
+          "engagementRate": 0.5102040816326531
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      },
+      {
+        "json": {
+          "sessions": 33,
+          "bounceRate": 0.6363636363636364,
+          "totalUsers": 29,
+          "landingPage": "/pricing",
+          "engagementRate": 0.3636363636363637
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      },
+      {
+        "json": {
+          "sessions": 19,
+          "bounceRate": 0.8947368421052632,
+          "totalUsers": 18,
+          "landingPage": "/blog/the-best-generative-engine-optimization-geo-tools",
+          "engagementRate": 0.10526315789473684
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      },
+      {
+        "json": {
+          "sessions": 17,
+          "bounceRate": 0.35294117647058826,
+          "totalUsers": 7,
+          "landingPage": "/ai-visibility-index/2026/automotive/services-and-maintenance",
+          "engagementRate": 0.6470588235294118
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      },
+      {
+        "json": {
+          "sessions": 16,
+          "bounceRate": 0.75,
+          "totalUsers": 16,
+          "landingPage": "/blog/how-brands-can-avoid-ai-confusion-and-misrepresentation",
+          "engagementRate": 0.25
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      },
+      {
+        "json": {
+          "sessions": 13,
+          "bounceRate": 0.6153846153846154,
+          "totalUsers": 13,
+          "landingPage": "/blog/all-blogs",
+          "engagementRate": 0.38461538461538464
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      },
+      {
+        "json": {
+          "sessions": 13,
+          "bounceRate": 0.7692307692307693,
+          "totalUsers": 13,
+          "landingPage": "/blog/key-platforms-for-entity-optimization-across-industries",
+          "engagementRate": 0.2307692307692308
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      },
+      {
+        "json": {
+          "sessions": 12,
+          "bounceRate": 0.5,
+          "totalUsers": 11,
+          "landingPage": "/contact-us",
+          "engagementRate": 0.5
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      },
+      {
+        "json": {
+          "sessions": 11,
+          "bounceRate": 0.6363636363636364,
+          "totalUsers": 11,
+          "landingPage": "/about-visible",
+          "engagementRate": 0.3636363636363637
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      },
+      {
+        "json": {
+          "sessions": 11,
+          "bounceRate": 0.3636363636363637,
+          "totalUsers": 7,
+          "landingPage": "/blog/ai-citation-source-monitoring",
+          "engagementRate": 0.6363636363636364
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      },
+      {
+        "json": {
+          "sessions": 11,
+          "bounceRate": 0.6363636363636364,
+          "totalUsers": 11,
+          "landingPage": "/blog/search-query-analysis",
+          "engagementRate": 0.3636363636363637
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      },
+      {
+        "json": {
+          "sessions": 11,
+          "bounceRate": 0.5454545454545454,
+          "totalUsers": 7,
+          "landingPage": "/blog/what-does-ai-think-about-your-brand",
+          "engagementRate": 0.4545454545454546
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      },
+      {
+        "json": {
+          "sessions": 11,
+          "bounceRate": 0.8181818181818182,
+          "totalUsers": 10,
+          "landingPage": "/framework",
+          "engagementRate": 0.18181818181818185
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      },
+      {
+        "json": {
+          "sessions": 10,
+          "bounceRate": 0.9,
+          "totalUsers": 10,
+          "landingPage": "/blog/ai-visibility-tracking-to-optimization-meet-the-govisible-action-center",
+          "engagementRate": 0.1
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      },
+      {
+        "json": {
+          "sessions": 10,
+          "bounceRate": 0.7,
+          "totalUsers": 10,
+          "landingPage": "/blog/how-govisible-helps-you-track-competitor-visibility-across-ai-engines",
+          "engagementRate": 0.3
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      },
+      {
+        "json": {
+          "sessions": 9,
+          "bounceRate": 1,
+          "totalUsers": 9,
+          "landingPage": "",
+          "engagementRate": 0
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      },
+      {
+        "json": {
+          "sessions": 9,
+          "bounceRate": 0.5555555555555556,
+          "totalUsers": 7,
+          "landingPage": "/ai-visibility-index/2026/automotive/passenger-cars",
+          "engagementRate": 0.4444444444444444
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      },
+      {
+        "json": {
+          "sessions": 9,
+          "bounceRate": 0.7777777777777778,
+          "totalUsers": 9,
+          "landingPage": "/blog/common-mistakes-to-avoid-in-intent-mapping-for-ai-search",
+          "engagementRate": 0.2222222222222222
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      },
+      {
+        "json": {
+          "sessions": 9,
+          "bounceRate": 0.4444444444444444,
+          "totalUsers": 9,
+          "landingPage": "/blog/seo-keywords-vs-geo-prompts-whats-changing-in-search-behavior",
+          "engagementRate": 0.5555555555555556
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      },
+      {
+        "json": {
+          "sessions": 9,
+          "bounceRate": 0.8888888888888888,
+          "totalUsers": 9,
+          "landingPage": "/blog/the-role-of-reviews-forums-and-mentions-in-ai-brand-visibility",
+          "engagementRate": 0.1111111111111111
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      },
+      {
+        "json": {
+          "sessions": 9,
+          "bounceRate": 1,
+          "totalUsers": 9,
+          "landingPage": "/blog/understanding-the-4-types-of-ai-search-intent-informational-navigational-comparative-transactional",
+          "engagementRate": 0
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      },
+      {
+        "json": {
+          "sessions": 8,
+          "bounceRate": 1,
+          "totalUsers": 8,
+          "landingPage": "/agency-partner-program",
+          "engagementRate": 0
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      },
+      {
+        "json": {
+          "sessions": 8,
+          "bounceRate": 0.125,
+          "totalUsers": 4,
+          "landingPage": "/ai-audit-request-submitted",
+          "engagementRate": 0.875
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      },
+      {
+        "json": {
+          "sessions": 8,
+          "bounceRate": 0.25,
+          "totalUsers": 4,
+          "landingPage": "/ai-visibility-index/2026",
+          "engagementRate": 0.75
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      },
+      {
+        "json": {
+          "sessions": 8,
+          "bounceRate": 0.75,
+          "totalUsers": 8,
+          "landingPage": "/blog/ai-citation-strategies",
+          "engagementRate": 0.25
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      },
+      {
+        "json": {
+          "sessions": 8,
+          "bounceRate": 1,
+          "totalUsers": 8,
+          "landingPage": "/blog/how-generative-engines-parse-intent-llm-prompt-interpretation-explained",
+          "engagementRate": 0
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      },
+      {
+        "json": {
+          "sessions": 8,
+          "bounceRate": 0.625,
+          "totalUsers": 8,
+          "landingPage": "/blog/the-anatomy-of-ai-optimized-content-headings-bullets-summaries",
+          "engagementRate": 0.375
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      },
+      {
+        "json": {
+          "sessions": 8,
+          "bounceRate": 0.75,
+          "totalUsers": 8,
+          "landingPage": "/blog/tools-techniques-how-to-extract-and-analyze-searcher-prompts",
+          "engagementRate": 0.25
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      },
+      {
+        "json": {
+          "sessions": 8,
+          "bounceRate": 0.625,
+          "totalUsers": 8,
+          "landingPage": "/govisible-platform",
+          "engagementRate": 0.375
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      },
+      {
+        "json": {
+          "sessions": 8,
+          "bounceRate": 0.875,
+          "totalUsers": 8,
+          "landingPage": "/learnability-testing-and-visibility-scoring",
+          "engagementRate": 0.125
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      },
+      {
+        "json": {
+          "sessions": 8,
+          "bounceRate": 1,
+          "totalUsers": 8,
+          "landingPage": "/perplexity-visibility-tracker",
+          "engagementRate": 0
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      },
+      {
+        "json": {
+          "sessions": 8,
+          "bounceRate": 0.5,
+          "totalUsers": 8,
+          "landingPage": "/templates/prompt-visibility-testing-log",
+          "engagementRate": 0.5
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      },
+      {
+        "json": {
+          "sessions": 7,
+          "bounceRate": 0.2857142857142857,
+          "totalUsers": 5,
+          "landingPage": "/blog/semantic-markers-how-llms-parse-structured-content",
+          "engagementRate": 0.7142857142857143
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      },
+      {
+        "json": {
+          "sessions": 7,
+          "bounceRate": 0.42857142857142855,
+          "totalUsers": 7,
+          "landingPage": "/blog/the-hidden-brand-risk-of-outdated-ai-answers-and-how-to-fix-it",
+          "engagementRate": 0.5714285714285714
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      },
+      {
+        "json": {
+          "sessions": 7,
+          "bounceRate": 0.8571428571428571,
+          "totalUsers": 7,
+          "landingPage": "/blog/the-knowledge-graph-layer-how-ai-models-understand-and-index-brands",
+          "engagementRate": 0.14285714285714285
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      },
+      {
+        "json": {
+          "sessions": 7,
+          "bounceRate": 0.8571428571428571,
+          "totalUsers": 7,
+          "landingPage": "/blog/the-role-of-schema-markup-in-generative-engine-optimization",
+          "engagementRate": 0.14285714285714285
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      },
+      {
+        "json": {
+          "sessions": 7,
+          "bounceRate": 0.8571428571428571,
+          "totalUsers": 7,
+          "landingPage": "/chatgpt-visibility-tracker",
+          "engagementRate": 0.14285714285714285
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      },
+      {
+        "json": {
+          "sessions": 7,
+          "bounceRate": 0.5714285714285714,
+          "totalUsers": 5,
+          "landingPage": "/govisible-ai-bot-tracker",
+          "engagementRate": 0.42857142857142855
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      },
+      {
+        "json": {
+          "sessions": 7,
+          "bounceRate": 0.8571428571428571,
+          "totalUsers": 7,
+          "landingPage": "/intent-to-answer-mapping",
+          "engagementRate": 0.14285714285714285
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      },
+      {
+        "json": {
+          "sessions": 7,
+          "bounceRate": 0.8571428571428571,
+          "totalUsers": 6,
+          "landingPage": "/templates/prompt-mining-canvas",
+          "engagementRate": 0.14285714285714285
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      },
+      {
+        "json": {
+          "sessions": 7,
+          "bounceRate": 1,
+          "totalUsers": 7,
+          "landingPage": "/visible-partner-program",
+          "engagementRate": 0
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      },
+      {
+        "json": {
+          "sessions": 6,
+          "bounceRate": 0.8333333333333334,
+          "totalUsers": 6,
+          "landingPage": "/blog",
+          "engagementRate": 0.16666666666666666
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      },
+      {
+        "json": {
+          "sessions": 6,
+          "bounceRate": 0.6666666666666666,
+          "totalUsers": 6,
+          "landingPage": "/blog/ai-visibility-insights",
+          "engagementRate": 0.3333333333333333
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      },
+      {
+        "json": {
+          "sessions": 6,
+          "bounceRate": 0.5,
+          "totalUsers": 6,
+          "landingPage": "/blog/govisible",
+          "engagementRate": 0.5
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      },
+      {
+        "json": {
+          "sessions": 6,
+          "bounceRate": 0.8333333333333334,
+          "totalUsers": 6,
+          "landingPage": "/blog/how-negative-brand-signals-can-undermine-ai-rankings",
+          "engagementRate": 0.16666666666666666
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      },
+      {
+        "json": {
+          "sessions": 6,
+          "bounceRate": 1,
+          "totalUsers": 6,
+          "landingPage": "/blog/structured-content-engineering-how-brands-build-ai-readable-content",
+          "engagementRate": 0
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      },
+      {
+        "json": {
+          "sessions": 6,
+          "bounceRate": 1,
+          "totalUsers": 6,
+          "landingPage": "/gemini-visibility-tracker",
+          "engagementRate": 0
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      },
+      {
+        "json": {
+          "sessions": 6,
+          "bounceRate": 1,
+          "totalUsers": 6,
+          "landingPage": "/intelligent-entity-optimization",
+          "engagementRate": 0
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      },
+      {
+        "json": {
+          "sessions": 6,
+          "bounceRate": 1,
+          "totalUsers": 6,
+          "landingPage": "/templates/external-citation-tracker",
+          "engagementRate": 0
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      },
+      {
+        "json": {
+          "sessions": 6,
+          "bounceRate": 0,
+          "totalUsers": 6,
+          "landingPage": "/thank-you",
+          "engagementRate": 1
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      },
+      {
+        "json": {
+          "sessions": 6,
+          "bounceRate": 1,
+          "totalUsers": 6,
+          "landingPage": "/voice-of-the-searcher",
+          "engagementRate": 0
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      },
+      {
+        "json": {
+          "sessions": 6,
+          "bounceRate": 0.5,
+          "totalUsers": 6,
+          "landingPage": "/webinar/ai-shopping-in-chatgpt",
+          "engagementRate": 0.5
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      },
+      {
+        "json": {
+          "sessions": 6,
+          "bounceRate": 0.8333333333333334,
+          "totalUsers": 6,
+          "landingPage": "/webinar/the-ai-blind-spot",
+          "engagementRate": 0.16666666666666666
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      },
+      {
+        "json": {
+          "sessions": 5,
+          "bounceRate": 0.6,
+          "totalUsers": 5,
+          "landingPage": "/blog/entity-optimization-tips",
+          "engagementRate": 0.4
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      },
+      {
+        "json": {
+          "sessions": 5,
+          "bounceRate": 1,
+          "totalUsers": 5,
+          "landingPage": "/blog/how-govisible-audits-your-brand-across-ai-engines-a-deep-dive-into-multi-engine-visibility",
+          "engagementRate": 0
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      },
+      {
+        "json": {
+          "sessions": 5,
+          "bounceRate": 0.8,
+          "totalUsers": 5,
+          "landingPage": "/blog/how-to-format-content-for-ai-surfaced-answer-snippets",
+          "engagementRate": 0.2
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      },
+      {
+        "json": {
+          "sessions": 5,
+          "bounceRate": 1,
+          "totalUsers": 5,
+          "landingPage": "/blog/track-ai-bot-traffic-on-your-website-monitor-ai-crawlers-user-agents-and-crawl-activity",
+          "engagementRate": 0
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      }
+    ],
+    "endDate": "2026-09-23",
+    "rowCount": 60,
+    "startDate": "2026-08-25",
+    "propertyId": "properties/488600391"
+  },
+  "input": {
+    "itemsIn": 1,
+    "incoming": {
+      "trigger-1789984786253": {
+        "kind": "manual",
+        "input": {
+          "source": "manual"
+        },
+        "items": [
+          {
+            "json": {
+              "kind": "manual",
+              "input": {
+                "source": "manual"
+              },
+              "triggered": true
+            }
+          }
+        ],
+        "triggered": true
+      }
+    },
+    "loopMeta": null,
+    "nodeData": {
+      "label": "Google Analytics",
+      "limit": 60,
+      "metrics": [
+        "sessions",
+        "totalUsers",
+        "engagementRate",
+        "bounceRate"
+      ],
+      "nodeType": "googleAnalytics",
+      "available": true,
+      "dateRange": "last30days",
+      "libraryId": "google-analytics",
+      "cacheDirty": false,
+      "dimensions": [
+        "landingPage"
+      ],
+      "propertyId": "488600391",
+      "credentialId": "8de7f833-e8e5-40ac-b2c9-473463235c9f",
+      "orderByField": "",
+      "orderDirection": "ascending",
+      "propertyIdMode": "account",
+      "libraryCategory": "SEO",
+      "libraryProvider": "Google",
+      "propertyDisplayName": "VISIBLE (488600391)"
+    },
+    "nodeType": "googleAnalytics",
+    "resolved": {
+      "limit": 60,
+      "endDate": "2026-09-23",
+      "metrics": [
+        "sessions",
+        "totalUsers",
+        "engagementRate",
+        "bounceRate"
+      ],
+      "startDate": "2026-08-25",
+      "dimensions": [
+        "landingPage"
+      ],
+      "propertyId": "properties/488600391",
+      "credentialId": "8de7f833-e8e5-40ac-b2c9-473463235c9f"
+    },
+    "contextInput": {
+      "source": "manual"
+    },
+    "inputSources": {
+      "main": {
+        "nodeId": "trigger-1789984786253",
+        "runIndex": 0,
+        "outputPort": "main"
+      }
+    },
+    "executionIndex": 0
+  }
+}

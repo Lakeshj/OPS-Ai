@@ -1,0 +1,80 @@
+### GA4 Intelligence Report
+#### Summary — 50 MCP rows / capabilities represented
+#### Opportunities / Data
+- **Landing page:** /blog/the-best-generative-engine-optimization-geo-tools  
+  **Sessions:** 19  
+  **Engagement rate:** 10.53%  
+  **Bounce rate:** 89.47%  
+  **MCP score:** 0.44  
+  **Reason:** Landing page /blog/the-best-generative-engine-optimization-geo-tools received 19 sessions with an engagement rate of 10.53% and a bounce rate of 89.47%.  
+  **Recommendation:** Review the landing-page experience and engagement elements for /blog/the-best-generative-engine-optimization-geo-tools.
+
+- **Landing page:** /blog/understanding-the-4-types-of-ai-search-intent-informational-navigational-comparative-transactional  
+  **Sessions:** 9  
+  **Engagement rate:** 0%  
+  **Bounce rate:** 100%  
+  **MCP score:** 0.27  
+  **Reason:** Landing page /blog/understanding-the-4-types-of-ai-search-intent-informational-navigational-comparative-transactional received 9 sessions with an engagement rate of 0% and a bounce rate of 100%.  
+  **Recommendation:** Review the landing-page experience and engagement elements for /blog/understanding-the-4-types-of-ai-search-intent-informational-navigational-comparative-transactional.
+
+- **Landing page:** /agency-partner-program  
+  **Sessions:** 8  
+  **Engagement rate:** 0%  
+  **Bounce rate:** 100%  
+  **MCP score:** 0.24  
+  **Reason:** Landing page /agency-partner-program received 8 sessions with an engagement rate of 0% and a bounce rate of 100%.  
+  **Recommendation:** Review the landing-page experience and engagement elements for /agency-partner-program.
+
+- **Landing page:** /blog/how-generative-engines-parse-intent-llm-prompt-interpretation-explained  
+  **Sessions:** 8  
+  **Engagement rate:** 0%  
+  **Bounce rate:** 100%  
+  **MCP score:** 0.24  
+  **Reason:** Landing page /blog/how-generative-engines-parse-intent-llm-prompt-interpretation-explained received 8 sessions with an engagement rate of 0% and a bounce rate of 100%.  
+  **Recommendation:** Review the landing-page experience and engagement elements for /blog/how-generative-engines-parse-intent-llm-prompt-interpretation-explained.
+
+- **Landing page:** /perplexity-visibility-tracker  
+  **Sessions:** 8  
+  **Engagement rate:** 0%  
+  **Bounce rate:** 100%  
+  **MCP score:** 0.24  
+  **Reason:** Landing page /perplexity-visibility-tracker received 8 sessions with an engagement rate of 0% and a bounce rate of 100%.  
+  **Recommendation:** Review the landing-page experience and engagement elements for /perplexity-visibility-tracker.
+
+- **Landing page:** /blog/ai-visibility-tracking-to-optimization-meet-the-govisible-action-center  
+  **Sessions:** 10  
+  **Engagement rate:** 10%  
+  **Bounce rate:** 90%  
+  **MCP score:** 0.23  
+  **Reason:** Landing page /blog/ai-visibility-tracking-to-optimization-meet-the-govisible-action-center received 10 sessions with an engagement rate of 10% and a bounce rate of 90%.  
+  **Recommendation:** Review the landing-page experience and engagement elements for /blog/ai-visibility-tracking-to-optimization-meet-the-govisible-action-center.
+
+- **Landing page:** /blog/how-brands-can-avoid-ai-confusion-and-misrepresentation  
+  **Sessions:** 16  
+  **Engagement rate:** 25%  
+  **Bounce rate:** 75%  
+  **MCP score:** 0.21  
+  **Reason:** Landing page /blog/how-brands-can-avoid-ai-confusion-and-misrepresentation received 16 sessions with an engagement rate of 25% and a bounce rate of 75%.  
+  **Recommendation:** Review the landing-page experience and engagement elements for /blog/how-brands-can-avoid-ai-confusion-and-misrepresentation.
+
+- **Landing page:** /visible-partner-program  
+  **Sessions:** 7  
+  **Engagement rate:** 0%  
+  **Bounce rate:** 100%  
+  **MCP score:** 0.21  
+  **Reason:** Landing page /visible-partner-program received 7 sessions with an engagement rate of 0% and a bounce rate of 100%.  
+  **Recommendation:** Review the landing-page experience and engagement elements for /visible-partner-program.
+
+- **Landing page:** /framework  
+  **Sessions:** 11  
+  **Engagement rate:** 18.18%  
+  **Bounce rate:** 81.82%  
+  **MCP score:** 0.20  
+  **Reason:** Landing page /framework received 11 sessions with an engagement rate of 18.18% and a bounce rate of 81.82%.  
+  **Recommendation:** Review the landing-page experience and engagement elements for /framework.
+
+- **Landing page:** /blog/the-role-of-reviews-forums-and-mentions-in-ai-brand-visibility  
+  **Sessions:** 9  
+  **Engagement rate:** 11.11%  
+  **Bounce rate:** 88.89%  
+  **MCP score:** 0.20  

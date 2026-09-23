@@ -1,0 +1,639 @@
+{
+  "landingOnlyDefaultsRun": {
+    "runId": "45bd1786-4e6d-4596-8479-159fce286c0e",
+    "mcpOutputItemCount": 1,
+    "opportunities": 0,
+    "section": {
+      "count": 0,
+      "period": {
+        "end": null,
+        "start": null
+      },
+      "source": "google_analytics",
+      "filters": {
+        "limit": 50,
+        "minScore": 0,
+        "minSessions": 150,
+        "minBounceRate": 0.65,
+        "maxEngagementRate": 0.35,
+        "maxViewsPerSession": 1.2,
+        "maxAverageSessionDuration": 25
+      },
+      "results": [],
+      "category": "intelligence",
+      "property": null,
+      "warnings": [
+        {
+          "code": "GA4_LANDING_ENTITY_UNRESOLVED",
+          "message": "2 row(s) had an unresolved landingPage value (e.g. \"(not set)\") and cannot be evaluated as a specific landing-page entity. Those rows were skipped and pagePath was not used as a fallback.",
+          "samples": [
+            "(not set)",
+            ""
+          ],
+          "capability": "landing_underperformance",
+          "unresolvedCount": 2
+        },
+        {
+          "code": "GA4_NO_MATCHES",
+          "filters": {
+            "limit": 50,
+            "minScore": 0,
+            "minSessions": 150,
+            "minBounceRate": 0.65,
+            "maxEngagementRate": 0.35,
+            "maxViewsPerSession": 1.2,
+            "maxAverageSessionDuration": 25
+          },
+          "message": "No landing underperformance opportunities matched the configured filters.",
+          "capability": "landing_underperformance"
+        }
+      ],
+      "capability": "landing_underperformance",
+      "__ga4Intelligence": true,
+      "__ga4CapabilitySection": true
+    },
+    "aiSnippet": "There were no qualifying landing underperformance opportunities. \n\nThe capability executed and returned zero qualifying opportunities due to the following warnings:\n\n1. **GA4_LANDING_ENTITY_UNRESOLVED**: 2 row(s) had an unresolved landingPage value (e.g. \"(not set)\") and cannot be evaluated as a specific landing-page entity. Those rows were skipped and pagePath was not used as a fallback.\n   \n2. **GA4_NO_MATCHES**: No landing underperformance opportunities matched the configured filters."
+  },
+  "qaPositiveRun": {
+    "runId": "4f289136-d21f-446a-8d4f-3b2df1e44cd8",
+    "upstreamRowCount": 60,
+    "validLandingRows": 58,
+    "selectedCapability": [
+      "landing_underperformance"
+    ],
+    "executedCapability": [
+      "landing_underperformance"
+    ],
+    "mcpOutputItemCount": 50,
+    "landingOpportunityCount": 50,
+    "exactOpportunitiesFirst5": [
+      {
+        "capability": "landing_underperformance",
+        "opportunity_type": "landing_underperformance",
+        "entity": {
+          "label": "/blog/the-best-generative-engine-optimization-geo-tools",
+          "landingPage": "/blog/the-best-generative-engine-optimization-geo-tools"
+        },
+        "metrics": {
+          "sessions": 19,
+          "bounceRate": 0.8947,
+          "totalUsers": 18,
+          "engagementRate": 0.1053
+        },
+        "score": 0.44,
+        "reason": "Landing page /blog/the-best-generative-engine-optimization-geo-tools received 19 sessions with an engagement rate of 10.53% and a bounce rate of 89.47%.",
+        "recommendation": "Review the landing-page experience and engagement elements for /blog/the-best-generative-engine-optimization-geo-tools.",
+        "filters": {
+          "limit": 50,
+          "minScore": 0,
+          "minSessions": 0,
+          "minBounceRate": 0,
+          "maxEngagementRate": 1,
+          "maxViewsPerSession": 1.2,
+          "maxAverageSessionDuration": 25
+        }
+      },
+      {
+        "capability": "landing_underperformance",
+        "opportunity_type": "landing_underperformance",
+        "entity": {
+          "label": "/blog/understanding-the-4-types-of-ai-search-intent-informational-navigational-comparative-transactional",
+          "landingPage": "/blog/understanding-the-4-types-of-ai-search-intent-informational-navigational-comparative-transactional"
+        },
+        "metrics": {
+          "sessions": 9,
+          "bounceRate": 1,
+          "totalUsers": 9,
+          "engagementRate": 0
+        },
+        "score": 0.27,
+        "reason": "Landing page /blog/understanding-the-4-types-of-ai-search-intent-informational-navigational-comparative-transactional received 9 sessions with an engagement rate of 0% and a bounce rate of 100%.",
+        "recommendation": "Review the landing-page experience and engagement elements for /blog/understanding-the-4-types-of-ai-search-intent-informational-navigational-comparative-transactional.",
+        "filters": {
+          "limit": 50,
+          "minScore": 0,
+          "minSessions": 0,
+          "minBounceRate": 0,
+          "maxEngagementRate": 1,
+          "maxViewsPerSession": 1.2,
+          "maxAverageSessionDuration": 25
+        }
+      },
+      {
+        "capability": "landing_underperformance",
+        "opportunity_type": "landing_underperformance",
+        "entity": {
+          "label": "/agency-partner-program",
+          "landingPage": "/agency-partner-program"
+        },
+        "metrics": {
+          "sessions": 8,
+          "bounceRate": 1,
+          "totalUsers": 8,
+          "engagementRate": 0
+        },
+        "score": 0.24,
+        "reason": "Landing page /agency-partner-program received 8 sessions with an engagement rate of 0% and a bounce rate of 100%.",
+        "recommendation": "Review the landing-page experience and engagement elements for /agency-partner-program.",
+        "filters": {
+          "limit": 50,
+          "minScore": 0,
+          "minSessions": 0,
+          "minBounceRate": 0,
+          "maxEngagementRate": 1,
+          "maxViewsPerSession": 1.2,
+          "maxAverageSessionDuration": 25
+        }
+      },
+      {
+        "capability": "landing_underperformance",
+        "opportunity_type": "landing_underperformance",
+        "entity": {
+          "label": "/blog/how-generative-engines-parse-intent-llm-prompt-interpretation-explained",
+          "landingPage": "/blog/how-generative-engines-parse-intent-llm-prompt-interpretation-explained"
+        },
+        "metrics": {
+          "sessions": 8,
+          "bounceRate": 1,
+          "totalUsers": 8,
+          "engagementRate": 0
+        },
+        "score": 0.24,
+        "reason": "Landing page /blog/how-generative-engines-parse-intent-llm-prompt-interpretation-explained received 8 sessions with an engagement rate of 0% and a bounce rate of 100%.",
+        "recommendation": "Review the landing-page experience and engagement elements for /blog/how-generative-engines-parse-intent-llm-prompt-interpretation-explained.",
+        "filters": {
+          "limit": 50,
+          "minScore": 0,
+          "minSessions": 0,
+          "minBounceRate": 0,
+          "maxEngagementRate": 1,
+          "maxViewsPerSession": 1.2,
+          "maxAverageSessionDuration": 25
+        }
+      },
+      {
+        "capability": "landing_underperformance",
+        "opportunity_type": "landing_underperformance",
+        "entity": {
+          "label": "/perplexity-visibility-tracker",
+          "landingPage": "/perplexity-visibility-tracker"
+        },
+        "metrics": {
+          "sessions": 8,
+          "bounceRate": 1,
+          "totalUsers": 8,
+          "engagementRate": 0
+        },
+        "score": 0.24,
+        "reason": "Landing page /perplexity-visibility-tracker received 8 sessions with an engagement rate of 0% and a bounce rate of 100%.",
+        "recommendation": "Review the landing-page experience and engagement elements for /perplexity-visibility-tracker.",
+        "filters": {
+          "limit": 50,
+          "minScore": 0,
+          "minSessions": 0,
+          "minBounceRate": 0,
+          "maxEngagementRate": 1,
+          "maxViewsPerSession": 1.2,
+          "maxAverageSessionDuration": 25
+        }
+      }
+    ],
+    "exactOpportunitiesAllScores": [
+      {
+        "page": "/blog/the-best-generative-engine-optimization-geo-tools",
+        "score": 0.44,
+        "sessions": 19
+      },
+      {
+        "page": "/blog/understanding-the-4-types-of-ai-search-intent-informational-navigational-comparative-transactional",
+        "score": 0.27,
+        "sessions": 9
+      },
+      {
+        "page": "/agency-partner-program",
+        "score": 0.24,
+        "sessions": 8
+      },
+      {
+        "page": "/blog/how-generative-engines-parse-intent-llm-prompt-interpretation-explained",
+        "score": 0.24,
+        "sessions": 8
+      },
+      {
+        "page": "/perplexity-visibility-tracker",
+        "score": 0.24,
+        "sessions": 8
+      },
+      {
+        "page": "/blog/ai-visibility-tracking-to-optimization-meet-the-govisible-action-center",
+        "score": 0.23,
+        "sessions": 10
+      },
+      {
+        "page": "/blog/how-brands-can-avoid-ai-confusion-and-misrepresentation",
+        "score": 0.21,
+        "sessions": 16
+      },
+      {
+        "page": "/visible-partner-program",
+        "score": 0.21,
+        "sessions": 7
+      },
+      {
+        "page": "/framework",
+        "score": 0.2,
+        "sessions": 11
+      },
+      {
+        "page": "/blog/the-role-of-reviews-forums-and-mentions-in-ai-brand-visibility",
+        "score": 0.2,
+        "sessions": 9
+      },
+      {
+        "page": "/pricing",
+        "score": 0.19,
+        "sessions": 33
+      },
+      {
+        "page": "/blog/key-platforms-for-entity-optimization-across-industries",
+        "score": 0.19,
+        "sessions": 13
+      },
+      {
+        "page": "/blog/structured-content-engineering-how-brands-build-ai-readable-content",
+        "score": 0.18,
+        "sessions": 6
+      },
+      {
+        "page": "/gemini-visibility-tracker",
+        "score": 0.18,
+        "sessions": 6
+      },
+      {
+        "page": "/intelligent-entity-optimization",
+        "score": 0.18,
+        "sessions": 6
+      },
+      {
+        "page": "/templates/external-citation-tracker",
+        "score": 0.18,
+        "sessions": 6
+      },
+      {
+        "page": "/voice-of-the-searcher",
+        "score": 0.18,
+        "sessions": 6
+      },
+      {
+        "page": "/learnability-testing-and-visibility-scoring",
+        "score": 0.17,
+        "sessions": 8
+      },
+      {
+        "page": "/blog/how-govisible-audits-your-brand-across-ai-engines-a-deep-dive-into-multi-engine-visibility",
+        "score": 0.15,
+        "sessions": 5
+      },
+      {
+        "page": "/blog/track-ai-bot-traffic-on-your-website-monitor-ai-crawlers-user-agents-and-crawl-activity",
+        "score": 0.15,
+        "sessions": 5
+      },
+      {
+        "page": "/blog/common-mistakes-to-avoid-in-intent-mapping-for-ai-search",
+        "score": 0.14,
+        "sessions": 9
+      },
+      {
+        "page": "/blog",
+        "score": 0.14,
+        "sessions": 7
+      },
+      {
+        "page": "/blog/the-knowledge-graph-layer-how-ai-models-understand-and-index-brands",
+        "score": 0.14,
+        "sessions": 7
+      },
+      {
+        "page": "/blog/the-role-of-schema-markup-in-generative-engine-optimization",
+        "score": 0.14,
+        "sessions": 7
+      },
+      {
+        "page": "/chatgpt-visibility-tracker",
+        "score": 0.14,
+        "sessions": 7
+      },
+      {
+        "page": "/intent-to-answer-mapping",
+        "score": 0.14,
+        "sessions": 7
+      },
+      {
+        "page": "/templates/prompt-mining-canvas",
+        "score": 0.14,
+        "sessions": 7
+      },
+      {
+        "page": "/blog/ai-citation-strategies",
+        "score": 0.11,
+        "sessions": 8
+      },
+      {
+        "page": "/blog/tools-techniques-how-to-extract-and-analyze-searcher-prompts",
+        "score": 0.11,
+        "sessions": 8
+      },
+      {
+        "page": "/blog/how-negative-brand-signals-can-undermine-ai-rankings",
+        "score": 0.11,
+        "sessions": 6
+      },
+      {
+        "page": "/webinar/the-ai-blind-spot",
+        "score": 0.11,
+        "sessions": 6
+      },
+      {
+        "page": "/blog/how-govisible-helps-you-track-competitor-visibility-across-ai-engines",
+        "score": 0.1,
+        "sessions": 10
+      },
+      {
+        "page": "/blog/how-to-format-content-for-ai-surfaced-answer-snippets",
+        "score": 0.08,
+        "sessions": 5
+      },
+      {
+        "page": "/blog/all-blogs",
+        "score": 0.06,
+        "sessions": 13
+      },
+      {
+        "page": "/about-visible",
+        "score": 0.06,
+        "sessions": 11
+      },
+      {
+        "page": "/blog/search-query-analysis",
+        "score": 0.06,
+        "sessions": 11
+      },
+      {
+        "page": "/blog/ai-visibility-insights",
+        "score": 0.05,
+        "sessions": 6
+      },
+      {
+        "page": "/blog/the-anatomy-of-ai-optimized-content-headings-bullets-summaries",
+        "score": 0.04,
+        "sessions": 8
+      },
+      {
+        "page": "/govisible-platform",
+        "score": 0.04,
+        "sessions": 8
+      },
+      {
+        "page": "/blog/entity-optimization-tips",
+        "score": 0.02,
+        "sessions": 5
+      },
+      {
+        "page": "/govisible-ai-bot-tracker",
+        "score": 0.01,
+        "sessions": 7
+      },
+      {
+        "page": "/",
+        "score": 0,
+        "sessions": 432
+      },
+      {
+        "page": "/ai-visibility-audit",
+        "score": 0,
+        "sessions": 98
+      },
+      {
+        "page": "/book-demo",
+        "score": 0,
+        "sessions": 98
+      },
+      {
+        "page": "/ai-visibility-index/2026/automotive/services-and-maintenance",
+        "score": 0,
+        "sessions": 17
+      },
+      {
+        "page": "/contact-us",
+        "score": 0,
+        "sessions": 12
+      },
+      {
+        "page": "/blog/ai-citation-source-monitoring",
+        "score": 0,
+        "sessions": 11
+      },
+      {
+        "page": "/blog/what-does-ai-think-about-your-brand",
+        "score": 0,
+        "sessions": 11
+      },
+      {
+        "page": "/ai-visibility-index/2026/automotive/passenger-cars",
+        "score": 0,
+        "sessions": 9
+      },
+      {
+        "page": "/blog/seo-keywords-vs-geo-prompts-whats-changing-in-search-behavior",
+        "score": 0,
+        "sessions": 9
+      }
+    ]
+  },
+  "aiInputChecks": {
+    "opportunityCount": 50,
+    "sectionCount": 0,
+    "positiveRowsMissingSectionMarker": true,
+    "opportunity_type_ok": true,
+    "scorePresent": true,
+    "reasonPresent": true,
+    "recommendationPresent": true,
+    "capabilityOnlyLanding": true,
+    "noPagePerformance": true,
+    "noAcquisition": true
+  },
+  "intelligenceContext": {
+    "ok": true,
+    "landingSection": {
+      "capability": "landing_underperformance",
+      "count": 50,
+      "resultsLen": 50,
+      "hasOpportunityRows": true,
+      "firstResultFields": {
+        "opportunity_type": "landing_underperformance",
+        "entity": {
+          "label": "/blog/the-best-generative-engine-optimization-geo-tools",
+          "landingPage": "/blog/the-best-generative-engine-optimization-geo-tools"
+        },
+        "metrics": {
+          "sessions": 19,
+          "bounceRate": 0.8947,
+          "totalUsers": 18,
+          "engagementRate": 0.1053
+        },
+        "score": 0.44,
+        "reason": "Landing page /blog/the-best-generative-engine-optimization-geo-tools received 19 sessions with an engagement rate of 10.53% and a bounce rate of 89.47%.",
+        "recommendation": "Review the landing-page experience and engagement elements for /blog/the-best-generative-engine-optimization-geo-tools."
+      }
+    },
+    "evidence": {
+      "opportunityRowCount": 50,
+      "dataRowCount": 0,
+      "hasOpportunityRows": true,
+      "hasDataRows": false,
+      "hasAnyStructuredMcpRows": true,
+      "hasZeroResultCapabilitySections": false,
+      "zeroResultCapabilityCount": 0,
+      "warnings": [],
+      "hasWarnings": false,
+      "capabilities": [
+        {
+          "capability": "landing_underperformance",
+          "category": "intelligence",
+          "count": 50,
+          "resultCount": 50,
+          "executed": true,
+          "zeroResult": false
+        }
+      ]
+    }
+  },
+  "groundedPromptChecks": {
+    "landingPage": true,
+    "sessions": true,
+    "engagementRate": true,
+    "bounceRate": true,
+    "score": true,
+    "reason": true,
+    "recommendation": true,
+    "promptLen": 77928
+  },
+  "groundedPromptEvidenceSnippet": "## Instructions\nAnalyze the structured GA4 MCP landing underperformance opportunities.\n\nReport every qualifying landing-page opportunity provided by the MCP.\n\nFor each result show:\n- Landing page\n- Sessions\n- Engagement rate, if provided\n- Bounce rate, if provided\n- MCP score\n- Reason\n- Recommendation\n\nUse the MCP score exactly as provided.\nDo not recalculate the score.\nDo not invent metrics.\nDo not create additional opportunities.\nDo not confuse landing pages with acquisition channels.\n\nIf there are no qualifying landing underperformance opportunities, state that clearly.\n\n## GA4 MCP Tools evidence rules\nGA4 MCP Tools evidence rules (internal — follow the user's instructions for format):\n\nUse ONLY the structured GA4 MCP opportunities/data provided as evidence.\nPreserve capability, opportunity_type, entity, metrics, reason,\nrecommendation, and MCP score exactly as supplied.\nNever calculate or replace the MCP score. If score is 32, report Score: 32.\n\nMCP means GA4 MCP Tools (the workflow processor). Never reinterpret \"MCP\"\nas \"Most Critical Pages\" or any other expanded phrase.\n\nNever invent metrics, dimensions, opportunities, scores, reasons, or\nrecommendations that are not present in the MCP output.\nNever independently analyze raw GA4 rows when structured MCP output is present.\nUser instructions control presentation/filtering only — they do not authorize\nnew GA4 analysis outside the MCP rows.\n\nCAPABILITY FIDELITY:\n- Preserve every capability represented in the evidence.\n- engagement_opportunities → only those MCP engagement rows.\n- landing_underperformance → only those MCP landing rows.\n- acquisition_concentration → only those MCP acquisition rows.\n- page_performance is DATA (row_kind: ranked_page), not an opportunity.\n  Do not invent opportunity_type, score, reason, or recommendation for\n  page_performance DATA rows.\n- Zero opportunity rows does NOT mean MCP data is missing when DATA rows exist.\n- One capability must never overwrite or silently drop another.\n\nACQUI",
+  "aiValidation": {
+    "responseLength": 4651,
+    "responseHead": "### GA4 Intelligence Report\n#### Summary — Total MCP rows / capabilities represented\nTotal MCP rows: 50 / Capabilities represented: landing_underperformance\n\n#### Opportunities / Data\n1. **Landing Page:** /blog/the-best-generative-engine-optimization-geo-tools  \n   **Sessions:** 19  \n   **Engagement Rate:** 10.53%  \n   **Bounce Rate:** 89.47%  \n   **MCP Score:** 0.44  \n   **Reason:** Landing page /blog/the-best-generative-engine-optimization-geo-tools received 19 sessions with an engagement rate of 10.53% and a bounce rate of 89.47%.  \n   **Recommendation:** Review the landing-page experience and engagement elements for /blog/the-best-generative-engine-optimization-geo-tools.\n\n2. **Landing Page:** /blog/understanding-the-4-types-of-ai-search-intent-informational-navigational-comparative-transactional  \n   **Sessions:** 9  \n   **Engagement Rate:** 0%  \n   **Bounce Rate:** 100%  \n   **MCP Score:** 0.27  \n   **Reason:** Landing page /blog/understanding-the-4-types-of-ai-search-intent-informational-navigational-comparative-transactional received 9 sessions with an engagement rate of 0% and a bounce rate of 100%.  \n   **Recommendation:** Review the landing-page experience and engagement elements for /blog/understanding-the-4-types-of-ai-search-intent-informational-navigational-comparative-transactional.\n\n3. **Landing Page:** /agency-partner-program  \n   **Sessions:** 8  \n   **Engagement Rate:** 0%  \n   **Bounce Rate:** 100%  \n   **MCP Score:** 0.24  \n   **Reason:** Landing page /agency-partner-program received 8 sessions with an engagement rate of 0% and a bounce rate of 100%.  \n   **Recommendation:** Review the landing-page experience and engagement elements for /agency-partner-program.\n\n4. **Landing Page:** /blog/how-generative-engines-parse-intent-llm-prompt-interpretation-explained  \n   **Sessions:** 8  \n   **Engagement Rate:** 0%  \n   **Bounce Rate:** 100%  \n   **MCP Score:** 0.24  \n   **Reason:** Landing page /blog/how-generative-engines-parse-intent-llm-prompt-interpretation-explained received 8 sessions with an engagement rate of 0% and a bounce rate of 100%.  \n   **Recommendation:** Review the landing-page experience and engagement elements for /blog/how-generative-engines-parse-intent-llm-prompt-interpretation-explained.\n\n5. **Landing Page:** /perplexity-visibility-tracker  \n   **Sessions:** 8  \n   **Engagement Rate:** 0%  \n   **Bounce Rate:** 100%  \n   **MCP Score:** 0.24  \n   **Reason:** Landing page /perplexity-visibility-tracker received 8 session",
+    "responseTail": "ce Rate:** 100%  \n   **MCP Score:** 0.21  \n   **Reason:** Landing page /visible-partner-program received 7 sessions with an engagement rate of 0% and a bounce rate of 100%.  \n   **Recommendation:** Review the landing-page experience and engagement elements for /visible-partner-program.\n\n9. **Landing Page:** /framework  \n   **Sessions:** 11  \n   **Engagement Rate:** 18.18%  \n   **Bounce Rate:** 81.82%  \n   **MCP Score:** 0.20  \n   **Reason:** Landing page /framework received 11 sessions with an engagement rate of 18.18% and a bounce rate of 81.82%.  \n   **Recommendation:** Review the landing-page experience and engagement elements for /framework.\n\n10. **Landing Page:** /blog/the-role-of-reviews-forums-and-mentions-in-ai-brand-visibility  \n    **Sessions:** 9  \n    **Engagement Rate:** 11.11",
+    "mentionedLandingPages": [
+      {
+        "label": "/blog/the-best-generative-engine-optimization-geo-tools",
+        "mentioned": true
+      },
+      {
+        "label": "/blog/understanding-the-4-types-of-ai-search-intent-informational-navigational-comparative-transactional",
+        "mentioned": true
+      },
+      {
+        "label": "/agency-partner-program",
+        "mentioned": true
+      },
+      {
+        "label": "/blog/how-generative-engines-parse-intent-llm-prompt-interpretation-explained",
+        "mentioned": true
+      },
+      {
+        "label": "/perplexity-visibility-tracker",
+        "mentioned": true
+      },
+      {
+        "label": "/blog/ai-visibility-tracking-to-optimization-meet-the-govisible-action-center",
+        "mentioned": true
+      },
+      {
+        "label": "/blog/how-brands-can-avoid-ai-confusion-and-misrepresentation",
+        "mentioned": true
+      },
+      {
+        "label": "/visible-partner-program",
+        "mentioned": true
+      },
+      {
+        "label": "/framework",
+        "mentioned": true
+      },
+      {
+        "label": "/blog/the-role-of-reviews-forums-and-mentions-in-ai-brand-visibility",
+        "mentioned": true
+      }
+    ],
+    "scoreMatches": [
+      {
+        "label": "/blog/the-best-generative-engine-optimization-geo-tools",
+        "score": 0.44,
+        "scoreNear": true
+      },
+      {
+        "label": "/blog/understanding-the-4-types-of-ai-search-intent-informational-navigational-comparative-transactional",
+        "score": 0.27,
+        "scoreNear": true
+      },
+      {
+        "label": "/agency-partner-program",
+        "score": 0.24,
+        "scoreNear": true
+      },
+      {
+        "label": "/blog/how-generative-engines-parse-intent-llm-prompt-interpretation-explained",
+        "score": 0.24,
+        "scoreNear": true
+      },
+      {
+        "label": "/perplexity-visibility-tracker",
+        "score": 0.24,
+        "scoreNear": true
+      },
+      {
+        "label": "/blog/ai-visibility-tracking-to-optimization-meet-the-govisible-action-center",
+        "score": 0.23,
+        "scoreNear": true
+      },
+      {
+        "label": "/blog/how-brands-can-avoid-ai-confusion-and-misrepresentation",
+        "score": 0.21,
+        "scoreNear": true
+      },
+      {
+        "label": "/visible-partner-program",
+        "score": 0.21,
+        "scoreNear": true
+      },
+      {
+        "label": "/framework",
+        "score": 0.2,
+        "scoreNear": true
+      },
+      {
+        "label": "/blog/the-role-of-reviews-forums-and-mentions-in-ai-brand-visibility",
+        "score": 0.2,
+        "scoreNear": false
+      }
+    ],
+    "inventedPages": [],
+    "missingTopOpps": [],
+    "acquisitionChannelConfusion": false,
+    "claimsNoOpportunities": false,
+    "mcpPagesInAi": 12,
+    "mcpOppCount": 50
+  },
+  "verdict": {
+    "ScorePreserved": "PASS",
+    "NoInventedOpportunities": "PASS",
+    "Overall": "PASS",
+    "notes": {
+      "mcpPagesInAi": 12,
+      "mcpOppCount": 50,
+      "topScoreNearMatches": 9,
+      "missingTopOpps": []
+    }
+  }
+}

@@ -1,0 +1,369 @@
+﻿RUN limit= 5
+{
+  "limit": 5,
+  "mcp": 5,
+  "aiIn": 5,
+  "aiOut": 5,
+  "finish_reason": "stop",
+  "chars": 2635,
+  "usage": {
+    "prompt_tokens": 3253,
+    "completion_tokens": 679,
+    "total_tokens": 3932,
+    "prompt_tokens_details": {
+      "cached_tokens": 0,
+      "audio_tokens": 0
+    },
+    "completion_tokens_details": {
+      "reasoning_tokens": 0,
+      "audio_tokens": 0,
+      "accepted_prediction_tokens": 0,
+      "rejected_prediction_tokens": 0
+    }
+  },
+  "truncatedHeuristic": false
+}
+RUN limit= 10
+{
+  "limit": 10,
+  "mcp": 10,
+  "aiIn": 10,
+  "aiOut": 10,
+  "finish_reason": "length",
+  "chars": 4636,
+  "usage": {
+    "prompt_tokens": 5123,
+    "completion_tokens": 1200,
+    "total_tokens": 6323,
+    "prompt_tokens_details": {
+      "cached_tokens": 0,
+      "audio_tokens": 0
+    },
+    "completion_tokens_details": {
+      "reasoning_tokens": 0,
+      "audio_tokens": 0,
+      "accepted_prediction_tokens": 0,
+      "rejected_prediction_tokens": 0
+    }
+  },
+  "truncatedHeuristic": true
+}
+RUN limit= 20
+{
+  "limit": 20,
+  "mcp": 20,
+  "aiIn": 20,
+  "aiOut": 10,
+  "finish_reason": "length",
+  "chars": 4651,
+  "usage": {
+    "prompt_tokens": 8821,
+    "completion_tokens": 1200,
+    "total_tokens": 10021,
+    "prompt_tokens_details": {
+      "cached_tokens": 0,
+      "audio_tokens": 0
+    },
+    "completion_tokens_details": {
+      "reasoning_tokens": 0,
+      "audio_tokens": 0,
+      "accepted_prediction_tokens": 0,
+      "rejected_prediction_tokens": 0
+    }
+  },
+  "truncatedHeuristic": true
+}
+RUN limit= 50
+{
+  "limit": 50,
+  "mcp": 50,
+  "aiIn": 50,
+  "aiOut": 0,
+  "finish_reason": "length",
+  "chars": 4562,
+  "usage": {
+    "prompt_tokens": 19914,
+    "completion_tokens": 1200,
+    "total_tokens": 21114,
+    "prompt_tokens_details": {
+      "cached_tokens": 19456,
+      "audio_tokens": 0
+    },
+    "completion_tokens_details": {
+      "reasoning_tokens": 0,
+      "audio_tokens": 0,
+      "accepted_prediction_tokens": 0,
+      "rejected_prediction_tokens": 0
+    }
+  },
+  "truncatedHeuristic": false
+}
+RUN concise limit=50
+{
+  "mcp": 50,
+  "aiOut": 0,
+  "finish_reason": "length",
+  "chars": 3452,
+  "usage": {
+    "prompt_tokens": 19863,
+    "completion_tokens": 1200,
+    "total_tokens": 21063,
+    "prompt_tokens_details": {
+      "cached_tokens": 0,
+      "audio_tokens": 0
+    },
+    "completion_tokens_details": {
+      "reasoning_tokens": 0,
+      "audio_tokens": 0,
+      "accepted_prediction_tokens": 0,
+      "rejected_prediction_tokens": 0
+    }
+  },
+  "truncatedHeuristic": false
+}
+
+=== SUMMARY ===
+{
+  "config": {
+    "source": "backend/services/workflowNodes.service.js runLlmNode",
+    "provider": "openai",
+    "model": "gpt-4o-mini",
+    "modelSource": "AI node data.model unset ΓåÆ withGenerationOptions(model || \"gpt-4o-mini\")",
+    "maxTokens": 1200,
+    "maxTokensSource": "data.maxTokens ?? 1200 (AI node has no maxTokens field)",
+    "temperature": 0.4,
+    "temperatureSource": "data.temperature ?? 0.4",
+    "apiParam": "max_tokens (gpt-4o-mini uses legacy max_tokens via withGenerationOptions)",
+    "finishReasonStoredInWorkflowOutput": false,
+    "finishReasonNote": "runLlmNode reads completion.choices[0].message.content only; finish_reason and usage are discarded from workflow step output",
+    "workflowSpecificResultLimit": "none found on AI node / runLlmNode beyond maxTokens",
+    "contextWindow": "not configured in workflow; model gpt-4o-mini has 128k context (vendor docs, not read from code)"
+  },
+  "matrix": [
+    {
+      "label": "verbose-limit-5",
+      "mcpOpportunityCount": 5,
+      "aiInputOpportunityCount": 5,
+      "groundedEvidenceOpportunityRowCount": 5,
+      "groundedHasOpportunityRows": true,
+      "groundedSystemPromptChars": 5242,
+      "groundedUserPromptChars": 8331,
+      "groundedTotalPromptChars": 13573,
+      "generationRequest": {
+        "model": "gpt-4o-mini",
+        "max_tokens": 1200,
+        "max_completion_tokens": null,
+        "temperature": 0.4
+      },
+      "finish_reason": "stop",
+      "usage": {
+        "prompt_tokens": 3253,
+        "completion_tokens": 679,
+        "total_tokens": 3932,
+        "prompt_tokens_details": {
+          "cached_tokens": 0,
+          "audio_tokens": 0
+        },
+        "completion_tokens_details": {
+          "reasoning_tokens": 0,
+          "audio_tokens": 0,
+          "accepted_prediction_tokens": 0,
+          "rejected_prediction_tokens": 0
+        }
+      },
+      "responseChars": 2635,
+      "responseApproxTokens": 659,
+      "aiReportedCount": 5,
+      "truncatedHeuristic": false,
+      "endsNaturally": true,
+      "responseHead": "### GA4 Intelligence Report\n#### Summary ΓÇö Total MCP rows / capabilities represented\n5 / landing_underperformance\n\n#### Opportunities / Data\n1. **Landing page:** /blog/the-best-generative-engine-optimization-geo-tools  \n   **Sessions:** 19  \n   **Engagement rate:** 10.53%  \n   **Bounce rate:** 89.47%  \n   **MCP score:** 0.44  \n   **Reason:** Landing page /blog/the-best-generative-engine-optimization-geo-tools received 19 sessions with an engagement rate of 10.53% and a bounce rate of 89.47%.  \n   **Recommendation:** Review the landing-page experience and engagement elements for /blog/the-best-",
+      "responseTail": "g page:** /perplexity-visibility-tracker  \n   **Sessions:** 8  \n   **Engagement rate:** 0%  \n   **Bounce rate:** 100%  \n   **MCP score:** 0.24  \n   **Reason:** Landing page /perplexity-visibility-tracker received 8 sessions with an engagement rate of 0% and a bounce rate of 100%.  \n   **Recommendation:** Review the landing-page experience and engagement elements for /perplexity-visibility-tracker."
+    },
+    {
+      "label": "verbose-limit-10",
+      "mcpOpportunityCount": 10,
+      "aiInputOpportunityCount": 10,
+      "groundedEvidenceOpportunityRowCount": 10,
+      "groundedHasOpportunityRows": true,
+      "groundedSystemPromptChars": 5245,
+      "groundedUserPromptChars": 15614,
+      "groundedTotalPromptChars": 20859,
+      "generationRequest": {
+        "model": "gpt-4o-mini",
+        "max_tokens": 1200,
+        "max_completion_tokens": null,
+        "temperature": 0.4
+      },
+      "finish_reason": "length",
+      "usage": {
+        "prompt_tokens": 5123,
+        "completion_tokens": 1200,
+        "total_tokens": 6323,
+        "prompt_tokens_details": {
+          "cached_tokens": 0,
+          "audio_tokens": 0
+        },
+        "completion_tokens_details": {
+          "reasoning_tokens": 0,
+          "audio_tokens": 0,
+          "accepted_prediction_tokens": 0,
+          "rejected_prediction_tokens": 0
+        }
+      },
+      "responseChars": 4636,
+      "responseApproxTokens": 1159,
+      "aiReportedCount": 10,
+      "truncatedHeuristic": true,
+      "endsNaturally": false,
+      "responseHead": "### GA4 Intelligence Report\n#### Summary ΓÇö Total MCP rows / capabilities represented\n10 / landing_underperformance\n\n#### Opportunities / Data\n1. **Landing page:** /blog/the-best-generative-engine-optimization-geo-tools  \n   **Sessions:** 19  \n   **Engagement rate:** 10.53%  \n   **Bounce rate:** 89.47%  \n   **MCP score:** 0.44  \n   **Reason:** Landing page /blog/the-best-generative-engine-optimization-geo-tools received 19 sessions with an engagement rate of 10.53% and a bounce rate of 89.47%.  \n   **Recommendation:** Review the landing-page experience and engagement elements for /blog/the-best",
+      "responseTail": "0  \n   **Reason:** Landing page /framework received 11 sessions with an engagement rate of 18.18% and a bounce rate of 81.82%.  \n   **Recommendation:** Review the landing-page experience and engagement elements for /framework.\n\n10. **Landing page:** /blog/the-role-of-reviews-forums-and-mentions-in-ai-brand-visibility  \n    **Sessions:** 9  \n    **Engagement rate:** 11.11%  \n    **Bounce rate:** 88"
+    },
+    {
+      "label": "verbose-limit-20",
+      "mcpOpportunityCount": 20,
+      "aiInputOpportunityCount": 20,
+      "groundedEvidenceOpportunityRowCount": 20,
+      "groundedHasOpportunityRows": true,
+      "groundedSystemPromptChars": 5245,
+      "groundedUserPromptChars": 30107,
+      "groundedTotalPromptChars": 35352,
+      "generationRequest": {
+        "model": "gpt-4o-mini",
+        "max_tokens": 1200,
+        "max_completion_tokens": null,
+        "temperature": 0.4
+      },
+      "finish_reason": "length",
+      "usage": {
+        "prompt_tokens": 8821,
+        "completion_tokens": 1200,
+        "total_tokens": 10021,
+        "prompt_tokens_details": {
+          "cached_tokens": 0,
+          "audio_tokens": 0
+        },
+        "completion_tokens_details": {
+          "reasoning_tokens": 0,
+          "audio_tokens": 0,
+          "accepted_prediction_tokens": 0,
+          "rejected_prediction_tokens": 0
+        }
+      },
+      "responseChars": 4651,
+      "responseApproxTokens": 1163,
+      "aiReportedCount": 10,
+      "truncatedHeuristic": true,
+      "endsNaturally": false,
+      "responseHead": "### GA4 Intelligence Report\n#### Summary ΓÇö Total MCP rows / capabilities represented\nTotal MCP rows: 20 / Capabilities represented: landing_underperformance\n\n#### Opportunities / Data\n1. **Landing page:** /blog/the-best-generative-engine-optimization-geo-tools  \n   **Sessions:** 19  \n   **Engagement rate:** 10.53%  \n   **Bounce rate:** 89.47%  \n   **MCP score:** 0.44  \n   **Reason:** Landing page /blog/the-best-generative-engine-optimization-geo-tools received 19 sessions with an engagement rate of 10.53% and a bounce rate of 89.47%.  \n   **Recommendation:** Review the landing-page experience ",
+      "responseTail": "82%  \n   **MCP score:** 0.20  \n   **Reason:** Landing page /framework received 11 sessions with an engagement rate of 18.18% and a bounce rate of 81.82%.  \n   **Recommendation:** Review the landing-page experience and engagement elements for /framework.\n\n10. **Landing page:** /blog/the-role-of-reviews-forums-and-mentions-in-ai-brand-visibility  \n    **Sessions:** 9  \n    **Engagement rate:** 11.11"
+    },
+    {
+      "label": "verbose-limit-50",
+      "mcpOpportunityCount": 50,
+      "aiInputOpportunityCount": 50,
+      "groundedEvidenceOpportunityRowCount": 50,
+      "groundedHasOpportunityRows": true,
+      "groundedSystemPromptChars": 5245,
+      "groundedUserPromptChars": 72682,
+      "groundedTotalPromptChars": 77927,
+      "generationRequest": {
+        "model": "gpt-4o-mini",
+        "max_tokens": 1200,
+        "max_completion_tokens": null,
+        "temperature": 0.4
+      },
+      "finish_reason": "length",
+      "usage": {
+        "prompt_tokens": 19914,
+        "completion_tokens": 1200,
+        "total_tokens": 21114,
+        "prompt_tokens_details": {
+          "cached_tokens": 19456,
+          "audio_tokens": 0
+        },
+        "completion_tokens_details": {
+          "reasoning_tokens": 0,
+          "audio_tokens": 0,
+          "accepted_prediction_tokens": 0,
+          "rejected_prediction_tokens": 0
+        }
+      },
+      "responseChars": 4562,
+      "responseApproxTokens": 1141,
+      "aiReportedCount": 0,
+      "truncatedHeuristic": false,
+      "endsNaturally": false,
+      "responseHead": "### GA4 Intelligence Report\n#### Summary ΓÇö 50 MCP rows / capabilities represented\n#### Opportunities / Data\n- **Landing page:** /blog/the-best-generative-engine-optimization-geo-tools  \n  **Sessions:** 19  \n  **Engagement rate:** 10.53%  \n  **Bounce rate:** 89.47%  \n  **MCP score:** 0.44  \n  **Reason:** Landing page /blog/the-best-generative-engine-optimization-geo-tools received 19 sessions with an engagement rate of 10.53% and a bounce rate of 89.47%.  \n  **Recommendation:** Review the landing-page experience and engagement elements for /blog/the-best-generative-engine-optimization-geo-tools",
+      "responseTail": "ding page /framework received 11 sessions with an engagement rate of 18.18% and a bounce rate of 81.82%.  \n  **Recommendation:** Review the landing-page experience and engagement elements for /framework.\n\n- **Landing page:** /blog/the-role-of-reviews-forums-and-mentions-in-ai-brand-visibility  \n  **Sessions:** 9  \n  **Engagement rate:** 11.11%  \n  **Bounce rate:** 88.89%  \n  **MCP score:** 0.20  \n"
+    }
+  ],
+  "concise50": {
+    "label": "concise-limit-50",
+    "mcpOpportunityCount": 50,
+    "aiInputOpportunityCount": 50,
+    "groundedEvidenceOpportunityRowCount": 50,
+    "groundedHasOpportunityRows": true,
+    "groundedSystemPromptChars": 4963,
+    "groundedUserPromptChars": 72682,
+    "groundedTotalPromptChars": 77645,
+    "generationRequest": {
+      "model": "gpt-4o-mini",
+      "max_tokens": 1200,
+      "max_completion_tokens": null,
+      "temperature": 0.4
+    },
+    "finish_reason": "length",
+    "usage": {
+      "prompt_tokens": 19863,
+      "completion_tokens": 1200,
+      "total_tokens": 21063,
+      "prompt_tokens_details": {
+        "cached_tokens": 0,
+        "audio_tokens": 0
+      },
+      "completion_tokens_details": {
+        "reasoning_tokens": 0,
+        "audio_tokens": 0,
+        "accepted_prediction_tokens": 0,
+        "rejected_prediction_tokens": 0
+      }
+    },
+    "responseChars": 3452,
+    "responseApproxTokens": 863,
+    "aiReportedCount": 0,
+    "truncatedHeuristic": false,
+    "endsNaturally": false,
+    "responseHead": "### GA4 Intelligence Report\n#### Summary ΓÇö Total MCP rows / capabilities represented\n#### Opportunities / Data\n- Landing page: /blog/the-best-generative-engine-optimization-geo-tools\n  - Sessions: 19\n  - Engagement rate: 0.1053\n  - Bounce rate: 0.8947\n  - MCP score: 0.44\n- Landing page: /blog/understanding-the-4-types-of-ai-search-intent-informational-navigational-comparative-transactional\n  - Sessions: 9\n  - Engagement rate: 0\n  - Bounce rate: 1\n  - MCP score: 0.27\n- Landing page: /agency-partner-program\n  - Sessions: 8\n  - Engagement rate: 0\n  - Bounce rate: 1\n  - MCP score: 0.24\n- Landing p",
+    "responseTail": "ent rate: 0\n  - Bounce rate: 1\n  - MCP score: 0.15\n- Landing page: /blog/common-mistakes-to-avoid-in-intent-mapping-for-ai-search\n  - Sessions: 9\n  - Engagement rate: 0.2222\n  - Bounce rate: 0.7778\n  - MCP score: 0.14\n- Landing page: /blog\n  - Sessions: 7\n  - Engagement rate: 0.1429\n  - Bounce rate: 0.8571\n  - MCP score: 0.14\n- Landing page: /blog/the-knowledge-graph-layer-how-ai-models-understand"
+  },
+  "sizeEstimates": {
+    "measuredFromVerbosePartialResponse": {
+      "responseChars": 4562,
+      "reportedItems": 10,
+      "avgCharsPerOpportunity": 456,
+      "avgApproxTokensPerOpportunity": 114,
+      "estCharsFor10": 4560,
+      "estCharsFor50": 22800,
+      "estApproxTokensFor10": 1140,
+      "estApproxTokensFor50": 5700,
+      "configuredMaxTokens": 1200,
+      "canFit50AtThisVerbosity": false
+    }
+  },
+  "prior8gLiveRun": {
+    "runId": "4f289136-d21f-446a-8d4f-3b2df1e44cd8",
+    "mcpOpportunityCount": 50,
+    "aiInputOpportunityCount": 50,
+    "aiReportedCount": 10,
+    "responseChars": 4651,
+    "truncatedHeuristic": true,
+    "finish_reason": "NOT STORED in workflow AI step output",
+    "model": "gpt-4o-mini"
+  },
+  "classification": {
+    "inputOrOutput": "OUTPUT-side",
+    "boundary": "BOUNDARY_E ΓÇö AI GENERATION OUTPUT LIMIT",
+    "productionCodeChangeRequired": "YES ΓÇö raise AI node maxTokens / expose finish_reason (not MCP changes)",
+    "rootCause": "Workflow AI node default maxTokens=1200 (max_tokens) exhausted; API finish_reason=length. All 50 opportunities are in the grounded prompt."
+  }
+}

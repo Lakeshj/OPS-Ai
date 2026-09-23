@@ -1,0 +1,2755 @@
+{
+  "run_id": "a9881bbe-ec47-465e-aa33-707c8b3d6ae8",
+  "step_id": "e79146c0-2086-4056-8a3a-95ca3ca92408",
+  "node_id": "ga4McpTool-1790083223630",
+  "node_type": "ga4McpTool",
+  "status": "succeeded",
+  "output": {
+    "ok": true,
+    "count": 53,
+    "items": [
+      {
+        "json": {
+          "count": 0,
+          "period": {
+            "end": null,
+            "start": null
+          },
+          "source": "google_analytics",
+          "filters": {
+            "limit": 50,
+            "minScore": 0,
+            "minSessions": 150,
+            "minBounceRate": 0.65,
+            "maxEngagementRate": 0.35,
+            "maxViewsPerSession": 1.2,
+            "maxAverageSessionDuration": 25
+          },
+          "results": [],
+          "category": "intelligence",
+          "property": null,
+          "warnings": [
+            {
+              "code": "GA4_LANDING_ENTITY_UNRESOLVED",
+              "message": "2 row(s) had an unresolved landingPage value (e.g. \"(not set)\") and cannot be evaluated as a specific landing-page entity. Those rows were skipped and pagePath was not used as a fallback.",
+              "samples": [
+                "(not set)",
+                ""
+              ],
+              "capability": "landing_underperformance",
+              "unresolvedCount": 2
+            },
+            {
+              "code": "GA4_NO_MATCHES",
+              "filters": {
+                "limit": 50,
+                "minScore": 0,
+                "minSessions": 150,
+                "minBounceRate": 0.65,
+                "maxEngagementRate": 0.35,
+                "maxViewsPerSession": 1.2,
+                "maxAverageSessionDuration": 25
+              },
+              "message": "No landing underperformance opportunities matched the configured filters.",
+              "capability": "landing_underperformance"
+            }
+          ],
+          "capability": "landing_underperformance",
+          "__ga4Intelligence": true,
+          "__ga4CapabilitySection": true
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      },
+      {
+        "json": {
+          "count": 0,
+          "period": {
+            "end": null,
+            "start": null
+          },
+          "source": "google_analytics",
+          "filters": {
+            "limit": 20,
+            "minScore": 0,
+            "minShare": 0.5,
+            "minVolume": 0,
+            "minConcentrationShare": 0.5
+          },
+          "results": [],
+          "category": "intelligence",
+          "property": null,
+          "warnings": [
+            {
+              "code": "GA4_ACQUISITION_DIM_MISSING",
+              "message": "Acquisition concentration needs a channel/source dimension. Required one of: sessionDefaultChannelGroup, sessionSourceMedium, sessionSource, sessionMedium, firstUserDefaultChannelGroup. pagePath, pageTitle, landingPage, and eventName are not acquisition dimensions.",
+              "capability": "acquisition_concentration",
+              "availableMetrics": [
+                "bounceRate",
+                "engagementRate",
+                "sessions",
+                "totalUsers"
+              ],
+              "requiredDimensions": [
+                "sessionDefaultChannelGroup",
+                "sessionSourceMedium",
+                "sessionSource",
+                "sessionMedium",
+                "firstUserDefaultChannelGroup"
+              ],
+              "availableDimensions": [
+                "landingPage"
+              ],
+              "forbiddenAsAcquisition": [
+                "pagePath",
+                "pageTitle",
+                "landingPage",
+                "pageLocation",
+                "eventName",
+                "hostName"
+              ]
+            }
+          ],
+          "capability": "acquisition_concentration",
+          "__ga4Intelligence": true,
+          "__ga4CapabilitySection": true
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      },
+      {
+        "json": {
+          "rank": 1,
+          "entity": {
+            "label": "/",
+            "landingPage": "/"
+          },
+          "period": {
+            "end": null,
+            "start": null
+          },
+          "source": "google_analytics",
+          "filters": {
+            "limit": 50,
+            "entityDim": "auto",
+            "sortMetric": "sessions",
+            "minSessions": 0,
+            "minPageViews": 0,
+            "minTotalUsers": 0,
+            "sortDirection": "desc",
+            "minMetricValue": null
+          },
+          "metrics": {
+            "sessions": 432,
+            "bounceRate": 0.456,
+            "totalUsers": 295,
+            "engagementRate": 0.544
+          },
+          "property": null,
+          "row_kind": "ranked_page",
+          "capability": "page_performance",
+          "sortMetric": "sessions",
+          "sortDirection": "desc",
+          "opportunity_type": null,
+          "__ga4Intelligence": true
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      },
+      {
+        "json": {
+          "rank": 2,
+          "entity": {
+            "label": "(not set)",
+            "landingPage": "(not set)"
+          },
+          "period": {
+            "end": null,
+            "start": null
+          },
+          "source": "google_analytics",
+          "filters": {
+            "limit": 50,
+            "entityDim": "auto",
+            "sortMetric": "sessions",
+            "minSessions": 0,
+            "minPageViews": 0,
+            "minTotalUsers": 0,
+            "sortDirection": "desc",
+            "minMetricValue": null
+          },
+          "metrics": {
+            "sessions": 105,
+            "bounceRate": 0.9524,
+            "totalUsers": 65,
+            "engagementRate": 0.0476
+          },
+          "property": null,
+          "row_kind": "ranked_page",
+          "capability": "page_performance",
+          "sortMetric": "sessions",
+          "sortDirection": "desc",
+          "opportunity_type": null,
+          "__ga4Intelligence": true
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      },
+      {
+        "json": {
+          "rank": 3,
+          "entity": {
+            "label": "/ai-visibility-audit",
+            "landingPage": "/ai-visibility-audit"
+          },
+          "period": {
+            "end": null,
+            "start": null
+          },
+          "source": "google_analytics",
+          "filters": {
+            "limit": 50,
+            "entityDim": "auto",
+            "sortMetric": "sessions",
+            "minSessions": 0,
+            "minPageViews": 0,
+            "minTotalUsers": 0,
+            "sortDirection": "desc",
+            "minMetricValue": null
+          },
+          "metrics": {
+            "sessions": 98,
+            "bounceRate": 0.4286,
+            "totalUsers": 77,
+            "engagementRate": 0.5714
+          },
+          "property": null,
+          "row_kind": "ranked_page",
+          "capability": "page_performance",
+          "sortMetric": "sessions",
+          "sortDirection": "desc",
+          "opportunity_type": null,
+          "__ga4Intelligence": true
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      },
+      {
+        "json": {
+          "rank": 4,
+          "entity": {
+            "label": "/book-demo",
+            "landingPage": "/book-demo"
+          },
+          "period": {
+            "end": null,
+            "start": null
+          },
+          "source": "google_analytics",
+          "filters": {
+            "limit": 50,
+            "entityDim": "auto",
+            "sortMetric": "sessions",
+            "minSessions": 0,
+            "minPageViews": 0,
+            "minTotalUsers": 0,
+            "sortDirection": "desc",
+            "minMetricValue": null
+          },
+          "metrics": {
+            "sessions": 98,
+            "bounceRate": 0.4898,
+            "totalUsers": 91,
+            "engagementRate": 0.5102
+          },
+          "property": null,
+          "row_kind": "ranked_page",
+          "capability": "page_performance",
+          "sortMetric": "sessions",
+          "sortDirection": "desc",
+          "opportunity_type": null,
+          "__ga4Intelligence": true
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      },
+      {
+        "json": {
+          "rank": 5,
+          "entity": {
+            "label": "/pricing",
+            "landingPage": "/pricing"
+          },
+          "period": {
+            "end": null,
+            "start": null
+          },
+          "source": "google_analytics",
+          "filters": {
+            "limit": 50,
+            "entityDim": "auto",
+            "sortMetric": "sessions",
+            "minSessions": 0,
+            "minPageViews": 0,
+            "minTotalUsers": 0,
+            "sortDirection": "desc",
+            "minMetricValue": null
+          },
+          "metrics": {
+            "sessions": 33,
+            "bounceRate": 0.6364,
+            "totalUsers": 29,
+            "engagementRate": 0.3636
+          },
+          "property": null,
+          "row_kind": "ranked_page",
+          "capability": "page_performance",
+          "sortMetric": "sessions",
+          "sortDirection": "desc",
+          "opportunity_type": null,
+          "__ga4Intelligence": true
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      },
+      {
+        "json": {
+          "rank": 6,
+          "entity": {
+            "label": "/blog/the-best-generative-engine-optimization-geo-tools",
+            "landingPage": "/blog/the-best-generative-engine-optimization-geo-tools"
+          },
+          "period": {
+            "end": null,
+            "start": null
+          },
+          "source": "google_analytics",
+          "filters": {
+            "limit": 50,
+            "entityDim": "auto",
+            "sortMetric": "sessions",
+            "minSessions": 0,
+            "minPageViews": 0,
+            "minTotalUsers": 0,
+            "sortDirection": "desc",
+            "minMetricValue": null
+          },
+          "metrics": {
+            "sessions": 19,
+            "bounceRate": 0.8947,
+            "totalUsers": 18,
+            "engagementRate": 0.1053
+          },
+          "property": null,
+          "row_kind": "ranked_page",
+          "capability": "page_performance",
+          "sortMetric": "sessions",
+          "sortDirection": "desc",
+          "opportunity_type": null,
+          "__ga4Intelligence": true
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      },
+      {
+        "json": {
+          "rank": 7,
+          "entity": {
+            "label": "/ai-visibility-index/2026/automotive/services-and-maintenance",
+            "landingPage": "/ai-visibility-index/2026/automotive/services-and-maintenance"
+          },
+          "period": {
+            "end": null,
+            "start": null
+          },
+          "source": "google_analytics",
+          "filters": {
+            "limit": 50,
+            "entityDim": "auto",
+            "sortMetric": "sessions",
+            "minSessions": 0,
+            "minPageViews": 0,
+            "minTotalUsers": 0,
+            "sortDirection": "desc",
+            "minMetricValue": null
+          },
+          "metrics": {
+            "sessions": 17,
+            "bounceRate": 0.3529,
+            "totalUsers": 7,
+            "engagementRate": 0.6471
+          },
+          "property": null,
+          "row_kind": "ranked_page",
+          "capability": "page_performance",
+          "sortMetric": "sessions",
+          "sortDirection": "desc",
+          "opportunity_type": null,
+          "__ga4Intelligence": true
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      },
+      {
+        "json": {
+          "rank": 8,
+          "entity": {
+            "label": "/blog/how-brands-can-avoid-ai-confusion-and-misrepresentation",
+            "landingPage": "/blog/how-brands-can-avoid-ai-confusion-and-misrepresentation"
+          },
+          "period": {
+            "end": null,
+            "start": null
+          },
+          "source": "google_analytics",
+          "filters": {
+            "limit": 50,
+            "entityDim": "auto",
+            "sortMetric": "sessions",
+            "minSessions": 0,
+            "minPageViews": 0,
+            "minTotalUsers": 0,
+            "sortDirection": "desc",
+            "minMetricValue": null
+          },
+          "metrics": {
+            "sessions": 16,
+            "bounceRate": 0.75,
+            "totalUsers": 16,
+            "engagementRate": 0.25
+          },
+          "property": null,
+          "row_kind": "ranked_page",
+          "capability": "page_performance",
+          "sortMetric": "sessions",
+          "sortDirection": "desc",
+          "opportunity_type": null,
+          "__ga4Intelligence": true
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      },
+      {
+        "json": {
+          "rank": 9,
+          "entity": {
+            "label": "/blog/all-blogs",
+            "landingPage": "/blog/all-blogs"
+          },
+          "period": {
+            "end": null,
+            "start": null
+          },
+          "source": "google_analytics",
+          "filters": {
+            "limit": 50,
+            "entityDim": "auto",
+            "sortMetric": "sessions",
+            "minSessions": 0,
+            "minPageViews": 0,
+            "minTotalUsers": 0,
+            "sortDirection": "desc",
+            "minMetricValue": null
+          },
+          "metrics": {
+            "sessions": 13,
+            "bounceRate": 0.6154,
+            "totalUsers": 13,
+            "engagementRate": 0.3846
+          },
+          "property": null,
+          "row_kind": "ranked_page",
+          "capability": "page_performance",
+          "sortMetric": "sessions",
+          "sortDirection": "desc",
+          "opportunity_type": null,
+          "__ga4Intelligence": true
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      },
+      {
+        "json": {
+          "rank": 10,
+          "entity": {
+            "label": "/blog/key-platforms-for-entity-optimization-across-industries",
+            "landingPage": "/blog/key-platforms-for-entity-optimization-across-industries"
+          },
+          "period": {
+            "end": null,
+            "start": null
+          },
+          "source": "google_analytics",
+          "filters": {
+            "limit": 50,
+            "entityDim": "auto",
+            "sortMetric": "sessions",
+            "minSessions": 0,
+            "minPageViews": 0,
+            "minTotalUsers": 0,
+            "sortDirection": "desc",
+            "minMetricValue": null
+          },
+          "metrics": {
+            "sessions": 13,
+            "bounceRate": 0.7692,
+            "totalUsers": 13,
+            "engagementRate": 0.2308
+          },
+          "property": null,
+          "row_kind": "ranked_page",
+          "capability": "page_performance",
+          "sortMetric": "sessions",
+          "sortDirection": "desc",
+          "opportunity_type": null,
+          "__ga4Intelligence": true
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      },
+      {
+        "json": {
+          "rank": 11,
+          "entity": {
+            "label": "/contact-us",
+            "landingPage": "/contact-us"
+          },
+          "period": {
+            "end": null,
+            "start": null
+          },
+          "source": "google_analytics",
+          "filters": {
+            "limit": 50,
+            "entityDim": "auto",
+            "sortMetric": "sessions",
+            "minSessions": 0,
+            "minPageViews": 0,
+            "minTotalUsers": 0,
+            "sortDirection": "desc",
+            "minMetricValue": null
+          },
+          "metrics": {
+            "sessions": 12,
+            "bounceRate": 0.5,
+            "totalUsers": 11,
+            "engagementRate": 0.5
+          },
+          "property": null,
+          "row_kind": "ranked_page",
+          "capability": "page_performance",
+          "sortMetric": "sessions",
+          "sortDirection": "desc",
+          "opportunity_type": null,
+          "__ga4Intelligence": true
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      },
+      {
+        "json": {
+          "rank": 12,
+          "entity": {
+            "label": "/about-visible",
+            "landingPage": "/about-visible"
+          },
+          "period": {
+            "end": null,
+            "start": null
+          },
+          "source": "google_analytics",
+          "filters": {
+            "limit": 50,
+            "entityDim": "auto",
+            "sortMetric": "sessions",
+            "minSessions": 0,
+            "minPageViews": 0,
+            "minTotalUsers": 0,
+            "sortDirection": "desc",
+            "minMetricValue": null
+          },
+          "metrics": {
+            "sessions": 11,
+            "bounceRate": 0.6364,
+            "totalUsers": 11,
+            "engagementRate": 0.3636
+          },
+          "property": null,
+          "row_kind": "ranked_page",
+          "capability": "page_performance",
+          "sortMetric": "sessions",
+          "sortDirection": "desc",
+          "opportunity_type": null,
+          "__ga4Intelligence": true
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      },
+      {
+        "json": {
+          "rank": 13,
+          "entity": {
+            "label": "/blog/ai-citation-source-monitoring",
+            "landingPage": "/blog/ai-citation-source-monitoring"
+          },
+          "period": {
+            "end": null,
+            "start": null
+          },
+          "source": "google_analytics",
+          "filters": {
+            "limit": 50,
+            "entityDim": "auto",
+            "sortMetric": "sessions",
+            "minSessions": 0,
+            "minPageViews": 0,
+            "minTotalUsers": 0,
+            "sortDirection": "desc",
+            "minMetricValue": null
+          },
+          "metrics": {
+            "sessions": 11,
+            "bounceRate": 0.3636,
+            "totalUsers": 7,
+            "engagementRate": 0.6364
+          },
+          "property": null,
+          "row_kind": "ranked_page",
+          "capability": "page_performance",
+          "sortMetric": "sessions",
+          "sortDirection": "desc",
+          "opportunity_type": null,
+          "__ga4Intelligence": true
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      },
+      {
+        "json": {
+          "rank": 14,
+          "entity": {
+            "label": "/blog/search-query-analysis",
+            "landingPage": "/blog/search-query-analysis"
+          },
+          "period": {
+            "end": null,
+            "start": null
+          },
+          "source": "google_analytics",
+          "filters": {
+            "limit": 50,
+            "entityDim": "auto",
+            "sortMetric": "sessions",
+            "minSessions": 0,
+            "minPageViews": 0,
+            "minTotalUsers": 0,
+            "sortDirection": "desc",
+            "minMetricValue": null
+          },
+          "metrics": {
+            "sessions": 11,
+            "bounceRate": 0.6364,
+            "totalUsers": 11,
+            "engagementRate": 0.3636
+          },
+          "property": null,
+          "row_kind": "ranked_page",
+          "capability": "page_performance",
+          "sortMetric": "sessions",
+          "sortDirection": "desc",
+          "opportunity_type": null,
+          "__ga4Intelligence": true
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      },
+      {
+        "json": {
+          "rank": 15,
+          "entity": {
+            "label": "/blog/what-does-ai-think-about-your-brand",
+            "landingPage": "/blog/what-does-ai-think-about-your-brand"
+          },
+          "period": {
+            "end": null,
+            "start": null
+          },
+          "source": "google_analytics",
+          "filters": {
+            "limit": 50,
+            "entityDim": "auto",
+            "sortMetric": "sessions",
+            "minSessions": 0,
+            "minPageViews": 0,
+            "minTotalUsers": 0,
+            "sortDirection": "desc",
+            "minMetricValue": null
+          },
+          "metrics": {
+            "sessions": 11,
+            "bounceRate": 0.5455,
+            "totalUsers": 7,
+            "engagementRate": 0.4545
+          },
+          "property": null,
+          "row_kind": "ranked_page",
+          "capability": "page_performance",
+          "sortMetric": "sessions",
+          "sortDirection": "desc",
+          "opportunity_type": null,
+          "__ga4Intelligence": true
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      },
+      {
+        "json": {
+          "rank": 16,
+          "entity": {
+            "label": "/framework",
+            "landingPage": "/framework"
+          },
+          "period": {
+            "end": null,
+            "start": null
+          },
+          "source": "google_analytics",
+          "filters": {
+            "limit": 50,
+            "entityDim": "auto",
+            "sortMetric": "sessions",
+            "minSessions": 0,
+            "minPageViews": 0,
+            "minTotalUsers": 0,
+            "sortDirection": "desc",
+            "minMetricValue": null
+          },
+          "metrics": {
+            "sessions": 11,
+            "bounceRate": 0.8182,
+            "totalUsers": 10,
+            "engagementRate": 0.1818
+          },
+          "property": null,
+          "row_kind": "ranked_page",
+          "capability": "page_performance",
+          "sortMetric": "sessions",
+          "sortDirection": "desc",
+          "opportunity_type": null,
+          "__ga4Intelligence": true
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      },
+      {
+        "json": {
+          "rank": 17,
+          "entity": {
+            "label": "/blog/ai-visibility-tracking-to-optimization-meet-the-govisible-action-center",
+            "landingPage": "/blog/ai-visibility-tracking-to-optimization-meet-the-govisible-action-center"
+          },
+          "period": {
+            "end": null,
+            "start": null
+          },
+          "source": "google_analytics",
+          "filters": {
+            "limit": 50,
+            "entityDim": "auto",
+            "sortMetric": "sessions",
+            "minSessions": 0,
+            "minPageViews": 0,
+            "minTotalUsers": 0,
+            "sortDirection": "desc",
+            "minMetricValue": null
+          },
+          "metrics": {
+            "sessions": 10,
+            "bounceRate": 0.9,
+            "totalUsers": 10,
+            "engagementRate": 0.1
+          },
+          "property": null,
+          "row_kind": "ranked_page",
+          "capability": "page_performance",
+          "sortMetric": "sessions",
+          "sortDirection": "desc",
+          "opportunity_type": null,
+          "__ga4Intelligence": true
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      },
+      {
+        "json": {
+          "rank": 18,
+          "entity": {
+            "label": "/blog/how-govisible-helps-you-track-competitor-visibility-across-ai-engines",
+            "landingPage": "/blog/how-govisible-helps-you-track-competitor-visibility-across-ai-engines"
+          },
+          "period": {
+            "end": null,
+            "start": null
+          },
+          "source": "google_analytics",
+          "filters": {
+            "limit": 50,
+            "entityDim": "auto",
+            "sortMetric": "sessions",
+            "minSessions": 0,
+            "minPageViews": 0,
+            "minTotalUsers": 0,
+            "sortDirection": "desc",
+            "minMetricValue": null
+          },
+          "metrics": {
+            "sessions": 10,
+            "bounceRate": 0.7,
+            "totalUsers": 10,
+            "engagementRate": 0.3
+          },
+          "property": null,
+          "row_kind": "ranked_page",
+          "capability": "page_performance",
+          "sortMetric": "sessions",
+          "sortDirection": "desc",
+          "opportunity_type": null,
+          "__ga4Intelligence": true
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      },
+      {
+        "json": {
+          "rank": 19,
+          "entity": {
+            "label": "/ai-visibility-index/2026/automotive/passenger-cars",
+            "landingPage": "/ai-visibility-index/2026/automotive/passenger-cars"
+          },
+          "period": {
+            "end": null,
+            "start": null
+          },
+          "source": "google_analytics",
+          "filters": {
+            "limit": 50,
+            "entityDim": "auto",
+            "sortMetric": "sessions",
+            "minSessions": 0,
+            "minPageViews": 0,
+            "minTotalUsers": 0,
+            "sortDirection": "desc",
+            "minMetricValue": null
+          },
+          "metrics": {
+            "sessions": 9,
+            "bounceRate": 0.5556,
+            "totalUsers": 7,
+            "engagementRate": 0.4444
+          },
+          "property": null,
+          "row_kind": "ranked_page",
+          "capability": "page_performance",
+          "sortMetric": "sessions",
+          "sortDirection": "desc",
+          "opportunity_type": null,
+          "__ga4Intelligence": true
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      },
+      {
+        "json": {
+          "rank": 20,
+          "entity": {
+            "label": "/blog/common-mistakes-to-avoid-in-intent-mapping-for-ai-search",
+            "landingPage": "/blog/common-mistakes-to-avoid-in-intent-mapping-for-ai-search"
+          },
+          "period": {
+            "end": null,
+            "start": null
+          },
+          "source": "google_analytics",
+          "filters": {
+            "limit": 50,
+            "entityDim": "auto",
+            "sortMetric": "sessions",
+            "minSessions": 0,
+            "minPageViews": 0,
+            "minTotalUsers": 0,
+            "sortDirection": "desc",
+            "minMetricValue": null
+          },
+          "metrics": {
+            "sessions": 9,
+            "bounceRate": 0.7778,
+            "totalUsers": 9,
+            "engagementRate": 0.2222
+          },
+          "property": null,
+          "row_kind": "ranked_page",
+          "capability": "page_performance",
+          "sortMetric": "sessions",
+          "sortDirection": "desc",
+          "opportunity_type": null,
+          "__ga4Intelligence": true
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      },
+      {
+        "json": {
+          "rank": 21,
+          "entity": {
+            "label": "/blog/seo-keywords-vs-geo-prompts-whats-changing-in-search-behavior",
+            "landingPage": "/blog/seo-keywords-vs-geo-prompts-whats-changing-in-search-behavior"
+          },
+          "period": {
+            "end": null,
+            "start": null
+          },
+          "source": "google_analytics",
+          "filters": {
+            "limit": 50,
+            "entityDim": "auto",
+            "sortMetric": "sessions",
+            "minSessions": 0,
+            "minPageViews": 0,
+            "minTotalUsers": 0,
+            "sortDirection": "desc",
+            "minMetricValue": null
+          },
+          "metrics": {
+            "sessions": 9,
+            "bounceRate": 0.4444,
+            "totalUsers": 9,
+            "engagementRate": 0.5556
+          },
+          "property": null,
+          "row_kind": "ranked_page",
+          "capability": "page_performance",
+          "sortMetric": "sessions",
+          "sortDirection": "desc",
+          "opportunity_type": null,
+          "__ga4Intelligence": true
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      },
+      {
+        "json": {
+          "rank": 22,
+          "entity": {
+            "label": "/blog/the-role-of-reviews-forums-and-mentions-in-ai-brand-visibility",
+            "landingPage": "/blog/the-role-of-reviews-forums-and-mentions-in-ai-brand-visibility"
+          },
+          "period": {
+            "end": null,
+            "start": null
+          },
+          "source": "google_analytics",
+          "filters": {
+            "limit": 50,
+            "entityDim": "auto",
+            "sortMetric": "sessions",
+            "minSessions": 0,
+            "minPageViews": 0,
+            "minTotalUsers": 0,
+            "sortDirection": "desc",
+            "minMetricValue": null
+          },
+          "metrics": {
+            "sessions": 9,
+            "bounceRate": 0.8889,
+            "totalUsers": 9,
+            "engagementRate": 0.1111
+          },
+          "property": null,
+          "row_kind": "ranked_page",
+          "capability": "page_performance",
+          "sortMetric": "sessions",
+          "sortDirection": "desc",
+          "opportunity_type": null,
+          "__ga4Intelligence": true
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      },
+      {
+        "json": {
+          "rank": 23,
+          "entity": {
+            "label": "/blog/understanding-the-4-types-of-ai-search-intent-informational-navigational-comparative-transactional",
+            "landingPage": "/blog/understanding-the-4-types-of-ai-search-intent-informational-navigational-comparative-transactional"
+          },
+          "period": {
+            "end": null,
+            "start": null
+          },
+          "source": "google_analytics",
+          "filters": {
+            "limit": 50,
+            "entityDim": "auto",
+            "sortMetric": "sessions",
+            "minSessions": 0,
+            "minPageViews": 0,
+            "minTotalUsers": 0,
+            "sortDirection": "desc",
+            "minMetricValue": null
+          },
+          "metrics": {
+            "sessions": 9,
+            "bounceRate": 1,
+            "totalUsers": 9,
+            "engagementRate": 0
+          },
+          "property": null,
+          "row_kind": "ranked_page",
+          "capability": "page_performance",
+          "sortMetric": "sessions",
+          "sortDirection": "desc",
+          "opportunity_type": null,
+          "__ga4Intelligence": true
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      },
+      {
+        "json": {
+          "rank": 24,
+          "entity": {
+            "label": "/agency-partner-program",
+            "landingPage": "/agency-partner-program"
+          },
+          "period": {
+            "end": null,
+            "start": null
+          },
+          "source": "google_analytics",
+          "filters": {
+            "limit": 50,
+            "entityDim": "auto",
+            "sortMetric": "sessions",
+            "minSessions": 0,
+            "minPageViews": 0,
+            "minTotalUsers": 0,
+            "sortDirection": "desc",
+            "minMetricValue": null
+          },
+          "metrics": {
+            "sessions": 8,
+            "bounceRate": 1,
+            "totalUsers": 8,
+            "engagementRate": 0
+          },
+          "property": null,
+          "row_kind": "ranked_page",
+          "capability": "page_performance",
+          "sortMetric": "sessions",
+          "sortDirection": "desc",
+          "opportunity_type": null,
+          "__ga4Intelligence": true
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      },
+      {
+        "json": {
+          "rank": 25,
+          "entity": {
+            "label": "/ai-audit-request-submitted",
+            "landingPage": "/ai-audit-request-submitted"
+          },
+          "period": {
+            "end": null,
+            "start": null
+          },
+          "source": "google_analytics",
+          "filters": {
+            "limit": 50,
+            "entityDim": "auto",
+            "sortMetric": "sessions",
+            "minSessions": 0,
+            "minPageViews": 0,
+            "minTotalUsers": 0,
+            "sortDirection": "desc",
+            "minMetricValue": null
+          },
+          "metrics": {
+            "sessions": 8,
+            "bounceRate": 0.125,
+            "totalUsers": 4,
+            "engagementRate": 0.875
+          },
+          "property": null,
+          "row_kind": "ranked_page",
+          "capability": "page_performance",
+          "sortMetric": "sessions",
+          "sortDirection": "desc",
+          "opportunity_type": null,
+          "__ga4Intelligence": true
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      },
+      {
+        "json": {
+          "rank": 26,
+          "entity": {
+            "label": "/ai-visibility-index/2026",
+            "landingPage": "/ai-visibility-index/2026"
+          },
+          "period": {
+            "end": null,
+            "start": null
+          },
+          "source": "google_analytics",
+          "filters": {
+            "limit": 50,
+            "entityDim": "auto",
+            "sortMetric": "sessions",
+            "minSessions": 0,
+            "minPageViews": 0,
+            "minTotalUsers": 0,
+            "sortDirection": "desc",
+            "minMetricValue": null
+          },
+          "metrics": {
+            "sessions": 8,
+            "bounceRate": 0.25,
+            "totalUsers": 4,
+            "engagementRate": 0.75
+          },
+          "property": null,
+          "row_kind": "ranked_page",
+          "capability": "page_performance",
+          "sortMetric": "sessions",
+          "sortDirection": "desc",
+          "opportunity_type": null,
+          "__ga4Intelligence": true
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      },
+      {
+        "json": {
+          "rank": 27,
+          "entity": {
+            "label": "/blog/ai-citation-strategies",
+            "landingPage": "/blog/ai-citation-strategies"
+          },
+          "period": {
+            "end": null,
+            "start": null
+          },
+          "source": "google_analytics",
+          "filters": {
+            "limit": 50,
+            "entityDim": "auto",
+            "sortMetric": "sessions",
+            "minSessions": 0,
+            "minPageViews": 0,
+            "minTotalUsers": 0,
+            "sortDirection": "desc",
+            "minMetricValue": null
+          },
+          "metrics": {
+            "sessions": 8,
+            "bounceRate": 0.75,
+            "totalUsers": 8,
+            "engagementRate": 0.25
+          },
+          "property": null,
+          "row_kind": "ranked_page",
+          "capability": "page_performance",
+          "sortMetric": "sessions",
+          "sortDirection": "desc",
+          "opportunity_type": null,
+          "__ga4Intelligence": true
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      },
+      {
+        "json": {
+          "rank": 28,
+          "entity": {
+            "label": "/blog/how-generative-engines-parse-intent-llm-prompt-interpretation-explained",
+            "landingPage": "/blog/how-generative-engines-parse-intent-llm-prompt-interpretation-explained"
+          },
+          "period": {
+            "end": null,
+            "start": null
+          },
+          "source": "google_analytics",
+          "filters": {
+            "limit": 50,
+            "entityDim": "auto",
+            "sortMetric": "sessions",
+            "minSessions": 0,
+            "minPageViews": 0,
+            "minTotalUsers": 0,
+            "sortDirection": "desc",
+            "minMetricValue": null
+          },
+          "metrics": {
+            "sessions": 8,
+            "bounceRate": 1,
+            "totalUsers": 8,
+            "engagementRate": 0
+          },
+          "property": null,
+          "row_kind": "ranked_page",
+          "capability": "page_performance",
+          "sortMetric": "sessions",
+          "sortDirection": "desc",
+          "opportunity_type": null,
+          "__ga4Intelligence": true
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      },
+      {
+        "json": {
+          "rank": 29,
+          "entity": {
+            "label": "/blog/the-anatomy-of-ai-optimized-content-headings-bullets-summaries",
+            "landingPage": "/blog/the-anatomy-of-ai-optimized-content-headings-bullets-summaries"
+          },
+          "period": {
+            "end": null,
+            "start": null
+          },
+          "source": "google_analytics",
+          "filters": {
+            "limit": 50,
+            "entityDim": "auto",
+            "sortMetric": "sessions",
+            "minSessions": 0,
+            "minPageViews": 0,
+            "minTotalUsers": 0,
+            "sortDirection": "desc",
+            "minMetricValue": null
+          },
+          "metrics": {
+            "sessions": 8,
+            "bounceRate": 0.625,
+            "totalUsers": 8,
+            "engagementRate": 0.375
+          },
+          "property": null,
+          "row_kind": "ranked_page",
+          "capability": "page_performance",
+          "sortMetric": "sessions",
+          "sortDirection": "desc",
+          "opportunity_type": null,
+          "__ga4Intelligence": true
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      },
+      {
+        "json": {
+          "rank": 30,
+          "entity": {
+            "label": "/blog/tools-techniques-how-to-extract-and-analyze-searcher-prompts",
+            "landingPage": "/blog/tools-techniques-how-to-extract-and-analyze-searcher-prompts"
+          },
+          "period": {
+            "end": null,
+            "start": null
+          },
+          "source": "google_analytics",
+          "filters": {
+            "limit": 50,
+            "entityDim": "auto",
+            "sortMetric": "sessions",
+            "minSessions": 0,
+            "minPageViews": 0,
+            "minTotalUsers": 0,
+            "sortDirection": "desc",
+            "minMetricValue": null
+          },
+          "metrics": {
+            "sessions": 8,
+            "bounceRate": 0.75,
+            "totalUsers": 8,
+            "engagementRate": 0.25
+          },
+          "property": null,
+          "row_kind": "ranked_page",
+          "capability": "page_performance",
+          "sortMetric": "sessions",
+          "sortDirection": "desc",
+          "opportunity_type": null,
+          "__ga4Intelligence": true
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      },
+      {
+        "json": {
+          "rank": 31,
+          "entity": {
+            "label": "/govisible-platform",
+            "landingPage": "/govisible-platform"
+          },
+          "period": {
+            "end": null,
+            "start": null
+          },
+          "source": "google_analytics",
+          "filters": {
+            "limit": 50,
+            "entityDim": "auto",
+            "sortMetric": "sessions",
+            "minSessions": 0,
+            "minPageViews": 0,
+            "minTotalUsers": 0,
+            "sortDirection": "desc",
+            "minMetricValue": null
+          },
+          "metrics": {
+            "sessions": 8,
+            "bounceRate": 0.625,
+            "totalUsers": 8,
+            "engagementRate": 0.375
+          },
+          "property": null,
+          "row_kind": "ranked_page",
+          "capability": "page_performance",
+          "sortMetric": "sessions",
+          "sortDirection": "desc",
+          "opportunity_type": null,
+          "__ga4Intelligence": true
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      },
+      {
+        "json": {
+          "rank": 32,
+          "entity": {
+            "label": "/learnability-testing-and-visibility-scoring",
+            "landingPage": "/learnability-testing-and-visibility-scoring"
+          },
+          "period": {
+            "end": null,
+            "start": null
+          },
+          "source": "google_analytics",
+          "filters": {
+            "limit": 50,
+            "entityDim": "auto",
+            "sortMetric": "sessions",
+            "minSessions": 0,
+            "minPageViews": 0,
+            "minTotalUsers": 0,
+            "sortDirection": "desc",
+            "minMetricValue": null
+          },
+          "metrics": {
+            "sessions": 8,
+            "bounceRate": 0.875,
+            "totalUsers": 8,
+            "engagementRate": 0.125
+          },
+          "property": null,
+          "row_kind": "ranked_page",
+          "capability": "page_performance",
+          "sortMetric": "sessions",
+          "sortDirection": "desc",
+          "opportunity_type": null,
+          "__ga4Intelligence": true
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      },
+      {
+        "json": {
+          "rank": 33,
+          "entity": {
+            "label": "/perplexity-visibility-tracker",
+            "landingPage": "/perplexity-visibility-tracker"
+          },
+          "period": {
+            "end": null,
+            "start": null
+          },
+          "source": "google_analytics",
+          "filters": {
+            "limit": 50,
+            "entityDim": "auto",
+            "sortMetric": "sessions",
+            "minSessions": 0,
+            "minPageViews": 0,
+            "minTotalUsers": 0,
+            "sortDirection": "desc",
+            "minMetricValue": null
+          },
+          "metrics": {
+            "sessions": 8,
+            "bounceRate": 1,
+            "totalUsers": 8,
+            "engagementRate": 0
+          },
+          "property": null,
+          "row_kind": "ranked_page",
+          "capability": "page_performance",
+          "sortMetric": "sessions",
+          "sortDirection": "desc",
+          "opportunity_type": null,
+          "__ga4Intelligence": true
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      },
+      {
+        "json": {
+          "rank": 34,
+          "entity": {
+            "label": "/templates/prompt-visibility-testing-log",
+            "landingPage": "/templates/prompt-visibility-testing-log"
+          },
+          "period": {
+            "end": null,
+            "start": null
+          },
+          "source": "google_analytics",
+          "filters": {
+            "limit": 50,
+            "entityDim": "auto",
+            "sortMetric": "sessions",
+            "minSessions": 0,
+            "minPageViews": 0,
+            "minTotalUsers": 0,
+            "sortDirection": "desc",
+            "minMetricValue": null
+          },
+          "metrics": {
+            "sessions": 8,
+            "bounceRate": 0.5,
+            "totalUsers": 8,
+            "engagementRate": 0.5
+          },
+          "property": null,
+          "row_kind": "ranked_page",
+          "capability": "page_performance",
+          "sortMetric": "sessions",
+          "sortDirection": "desc",
+          "opportunity_type": null,
+          "__ga4Intelligence": true
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      },
+      {
+        "json": {
+          "rank": 35,
+          "entity": {
+            "label": "/blog/semantic-markers-how-llms-parse-structured-content",
+            "landingPage": "/blog/semantic-markers-how-llms-parse-structured-content"
+          },
+          "period": {
+            "end": null,
+            "start": null
+          },
+          "source": "google_analytics",
+          "filters": {
+            "limit": 50,
+            "entityDim": "auto",
+            "sortMetric": "sessions",
+            "minSessions": 0,
+            "minPageViews": 0,
+            "minTotalUsers": 0,
+            "sortDirection": "desc",
+            "minMetricValue": null
+          },
+          "metrics": {
+            "sessions": 7,
+            "bounceRate": 0.2857,
+            "totalUsers": 5,
+            "engagementRate": 0.7143
+          },
+          "property": null,
+          "row_kind": "ranked_page",
+          "capability": "page_performance",
+          "sortMetric": "sessions",
+          "sortDirection": "desc",
+          "opportunity_type": null,
+          "__ga4Intelligence": true
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      },
+      {
+        "json": {
+          "rank": 36,
+          "entity": {
+            "label": "/blog/the-hidden-brand-risk-of-outdated-ai-answers-and-how-to-fix-it",
+            "landingPage": "/blog/the-hidden-brand-risk-of-outdated-ai-answers-and-how-to-fix-it"
+          },
+          "period": {
+            "end": null,
+            "start": null
+          },
+          "source": "google_analytics",
+          "filters": {
+            "limit": 50,
+            "entityDim": "auto",
+            "sortMetric": "sessions",
+            "minSessions": 0,
+            "minPageViews": 0,
+            "minTotalUsers": 0,
+            "sortDirection": "desc",
+            "minMetricValue": null
+          },
+          "metrics": {
+            "sessions": 7,
+            "bounceRate": 0.4286,
+            "totalUsers": 7,
+            "engagementRate": 0.5714
+          },
+          "property": null,
+          "row_kind": "ranked_page",
+          "capability": "page_performance",
+          "sortMetric": "sessions",
+          "sortDirection": "desc",
+          "opportunity_type": null,
+          "__ga4Intelligence": true
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      },
+      {
+        "json": {
+          "rank": 37,
+          "entity": {
+            "label": "/blog/the-knowledge-graph-layer-how-ai-models-understand-and-index-brands",
+            "landingPage": "/blog/the-knowledge-graph-layer-how-ai-models-understand-and-index-brands"
+          },
+          "period": {
+            "end": null,
+            "start": null
+          },
+          "source": "google_analytics",
+          "filters": {
+            "limit": 50,
+            "entityDim": "auto",
+            "sortMetric": "sessions",
+            "minSessions": 0,
+            "minPageViews": 0,
+            "minTotalUsers": 0,
+            "sortDirection": "desc",
+            "minMetricValue": null
+          },
+          "metrics": {
+            "sessions": 7,
+            "bounceRate": 0.8571,
+            "totalUsers": 7,
+            "engagementRate": 0.1429
+          },
+          "property": null,
+          "row_kind": "ranked_page",
+          "capability": "page_performance",
+          "sortMetric": "sessions",
+          "sortDirection": "desc",
+          "opportunity_type": null,
+          "__ga4Intelligence": true
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      },
+      {
+        "json": {
+          "rank": 38,
+          "entity": {
+            "label": "/blog/the-role-of-schema-markup-in-generative-engine-optimization",
+            "landingPage": "/blog/the-role-of-schema-markup-in-generative-engine-optimization"
+          },
+          "period": {
+            "end": null,
+            "start": null
+          },
+          "source": "google_analytics",
+          "filters": {
+            "limit": 50,
+            "entityDim": "auto",
+            "sortMetric": "sessions",
+            "minSessions": 0,
+            "minPageViews": 0,
+            "minTotalUsers": 0,
+            "sortDirection": "desc",
+            "minMetricValue": null
+          },
+          "metrics": {
+            "sessions": 7,
+            "bounceRate": 0.8571,
+            "totalUsers": 7,
+            "engagementRate": 0.1429
+          },
+          "property": null,
+          "row_kind": "ranked_page",
+          "capability": "page_performance",
+          "sortMetric": "sessions",
+          "sortDirection": "desc",
+          "opportunity_type": null,
+          "__ga4Intelligence": true
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      },
+      {
+        "json": {
+          "rank": 39,
+          "entity": {
+            "label": "/chatgpt-visibility-tracker",
+            "landingPage": "/chatgpt-visibility-tracker"
+          },
+          "period": {
+            "end": null,
+            "start": null
+          },
+          "source": "google_analytics",
+          "filters": {
+            "limit": 50,
+            "entityDim": "auto",
+            "sortMetric": "sessions",
+            "minSessions": 0,
+            "minPageViews": 0,
+            "minTotalUsers": 0,
+            "sortDirection": "desc",
+            "minMetricValue": null
+          },
+          "metrics": {
+            "sessions": 7,
+            "bounceRate": 0.8571,
+            "totalUsers": 7,
+            "engagementRate": 0.1429
+          },
+          "property": null,
+          "row_kind": "ranked_page",
+          "capability": "page_performance",
+          "sortMetric": "sessions",
+          "sortDirection": "desc",
+          "opportunity_type": null,
+          "__ga4Intelligence": true
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      },
+      {
+        "json": {
+          "rank": 40,
+          "entity": {
+            "label": "/govisible-ai-bot-tracker",
+            "landingPage": "/govisible-ai-bot-tracker"
+          },
+          "period": {
+            "end": null,
+            "start": null
+          },
+          "source": "google_analytics",
+          "filters": {
+            "limit": 50,
+            "entityDim": "auto",
+            "sortMetric": "sessions",
+            "minSessions": 0,
+            "minPageViews": 0,
+            "minTotalUsers": 0,
+            "sortDirection": "desc",
+            "minMetricValue": null
+          },
+          "metrics": {
+            "sessions": 7,
+            "bounceRate": 0.5714,
+            "totalUsers": 5,
+            "engagementRate": 0.4286
+          },
+          "property": null,
+          "row_kind": "ranked_page",
+          "capability": "page_performance",
+          "sortMetric": "sessions",
+          "sortDirection": "desc",
+          "opportunity_type": null,
+          "__ga4Intelligence": true
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      },
+      {
+        "json": {
+          "rank": 41,
+          "entity": {
+            "label": "/intent-to-answer-mapping",
+            "landingPage": "/intent-to-answer-mapping"
+          },
+          "period": {
+            "end": null,
+            "start": null
+          },
+          "source": "google_analytics",
+          "filters": {
+            "limit": 50,
+            "entityDim": "auto",
+            "sortMetric": "sessions",
+            "minSessions": 0,
+            "minPageViews": 0,
+            "minTotalUsers": 0,
+            "sortDirection": "desc",
+            "minMetricValue": null
+          },
+          "metrics": {
+            "sessions": 7,
+            "bounceRate": 0.8571,
+            "totalUsers": 7,
+            "engagementRate": 0.1429
+          },
+          "property": null,
+          "row_kind": "ranked_page",
+          "capability": "page_performance",
+          "sortMetric": "sessions",
+          "sortDirection": "desc",
+          "opportunity_type": null,
+          "__ga4Intelligence": true
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      },
+      {
+        "json": {
+          "rank": 42,
+          "entity": {
+            "label": "/templates/prompt-mining-canvas",
+            "landingPage": "/templates/prompt-mining-canvas"
+          },
+          "period": {
+            "end": null,
+            "start": null
+          },
+          "source": "google_analytics",
+          "filters": {
+            "limit": 50,
+            "entityDim": "auto",
+            "sortMetric": "sessions",
+            "minSessions": 0,
+            "minPageViews": 0,
+            "minTotalUsers": 0,
+            "sortDirection": "desc",
+            "minMetricValue": null
+          },
+          "metrics": {
+            "sessions": 7,
+            "bounceRate": 0.8571,
+            "totalUsers": 6,
+            "engagementRate": 0.1429
+          },
+          "property": null,
+          "row_kind": "ranked_page",
+          "capability": "page_performance",
+          "sortMetric": "sessions",
+          "sortDirection": "desc",
+          "opportunity_type": null,
+          "__ga4Intelligence": true
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      },
+      {
+        "json": {
+          "rank": 43,
+          "entity": {
+            "label": "/visible-partner-program",
+            "landingPage": "/visible-partner-program"
+          },
+          "period": {
+            "end": null,
+            "start": null
+          },
+          "source": "google_analytics",
+          "filters": {
+            "limit": 50,
+            "entityDim": "auto",
+            "sortMetric": "sessions",
+            "minSessions": 0,
+            "minPageViews": 0,
+            "minTotalUsers": 0,
+            "sortDirection": "desc",
+            "minMetricValue": null
+          },
+          "metrics": {
+            "sessions": 7,
+            "bounceRate": 1,
+            "totalUsers": 7,
+            "engagementRate": 0
+          },
+          "property": null,
+          "row_kind": "ranked_page",
+          "capability": "page_performance",
+          "sortMetric": "sessions",
+          "sortDirection": "desc",
+          "opportunity_type": null,
+          "__ga4Intelligence": true
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      },
+      {
+        "json": {
+          "rank": 44,
+          "entity": {
+            "label": "/blog",
+            "landingPage": "/blog"
+          },
+          "period": {
+            "end": null,
+            "start": null
+          },
+          "source": "google_analytics",
+          "filters": {
+            "limit": 50,
+            "entityDim": "auto",
+            "sortMetric": "sessions",
+            "minSessions": 0,
+            "minPageViews": 0,
+            "minTotalUsers": 0,
+            "sortDirection": "desc",
+            "minMetricValue": null
+          },
+          "metrics": {
+            "sessions": 6,
+            "bounceRate": 0.8333,
+            "totalUsers": 6,
+            "engagementRate": 0.1667
+          },
+          "property": null,
+          "row_kind": "ranked_page",
+          "capability": "page_performance",
+          "sortMetric": "sessions",
+          "sortDirection": "desc",
+          "opportunity_type": null,
+          "__ga4Intelligence": true
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      },
+      {
+        "json": {
+          "rank": 45,
+          "entity": {
+            "label": "/blog/ai-visibility-insights",
+            "landingPage": "/blog/ai-visibility-insights"
+          },
+          "period": {
+            "end": null,
+            "start": null
+          },
+          "source": "google_analytics",
+          "filters": {
+            "limit": 50,
+            "entityDim": "auto",
+            "sortMetric": "sessions",
+            "minSessions": 0,
+            "minPageViews": 0,
+            "minTotalUsers": 0,
+            "sortDirection": "desc",
+            "minMetricValue": null
+          },
+          "metrics": {
+            "sessions": 6,
+            "bounceRate": 0.6667,
+            "totalUsers": 6,
+            "engagementRate": 0.3333
+          },
+          "property": null,
+          "row_kind": "ranked_page",
+          "capability": "page_performance",
+          "sortMetric": "sessions",
+          "sortDirection": "desc",
+          "opportunity_type": null,
+          "__ga4Intelligence": true
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      },
+      {
+        "json": {
+          "rank": 46,
+          "entity": {
+            "label": "/blog/govisible",
+            "landingPage": "/blog/govisible"
+          },
+          "period": {
+            "end": null,
+            "start": null
+          },
+          "source": "google_analytics",
+          "filters": {
+            "limit": 50,
+            "entityDim": "auto",
+            "sortMetric": "sessions",
+            "minSessions": 0,
+            "minPageViews": 0,
+            "minTotalUsers": 0,
+            "sortDirection": "desc",
+            "minMetricValue": null
+          },
+          "metrics": {
+            "sessions": 6,
+            "bounceRate": 0.5,
+            "totalUsers": 6,
+            "engagementRate": 0.5
+          },
+          "property": null,
+          "row_kind": "ranked_page",
+          "capability": "page_performance",
+          "sortMetric": "sessions",
+          "sortDirection": "desc",
+          "opportunity_type": null,
+          "__ga4Intelligence": true
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      },
+      {
+        "json": {
+          "rank": 47,
+          "entity": {
+            "label": "/blog/how-negative-brand-signals-can-undermine-ai-rankings",
+            "landingPage": "/blog/how-negative-brand-signals-can-undermine-ai-rankings"
+          },
+          "period": {
+            "end": null,
+            "start": null
+          },
+          "source": "google_analytics",
+          "filters": {
+            "limit": 50,
+            "entityDim": "auto",
+            "sortMetric": "sessions",
+            "minSessions": 0,
+            "minPageViews": 0,
+            "minTotalUsers": 0,
+            "sortDirection": "desc",
+            "minMetricValue": null
+          },
+          "metrics": {
+            "sessions": 6,
+            "bounceRate": 0.8333,
+            "totalUsers": 6,
+            "engagementRate": 0.1667
+          },
+          "property": null,
+          "row_kind": "ranked_page",
+          "capability": "page_performance",
+          "sortMetric": "sessions",
+          "sortDirection": "desc",
+          "opportunity_type": null,
+          "__ga4Intelligence": true
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      },
+      {
+        "json": {
+          "rank": 48,
+          "entity": {
+            "label": "/blog/structured-content-engineering-how-brands-build-ai-readable-content",
+            "landingPage": "/blog/structured-content-engineering-how-brands-build-ai-readable-content"
+          },
+          "period": {
+            "end": null,
+            "start": null
+          },
+          "source": "google_analytics",
+          "filters": {
+            "limit": 50,
+            "entityDim": "auto",
+            "sortMetric": "sessions",
+            "minSessions": 0,
+            "minPageViews": 0,
+            "minTotalUsers": 0,
+            "sortDirection": "desc",
+            "minMetricValue": null
+          },
+          "metrics": {
+            "sessions": 6,
+            "bounceRate": 1,
+            "totalUsers": 6,
+            "engagementRate": 0
+          },
+          "property": null,
+          "row_kind": "ranked_page",
+          "capability": "page_performance",
+          "sortMetric": "sessions",
+          "sortDirection": "desc",
+          "opportunity_type": null,
+          "__ga4Intelligence": true
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      },
+      {
+        "json": {
+          "rank": 49,
+          "entity": {
+            "label": "/gemini-visibility-tracker",
+            "landingPage": "/gemini-visibility-tracker"
+          },
+          "period": {
+            "end": null,
+            "start": null
+          },
+          "source": "google_analytics",
+          "filters": {
+            "limit": 50,
+            "entityDim": "auto",
+            "sortMetric": "sessions",
+            "minSessions": 0,
+            "minPageViews": 0,
+            "minTotalUsers": 0,
+            "sortDirection": "desc",
+            "minMetricValue": null
+          },
+          "metrics": {
+            "sessions": 6,
+            "bounceRate": 1,
+            "totalUsers": 6,
+            "engagementRate": 0
+          },
+          "property": null,
+          "row_kind": "ranked_page",
+          "capability": "page_performance",
+          "sortMetric": "sessions",
+          "sortDirection": "desc",
+          "opportunity_type": null,
+          "__ga4Intelligence": true
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      },
+      {
+        "json": {
+          "rank": 50,
+          "entity": {
+            "label": "/intelligent-entity-optimization",
+            "landingPage": "/intelligent-entity-optimization"
+          },
+          "period": {
+            "end": null,
+            "start": null
+          },
+          "source": "google_analytics",
+          "filters": {
+            "limit": 50,
+            "entityDim": "auto",
+            "sortMetric": "sessions",
+            "minSessions": 0,
+            "minPageViews": 0,
+            "minTotalUsers": 0,
+            "sortDirection": "desc",
+            "minMetricValue": null
+          },
+          "metrics": {
+            "sessions": 6,
+            "bounceRate": 1,
+            "totalUsers": 6,
+            "engagementRate": 0
+          },
+          "property": null,
+          "row_kind": "ranked_page",
+          "capability": "page_performance",
+          "sortMetric": "sessions",
+          "sortDirection": "desc",
+          "opportunity_type": null,
+          "__ga4Intelligence": true
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      },
+      {
+        "json": {
+          "count": 0,
+          "period": {
+            "end": null,
+            "start": null
+          },
+          "source": "google_analytics",
+          "filters": {
+            "limit": 50,
+            "minScore": 0,
+            "minSessions": 250,
+            "minBounceRate": 0.6,
+            "maxEngagementRate": 0.4
+          },
+          "results": [],
+          "category": "intelligence",
+          "property": null,
+          "warnings": [
+            {
+              "code": "GA4_NO_MATCHES",
+              "filters": {
+                "limit": 50,
+                "minScore": 0,
+                "minSessions": 250,
+                "minBounceRate": 0.6,
+                "maxEngagementRate": 0.4
+              },
+              "message": "No engagement opportunities matched the configured filters.",
+              "capability": "engagement_opportunities"
+            }
+          ],
+          "capability": "engagement_opportunities",
+          "__ga4Intelligence": true,
+          "__ga4CapabilitySection": true
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      }
+    ],
+    "labels": [
+      "Landing Underperformance",
+      "Acquisition Concentration",
+      "Page Performance",
+      "Engagement Opportunities"
+    ],
+    "itemsIn": 60,
+    "executed": [
+      "landing_underperformance",
+      "acquisition_concentration",
+      "page_performance",
+      "engagement_opportunities"
+    ],
+    "itemsOut": 53,
+    "scaffold": true,
+    "warnings": [
+      {
+        "code": "GA4_LANDING_ENTITY_UNRESOLVED",
+        "message": "2 row(s) had an unresolved landingPage value (e.g. \"(not set)\") and cannot be evaluated as a specific landing-page entity. Those rows were skipped and pagePath was not used as a fallback.",
+        "samples": [
+          "(not set)",
+          ""
+        ],
+        "capability": "landing_underperformance",
+        "unresolvedCount": 2
+      },
+      {
+        "code": "GA4_NO_MATCHES",
+        "filters": {
+          "limit": 50,
+          "minScore": 0,
+          "minSessions": 150,
+          "minBounceRate": 0.65,
+          "maxEngagementRate": 0.35,
+          "maxViewsPerSession": 1.2,
+          "maxAverageSessionDuration": 25
+        },
+        "message": "No landing underperformance opportunities matched the configured filters.",
+        "capability": "landing_underperformance"
+      },
+      {
+        "code": "GA4_ACQUISITION_DIM_MISSING",
+        "message": "Acquisition concentration needs a channel/source dimension. Required one of: sessionDefaultChannelGroup, sessionSourceMedium, sessionSource, sessionMedium, firstUserDefaultChannelGroup. pagePath, pageTitle, landingPage, and eventName are not acquisition dimensions.",
+        "capability": "acquisition_concentration",
+        "availableMetrics": [
+          "bounceRate",
+          "engagementRate",
+          "sessions",
+          "totalUsers"
+        ],
+        "requiredDimensions": [
+          "sessionDefaultChannelGroup",
+          "sessionSourceMedium",
+          "sessionSource",
+          "sessionMedium",
+          "firstUserDefaultChannelGroup"
+        ],
+        "availableDimensions": [
+          "landingPage"
+        ],
+        "forbiddenAsAcquisition": [
+          "pagePath",
+          "pageTitle",
+          "landingPage",
+          "pageLocation",
+          "eventName",
+          "hostName"
+        ]
+      },
+      {
+        "code": "GA4_NO_MATCHES",
+        "filters": {
+          "limit": 50,
+          "minScore": 0,
+          "minSessions": 250,
+          "minBounceRate": 0.6,
+          "maxEngagementRate": 0.4
+        },
+        "message": "No engagement opportunities matched the configured filters.",
+        "capability": "engagement_opportunities"
+      }
+    ],
+    "inventory": {
+      "allKeys": [
+        "bounceRate",
+        "engagementRate",
+        "landingPage",
+        "sessions",
+        "totalUsers"
+      ],
+      "availableMetrics": [
+        "bounceRate",
+        "engagementRate",
+        "sessions",
+        "totalUsers"
+      ],
+      "availableDimensions": [
+        "landingPage"
+      ]
+    },
+    "capability": "landing_underperformance",
+    "capabilities": [
+      "landing_underperformance",
+      "acquisition_concentration",
+      "page_performance",
+      "engagement_opportunities"
+    ],
+    "perCapability": [
+      {
+        "ok": true,
+        "count": 0,
+        "label": "Landing Underperformance",
+        "category": "intelligence",
+        "capability": "landing_underperformance"
+      },
+      {
+        "ok": true,
+        "count": 0,
+        "label": "Acquisition Concentration",
+        "category": "intelligence",
+        "capability": "acquisition_concentration"
+      },
+      {
+        "ok": true,
+        "count": 50,
+        "label": "Page Performance",
+        "category": "data",
+        "capability": "page_performance"
+      },
+      {
+        "ok": true,
+        "count": 0,
+        "label": "Engagement Opportunities",
+        "category": "intelligence",
+        "capability": "engagement_opportunities"
+      }
+    ],
+    "runtimeDiagnostics": {
+      "nodeId": "ga4McpTool-1790083223630",
+      "handoff": {
+        "nodeId": "ga4McpTool-1790083223630",
+        "rowsDetected": true,
+        "inputItemCount": 60,
+        "firstItemTopKeys": [
+          "json",
+          "pairedItem"
+        ],
+        "firstItemJsonKeys": [
+          "landingPage",
+          "sessions",
+          "totalUsers",
+          "engagementRate",
+          "bounceRate"
+        ]
+      },
+      "executed": [
+        "landing_underperformance",
+        "acquisition_concentration",
+        "page_performance",
+        "engagement_opportunities"
+      ],
+      "perCapability": [
+        {
+          "ok": true,
+          "count": 0,
+          "label": "Landing Underperformance",
+          "category": "intelligence",
+          "capability": "landing_underperformance"
+        },
+        {
+          "ok": true,
+          "count": 0,
+          "label": "Acquisition Concentration",
+          "category": "intelligence",
+          "capability": "acquisition_concentration"
+        },
+        {
+          "ok": true,
+          "count": 50,
+          "label": "Page Performance",
+          "category": "data",
+          "capability": "page_performance"
+        },
+        {
+          "ok": true,
+          "count": 0,
+          "label": "Engagement Opportunities",
+          "category": "intelligence",
+          "capability": "engagement_opportunities"
+        }
+      ],
+      "outputItemCount": 53,
+      "outputCapabilities": {
+        "page_performance": 50,
+        "engagement_opportunities": 1,
+        "landing_underperformance": 1,
+        "acquisition_concentration": 1
+      },
+      "receivedCapability": [
+        "landing_underperformance",
+        "acquisition_concentration",
+        "page_performance",
+        "engagement_opportunities"
+      ],
+      "receivedCapabilities": [
+        "landing_underperformance",
+        "acquisition_concentration",
+        "page_performance",
+        "engagement_opportunities"
+      ],
+      "selectedCapabilities": [
+        "landing_underperformance",
+        "acquisition_concentration",
+        "page_performance",
+        "engagement_opportunities"
+      ]
+    }
+  },
+  "input": {
+    "itemsIn": 60,
+    "incoming": {
+      "googleAnalytics-1789984791245": {
+        "items": [
+          {
+            "json": {
+              "sessions": 432,
+              "bounceRate": 0.45601851851851855,
+              "totalUsers": 295,
+              "landingPage": "/",
+              "engagementRate": 0.5439814814814815
+            },
+            "pairedItem": {
+              "item": 0
+            }
+          },
+          {
+            "json": {
+              "sessions": 105,
+              "bounceRate": 0.9523809523809524,
+              "totalUsers": 65,
+              "landingPage": "(not set)",
+              "engagementRate": 0.047619047619047616
+            },
+            "pairedItem": {
+              "item": 0
+            }
+          },
+          {
+            "json": {
+              "sessions": 98,
+              "bounceRate": 0.42857142857142855,
+              "totalUsers": 77,
+              "landingPage": "/ai-visibility-audit",
+              "engagementRate": 0.5714285714285714
+            },
+            "pairedItem": {
+              "item": 0
+            }
+          },
+          {
+            "json": {
+              "sessions": 98,
+              "bounceRate": 0.4897959183673469,
+              "totalUsers": 91,
+              "landingPage": "/book-demo",
+              "engagementRate": 0.5102040816326531
+            },
+            "pairedItem": {
+              "item": 0
+            }
+          },
+          {
+            "json": {
+              "sessions": 33,
+              "bounceRate": 0.6363636363636364,
+              "totalUsers": 29,
+              "landingPage": "/pricing",
+              "engagementRate": 0.3636363636363637
+            },
+            "pairedItem": {
+              "item": 0
+            }
+          },
+          {
+            "json": {
+              "sessions": 19,
+              "bounceRate": 0.8947368421052632,
+              "totalUsers": 18,
+              "landingPage": "/blog/the-best-generative-engine-optimization-geo-tools",
+              "engagementRate": 0.10526315789473684
+            },
+            "pairedItem": {
+              "item": 0
+            }
+          },
+          {
+            "json": {
+              "sessions": 17,
+              "bounceRate": 0.35294117647058826,
+              "totalUsers": 7,
+              "landingPage": "/ai-visibility-index/2026/automotive/services-and-maintenance",
+              "engagementRate": 0.6470588235294118
+            },
+            "pairedItem": {
+              "item": 0
+            }
+          },
+          {
+            "json": {
+              "sessions": 16,
+              "bounceRate": 0.75,
+              "totalUsers": 16,
+              "landingPage": "/blog/how-brands-can-avoid-ai-confusion-and-misrepresentation",
+              "engagementRate": 0.25
+            },
+            "pairedItem": {
+              "item": 0
+            }
+          },
+          {
+            "json": {
+              "sessions": 13,
+              "bounceRate": 0.6153846153846154,
+              "totalUsers": 13,
+              "landingPage": "/blog/all-blogs",
+              "engagementRate": 0.38461538461538464
+            },
+            "pairedItem": {
+              "item": 0
+            }
+          },
+          {
+            "json": {
+              "sessions": 13,
+              "bounceRate": 0.7692307692307693,
+              "totalUsers": 13,
+              "landingPage": "/blog/key-platforms-for-entity-optimization-across-industries",
+              "engagementRate": 0.2307692307692308
+            },
+            "pairedItem": {
+              "item": 0
+            }
+          },
+          {
+            "json": {
+              "sessions": 12,
+              "bounceRate": 0.5,
+              "totalUsers": 11,
+              "landingPage": "/contact-us",
+              "engagementRate": 0.5
+            },
+            "pairedItem": {
+              "item": 0
+            }
+          },
+          {
+            "json": {
+              "sessions": 11,
+              "bounceRate": 0.6363636363636364,
+              "totalUsers": 11,
+              "landingPage": "/about-visible",
+              "engagementRate": 0.3636363636363637
+            },
+            "pairedItem": {
+              "item": 0
+            }
+          },
+          {
+            "json": {
+              "sessions": 11,
+              "bounceRate": 0.3636363636363637,
+              "totalUsers": 7,
+              "landingPage": "/blog/ai-citation-source-monitoring",
+              "engagementRate": 0.6363636363636364
+            },
+            "pairedItem": {
+              "item": 0
+            }
+          },
+          {
+            "json": {
+              "sessions": 11,
+              "bounceRate": 0.6363636363636364,
+              "totalUsers": 11,
+              "landingPage": "/blog/search-query-analysis",
+              "engagementRate": 0.3636363636363637
+            },
+            "pairedItem": {
+              "item": 0
+            }
+          },
+          {
+            "json": {
+              "sessions": 11,
+              "bounceRate": 0.5454545454545454,
+              "totalUsers": 7,
+              "landingPage": "/blog/what-does-ai-think-about-your-brand",
+              "engagementRate": 0.4545454545454546
+            },
+            "pairedItem": {
+              "item": 0
+            }
+          },
+          {
+            "json": {
+              "sessions": 11,
+              "bounceRate": 0.8181818181818182,
+              "totalUsers": 10,
+              "landingPage": "/framework",
+              "engagementRate": 0.18181818181818185
+            },
+            "pairedItem": {
+              "item": 0
+            }
+          },
+          {
+            "json": {
+              "sessions": 10,
+              "bounceRate": 0.9,
+              "totalUsers": 10,
+              "landingPage": "/blog/ai-visibility-tracking-to-optimization-meet-the-govisible-action-center",
+              "engagementRate": 0.1
+            },
+            "pairedItem": {
+              "item": 0
+            }
+          },
+          {
+            "json": {
+              "sessions": 10,
+              "bounceRate": 0.7,
+              "totalUsers": 10,
+              "landingPage": "/blog/how-govisible-helps-you-track-competitor-visibility-across-ai-engines",
+              "engagementRate": 0.3
+            },
+            "pairedItem": {
+              "item": 0
+            }
+          },
+          {
+            "json": {
+              "sessions": 9,
+              "bounceRate": 1,
+              "totalUsers": 9,
+              "landingPage": "",
+              "engagementRate": 0
+            },
+            "pairedItem": {
+              "item": 0
+            }
+          },
+          {
+            "json": {
+              "sessions": 9,
+              "bounceRate": 0.5555555555555556,
+              "totalUsers": 7,
+              "landingPage": "/ai-visibility-index/2026/automotive/passenger-cars",
+              "engagementRate": 0.4444444444444444
+            },
+            "pairedItem": {
+              "item": 0
+            }
+          },
+          {
+            "json": {
+              "sessions": 9,
+              "bounceRate": 0.7777777777777778,
+              "totalUsers": 9,
+              "landingPage": "/blog/common-mistakes-to-avoid-in-intent-mapping-for-ai-search",
+              "engagementRate": 0.2222222222222222
+            },
+            "pairedItem": {
+              "item": 0
+            }
+          },
+          {
+            "json": {
+              "sessions": 9,
+              "bounceRate": 0.4444444444444444,
+              "totalUsers": 9,
+              "landingPage": "/blog/seo-keywords-vs-geo-prompts-whats-changing-in-search-behavior",
+              "engagementRate": 0.5555555555555556
+            },
+            "pairedItem": {
+              "item": 0
+            }
+          },
+          {
+            "json": {
+              "sessions": 9,
+              "bounceRate": 0.8888888888888888,
+              "totalUsers": 9,
+              "landingPage": "/blog/the-role-of-reviews-forums-and-mentions-in-ai-brand-visibility",
+              "engagementRate": 0.1111111111111111
+            },
+            "pairedItem": {
+              "item": 0
+            }
+          },
+          {
+            "json": {
+              "sessions": 9,
+              "bounceRate": 1,
+              "totalUsers": 9,
+              "landingPage": "/blog/understanding-the-4-types-of-ai-search-intent-informational-navigational-comparative-transactional",
+              "engagementRate": 0
+            },
+            "pairedItem": {
+              "item": 0
+            }
+          },
+          {
+            "json": {
+              "sessions": 8,
+              "bounceRate": 1,
+              "totalUsers": 8,
+              "landingPage": "/agency-partner-program",
+              "engagementRate": 0
+            },
+            "pairedItem": {
+              "item": 0
+            }
+          },
+          "…truncated (60 items total)"
+        ],
+        "endDate": "2026-09-23",
+        "rowCount": 60,
+        "startDate": "2026-08-25",
+        "propertyId": "properties/488600391"
+      }
+    },
+    "loopMeta": null,
+    "nodeData": {
+      "label": "GA4 MCP Tools",
+      "limit": 50,
+      "minShare": 0,
+      "nodeType": "ga4McpTool",
+      "available": true,
+      "libraryId": "ga4-mcp-tools",
+      "minVolume": 0,
+      "cacheDirty": false,
+      "capability": [
+        "landing_underperformance",
+        "acquisition_concentration",
+        "page_performance",
+        "engagement_opportunities"
+      ],
+      "minSessions": 20,
+      "capabilities": [
+        "landing_underperformance",
+        "acquisition_concentration",
+        "page_performance",
+        "engagement_opportunities"
+      ],
+      "minBounceRate": 0.65,
+      "libraryCategory": "SEO",
+      "libraryProvider": "OpsAi",
+      "maxEngagementRate": 0.35,
+      "capabilitySettings": {
+        "engagement_opportunities": {
+          "limit": 50,
+          "minSessions": 250,
+          "minBounceRate": 0.6,
+          "maxEngagementRate": 0.4
+        },
+        "landing_underperformance": {
+          "minSessions": 150,
+          "minBounceRate": 0.65,
+          "maxEngagementRate": 0.35
+        },
+        "acquisition_concentration": {
+          "minShare": 0.5,
+          "minVolume": 0,
+          "minConcentrationShare": 0
+        }
+      },
+      "minConcentrationShare": 0
+    },
+    "nodeType": "ga4McpTool",
+    "resolved": null,
+    "contextInput": {
+      "source": "manual"
+    },
+    "inputSources": {
+      "main": {
+        "nodeId": "googleAnalytics-1789984791245",
+        "runIndex": 0,
+        "outputPort": "main"
+      }
+    },
+    "executionIndex": 0
+  }
+}

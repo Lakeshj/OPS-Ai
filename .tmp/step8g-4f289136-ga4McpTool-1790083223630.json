@@ -1,0 +1,4910 @@
+{
+  "run_id": "4f289136-d21f-446a-8d4f-3b2df1e44cd8",
+  "step_id": "64515c8d-9315-4ebf-b413-4ceddd23fc4e",
+  "node_id": "ga4McpTool-1790083223630",
+  "node_type": "ga4McpTool",
+  "status": "succeeded",
+  "output": {
+    "ok": true,
+    "count": 50,
+    "items": [
+      {
+        "json": {
+          "score": 0.44,
+          "entity": {
+            "label": "/blog/the-best-generative-engine-optimization-geo-tools",
+            "landingPage": "/blog/the-best-generative-engine-optimization-geo-tools"
+          },
+          "period": {
+            "end": null,
+            "start": null
+          },
+          "reason": "Landing page /blog/the-best-generative-engine-optimization-geo-tools received 19 sessions with an engagement rate of 10.53% and a bounce rate of 89.47%.",
+          "source": "google_analytics",
+          "filters": {
+            "limit": 50,
+            "minScore": 0,
+            "minSessions": 0,
+            "minBounceRate": 0,
+            "maxEngagementRate": 1,
+            "maxViewsPerSession": 1.2,
+            "maxAverageSessionDuration": 25
+          },
+          "metrics": {
+            "sessions": 19,
+            "bounceRate": 0.8947,
+            "totalUsers": 18,
+            "engagementRate": 0.1053
+          },
+          "property": null,
+          "capability": "landing_underperformance",
+          "recommendation": "Review the landing-page experience and engagement elements for /blog/the-best-generative-engine-optimization-geo-tools.",
+          "score_breakdown": {
+            "inputs": {
+              "erGap": 0.344737,
+              "vpsGap": 0,
+              "sessions": 19,
+              "bounceGap": 0.344737,
+              "bounceRate": 0.8947,
+              "durationGap": 0,
+              "engagementRate": 0.1053,
+              "viewsPerSession": null,
+              "averageSessionDuration": null
+            },
+            "volume": 0.012667,
+            "formula": "min(1, sessions/1500) * max(ER_gap, bounce_gap, viewsPerSession_gap, duration_gap) * 100",
+            "payoffGap": 0.344737,
+            "payoffGap_definition": "max(ER gap vs 0.45, bounce gap vs 0.55, viewsPerSession gap vs 1.5, duration gap vs 40s)"
+          },
+          "opportunity_type": "landing_underperformance",
+          "__ga4Intelligence": true
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      },
+      {
+        "json": {
+          "score": 0.27,
+          "entity": {
+            "label": "/blog/understanding-the-4-types-of-ai-search-intent-informational-navigational-comparative-transactional",
+            "landingPage": "/blog/understanding-the-4-types-of-ai-search-intent-informational-navigational-comparative-transactional"
+          },
+          "period": {
+            "end": null,
+            "start": null
+          },
+          "reason": "Landing page /blog/understanding-the-4-types-of-ai-search-intent-informational-navigational-comparative-transactional received 9 sessions with an engagement rate of 0% and a bounce rate of 100%.",
+          "source": "google_analytics",
+          "filters": {
+            "limit": 50,
+            "minScore": 0,
+            "minSessions": 0,
+            "minBounceRate": 0,
+            "maxEngagementRate": 1,
+            "maxViewsPerSession": 1.2,
+            "maxAverageSessionDuration": 25
+          },
+          "metrics": {
+            "sessions": 9,
+            "bounceRate": 1,
+            "totalUsers": 9,
+            "engagementRate": 0
+          },
+          "property": null,
+          "capability": "landing_underperformance",
+          "recommendation": "Review the landing-page experience and engagement elements for /blog/understanding-the-4-types-of-ai-search-intent-informational-navigational-comparative-transactional.",
+          "score_breakdown": {
+            "inputs": {
+              "erGap": 0.45,
+              "vpsGap": 0,
+              "sessions": 9,
+              "bounceGap": 0.45,
+              "bounceRate": 1,
+              "durationGap": 0,
+              "engagementRate": 0,
+              "viewsPerSession": null,
+              "averageSessionDuration": null
+            },
+            "volume": 0.006,
+            "formula": "min(1, sessions/1500) * max(ER_gap, bounce_gap, viewsPerSession_gap, duration_gap) * 100",
+            "payoffGap": 0.45,
+            "payoffGap_definition": "max(ER gap vs 0.45, bounce gap vs 0.55, viewsPerSession gap vs 1.5, duration gap vs 40s)"
+          },
+          "opportunity_type": "landing_underperformance",
+          "__ga4Intelligence": true
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      },
+      {
+        "json": {
+          "score": 0.24,
+          "entity": {
+            "label": "/agency-partner-program",
+            "landingPage": "/agency-partner-program"
+          },
+          "period": {
+            "end": null,
+            "start": null
+          },
+          "reason": "Landing page /agency-partner-program received 8 sessions with an engagement rate of 0% and a bounce rate of 100%.",
+          "source": "google_analytics",
+          "filters": {
+            "limit": 50,
+            "minScore": 0,
+            "minSessions": 0,
+            "minBounceRate": 0,
+            "maxEngagementRate": 1,
+            "maxViewsPerSession": 1.2,
+            "maxAverageSessionDuration": 25
+          },
+          "metrics": {
+            "sessions": 8,
+            "bounceRate": 1,
+            "totalUsers": 8,
+            "engagementRate": 0
+          },
+          "property": null,
+          "capability": "landing_underperformance",
+          "recommendation": "Review the landing-page experience and engagement elements for /agency-partner-program.",
+          "score_breakdown": {
+            "inputs": {
+              "erGap": 0.45,
+              "vpsGap": 0,
+              "sessions": 8,
+              "bounceGap": 0.45,
+              "bounceRate": 1,
+              "durationGap": 0,
+              "engagementRate": 0,
+              "viewsPerSession": null,
+              "averageSessionDuration": null
+            },
+            "volume": 0.005333,
+            "formula": "min(1, sessions/1500) * max(ER_gap, bounce_gap, viewsPerSession_gap, duration_gap) * 100",
+            "payoffGap": 0.45,
+            "payoffGap_definition": "max(ER gap vs 0.45, bounce gap vs 0.55, viewsPerSession gap vs 1.5, duration gap vs 40s)"
+          },
+          "opportunity_type": "landing_underperformance",
+          "__ga4Intelligence": true
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      },
+      {
+        "json": {
+          "score": 0.24,
+          "entity": {
+            "label": "/blog/how-generative-engines-parse-intent-llm-prompt-interpretation-explained",
+            "landingPage": "/blog/how-generative-engines-parse-intent-llm-prompt-interpretation-explained"
+          },
+          "period": {
+            "end": null,
+            "start": null
+          },
+          "reason": "Landing page /blog/how-generative-engines-parse-intent-llm-prompt-interpretation-explained received 8 sessions with an engagement rate of 0% and a bounce rate of 100%.",
+          "source": "google_analytics",
+          "filters": {
+            "limit": 50,
+            "minScore": 0,
+            "minSessions": 0,
+            "minBounceRate": 0,
+            "maxEngagementRate": 1,
+            "maxViewsPerSession": 1.2,
+            "maxAverageSessionDuration": 25
+          },
+          "metrics": {
+            "sessions": 8,
+            "bounceRate": 1,
+            "totalUsers": 8,
+            "engagementRate": 0
+          },
+          "property": null,
+          "capability": "landing_underperformance",
+          "recommendation": "Review the landing-page experience and engagement elements for /blog/how-generative-engines-parse-intent-llm-prompt-interpretation-explained.",
+          "score_breakdown": {
+            "inputs": {
+              "erGap": 0.45,
+              "vpsGap": 0,
+              "sessions": 8,
+              "bounceGap": 0.45,
+              "bounceRate": 1,
+              "durationGap": 0,
+              "engagementRate": 0,
+              "viewsPerSession": null,
+              "averageSessionDuration": null
+            },
+            "volume": 0.005333,
+            "formula": "min(1, sessions/1500) * max(ER_gap, bounce_gap, viewsPerSession_gap, duration_gap) * 100",
+            "payoffGap": 0.45,
+            "payoffGap_definition": "max(ER gap vs 0.45, bounce gap vs 0.55, viewsPerSession gap vs 1.5, duration gap vs 40s)"
+          },
+          "opportunity_type": "landing_underperformance",
+          "__ga4Intelligence": true
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      },
+      {
+        "json": {
+          "score": 0.24,
+          "entity": {
+            "label": "/perplexity-visibility-tracker",
+            "landingPage": "/perplexity-visibility-tracker"
+          },
+          "period": {
+            "end": null,
+            "start": null
+          },
+          "reason": "Landing page /perplexity-visibility-tracker received 8 sessions with an engagement rate of 0% and a bounce rate of 100%.",
+          "source": "google_analytics",
+          "filters": {
+            "limit": 50,
+            "minScore": 0,
+            "minSessions": 0,
+            "minBounceRate": 0,
+            "maxEngagementRate": 1,
+            "maxViewsPerSession": 1.2,
+            "maxAverageSessionDuration": 25
+          },
+          "metrics": {
+            "sessions": 8,
+            "bounceRate": 1,
+            "totalUsers": 8,
+            "engagementRate": 0
+          },
+          "property": null,
+          "capability": "landing_underperformance",
+          "recommendation": "Review the landing-page experience and engagement elements for /perplexity-visibility-tracker.",
+          "score_breakdown": {
+            "inputs": {
+              "erGap": 0.45,
+              "vpsGap": 0,
+              "sessions": 8,
+              "bounceGap": 0.45,
+              "bounceRate": 1,
+              "durationGap": 0,
+              "engagementRate": 0,
+              "viewsPerSession": null,
+              "averageSessionDuration": null
+            },
+            "volume": 0.005333,
+            "formula": "min(1, sessions/1500) * max(ER_gap, bounce_gap, viewsPerSession_gap, duration_gap) * 100",
+            "payoffGap": 0.45,
+            "payoffGap_definition": "max(ER gap vs 0.45, bounce gap vs 0.55, viewsPerSession gap vs 1.5, duration gap vs 40s)"
+          },
+          "opportunity_type": "landing_underperformance",
+          "__ga4Intelligence": true
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      },
+      {
+        "json": {
+          "score": 0.23,
+          "entity": {
+            "label": "/blog/ai-visibility-tracking-to-optimization-meet-the-govisible-action-center",
+            "landingPage": "/blog/ai-visibility-tracking-to-optimization-meet-the-govisible-action-center"
+          },
+          "period": {
+            "end": null,
+            "start": null
+          },
+          "reason": "Landing page /blog/ai-visibility-tracking-to-optimization-meet-the-govisible-action-center received 10 sessions with an engagement rate of 10% and a bounce rate of 90%.",
+          "source": "google_analytics",
+          "filters": {
+            "limit": 50,
+            "minScore": 0,
+            "minSessions": 0,
+            "minBounceRate": 0,
+            "maxEngagementRate": 1,
+            "maxViewsPerSession": 1.2,
+            "maxAverageSessionDuration": 25
+          },
+          "metrics": {
+            "sessions": 10,
+            "bounceRate": 0.9,
+            "totalUsers": 10,
+            "engagementRate": 0.1
+          },
+          "property": null,
+          "capability": "landing_underperformance",
+          "recommendation": "Review the landing-page experience and engagement elements for /blog/ai-visibility-tracking-to-optimization-meet-the-govisible-action-center.",
+          "score_breakdown": {
+            "inputs": {
+              "erGap": 0.35,
+              "vpsGap": 0,
+              "sessions": 10,
+              "bounceGap": 0.35,
+              "bounceRate": 0.9,
+              "durationGap": 0,
+              "engagementRate": 0.1,
+              "viewsPerSession": null,
+              "averageSessionDuration": null
+            },
+            "volume": 0.006667,
+            "formula": "min(1, sessions/1500) * max(ER_gap, bounce_gap, viewsPerSession_gap, duration_gap) * 100",
+            "payoffGap": 0.35,
+            "payoffGap_definition": "max(ER gap vs 0.45, bounce gap vs 0.55, viewsPerSession gap vs 1.5, duration gap vs 40s)"
+          },
+          "opportunity_type": "landing_underperformance",
+          "__ga4Intelligence": true
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      },
+      {
+        "json": {
+          "score": 0.21,
+          "entity": {
+            "label": "/blog/how-brands-can-avoid-ai-confusion-and-misrepresentation",
+            "landingPage": "/blog/how-brands-can-avoid-ai-confusion-and-misrepresentation"
+          },
+          "period": {
+            "end": null,
+            "start": null
+          },
+          "reason": "Landing page /blog/how-brands-can-avoid-ai-confusion-and-misrepresentation received 16 sessions with an engagement rate of 25% and a bounce rate of 75%.",
+          "source": "google_analytics",
+          "filters": {
+            "limit": 50,
+            "minScore": 0,
+            "minSessions": 0,
+            "minBounceRate": 0,
+            "maxEngagementRate": 1,
+            "maxViewsPerSession": 1.2,
+            "maxAverageSessionDuration": 25
+          },
+          "metrics": {
+            "sessions": 16,
+            "bounceRate": 0.75,
+            "totalUsers": 16,
+            "engagementRate": 0.25
+          },
+          "property": null,
+          "capability": "landing_underperformance",
+          "recommendation": "Review the landing-page experience and engagement elements for /blog/how-brands-can-avoid-ai-confusion-and-misrepresentation.",
+          "score_breakdown": {
+            "inputs": {
+              "erGap": 0.2,
+              "vpsGap": 0,
+              "sessions": 16,
+              "bounceGap": 0.2,
+              "bounceRate": 0.75,
+              "durationGap": 0,
+              "engagementRate": 0.25,
+              "viewsPerSession": null,
+              "averageSessionDuration": null
+            },
+            "volume": 0.010667,
+            "formula": "min(1, sessions/1500) * max(ER_gap, bounce_gap, viewsPerSession_gap, duration_gap) * 100",
+            "payoffGap": 0.2,
+            "payoffGap_definition": "max(ER gap vs 0.45, bounce gap vs 0.55, viewsPerSession gap vs 1.5, duration gap vs 40s)"
+          },
+          "opportunity_type": "landing_underperformance",
+          "__ga4Intelligence": true
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      },
+      {
+        "json": {
+          "score": 0.21,
+          "entity": {
+            "label": "/visible-partner-program",
+            "landingPage": "/visible-partner-program"
+          },
+          "period": {
+            "end": null,
+            "start": null
+          },
+          "reason": "Landing page /visible-partner-program received 7 sessions with an engagement rate of 0% and a bounce rate of 100%.",
+          "source": "google_analytics",
+          "filters": {
+            "limit": 50,
+            "minScore": 0,
+            "minSessions": 0,
+            "minBounceRate": 0,
+            "maxEngagementRate": 1,
+            "maxViewsPerSession": 1.2,
+            "maxAverageSessionDuration": 25
+          },
+          "metrics": {
+            "sessions": 7,
+            "bounceRate": 1,
+            "totalUsers": 7,
+            "engagementRate": 0
+          },
+          "property": null,
+          "capability": "landing_underperformance",
+          "recommendation": "Review the landing-page experience and engagement elements for /visible-partner-program.",
+          "score_breakdown": {
+            "inputs": {
+              "erGap": 0.45,
+              "vpsGap": 0,
+              "sessions": 7,
+              "bounceGap": 0.45,
+              "bounceRate": 1,
+              "durationGap": 0,
+              "engagementRate": 0,
+              "viewsPerSession": null,
+              "averageSessionDuration": null
+            },
+            "volume": 0.004667,
+            "formula": "min(1, sessions/1500) * max(ER_gap, bounce_gap, viewsPerSession_gap, duration_gap) * 100",
+            "payoffGap": 0.45,
+            "payoffGap_definition": "max(ER gap vs 0.45, bounce gap vs 0.55, viewsPerSession gap vs 1.5, duration gap vs 40s)"
+          },
+          "opportunity_type": "landing_underperformance",
+          "__ga4Intelligence": true
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      },
+      {
+        "json": {
+          "score": 0.2,
+          "entity": {
+            "label": "/framework",
+            "landingPage": "/framework"
+          },
+          "period": {
+            "end": null,
+            "start": null
+          },
+          "reason": "Landing page /framework received 11 sessions with an engagement rate of 18.18% and a bounce rate of 81.82%.",
+          "source": "google_analytics",
+          "filters": {
+            "limit": 50,
+            "minScore": 0,
+            "minSessions": 0,
+            "minBounceRate": 0,
+            "maxEngagementRate": 1,
+            "maxViewsPerSession": 1.2,
+            "maxAverageSessionDuration": 25
+          },
+          "metrics": {
+            "sessions": 11,
+            "bounceRate": 0.8182,
+            "totalUsers": 10,
+            "engagementRate": 0.1818
+          },
+          "property": null,
+          "capability": "landing_underperformance",
+          "recommendation": "Review the landing-page experience and engagement elements for /framework.",
+          "score_breakdown": {
+            "inputs": {
+              "erGap": 0.268182,
+              "vpsGap": 0,
+              "sessions": 11,
+              "bounceGap": 0.268182,
+              "bounceRate": 0.8182,
+              "durationGap": 0,
+              "engagementRate": 0.1818,
+              "viewsPerSession": null,
+              "averageSessionDuration": null
+            },
+            "volume": 0.007333,
+            "formula": "min(1, sessions/1500) * max(ER_gap, bounce_gap, viewsPerSession_gap, duration_gap) * 100",
+            "payoffGap": 0.268182,
+            "payoffGap_definition": "max(ER gap vs 0.45, bounce gap vs 0.55, viewsPerSession gap vs 1.5, duration gap vs 40s)"
+          },
+          "opportunity_type": "landing_underperformance",
+          "__ga4Intelligence": true
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      },
+      {
+        "json": {
+          "score": 0.2,
+          "entity": {
+            "label": "/blog/the-role-of-reviews-forums-and-mentions-in-ai-brand-visibility",
+            "landingPage": "/blog/the-role-of-reviews-forums-and-mentions-in-ai-brand-visibility"
+          },
+          "period": {
+            "end": null,
+            "start": null
+          },
+          "reason": "Landing page /blog/the-role-of-reviews-forums-and-mentions-in-ai-brand-visibility received 9 sessions with an engagement rate of 11.11% and a bounce rate of 88.89%.",
+          "source": "google_analytics",
+          "filters": {
+            "limit": 50,
+            "minScore": 0,
+            "minSessions": 0,
+            "minBounceRate": 0,
+            "maxEngagementRate": 1,
+            "maxViewsPerSession": 1.2,
+            "maxAverageSessionDuration": 25
+          },
+          "metrics": {
+            "sessions": 9,
+            "bounceRate": 0.8889,
+            "totalUsers": 9,
+            "engagementRate": 0.1111
+          },
+          "property": null,
+          "capability": "landing_underperformance",
+          "recommendation": "Review the landing-page experience and engagement elements for /blog/the-role-of-reviews-forums-and-mentions-in-ai-brand-visibility.",
+          "score_breakdown": {
+            "inputs": {
+              "erGap": 0.338889,
+              "vpsGap": 0,
+              "sessions": 9,
+              "bounceGap": 0.338889,
+              "bounceRate": 0.8889,
+              "durationGap": 0,
+              "engagementRate": 0.1111,
+              "viewsPerSession": null,
+              "averageSessionDuration": null
+            },
+            "volume": 0.006,
+            "formula": "min(1, sessions/1500) * max(ER_gap, bounce_gap, viewsPerSession_gap, duration_gap) * 100",
+            "payoffGap": 0.338889,
+            "payoffGap_definition": "max(ER gap vs 0.45, bounce gap vs 0.55, viewsPerSession gap vs 1.5, duration gap vs 40s)"
+          },
+          "opportunity_type": "landing_underperformance",
+          "__ga4Intelligence": true
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      },
+      {
+        "json": {
+          "score": 0.19,
+          "entity": {
+            "label": "/pricing",
+            "landingPage": "/pricing"
+          },
+          "period": {
+            "end": null,
+            "start": null
+          },
+          "reason": "Landing page /pricing received 33 sessions with an engagement rate of 36.36% and a bounce rate of 63.64%.",
+          "source": "google_analytics",
+          "filters": {
+            "limit": 50,
+            "minScore": 0,
+            "minSessions": 0,
+            "minBounceRate": 0,
+            "maxEngagementRate": 1,
+            "maxViewsPerSession": 1.2,
+            "maxAverageSessionDuration": 25
+          },
+          "metrics": {
+            "sessions": 33,
+            "bounceRate": 0.6364,
+            "totalUsers": 29,
+            "engagementRate": 0.3636
+          },
+          "property": null,
+          "capability": "landing_underperformance",
+          "recommendation": "Review the landing-page experience and engagement elements for /pricing.",
+          "score_breakdown": {
+            "inputs": {
+              "erGap": 0.086364,
+              "vpsGap": 0,
+              "sessions": 33,
+              "bounceGap": 0.086364,
+              "bounceRate": 0.6364,
+              "durationGap": 0,
+              "engagementRate": 0.3636,
+              "viewsPerSession": null,
+              "averageSessionDuration": null
+            },
+            "volume": 0.022,
+            "formula": "min(1, sessions/1500) * max(ER_gap, bounce_gap, viewsPerSession_gap, duration_gap) * 100",
+            "payoffGap": 0.086364,
+            "payoffGap_definition": "max(ER gap vs 0.45, bounce gap vs 0.55, viewsPerSession gap vs 1.5, duration gap vs 40s)"
+          },
+          "opportunity_type": "landing_underperformance",
+          "__ga4Intelligence": true
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      },
+      {
+        "json": {
+          "score": 0.19,
+          "entity": {
+            "label": "/blog/key-platforms-for-entity-optimization-across-industries",
+            "landingPage": "/blog/key-platforms-for-entity-optimization-across-industries"
+          },
+          "period": {
+            "end": null,
+            "start": null
+          },
+          "reason": "Landing page /blog/key-platforms-for-entity-optimization-across-industries received 13 sessions with an engagement rate of 23.08% and a bounce rate of 76.92%.",
+          "source": "google_analytics",
+          "filters": {
+            "limit": 50,
+            "minScore": 0,
+            "minSessions": 0,
+            "minBounceRate": 0,
+            "maxEngagementRate": 1,
+            "maxViewsPerSession": 1.2,
+            "maxAverageSessionDuration": 25
+          },
+          "metrics": {
+            "sessions": 13,
+            "bounceRate": 0.7692,
+            "totalUsers": 13,
+            "engagementRate": 0.2308
+          },
+          "property": null,
+          "capability": "landing_underperformance",
+          "recommendation": "Review the landing-page experience and engagement elements for /blog/key-platforms-for-entity-optimization-across-industries.",
+          "score_breakdown": {
+            "inputs": {
+              "erGap": 0.219231,
+              "vpsGap": 0,
+              "sessions": 13,
+              "bounceGap": 0.219231,
+              "bounceRate": 0.7692,
+              "durationGap": 0,
+              "engagementRate": 0.2308,
+              "viewsPerSession": null,
+              "averageSessionDuration": null
+            },
+            "volume": 0.008667,
+            "formula": "min(1, sessions/1500) * max(ER_gap, bounce_gap, viewsPerSession_gap, duration_gap) * 100",
+            "payoffGap": 0.219231,
+            "payoffGap_definition": "max(ER gap vs 0.45, bounce gap vs 0.55, viewsPerSession gap vs 1.5, duration gap vs 40s)"
+          },
+          "opportunity_type": "landing_underperformance",
+          "__ga4Intelligence": true
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      },
+      {
+        "json": {
+          "score": 0.18,
+          "entity": {
+            "label": "/blog/structured-content-engineering-how-brands-build-ai-readable-content",
+            "landingPage": "/blog/structured-content-engineering-how-brands-build-ai-readable-content"
+          },
+          "period": {
+            "end": null,
+            "start": null
+          },
+          "reason": "Landing page /blog/structured-content-engineering-how-brands-build-ai-readable-content received 6 sessions with an engagement rate of 0% and a bounce rate of 100%.",
+          "source": "google_analytics",
+          "filters": {
+            "limit": 50,
+            "minScore": 0,
+            "minSessions": 0,
+            "minBounceRate": 0,
+            "maxEngagementRate": 1,
+            "maxViewsPerSession": 1.2,
+            "maxAverageSessionDuration": 25
+          },
+          "metrics": {
+            "sessions": 6,
+            "bounceRate": 1,
+            "totalUsers": 6,
+            "engagementRate": 0
+          },
+          "property": null,
+          "capability": "landing_underperformance",
+          "recommendation": "Review the landing-page experience and engagement elements for /blog/structured-content-engineering-how-brands-build-ai-readable-content.",
+          "score_breakdown": {
+            "inputs": {
+              "erGap": 0.45,
+              "vpsGap": 0,
+              "sessions": 6,
+              "bounceGap": 0.45,
+              "bounceRate": 1,
+              "durationGap": 0,
+              "engagementRate": 0,
+              "viewsPerSession": null,
+              "averageSessionDuration": null
+            },
+            "volume": 0.004,
+            "formula": "min(1, sessions/1500) * max(ER_gap, bounce_gap, viewsPerSession_gap, duration_gap) * 100",
+            "payoffGap": 0.45,
+            "payoffGap_definition": "max(ER gap vs 0.45, bounce gap vs 0.55, viewsPerSession gap vs 1.5, duration gap vs 40s)"
+          },
+          "opportunity_type": "landing_underperformance",
+          "__ga4Intelligence": true
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      },
+      {
+        "json": {
+          "score": 0.18,
+          "entity": {
+            "label": "/gemini-visibility-tracker",
+            "landingPage": "/gemini-visibility-tracker"
+          },
+          "period": {
+            "end": null,
+            "start": null
+          },
+          "reason": "Landing page /gemini-visibility-tracker received 6 sessions with an engagement rate of 0% and a bounce rate of 100%.",
+          "source": "google_analytics",
+          "filters": {
+            "limit": 50,
+            "minScore": 0,
+            "minSessions": 0,
+            "minBounceRate": 0,
+            "maxEngagementRate": 1,
+            "maxViewsPerSession": 1.2,
+            "maxAverageSessionDuration": 25
+          },
+          "metrics": {
+            "sessions": 6,
+            "bounceRate": 1,
+            "totalUsers": 6,
+            "engagementRate": 0
+          },
+          "property": null,
+          "capability": "landing_underperformance",
+          "recommendation": "Review the landing-page experience and engagement elements for /gemini-visibility-tracker.",
+          "score_breakdown": {
+            "inputs": {
+              "erGap": 0.45,
+              "vpsGap": 0,
+              "sessions": 6,
+              "bounceGap": 0.45,
+              "bounceRate": 1,
+              "durationGap": 0,
+              "engagementRate": 0,
+              "viewsPerSession": null,
+              "averageSessionDuration": null
+            },
+            "volume": 0.004,
+            "formula": "min(1, sessions/1500) * max(ER_gap, bounce_gap, viewsPerSession_gap, duration_gap) * 100",
+            "payoffGap": 0.45,
+            "payoffGap_definition": "max(ER gap vs 0.45, bounce gap vs 0.55, viewsPerSession gap vs 1.5, duration gap vs 40s)"
+          },
+          "opportunity_type": "landing_underperformance",
+          "__ga4Intelligence": true
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      },
+      {
+        "json": {
+          "score": 0.18,
+          "entity": {
+            "label": "/intelligent-entity-optimization",
+            "landingPage": "/intelligent-entity-optimization"
+          },
+          "period": {
+            "end": null,
+            "start": null
+          },
+          "reason": "Landing page /intelligent-entity-optimization received 6 sessions with an engagement rate of 0% and a bounce rate of 100%.",
+          "source": "google_analytics",
+          "filters": {
+            "limit": 50,
+            "minScore": 0,
+            "minSessions": 0,
+            "minBounceRate": 0,
+            "maxEngagementRate": 1,
+            "maxViewsPerSession": 1.2,
+            "maxAverageSessionDuration": 25
+          },
+          "metrics": {
+            "sessions": 6,
+            "bounceRate": 1,
+            "totalUsers": 6,
+            "engagementRate": 0
+          },
+          "property": null,
+          "capability": "landing_underperformance",
+          "recommendation": "Review the landing-page experience and engagement elements for /intelligent-entity-optimization.",
+          "score_breakdown": {
+            "inputs": {
+              "erGap": 0.45,
+              "vpsGap": 0,
+              "sessions": 6,
+              "bounceGap": 0.45,
+              "bounceRate": 1,
+              "durationGap": 0,
+              "engagementRate": 0,
+              "viewsPerSession": null,
+              "averageSessionDuration": null
+            },
+            "volume": 0.004,
+            "formula": "min(1, sessions/1500) * max(ER_gap, bounce_gap, viewsPerSession_gap, duration_gap) * 100",
+            "payoffGap": 0.45,
+            "payoffGap_definition": "max(ER gap vs 0.45, bounce gap vs 0.55, viewsPerSession gap vs 1.5, duration gap vs 40s)"
+          },
+          "opportunity_type": "landing_underperformance",
+          "__ga4Intelligence": true
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      },
+      {
+        "json": {
+          "score": 0.18,
+          "entity": {
+            "label": "/templates/external-citation-tracker",
+            "landingPage": "/templates/external-citation-tracker"
+          },
+          "period": {
+            "end": null,
+            "start": null
+          },
+          "reason": "Landing page /templates/external-citation-tracker received 6 sessions with an engagement rate of 0% and a bounce rate of 100%.",
+          "source": "google_analytics",
+          "filters": {
+            "limit": 50,
+            "minScore": 0,
+            "minSessions": 0,
+            "minBounceRate": 0,
+            "maxEngagementRate": 1,
+            "maxViewsPerSession": 1.2,
+            "maxAverageSessionDuration": 25
+          },
+          "metrics": {
+            "sessions": 6,
+            "bounceRate": 1,
+            "totalUsers": 6,
+            "engagementRate": 0
+          },
+          "property": null,
+          "capability": "landing_underperformance",
+          "recommendation": "Review the landing-page experience and engagement elements for /templates/external-citation-tracker.",
+          "score_breakdown": {
+            "inputs": {
+              "erGap": 0.45,
+              "vpsGap": 0,
+              "sessions": 6,
+              "bounceGap": 0.45,
+              "bounceRate": 1,
+              "durationGap": 0,
+              "engagementRate": 0,
+              "viewsPerSession": null,
+              "averageSessionDuration": null
+            },
+            "volume": 0.004,
+            "formula": "min(1, sessions/1500) * max(ER_gap, bounce_gap, viewsPerSession_gap, duration_gap) * 100",
+            "payoffGap": 0.45,
+            "payoffGap_definition": "max(ER gap vs 0.45, bounce gap vs 0.55, viewsPerSession gap vs 1.5, duration gap vs 40s)"
+          },
+          "opportunity_type": "landing_underperformance",
+          "__ga4Intelligence": true
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      },
+      {
+        "json": {
+          "score": 0.18,
+          "entity": {
+            "label": "/voice-of-the-searcher",
+            "landingPage": "/voice-of-the-searcher"
+          },
+          "period": {
+            "end": null,
+            "start": null
+          },
+          "reason": "Landing page /voice-of-the-searcher received 6 sessions with an engagement rate of 0% and a bounce rate of 100%.",
+          "source": "google_analytics",
+          "filters": {
+            "limit": 50,
+            "minScore": 0,
+            "minSessions": 0,
+            "minBounceRate": 0,
+            "maxEngagementRate": 1,
+            "maxViewsPerSession": 1.2,
+            "maxAverageSessionDuration": 25
+          },
+          "metrics": {
+            "sessions": 6,
+            "bounceRate": 1,
+            "totalUsers": 6,
+            "engagementRate": 0
+          },
+          "property": null,
+          "capability": "landing_underperformance",
+          "recommendation": "Review the landing-page experience and engagement elements for /voice-of-the-searcher.",
+          "score_breakdown": {
+            "inputs": {
+              "erGap": 0.45,
+              "vpsGap": 0,
+              "sessions": 6,
+              "bounceGap": 0.45,
+              "bounceRate": 1,
+              "durationGap": 0,
+              "engagementRate": 0,
+              "viewsPerSession": null,
+              "averageSessionDuration": null
+            },
+            "volume": 0.004,
+            "formula": "min(1, sessions/1500) * max(ER_gap, bounce_gap, viewsPerSession_gap, duration_gap) * 100",
+            "payoffGap": 0.45,
+            "payoffGap_definition": "max(ER gap vs 0.45, bounce gap vs 0.55, viewsPerSession gap vs 1.5, duration gap vs 40s)"
+          },
+          "opportunity_type": "landing_underperformance",
+          "__ga4Intelligence": true
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      },
+      {
+        "json": {
+          "score": 0.17,
+          "entity": {
+            "label": "/learnability-testing-and-visibility-scoring",
+            "landingPage": "/learnability-testing-and-visibility-scoring"
+          },
+          "period": {
+            "end": null,
+            "start": null
+          },
+          "reason": "Landing page /learnability-testing-and-visibility-scoring received 8 sessions with an engagement rate of 12.5% and a bounce rate of 87.5%.",
+          "source": "google_analytics",
+          "filters": {
+            "limit": 50,
+            "minScore": 0,
+            "minSessions": 0,
+            "minBounceRate": 0,
+            "maxEngagementRate": 1,
+            "maxViewsPerSession": 1.2,
+            "maxAverageSessionDuration": 25
+          },
+          "metrics": {
+            "sessions": 8,
+            "bounceRate": 0.875,
+            "totalUsers": 8,
+            "engagementRate": 0.125
+          },
+          "property": null,
+          "capability": "landing_underperformance",
+          "recommendation": "Review the landing-page experience and engagement elements for /learnability-testing-and-visibility-scoring.",
+          "score_breakdown": {
+            "inputs": {
+              "erGap": 0.325,
+              "vpsGap": 0,
+              "sessions": 8,
+              "bounceGap": 0.325,
+              "bounceRate": 0.875,
+              "durationGap": 0,
+              "engagementRate": 0.125,
+              "viewsPerSession": null,
+              "averageSessionDuration": null
+            },
+            "volume": 0.005333,
+            "formula": "min(1, sessions/1500) * max(ER_gap, bounce_gap, viewsPerSession_gap, duration_gap) * 100",
+            "payoffGap": 0.325,
+            "payoffGap_definition": "max(ER gap vs 0.45, bounce gap vs 0.55, viewsPerSession gap vs 1.5, duration gap vs 40s)"
+          },
+          "opportunity_type": "landing_underperformance",
+          "__ga4Intelligence": true
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      },
+      {
+        "json": {
+          "score": 0.15,
+          "entity": {
+            "label": "/blog/how-govisible-audits-your-brand-across-ai-engines-a-deep-dive-into-multi-engine-visibility",
+            "landingPage": "/blog/how-govisible-audits-your-brand-across-ai-engines-a-deep-dive-into-multi-engine-visibility"
+          },
+          "period": {
+            "end": null,
+            "start": null
+          },
+          "reason": "Landing page /blog/how-govisible-audits-your-brand-across-ai-engines-a-deep-dive-into-multi-engine-visibility received 5 sessions with an engagement rate of 0% and a bounce rate of 100%.",
+          "source": "google_analytics",
+          "filters": {
+            "limit": 50,
+            "minScore": 0,
+            "minSessions": 0,
+            "minBounceRate": 0,
+            "maxEngagementRate": 1,
+            "maxViewsPerSession": 1.2,
+            "maxAverageSessionDuration": 25
+          },
+          "metrics": {
+            "sessions": 5,
+            "bounceRate": 1,
+            "totalUsers": 5,
+            "engagementRate": 0
+          },
+          "property": null,
+          "capability": "landing_underperformance",
+          "recommendation": "Review the landing-page experience and engagement elements for /blog/how-govisible-audits-your-brand-across-ai-engines-a-deep-dive-into-multi-engine-visibility.",
+          "score_breakdown": {
+            "inputs": {
+              "erGap": 0.45,
+              "vpsGap": 0,
+              "sessions": 5,
+              "bounceGap": 0.45,
+              "bounceRate": 1,
+              "durationGap": 0,
+              "engagementRate": 0,
+              "viewsPerSession": null,
+              "averageSessionDuration": null
+            },
+            "volume": 0.003333,
+            "formula": "min(1, sessions/1500) * max(ER_gap, bounce_gap, viewsPerSession_gap, duration_gap) * 100",
+            "payoffGap": 0.45,
+            "payoffGap_definition": "max(ER gap vs 0.45, bounce gap vs 0.55, viewsPerSession gap vs 1.5, duration gap vs 40s)"
+          },
+          "opportunity_type": "landing_underperformance",
+          "__ga4Intelligence": true
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      },
+      {
+        "json": {
+          "score": 0.15,
+          "entity": {
+            "label": "/blog/track-ai-bot-traffic-on-your-website-monitor-ai-crawlers-user-agents-and-crawl-activity",
+            "landingPage": "/blog/track-ai-bot-traffic-on-your-website-monitor-ai-crawlers-user-agents-and-crawl-activity"
+          },
+          "period": {
+            "end": null,
+            "start": null
+          },
+          "reason": "Landing page /blog/track-ai-bot-traffic-on-your-website-monitor-ai-crawlers-user-agents-and-crawl-activity received 5 sessions with an engagement rate of 0% and a bounce rate of 100%.",
+          "source": "google_analytics",
+          "filters": {
+            "limit": 50,
+            "minScore": 0,
+            "minSessions": 0,
+            "minBounceRate": 0,
+            "maxEngagementRate": 1,
+            "maxViewsPerSession": 1.2,
+            "maxAverageSessionDuration": 25
+          },
+          "metrics": {
+            "sessions": 5,
+            "bounceRate": 1,
+            "totalUsers": 5,
+            "engagementRate": 0
+          },
+          "property": null,
+          "capability": "landing_underperformance",
+          "recommendation": "Review the landing-page experience and engagement elements for /blog/track-ai-bot-traffic-on-your-website-monitor-ai-crawlers-user-agents-and-crawl-activity.",
+          "score_breakdown": {
+            "inputs": {
+              "erGap": 0.45,
+              "vpsGap": 0,
+              "sessions": 5,
+              "bounceGap": 0.45,
+              "bounceRate": 1,
+              "durationGap": 0,
+              "engagementRate": 0,
+              "viewsPerSession": null,
+              "averageSessionDuration": null
+            },
+            "volume": 0.003333,
+            "formula": "min(1, sessions/1500) * max(ER_gap, bounce_gap, viewsPerSession_gap, duration_gap) * 100",
+            "payoffGap": 0.45,
+            "payoffGap_definition": "max(ER gap vs 0.45, bounce gap vs 0.55, viewsPerSession gap vs 1.5, duration gap vs 40s)"
+          },
+          "opportunity_type": "landing_underperformance",
+          "__ga4Intelligence": true
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      },
+      {
+        "json": {
+          "score": 0.14,
+          "entity": {
+            "label": "/blog/common-mistakes-to-avoid-in-intent-mapping-for-ai-search",
+            "landingPage": "/blog/common-mistakes-to-avoid-in-intent-mapping-for-ai-search"
+          },
+          "period": {
+            "end": null,
+            "start": null
+          },
+          "reason": "Landing page /blog/common-mistakes-to-avoid-in-intent-mapping-for-ai-search received 9 sessions with an engagement rate of 22.22% and a bounce rate of 77.78%.",
+          "source": "google_analytics",
+          "filters": {
+            "limit": 50,
+            "minScore": 0,
+            "minSessions": 0,
+            "minBounceRate": 0,
+            "maxEngagementRate": 1,
+            "maxViewsPerSession": 1.2,
+            "maxAverageSessionDuration": 25
+          },
+          "metrics": {
+            "sessions": 9,
+            "bounceRate": 0.7778,
+            "totalUsers": 9,
+            "engagementRate": 0.2222
+          },
+          "property": null,
+          "capability": "landing_underperformance",
+          "recommendation": "Review the landing-page experience and engagement elements for /blog/common-mistakes-to-avoid-in-intent-mapping-for-ai-search.",
+          "score_breakdown": {
+            "inputs": {
+              "erGap": 0.227778,
+              "vpsGap": 0,
+              "sessions": 9,
+              "bounceGap": 0.227778,
+              "bounceRate": 0.7778,
+              "durationGap": 0,
+              "engagementRate": 0.2222,
+              "viewsPerSession": null,
+              "averageSessionDuration": null
+            },
+            "volume": 0.006,
+            "formula": "min(1, sessions/1500) * max(ER_gap, bounce_gap, viewsPerSession_gap, duration_gap) * 100",
+            "payoffGap": 0.227778,
+            "payoffGap_definition": "max(ER gap vs 0.45, bounce gap vs 0.55, viewsPerSession gap vs 1.5, duration gap vs 40s)"
+          },
+          "opportunity_type": "landing_underperformance",
+          "__ga4Intelligence": true
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      },
+      {
+        "json": {
+          "score": 0.14,
+          "entity": {
+            "label": "/blog",
+            "landingPage": "/blog"
+          },
+          "period": {
+            "end": null,
+            "start": null
+          },
+          "reason": "Landing page /blog received 7 sessions with an engagement rate of 14.29% and a bounce rate of 85.71%.",
+          "source": "google_analytics",
+          "filters": {
+            "limit": 50,
+            "minScore": 0,
+            "minSessions": 0,
+            "minBounceRate": 0,
+            "maxEngagementRate": 1,
+            "maxViewsPerSession": 1.2,
+            "maxAverageSessionDuration": 25
+          },
+          "metrics": {
+            "sessions": 7,
+            "bounceRate": 0.8571,
+            "totalUsers": 7,
+            "engagementRate": 0.1429
+          },
+          "property": null,
+          "capability": "landing_underperformance",
+          "recommendation": "Review the landing-page experience and engagement elements for /blog.",
+          "score_breakdown": {
+            "inputs": {
+              "erGap": 0.307143,
+              "vpsGap": 0,
+              "sessions": 7,
+              "bounceGap": 0.307143,
+              "bounceRate": 0.8571,
+              "durationGap": 0,
+              "engagementRate": 0.1429,
+              "viewsPerSession": null,
+              "averageSessionDuration": null
+            },
+            "volume": 0.004667,
+            "formula": "min(1, sessions/1500) * max(ER_gap, bounce_gap, viewsPerSession_gap, duration_gap) * 100",
+            "payoffGap": 0.307143,
+            "payoffGap_definition": "max(ER gap vs 0.45, bounce gap vs 0.55, viewsPerSession gap vs 1.5, duration gap vs 40s)"
+          },
+          "opportunity_type": "landing_underperformance",
+          "__ga4Intelligence": true
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      },
+      {
+        "json": {
+          "score": 0.14,
+          "entity": {
+            "label": "/blog/the-knowledge-graph-layer-how-ai-models-understand-and-index-brands",
+            "landingPage": "/blog/the-knowledge-graph-layer-how-ai-models-understand-and-index-brands"
+          },
+          "period": {
+            "end": null,
+            "start": null
+          },
+          "reason": "Landing page /blog/the-knowledge-graph-layer-how-ai-models-understand-and-index-brands received 7 sessions with an engagement rate of 14.29% and a bounce rate of 85.71%.",
+          "source": "google_analytics",
+          "filters": {
+            "limit": 50,
+            "minScore": 0,
+            "minSessions": 0,
+            "minBounceRate": 0,
+            "maxEngagementRate": 1,
+            "maxViewsPerSession": 1.2,
+            "maxAverageSessionDuration": 25
+          },
+          "metrics": {
+            "sessions": 7,
+            "bounceRate": 0.8571,
+            "totalUsers": 7,
+            "engagementRate": 0.1429
+          },
+          "property": null,
+          "capability": "landing_underperformance",
+          "recommendation": "Review the landing-page experience and engagement elements for /blog/the-knowledge-graph-layer-how-ai-models-understand-and-index-brands.",
+          "score_breakdown": {
+            "inputs": {
+              "erGap": 0.307143,
+              "vpsGap": 0,
+              "sessions": 7,
+              "bounceGap": 0.307143,
+              "bounceRate": 0.8571,
+              "durationGap": 0,
+              "engagementRate": 0.1429,
+              "viewsPerSession": null,
+              "averageSessionDuration": null
+            },
+            "volume": 0.004667,
+            "formula": "min(1, sessions/1500) * max(ER_gap, bounce_gap, viewsPerSession_gap, duration_gap) * 100",
+            "payoffGap": 0.307143,
+            "payoffGap_definition": "max(ER gap vs 0.45, bounce gap vs 0.55, viewsPerSession gap vs 1.5, duration gap vs 40s)"
+          },
+          "opportunity_type": "landing_underperformance",
+          "__ga4Intelligence": true
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      },
+      {
+        "json": {
+          "score": 0.14,
+          "entity": {
+            "label": "/blog/the-role-of-schema-markup-in-generative-engine-optimization",
+            "landingPage": "/blog/the-role-of-schema-markup-in-generative-engine-optimization"
+          },
+          "period": {
+            "end": null,
+            "start": null
+          },
+          "reason": "Landing page /blog/the-role-of-schema-markup-in-generative-engine-optimization received 7 sessions with an engagement rate of 14.29% and a bounce rate of 85.71%.",
+          "source": "google_analytics",
+          "filters": {
+            "limit": 50,
+            "minScore": 0,
+            "minSessions": 0,
+            "minBounceRate": 0,
+            "maxEngagementRate": 1,
+            "maxViewsPerSession": 1.2,
+            "maxAverageSessionDuration": 25
+          },
+          "metrics": {
+            "sessions": 7,
+            "bounceRate": 0.8571,
+            "totalUsers": 7,
+            "engagementRate": 0.1429
+          },
+          "property": null,
+          "capability": "landing_underperformance",
+          "recommendation": "Review the landing-page experience and engagement elements for /blog/the-role-of-schema-markup-in-generative-engine-optimization.",
+          "score_breakdown": {
+            "inputs": {
+              "erGap": 0.307143,
+              "vpsGap": 0,
+              "sessions": 7,
+              "bounceGap": 0.307143,
+              "bounceRate": 0.8571,
+              "durationGap": 0,
+              "engagementRate": 0.1429,
+              "viewsPerSession": null,
+              "averageSessionDuration": null
+            },
+            "volume": 0.004667,
+            "formula": "min(1, sessions/1500) * max(ER_gap, bounce_gap, viewsPerSession_gap, duration_gap) * 100",
+            "payoffGap": 0.307143,
+            "payoffGap_definition": "max(ER gap vs 0.45, bounce gap vs 0.55, viewsPerSession gap vs 1.5, duration gap vs 40s)"
+          },
+          "opportunity_type": "landing_underperformance",
+          "__ga4Intelligence": true
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      },
+      {
+        "json": {
+          "score": 0.14,
+          "entity": {
+            "label": "/chatgpt-visibility-tracker",
+            "landingPage": "/chatgpt-visibility-tracker"
+          },
+          "period": {
+            "end": null,
+            "start": null
+          },
+          "reason": "Landing page /chatgpt-visibility-tracker received 7 sessions with an engagement rate of 14.29% and a bounce rate of 85.71%.",
+          "source": "google_analytics",
+          "filters": {
+            "limit": 50,
+            "minScore": 0,
+            "minSessions": 0,
+            "minBounceRate": 0,
+            "maxEngagementRate": 1,
+            "maxViewsPerSession": 1.2,
+            "maxAverageSessionDuration": 25
+          },
+          "metrics": {
+            "sessions": 7,
+            "bounceRate": 0.8571,
+            "totalUsers": 7,
+            "engagementRate": 0.1429
+          },
+          "property": null,
+          "capability": "landing_underperformance",
+          "recommendation": "Review the landing-page experience and engagement elements for /chatgpt-visibility-tracker.",
+          "score_breakdown": {
+            "inputs": {
+              "erGap": 0.307143,
+              "vpsGap": 0,
+              "sessions": 7,
+              "bounceGap": 0.307143,
+              "bounceRate": 0.8571,
+              "durationGap": 0,
+              "engagementRate": 0.1429,
+              "viewsPerSession": null,
+              "averageSessionDuration": null
+            },
+            "volume": 0.004667,
+            "formula": "min(1, sessions/1500) * max(ER_gap, bounce_gap, viewsPerSession_gap, duration_gap) * 100",
+            "payoffGap": 0.307143,
+            "payoffGap_definition": "max(ER gap vs 0.45, bounce gap vs 0.55, viewsPerSession gap vs 1.5, duration gap vs 40s)"
+          },
+          "opportunity_type": "landing_underperformance",
+          "__ga4Intelligence": true
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      },
+      {
+        "json": {
+          "score": 0.14,
+          "entity": {
+            "label": "/intent-to-answer-mapping",
+            "landingPage": "/intent-to-answer-mapping"
+          },
+          "period": {
+            "end": null,
+            "start": null
+          },
+          "reason": "Landing page /intent-to-answer-mapping received 7 sessions with an engagement rate of 14.29% and a bounce rate of 85.71%.",
+          "source": "google_analytics",
+          "filters": {
+            "limit": 50,
+            "minScore": 0,
+            "minSessions": 0,
+            "minBounceRate": 0,
+            "maxEngagementRate": 1,
+            "maxViewsPerSession": 1.2,
+            "maxAverageSessionDuration": 25
+          },
+          "metrics": {
+            "sessions": 7,
+            "bounceRate": 0.8571,
+            "totalUsers": 7,
+            "engagementRate": 0.1429
+          },
+          "property": null,
+          "capability": "landing_underperformance",
+          "recommendation": "Review the landing-page experience and engagement elements for /intent-to-answer-mapping.",
+          "score_breakdown": {
+            "inputs": {
+              "erGap": 0.307143,
+              "vpsGap": 0,
+              "sessions": 7,
+              "bounceGap": 0.307143,
+              "bounceRate": 0.8571,
+              "durationGap": 0,
+              "engagementRate": 0.1429,
+              "viewsPerSession": null,
+              "averageSessionDuration": null
+            },
+            "volume": 0.004667,
+            "formula": "min(1, sessions/1500) * max(ER_gap, bounce_gap, viewsPerSession_gap, duration_gap) * 100",
+            "payoffGap": 0.307143,
+            "payoffGap_definition": "max(ER gap vs 0.45, bounce gap vs 0.55, viewsPerSession gap vs 1.5, duration gap vs 40s)"
+          },
+          "opportunity_type": "landing_underperformance",
+          "__ga4Intelligence": true
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      },
+      {
+        "json": {
+          "score": 0.14,
+          "entity": {
+            "label": "/templates/prompt-mining-canvas",
+            "landingPage": "/templates/prompt-mining-canvas"
+          },
+          "period": {
+            "end": null,
+            "start": null
+          },
+          "reason": "Landing page /templates/prompt-mining-canvas received 7 sessions with an engagement rate of 14.29% and a bounce rate of 85.71%.",
+          "source": "google_analytics",
+          "filters": {
+            "limit": 50,
+            "minScore": 0,
+            "minSessions": 0,
+            "minBounceRate": 0,
+            "maxEngagementRate": 1,
+            "maxViewsPerSession": 1.2,
+            "maxAverageSessionDuration": 25
+          },
+          "metrics": {
+            "sessions": 7,
+            "bounceRate": 0.8571,
+            "totalUsers": 6,
+            "engagementRate": 0.1429
+          },
+          "property": null,
+          "capability": "landing_underperformance",
+          "recommendation": "Review the landing-page experience and engagement elements for /templates/prompt-mining-canvas.",
+          "score_breakdown": {
+            "inputs": {
+              "erGap": 0.307143,
+              "vpsGap": 0,
+              "sessions": 7,
+              "bounceGap": 0.307143,
+              "bounceRate": 0.8571,
+              "durationGap": 0,
+              "engagementRate": 0.1429,
+              "viewsPerSession": null,
+              "averageSessionDuration": null
+            },
+            "volume": 0.004667,
+            "formula": "min(1, sessions/1500) * max(ER_gap, bounce_gap, viewsPerSession_gap, duration_gap) * 100",
+            "payoffGap": 0.307143,
+            "payoffGap_definition": "max(ER gap vs 0.45, bounce gap vs 0.55, viewsPerSession gap vs 1.5, duration gap vs 40s)"
+          },
+          "opportunity_type": "landing_underperformance",
+          "__ga4Intelligence": true
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      },
+      {
+        "json": {
+          "score": 0.11,
+          "entity": {
+            "label": "/blog/ai-citation-strategies",
+            "landingPage": "/blog/ai-citation-strategies"
+          },
+          "period": {
+            "end": null,
+            "start": null
+          },
+          "reason": "Landing page /blog/ai-citation-strategies received 8 sessions with an engagement rate of 25% and a bounce rate of 75%.",
+          "source": "google_analytics",
+          "filters": {
+            "limit": 50,
+            "minScore": 0,
+            "minSessions": 0,
+            "minBounceRate": 0,
+            "maxEngagementRate": 1,
+            "maxViewsPerSession": 1.2,
+            "maxAverageSessionDuration": 25
+          },
+          "metrics": {
+            "sessions": 8,
+            "bounceRate": 0.75,
+            "totalUsers": 8,
+            "engagementRate": 0.25
+          },
+          "property": null,
+          "capability": "landing_underperformance",
+          "recommendation": "Review the landing-page experience and engagement elements for /blog/ai-citation-strategies.",
+          "score_breakdown": {
+            "inputs": {
+              "erGap": 0.2,
+              "vpsGap": 0,
+              "sessions": 8,
+              "bounceGap": 0.2,
+              "bounceRate": 0.75,
+              "durationGap": 0,
+              "engagementRate": 0.25,
+              "viewsPerSession": null,
+              "averageSessionDuration": null
+            },
+            "volume": 0.005333,
+            "formula": "min(1, sessions/1500) * max(ER_gap, bounce_gap, viewsPerSession_gap, duration_gap) * 100",
+            "payoffGap": 0.2,
+            "payoffGap_definition": "max(ER gap vs 0.45, bounce gap vs 0.55, viewsPerSession gap vs 1.5, duration gap vs 40s)"
+          },
+          "opportunity_type": "landing_underperformance",
+          "__ga4Intelligence": true
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      },
+      {
+        "json": {
+          "score": 0.11,
+          "entity": {
+            "label": "/blog/tools-techniques-how-to-extract-and-analyze-searcher-prompts",
+            "landingPage": "/blog/tools-techniques-how-to-extract-and-analyze-searcher-prompts"
+          },
+          "period": {
+            "end": null,
+            "start": null
+          },
+          "reason": "Landing page /blog/tools-techniques-how-to-extract-and-analyze-searcher-prompts received 8 sessions with an engagement rate of 25% and a bounce rate of 75%.",
+          "source": "google_analytics",
+          "filters": {
+            "limit": 50,
+            "minScore": 0,
+            "minSessions": 0,
+            "minBounceRate": 0,
+            "maxEngagementRate": 1,
+            "maxViewsPerSession": 1.2,
+            "maxAverageSessionDuration": 25
+          },
+          "metrics": {
+            "sessions": 8,
+            "bounceRate": 0.75,
+            "totalUsers": 8,
+            "engagementRate": 0.25
+          },
+          "property": null,
+          "capability": "landing_underperformance",
+          "recommendation": "Review the landing-page experience and engagement elements for /blog/tools-techniques-how-to-extract-and-analyze-searcher-prompts.",
+          "score_breakdown": {
+            "inputs": {
+              "erGap": 0.2,
+              "vpsGap": 0,
+              "sessions": 8,
+              "bounceGap": 0.2,
+              "bounceRate": 0.75,
+              "durationGap": 0,
+              "engagementRate": 0.25,
+              "viewsPerSession": null,
+              "averageSessionDuration": null
+            },
+            "volume": 0.005333,
+            "formula": "min(1, sessions/1500) * max(ER_gap, bounce_gap, viewsPerSession_gap, duration_gap) * 100",
+            "payoffGap": 0.2,
+            "payoffGap_definition": "max(ER gap vs 0.45, bounce gap vs 0.55, viewsPerSession gap vs 1.5, duration gap vs 40s)"
+          },
+          "opportunity_type": "landing_underperformance",
+          "__ga4Intelligence": true
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      },
+      {
+        "json": {
+          "score": 0.11,
+          "entity": {
+            "label": "/blog/how-negative-brand-signals-can-undermine-ai-rankings",
+            "landingPage": "/blog/how-negative-brand-signals-can-undermine-ai-rankings"
+          },
+          "period": {
+            "end": null,
+            "start": null
+          },
+          "reason": "Landing page /blog/how-negative-brand-signals-can-undermine-ai-rankings received 6 sessions with an engagement rate of 16.67% and a bounce rate of 83.33%.",
+          "source": "google_analytics",
+          "filters": {
+            "limit": 50,
+            "minScore": 0,
+            "minSessions": 0,
+            "minBounceRate": 0,
+            "maxEngagementRate": 1,
+            "maxViewsPerSession": 1.2,
+            "maxAverageSessionDuration": 25
+          },
+          "metrics": {
+            "sessions": 6,
+            "bounceRate": 0.8333,
+            "totalUsers": 6,
+            "engagementRate": 0.1667
+          },
+          "property": null,
+          "capability": "landing_underperformance",
+          "recommendation": "Review the landing-page experience and engagement elements for /blog/how-negative-brand-signals-can-undermine-ai-rankings.",
+          "score_breakdown": {
+            "inputs": {
+              "erGap": 0.283333,
+              "vpsGap": 0,
+              "sessions": 6,
+              "bounceGap": 0.283333,
+              "bounceRate": 0.8333,
+              "durationGap": 0,
+              "engagementRate": 0.1667,
+              "viewsPerSession": null,
+              "averageSessionDuration": null
+            },
+            "volume": 0.004,
+            "formula": "min(1, sessions/1500) * max(ER_gap, bounce_gap, viewsPerSession_gap, duration_gap) * 100",
+            "payoffGap": 0.283333,
+            "payoffGap_definition": "max(ER gap vs 0.45, bounce gap vs 0.55, viewsPerSession gap vs 1.5, duration gap vs 40s)"
+          },
+          "opportunity_type": "landing_underperformance",
+          "__ga4Intelligence": true
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      },
+      {
+        "json": {
+          "score": 0.11,
+          "entity": {
+            "label": "/webinar/the-ai-blind-spot",
+            "landingPage": "/webinar/the-ai-blind-spot"
+          },
+          "period": {
+            "end": null,
+            "start": null
+          },
+          "reason": "Landing page /webinar/the-ai-blind-spot received 6 sessions with an engagement rate of 16.67% and a bounce rate of 83.33%.",
+          "source": "google_analytics",
+          "filters": {
+            "limit": 50,
+            "minScore": 0,
+            "minSessions": 0,
+            "minBounceRate": 0,
+            "maxEngagementRate": 1,
+            "maxViewsPerSession": 1.2,
+            "maxAverageSessionDuration": 25
+          },
+          "metrics": {
+            "sessions": 6,
+            "bounceRate": 0.8333,
+            "totalUsers": 6,
+            "engagementRate": 0.1667
+          },
+          "property": null,
+          "capability": "landing_underperformance",
+          "recommendation": "Review the landing-page experience and engagement elements for /webinar/the-ai-blind-spot.",
+          "score_breakdown": {
+            "inputs": {
+              "erGap": 0.283333,
+              "vpsGap": 0,
+              "sessions": 6,
+              "bounceGap": 0.283333,
+              "bounceRate": 0.8333,
+              "durationGap": 0,
+              "engagementRate": 0.1667,
+              "viewsPerSession": null,
+              "averageSessionDuration": null
+            },
+            "volume": 0.004,
+            "formula": "min(1, sessions/1500) * max(ER_gap, bounce_gap, viewsPerSession_gap, duration_gap) * 100",
+            "payoffGap": 0.283333,
+            "payoffGap_definition": "max(ER gap vs 0.45, bounce gap vs 0.55, viewsPerSession gap vs 1.5, duration gap vs 40s)"
+          },
+          "opportunity_type": "landing_underperformance",
+          "__ga4Intelligence": true
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      },
+      {
+        "json": {
+          "score": 0.1,
+          "entity": {
+            "label": "/blog/how-govisible-helps-you-track-competitor-visibility-across-ai-engines",
+            "landingPage": "/blog/how-govisible-helps-you-track-competitor-visibility-across-ai-engines"
+          },
+          "period": {
+            "end": null,
+            "start": null
+          },
+          "reason": "Landing page /blog/how-govisible-helps-you-track-competitor-visibility-across-ai-engines received 10 sessions with an engagement rate of 30% and a bounce rate of 70%.",
+          "source": "google_analytics",
+          "filters": {
+            "limit": 50,
+            "minScore": 0,
+            "minSessions": 0,
+            "minBounceRate": 0,
+            "maxEngagementRate": 1,
+            "maxViewsPerSession": 1.2,
+            "maxAverageSessionDuration": 25
+          },
+          "metrics": {
+            "sessions": 10,
+            "bounceRate": 0.7,
+            "totalUsers": 10,
+            "engagementRate": 0.3
+          },
+          "property": null,
+          "capability": "landing_underperformance",
+          "recommendation": "Review the landing-page experience and engagement elements for /blog/how-govisible-helps-you-track-competitor-visibility-across-ai-engines.",
+          "score_breakdown": {
+            "inputs": {
+              "erGap": 0.15,
+              "vpsGap": 0,
+              "sessions": 10,
+              "bounceGap": 0.15,
+              "bounceRate": 0.7,
+              "durationGap": 0,
+              "engagementRate": 0.3,
+              "viewsPerSession": null,
+              "averageSessionDuration": null
+            },
+            "volume": 0.006667,
+            "formula": "min(1, sessions/1500) * max(ER_gap, bounce_gap, viewsPerSession_gap, duration_gap) * 100",
+            "payoffGap": 0.15,
+            "payoffGap_definition": "max(ER gap vs 0.45, bounce gap vs 0.55, viewsPerSession gap vs 1.5, duration gap vs 40s)"
+          },
+          "opportunity_type": "landing_underperformance",
+          "__ga4Intelligence": true
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      },
+      {
+        "json": {
+          "score": 0.08,
+          "entity": {
+            "label": "/blog/how-to-format-content-for-ai-surfaced-answer-snippets",
+            "landingPage": "/blog/how-to-format-content-for-ai-surfaced-answer-snippets"
+          },
+          "period": {
+            "end": null,
+            "start": null
+          },
+          "reason": "Landing page /blog/how-to-format-content-for-ai-surfaced-answer-snippets received 5 sessions with an engagement rate of 20% and a bounce rate of 80%.",
+          "source": "google_analytics",
+          "filters": {
+            "limit": 50,
+            "minScore": 0,
+            "minSessions": 0,
+            "minBounceRate": 0,
+            "maxEngagementRate": 1,
+            "maxViewsPerSession": 1.2,
+            "maxAverageSessionDuration": 25
+          },
+          "metrics": {
+            "sessions": 5,
+            "bounceRate": 0.8,
+            "totalUsers": 5,
+            "engagementRate": 0.2
+          },
+          "property": null,
+          "capability": "landing_underperformance",
+          "recommendation": "Review the landing-page experience and engagement elements for /blog/how-to-format-content-for-ai-surfaced-answer-snippets.",
+          "score_breakdown": {
+            "inputs": {
+              "erGap": 0.25,
+              "vpsGap": 0,
+              "sessions": 5,
+              "bounceGap": 0.25,
+              "bounceRate": 0.8,
+              "durationGap": 0,
+              "engagementRate": 0.2,
+              "viewsPerSession": null,
+              "averageSessionDuration": null
+            },
+            "volume": 0.003333,
+            "formula": "min(1, sessions/1500) * max(ER_gap, bounce_gap, viewsPerSession_gap, duration_gap) * 100",
+            "payoffGap": 0.25,
+            "payoffGap_definition": "max(ER gap vs 0.45, bounce gap vs 0.55, viewsPerSession gap vs 1.5, duration gap vs 40s)"
+          },
+          "opportunity_type": "landing_underperformance",
+          "__ga4Intelligence": true
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      },
+      {
+        "json": {
+          "score": 0.06,
+          "entity": {
+            "label": "/blog/all-blogs",
+            "landingPage": "/blog/all-blogs"
+          },
+          "period": {
+            "end": null,
+            "start": null
+          },
+          "reason": "Landing page /blog/all-blogs received 13 sessions with an engagement rate of 38.46% and a bounce rate of 61.54%.",
+          "source": "google_analytics",
+          "filters": {
+            "limit": 50,
+            "minScore": 0,
+            "minSessions": 0,
+            "minBounceRate": 0,
+            "maxEngagementRate": 1,
+            "maxViewsPerSession": 1.2,
+            "maxAverageSessionDuration": 25
+          },
+          "metrics": {
+            "sessions": 13,
+            "bounceRate": 0.6154,
+            "totalUsers": 13,
+            "engagementRate": 0.3846
+          },
+          "property": null,
+          "capability": "landing_underperformance",
+          "recommendation": "Review the landing-page experience and engagement elements for /blog/all-blogs.",
+          "score_breakdown": {
+            "inputs": {
+              "erGap": 0.065385,
+              "vpsGap": 0,
+              "sessions": 13,
+              "bounceGap": 0.065385,
+              "bounceRate": 0.6154,
+              "durationGap": 0,
+              "engagementRate": 0.3846,
+              "viewsPerSession": null,
+              "averageSessionDuration": null
+            },
+            "volume": 0.008667,
+            "formula": "min(1, sessions/1500) * max(ER_gap, bounce_gap, viewsPerSession_gap, duration_gap) * 100",
+            "payoffGap": 0.065385,
+            "payoffGap_definition": "max(ER gap vs 0.45, bounce gap vs 0.55, viewsPerSession gap vs 1.5, duration gap vs 40s)"
+          },
+          "opportunity_type": "landing_underperformance",
+          "__ga4Intelligence": true
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      },
+      {
+        "json": {
+          "score": 0.06,
+          "entity": {
+            "label": "/about-visible",
+            "landingPage": "/about-visible"
+          },
+          "period": {
+            "end": null,
+            "start": null
+          },
+          "reason": "Landing page /about-visible received 11 sessions with an engagement rate of 36.36% and a bounce rate of 63.64%.",
+          "source": "google_analytics",
+          "filters": {
+            "limit": 50,
+            "minScore": 0,
+            "minSessions": 0,
+            "minBounceRate": 0,
+            "maxEngagementRate": 1,
+            "maxViewsPerSession": 1.2,
+            "maxAverageSessionDuration": 25
+          },
+          "metrics": {
+            "sessions": 11,
+            "bounceRate": 0.6364,
+            "totalUsers": 11,
+            "engagementRate": 0.3636
+          },
+          "property": null,
+          "capability": "landing_underperformance",
+          "recommendation": "Review the landing-page experience and engagement elements for /about-visible.",
+          "score_breakdown": {
+            "inputs": {
+              "erGap": 0.086364,
+              "vpsGap": 0,
+              "sessions": 11,
+              "bounceGap": 0.086364,
+              "bounceRate": 0.6364,
+              "durationGap": 0,
+              "engagementRate": 0.3636,
+              "viewsPerSession": null,
+              "averageSessionDuration": null
+            },
+            "volume": 0.007333,
+            "formula": "min(1, sessions/1500) * max(ER_gap, bounce_gap, viewsPerSession_gap, duration_gap) * 100",
+            "payoffGap": 0.086364,
+            "payoffGap_definition": "max(ER gap vs 0.45, bounce gap vs 0.55, viewsPerSession gap vs 1.5, duration gap vs 40s)"
+          },
+          "opportunity_type": "landing_underperformance",
+          "__ga4Intelligence": true
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      },
+      {
+        "json": {
+          "score": 0.06,
+          "entity": {
+            "label": "/blog/search-query-analysis",
+            "landingPage": "/blog/search-query-analysis"
+          },
+          "period": {
+            "end": null,
+            "start": null
+          },
+          "reason": "Landing page /blog/search-query-analysis received 11 sessions with an engagement rate of 36.36% and a bounce rate of 63.64%.",
+          "source": "google_analytics",
+          "filters": {
+            "limit": 50,
+            "minScore": 0,
+            "minSessions": 0,
+            "minBounceRate": 0,
+            "maxEngagementRate": 1,
+            "maxViewsPerSession": 1.2,
+            "maxAverageSessionDuration": 25
+          },
+          "metrics": {
+            "sessions": 11,
+            "bounceRate": 0.6364,
+            "totalUsers": 11,
+            "engagementRate": 0.3636
+          },
+          "property": null,
+          "capability": "landing_underperformance",
+          "recommendation": "Review the landing-page experience and engagement elements for /blog/search-query-analysis.",
+          "score_breakdown": {
+            "inputs": {
+              "erGap": 0.086364,
+              "vpsGap": 0,
+              "sessions": 11,
+              "bounceGap": 0.086364,
+              "bounceRate": 0.6364,
+              "durationGap": 0,
+              "engagementRate": 0.3636,
+              "viewsPerSession": null,
+              "averageSessionDuration": null
+            },
+            "volume": 0.007333,
+            "formula": "min(1, sessions/1500) * max(ER_gap, bounce_gap, viewsPerSession_gap, duration_gap) * 100",
+            "payoffGap": 0.086364,
+            "payoffGap_definition": "max(ER gap vs 0.45, bounce gap vs 0.55, viewsPerSession gap vs 1.5, duration gap vs 40s)"
+          },
+          "opportunity_type": "landing_underperformance",
+          "__ga4Intelligence": true
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      },
+      {
+        "json": {
+          "score": 0.05,
+          "entity": {
+            "label": "/blog/ai-visibility-insights",
+            "landingPage": "/blog/ai-visibility-insights"
+          },
+          "period": {
+            "end": null,
+            "start": null
+          },
+          "reason": "Landing page /blog/ai-visibility-insights received 6 sessions with an engagement rate of 33.33% and a bounce rate of 66.67%.",
+          "source": "google_analytics",
+          "filters": {
+            "limit": 50,
+            "minScore": 0,
+            "minSessions": 0,
+            "minBounceRate": 0,
+            "maxEngagementRate": 1,
+            "maxViewsPerSession": 1.2,
+            "maxAverageSessionDuration": 25
+          },
+          "metrics": {
+            "sessions": 6,
+            "bounceRate": 0.6667,
+            "totalUsers": 6,
+            "engagementRate": 0.3333
+          },
+          "property": null,
+          "capability": "landing_underperformance",
+          "recommendation": "Review the landing-page experience and engagement elements for /blog/ai-visibility-insights.",
+          "score_breakdown": {
+            "inputs": {
+              "erGap": 0.116667,
+              "vpsGap": 0,
+              "sessions": 6,
+              "bounceGap": 0.116667,
+              "bounceRate": 0.6667,
+              "durationGap": 0,
+              "engagementRate": 0.3333,
+              "viewsPerSession": null,
+              "averageSessionDuration": null
+            },
+            "volume": 0.004,
+            "formula": "min(1, sessions/1500) * max(ER_gap, bounce_gap, viewsPerSession_gap, duration_gap) * 100",
+            "payoffGap": 0.116667,
+            "payoffGap_definition": "max(ER gap vs 0.45, bounce gap vs 0.55, viewsPerSession gap vs 1.5, duration gap vs 40s)"
+          },
+          "opportunity_type": "landing_underperformance",
+          "__ga4Intelligence": true
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      },
+      {
+        "json": {
+          "score": 0.04,
+          "entity": {
+            "label": "/blog/the-anatomy-of-ai-optimized-content-headings-bullets-summaries",
+            "landingPage": "/blog/the-anatomy-of-ai-optimized-content-headings-bullets-summaries"
+          },
+          "period": {
+            "end": null,
+            "start": null
+          },
+          "reason": "Landing page /blog/the-anatomy-of-ai-optimized-content-headings-bullets-summaries received 8 sessions with an engagement rate of 37.5% and a bounce rate of 62.5%.",
+          "source": "google_analytics",
+          "filters": {
+            "limit": 50,
+            "minScore": 0,
+            "minSessions": 0,
+            "minBounceRate": 0,
+            "maxEngagementRate": 1,
+            "maxViewsPerSession": 1.2,
+            "maxAverageSessionDuration": 25
+          },
+          "metrics": {
+            "sessions": 8,
+            "bounceRate": 0.625,
+            "totalUsers": 8,
+            "engagementRate": 0.375
+          },
+          "property": null,
+          "capability": "landing_underperformance",
+          "recommendation": "Review the landing-page experience and engagement elements for /blog/the-anatomy-of-ai-optimized-content-headings-bullets-summaries.",
+          "score_breakdown": {
+            "inputs": {
+              "erGap": 0.075,
+              "vpsGap": 0,
+              "sessions": 8,
+              "bounceGap": 0.075,
+              "bounceRate": 0.625,
+              "durationGap": 0,
+              "engagementRate": 0.375,
+              "viewsPerSession": null,
+              "averageSessionDuration": null
+            },
+            "volume": 0.005333,
+            "formula": "min(1, sessions/1500) * max(ER_gap, bounce_gap, viewsPerSession_gap, duration_gap) * 100",
+            "payoffGap": 0.075,
+            "payoffGap_definition": "max(ER gap vs 0.45, bounce gap vs 0.55, viewsPerSession gap vs 1.5, duration gap vs 40s)"
+          },
+          "opportunity_type": "landing_underperformance",
+          "__ga4Intelligence": true
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      },
+      {
+        "json": {
+          "score": 0.04,
+          "entity": {
+            "label": "/govisible-platform",
+            "landingPage": "/govisible-platform"
+          },
+          "period": {
+            "end": null,
+            "start": null
+          },
+          "reason": "Landing page /govisible-platform received 8 sessions with an engagement rate of 37.5% and a bounce rate of 62.5%.",
+          "source": "google_analytics",
+          "filters": {
+            "limit": 50,
+            "minScore": 0,
+            "minSessions": 0,
+            "minBounceRate": 0,
+            "maxEngagementRate": 1,
+            "maxViewsPerSession": 1.2,
+            "maxAverageSessionDuration": 25
+          },
+          "metrics": {
+            "sessions": 8,
+            "bounceRate": 0.625,
+            "totalUsers": 8,
+            "engagementRate": 0.375
+          },
+          "property": null,
+          "capability": "landing_underperformance",
+          "recommendation": "Review the landing-page experience and engagement elements for /govisible-platform.",
+          "score_breakdown": {
+            "inputs": {
+              "erGap": 0.075,
+              "vpsGap": 0,
+              "sessions": 8,
+              "bounceGap": 0.075,
+              "bounceRate": 0.625,
+              "durationGap": 0,
+              "engagementRate": 0.375,
+              "viewsPerSession": null,
+              "averageSessionDuration": null
+            },
+            "volume": 0.005333,
+            "formula": "min(1, sessions/1500) * max(ER_gap, bounce_gap, viewsPerSession_gap, duration_gap) * 100",
+            "payoffGap": 0.075,
+            "payoffGap_definition": "max(ER gap vs 0.45, bounce gap vs 0.55, viewsPerSession gap vs 1.5, duration gap vs 40s)"
+          },
+          "opportunity_type": "landing_underperformance",
+          "__ga4Intelligence": true
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      },
+      {
+        "json": {
+          "score": 0.02,
+          "entity": {
+            "label": "/blog/entity-optimization-tips",
+            "landingPage": "/blog/entity-optimization-tips"
+          },
+          "period": {
+            "end": null,
+            "start": null
+          },
+          "reason": "Landing page /blog/entity-optimization-tips received 5 sessions with an engagement rate of 40% and a bounce rate of 60%.",
+          "source": "google_analytics",
+          "filters": {
+            "limit": 50,
+            "minScore": 0,
+            "minSessions": 0,
+            "minBounceRate": 0,
+            "maxEngagementRate": 1,
+            "maxViewsPerSession": 1.2,
+            "maxAverageSessionDuration": 25
+          },
+          "metrics": {
+            "sessions": 5,
+            "bounceRate": 0.6,
+            "totalUsers": 5,
+            "engagementRate": 0.4
+          },
+          "property": null,
+          "capability": "landing_underperformance",
+          "recommendation": "Review the landing-page experience and engagement elements for /blog/entity-optimization-tips.",
+          "score_breakdown": {
+            "inputs": {
+              "erGap": 0.05,
+              "vpsGap": 0,
+              "sessions": 5,
+              "bounceGap": 0.05,
+              "bounceRate": 0.6,
+              "durationGap": 0,
+              "engagementRate": 0.4,
+              "viewsPerSession": null,
+              "averageSessionDuration": null
+            },
+            "volume": 0.003333,
+            "formula": "min(1, sessions/1500) * max(ER_gap, bounce_gap, viewsPerSession_gap, duration_gap) * 100",
+            "payoffGap": 0.05,
+            "payoffGap_definition": "max(ER gap vs 0.45, bounce gap vs 0.55, viewsPerSession gap vs 1.5, duration gap vs 40s)"
+          },
+          "opportunity_type": "landing_underperformance",
+          "__ga4Intelligence": true
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      },
+      {
+        "json": {
+          "score": 0.01,
+          "entity": {
+            "label": "/govisible-ai-bot-tracker",
+            "landingPage": "/govisible-ai-bot-tracker"
+          },
+          "period": {
+            "end": null,
+            "start": null
+          },
+          "reason": "Landing page /govisible-ai-bot-tracker received 7 sessions with an engagement rate of 42.86% and a bounce rate of 57.14%.",
+          "source": "google_analytics",
+          "filters": {
+            "limit": 50,
+            "minScore": 0,
+            "minSessions": 0,
+            "minBounceRate": 0,
+            "maxEngagementRate": 1,
+            "maxViewsPerSession": 1.2,
+            "maxAverageSessionDuration": 25
+          },
+          "metrics": {
+            "sessions": 7,
+            "bounceRate": 0.5714,
+            "totalUsers": 5,
+            "engagementRate": 0.4286
+          },
+          "property": null,
+          "capability": "landing_underperformance",
+          "recommendation": "Review the landing-page experience and engagement elements for /govisible-ai-bot-tracker.",
+          "score_breakdown": {
+            "inputs": {
+              "erGap": 0.021429,
+              "vpsGap": 0,
+              "sessions": 7,
+              "bounceGap": 0.021429,
+              "bounceRate": 0.5714,
+              "durationGap": 0,
+              "engagementRate": 0.4286,
+              "viewsPerSession": null,
+              "averageSessionDuration": null
+            },
+            "volume": 0.004667,
+            "formula": "min(1, sessions/1500) * max(ER_gap, bounce_gap, viewsPerSession_gap, duration_gap) * 100",
+            "payoffGap": 0.021429,
+            "payoffGap_definition": "max(ER gap vs 0.45, bounce gap vs 0.55, viewsPerSession gap vs 1.5, duration gap vs 40s)"
+          },
+          "opportunity_type": "landing_underperformance",
+          "__ga4Intelligence": true
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      },
+      {
+        "json": {
+          "score": 0,
+          "entity": {
+            "label": "/",
+            "landingPage": "/"
+          },
+          "period": {
+            "end": null,
+            "start": null
+          },
+          "reason": "Landing page / received 432 sessions with an engagement rate of 54.4% and a bounce rate of 45.6%.",
+          "source": "google_analytics",
+          "filters": {
+            "limit": 50,
+            "minScore": 0,
+            "minSessions": 0,
+            "minBounceRate": 0,
+            "maxEngagementRate": 1,
+            "maxViewsPerSession": 1.2,
+            "maxAverageSessionDuration": 25
+          },
+          "metrics": {
+            "sessions": 432,
+            "bounceRate": 0.456,
+            "totalUsers": 295,
+            "engagementRate": 0.544
+          },
+          "property": null,
+          "capability": "landing_underperformance",
+          "recommendation": "Review the landing-page experience and engagement elements for /.",
+          "score_breakdown": {
+            "inputs": {
+              "erGap": 0,
+              "vpsGap": 0,
+              "sessions": 432,
+              "bounceGap": 0,
+              "bounceRate": 0.456,
+              "durationGap": 0,
+              "engagementRate": 0.544,
+              "viewsPerSession": null,
+              "averageSessionDuration": null
+            },
+            "volume": 0.288,
+            "formula": "min(1, sessions/1500) * max(ER_gap, bounce_gap, viewsPerSession_gap, duration_gap) * 100",
+            "payoffGap": 0,
+            "payoffGap_definition": "max(ER gap vs 0.45, bounce gap vs 0.55, viewsPerSession gap vs 1.5, duration gap vs 40s)"
+          },
+          "opportunity_type": "landing_underperformance",
+          "__ga4Intelligence": true
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      },
+      {
+        "json": {
+          "score": 0,
+          "entity": {
+            "label": "/ai-visibility-audit",
+            "landingPage": "/ai-visibility-audit"
+          },
+          "period": {
+            "end": null,
+            "start": null
+          },
+          "reason": "Landing page /ai-visibility-audit received 98 sessions with an engagement rate of 57.14% and a bounce rate of 42.86%.",
+          "source": "google_analytics",
+          "filters": {
+            "limit": 50,
+            "minScore": 0,
+            "minSessions": 0,
+            "minBounceRate": 0,
+            "maxEngagementRate": 1,
+            "maxViewsPerSession": 1.2,
+            "maxAverageSessionDuration": 25
+          },
+          "metrics": {
+            "sessions": 98,
+            "bounceRate": 0.4286,
+            "totalUsers": 77,
+            "engagementRate": 0.5714
+          },
+          "property": null,
+          "capability": "landing_underperformance",
+          "recommendation": "Review the landing-page experience and engagement elements for /ai-visibility-audit.",
+          "score_breakdown": {
+            "inputs": {
+              "erGap": 0,
+              "vpsGap": 0,
+              "sessions": 98,
+              "bounceGap": 0,
+              "bounceRate": 0.4286,
+              "durationGap": 0,
+              "engagementRate": 0.5714,
+              "viewsPerSession": null,
+              "averageSessionDuration": null
+            },
+            "volume": 0.065333,
+            "formula": "min(1, sessions/1500) * max(ER_gap, bounce_gap, viewsPerSession_gap, duration_gap) * 100",
+            "payoffGap": 0,
+            "payoffGap_definition": "max(ER gap vs 0.45, bounce gap vs 0.55, viewsPerSession gap vs 1.5, duration gap vs 40s)"
+          },
+          "opportunity_type": "landing_underperformance",
+          "__ga4Intelligence": true
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      },
+      {
+        "json": {
+          "score": 0,
+          "entity": {
+            "label": "/book-demo",
+            "landingPage": "/book-demo"
+          },
+          "period": {
+            "end": null,
+            "start": null
+          },
+          "reason": "Landing page /book-demo received 98 sessions with an engagement rate of 51.02% and a bounce rate of 48.98%.",
+          "source": "google_analytics",
+          "filters": {
+            "limit": 50,
+            "minScore": 0,
+            "minSessions": 0,
+            "minBounceRate": 0,
+            "maxEngagementRate": 1,
+            "maxViewsPerSession": 1.2,
+            "maxAverageSessionDuration": 25
+          },
+          "metrics": {
+            "sessions": 98,
+            "bounceRate": 0.4898,
+            "totalUsers": 91,
+            "engagementRate": 0.5102
+          },
+          "property": null,
+          "capability": "landing_underperformance",
+          "recommendation": "Review the landing-page experience and engagement elements for /book-demo.",
+          "score_breakdown": {
+            "inputs": {
+              "erGap": 0,
+              "vpsGap": 0,
+              "sessions": 98,
+              "bounceGap": 0,
+              "bounceRate": 0.4898,
+              "durationGap": 0,
+              "engagementRate": 0.5102,
+              "viewsPerSession": null,
+              "averageSessionDuration": null
+            },
+            "volume": 0.065333,
+            "formula": "min(1, sessions/1500) * max(ER_gap, bounce_gap, viewsPerSession_gap, duration_gap) * 100",
+            "payoffGap": 0,
+            "payoffGap_definition": "max(ER gap vs 0.45, bounce gap vs 0.55, viewsPerSession gap vs 1.5, duration gap vs 40s)"
+          },
+          "opportunity_type": "landing_underperformance",
+          "__ga4Intelligence": true
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      },
+      {
+        "json": {
+          "score": 0,
+          "entity": {
+            "label": "/ai-visibility-index/2026/automotive/services-and-maintenance",
+            "landingPage": "/ai-visibility-index/2026/automotive/services-and-maintenance"
+          },
+          "period": {
+            "end": null,
+            "start": null
+          },
+          "reason": "Landing page /ai-visibility-index/2026/automotive/services-and-maintenance received 17 sessions with an engagement rate of 64.71% and a bounce rate of 35.29%.",
+          "source": "google_analytics",
+          "filters": {
+            "limit": 50,
+            "minScore": 0,
+            "minSessions": 0,
+            "minBounceRate": 0,
+            "maxEngagementRate": 1,
+            "maxViewsPerSession": 1.2,
+            "maxAverageSessionDuration": 25
+          },
+          "metrics": {
+            "sessions": 17,
+            "bounceRate": 0.3529,
+            "totalUsers": 7,
+            "engagementRate": 0.6471
+          },
+          "property": null,
+          "capability": "landing_underperformance",
+          "recommendation": "Review the landing-page experience and engagement elements for /ai-visibility-index/2026/automotive/services-and-maintenance.",
+          "score_breakdown": {
+            "inputs": {
+              "erGap": 0,
+              "vpsGap": 0,
+              "sessions": 17,
+              "bounceGap": 0,
+              "bounceRate": 0.3529,
+              "durationGap": 0,
+              "engagementRate": 0.6471,
+              "viewsPerSession": null,
+              "averageSessionDuration": null
+            },
+            "volume": 0.011333,
+            "formula": "min(1, sessions/1500) * max(ER_gap, bounce_gap, viewsPerSession_gap, duration_gap) * 100",
+            "payoffGap": 0,
+            "payoffGap_definition": "max(ER gap vs 0.45, bounce gap vs 0.55, viewsPerSession gap vs 1.5, duration gap vs 40s)"
+          },
+          "opportunity_type": "landing_underperformance",
+          "__ga4Intelligence": true
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      },
+      {
+        "json": {
+          "score": 0,
+          "entity": {
+            "label": "/contact-us",
+            "landingPage": "/contact-us"
+          },
+          "period": {
+            "end": null,
+            "start": null
+          },
+          "reason": "Landing page /contact-us received 12 sessions with an engagement rate of 50% and a bounce rate of 50%.",
+          "source": "google_analytics",
+          "filters": {
+            "limit": 50,
+            "minScore": 0,
+            "minSessions": 0,
+            "minBounceRate": 0,
+            "maxEngagementRate": 1,
+            "maxViewsPerSession": 1.2,
+            "maxAverageSessionDuration": 25
+          },
+          "metrics": {
+            "sessions": 12,
+            "bounceRate": 0.5,
+            "totalUsers": 11,
+            "engagementRate": 0.5
+          },
+          "property": null,
+          "capability": "landing_underperformance",
+          "recommendation": "Review the landing-page experience and engagement elements for /contact-us.",
+          "score_breakdown": {
+            "inputs": {
+              "erGap": 0,
+              "vpsGap": 0,
+              "sessions": 12,
+              "bounceGap": 0,
+              "bounceRate": 0.5,
+              "durationGap": 0,
+              "engagementRate": 0.5,
+              "viewsPerSession": null,
+              "averageSessionDuration": null
+            },
+            "volume": 0.008,
+            "formula": "min(1, sessions/1500) * max(ER_gap, bounce_gap, viewsPerSession_gap, duration_gap) * 100",
+            "payoffGap": 0,
+            "payoffGap_definition": "max(ER gap vs 0.45, bounce gap vs 0.55, viewsPerSession gap vs 1.5, duration gap vs 40s)"
+          },
+          "opportunity_type": "landing_underperformance",
+          "__ga4Intelligence": true
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      },
+      {
+        "json": {
+          "score": 0,
+          "entity": {
+            "label": "/blog/ai-citation-source-monitoring",
+            "landingPage": "/blog/ai-citation-source-monitoring"
+          },
+          "period": {
+            "end": null,
+            "start": null
+          },
+          "reason": "Landing page /blog/ai-citation-source-monitoring received 11 sessions with an engagement rate of 63.64% and a bounce rate of 36.36%.",
+          "source": "google_analytics",
+          "filters": {
+            "limit": 50,
+            "minScore": 0,
+            "minSessions": 0,
+            "minBounceRate": 0,
+            "maxEngagementRate": 1,
+            "maxViewsPerSession": 1.2,
+            "maxAverageSessionDuration": 25
+          },
+          "metrics": {
+            "sessions": 11,
+            "bounceRate": 0.3636,
+            "totalUsers": 7,
+            "engagementRate": 0.6364
+          },
+          "property": null,
+          "capability": "landing_underperformance",
+          "recommendation": "Review the landing-page experience and engagement elements for /blog/ai-citation-source-monitoring.",
+          "score_breakdown": {
+            "inputs": {
+              "erGap": 0,
+              "vpsGap": 0,
+              "sessions": 11,
+              "bounceGap": 0,
+              "bounceRate": 0.3636,
+              "durationGap": 0,
+              "engagementRate": 0.6364,
+              "viewsPerSession": null,
+              "averageSessionDuration": null
+            },
+            "volume": 0.007333,
+            "formula": "min(1, sessions/1500) * max(ER_gap, bounce_gap, viewsPerSession_gap, duration_gap) * 100",
+            "payoffGap": 0,
+            "payoffGap_definition": "max(ER gap vs 0.45, bounce gap vs 0.55, viewsPerSession gap vs 1.5, duration gap vs 40s)"
+          },
+          "opportunity_type": "landing_underperformance",
+          "__ga4Intelligence": true
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      },
+      {
+        "json": {
+          "score": 0,
+          "entity": {
+            "label": "/blog/what-does-ai-think-about-your-brand",
+            "landingPage": "/blog/what-does-ai-think-about-your-brand"
+          },
+          "period": {
+            "end": null,
+            "start": null
+          },
+          "reason": "Landing page /blog/what-does-ai-think-about-your-brand received 11 sessions with an engagement rate of 45.45% and a bounce rate of 54.55%.",
+          "source": "google_analytics",
+          "filters": {
+            "limit": 50,
+            "minScore": 0,
+            "minSessions": 0,
+            "minBounceRate": 0,
+            "maxEngagementRate": 1,
+            "maxViewsPerSession": 1.2,
+            "maxAverageSessionDuration": 25
+          },
+          "metrics": {
+            "sessions": 11,
+            "bounceRate": 0.5455,
+            "totalUsers": 7,
+            "engagementRate": 0.4545
+          },
+          "property": null,
+          "capability": "landing_underperformance",
+          "recommendation": "Review the landing-page experience and engagement elements for /blog/what-does-ai-think-about-your-brand.",
+          "score_breakdown": {
+            "inputs": {
+              "erGap": 0,
+              "vpsGap": 0,
+              "sessions": 11,
+              "bounceGap": 0,
+              "bounceRate": 0.5455,
+              "durationGap": 0,
+              "engagementRate": 0.4545,
+              "viewsPerSession": null,
+              "averageSessionDuration": null
+            },
+            "volume": 0.007333,
+            "formula": "min(1, sessions/1500) * max(ER_gap, bounce_gap, viewsPerSession_gap, duration_gap) * 100",
+            "payoffGap": 0,
+            "payoffGap_definition": "max(ER gap vs 0.45, bounce gap vs 0.55, viewsPerSession gap vs 1.5, duration gap vs 40s)"
+          },
+          "opportunity_type": "landing_underperformance",
+          "__ga4Intelligence": true
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      },
+      {
+        "json": {
+          "score": 0,
+          "entity": {
+            "label": "/ai-visibility-index/2026/automotive/passenger-cars",
+            "landingPage": "/ai-visibility-index/2026/automotive/passenger-cars"
+          },
+          "period": {
+            "end": null,
+            "start": null
+          },
+          "reason": "Landing page /ai-visibility-index/2026/automotive/passenger-cars received 9 sessions with an engagement rate of 44.44% and a bounce rate of 55.56%.",
+          "source": "google_analytics",
+          "filters": {
+            "limit": 50,
+            "minScore": 0,
+            "minSessions": 0,
+            "minBounceRate": 0,
+            "maxEngagementRate": 1,
+            "maxViewsPerSession": 1.2,
+            "maxAverageSessionDuration": 25
+          },
+          "metrics": {
+            "sessions": 9,
+            "bounceRate": 0.5556,
+            "totalUsers": 7,
+            "engagementRate": 0.4444
+          },
+          "property": null,
+          "capability": "landing_underperformance",
+          "recommendation": "Review the landing-page experience and engagement elements for /ai-visibility-index/2026/automotive/passenger-cars.",
+          "score_breakdown": {
+            "inputs": {
+              "erGap": 0.005556,
+              "vpsGap": 0,
+              "sessions": 9,
+              "bounceGap": 0.005556,
+              "bounceRate": 0.5556,
+              "durationGap": 0,
+              "engagementRate": 0.4444,
+              "viewsPerSession": null,
+              "averageSessionDuration": null
+            },
+            "volume": 0.006,
+            "formula": "min(1, sessions/1500) * max(ER_gap, bounce_gap, viewsPerSession_gap, duration_gap) * 100",
+            "payoffGap": 0.005556,
+            "payoffGap_definition": "max(ER gap vs 0.45, bounce gap vs 0.55, viewsPerSession gap vs 1.5, duration gap vs 40s)"
+          },
+          "opportunity_type": "landing_underperformance",
+          "__ga4Intelligence": true
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      },
+      {
+        "json": {
+          "score": 0,
+          "entity": {
+            "label": "/blog/seo-keywords-vs-geo-prompts-whats-changing-in-search-behavior",
+            "landingPage": "/blog/seo-keywords-vs-geo-prompts-whats-changing-in-search-behavior"
+          },
+          "period": {
+            "end": null,
+            "start": null
+          },
+          "reason": "Landing page /blog/seo-keywords-vs-geo-prompts-whats-changing-in-search-behavior received 9 sessions with an engagement rate of 55.56% and a bounce rate of 44.44%.",
+          "source": "google_analytics",
+          "filters": {
+            "limit": 50,
+            "minScore": 0,
+            "minSessions": 0,
+            "minBounceRate": 0,
+            "maxEngagementRate": 1,
+            "maxViewsPerSession": 1.2,
+            "maxAverageSessionDuration": 25
+          },
+          "metrics": {
+            "sessions": 9,
+            "bounceRate": 0.4444,
+            "totalUsers": 9,
+            "engagementRate": 0.5556
+          },
+          "property": null,
+          "capability": "landing_underperformance",
+          "recommendation": "Review the landing-page experience and engagement elements for /blog/seo-keywords-vs-geo-prompts-whats-changing-in-search-behavior.",
+          "score_breakdown": {
+            "inputs": {
+              "erGap": 0,
+              "vpsGap": 0,
+              "sessions": 9,
+              "bounceGap": 0,
+              "bounceRate": 0.4444,
+              "durationGap": 0,
+              "engagementRate": 0.5556,
+              "viewsPerSession": null,
+              "averageSessionDuration": null
+            },
+            "volume": 0.006,
+            "formula": "min(1, sessions/1500) * max(ER_gap, bounce_gap, viewsPerSession_gap, duration_gap) * 100",
+            "payoffGap": 0,
+            "payoffGap_definition": "max(ER gap vs 0.45, bounce gap vs 0.55, viewsPerSession gap vs 1.5, duration gap vs 40s)"
+          },
+          "opportunity_type": "landing_underperformance",
+          "__ga4Intelligence": true
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      }
+    ],
+    "label": "Landing Underperformance",
+    "period": {
+      "end": null,
+      "start": null
+    },
+    "filters": {
+      "limit": 50,
+      "minScore": 0,
+      "minSessions": 0,
+      "minBounceRate": 0,
+      "maxEngagementRate": 1,
+      "maxViewsPerSession": 1.2,
+      "maxAverageSessionDuration": 25
+    },
+    "itemsIn": 60,
+    "category": "intelligence",
+    "executed": [
+      "landing_underperformance"
+    ],
+    "itemsOut": 50,
+    "property": null,
+    "scaffold": false,
+    "warnings": [
+      {
+        "code": "GA4_LANDING_ENTITY_UNRESOLVED",
+        "message": "2 row(s) had an unresolved landingPage value (e.g. \"(not set)\") and cannot be evaluated as a specific landing-page entity. Those rows were skipped and pagePath was not used as a fallback.",
+        "samples": [
+          "(not set)",
+          ""
+        ],
+        "capability": "landing_underperformance",
+        "unresolvedCount": 2
+      }
+    ],
+    "inventory": {
+      "allKeys": [
+        "bounceRate",
+        "engagementRate",
+        "landingPage",
+        "sessions",
+        "totalUsers"
+      ],
+      "availableMetrics": [
+        "bounceRate",
+        "engagementRate",
+        "sessions",
+        "totalUsers"
+      ],
+      "availableDimensions": [
+        "landingPage"
+      ]
+    },
+    "capability": "landing_underperformance",
+    "implemented": true,
+    "capabilities": [
+      "landing_underperformance"
+    ],
+    "runtimeDiagnostics": {
+      "nodeId": "ga4McpTool-1790083223630",
+      "handoff": {
+        "nodeId": "ga4McpTool-1790083223630",
+        "rowsDetected": true,
+        "inputItemCount": 60,
+        "firstItemTopKeys": [
+          "json",
+          "pairedItem"
+        ],
+        "firstItemJsonKeys": [
+          "landingPage",
+          "sessions",
+          "totalUsers",
+          "engagementRate",
+          "bounceRate"
+        ]
+      },
+      "executed": [
+        "landing_underperformance"
+      ],
+      "outputItemCount": 50,
+      "outputCapabilities": {
+        "landing_underperformance": 50
+      },
+      "receivedCapability": "landing_underperformance",
+      "receivedCapabilities": [
+        "landing_underperformance"
+      ],
+      "selectedCapabilities": [
+        "landing_underperformance"
+      ]
+    },
+    "intelligenceContext": {
+      "kind": "ga4_intelligence_context",
+      "period": {
+        "end": null,
+        "start": null
+      },
+      "source": "google_analytics",
+      "property": null,
+      "warnings": [
+        {
+          "code": "GA4_LANDING_ENTITY_UNRESOLVED",
+          "message": "2 row(s) had an unresolved landingPage value (e.g. \"(not set)\") and cannot be evaluated as a specific landing-page entity. Those rows were skipped and pagePath was not used as a fallback.",
+          "samples": [
+            "(not set)",
+            ""
+          ],
+          "capability": "landing_underperformance",
+          "unresolvedCount": 2
+        }
+      ],
+      "capabilities": [
+        {
+          "count": 50,
+          "filters": {
+            "limit": 50,
+            "minScore": 0,
+            "minSessions": 0,
+            "minBounceRate": 0,
+            "maxEngagementRate": 1,
+            "maxViewsPerSession": 1.2,
+            "maxAverageSessionDuration": 25
+          },
+          "results": [
+            {
+              "score": 0.44,
+              "entity": {
+                "label": "/blog/the-best-generative-engine-optimization-geo-tools",
+                "landingPage": "/blog/the-best-generative-engine-optimization-geo-tools"
+              },
+              "reason": "Landing page /blog/the-best-generative-engine-optimization-geo-tools received 19 sessions with an engagement rate of 10.53% and a bounce rate of 89.47%.",
+              "metrics": {
+                "sessions": 19,
+                "bounceRate": 0.8947,
+                "totalUsers": 18,
+                "engagementRate": 0.1053
+              },
+              "recommendation": "Review the landing-page experience and engagement elements for /blog/the-best-generative-engine-optimization-geo-tools.",
+              "score_breakdown": {
+                "inputs": {
+                  "erGap": 0.344737,
+                  "vpsGap": 0,
+                  "sessions": 19,
+                  "bounceGap": 0.344737,
+                  "bounceRate": 0.8947,
+                  "durationGap": 0,
+                  "engagementRate": 0.1053,
+                  "viewsPerSession": null,
+                  "averageSessionDuration": null
+                },
+                "volume": 0.012667,
+                "formula": "min(1, sessions/1500) * max(ER_gap, bounce_gap, viewsPerSession_gap, duration_gap) * 100",
+                "payoffGap": 0.344737,
+                "payoffGap_definition": "max(ER gap vs 0.45, bounce gap vs 0.55, viewsPerSession gap vs 1.5, duration gap vs 40s)"
+              },
+              "opportunity_type": "landing_underperformance"
+            },
+            {
+              "score": 0.27,
+              "entity": {
+                "label": "/blog/understanding-the-4-types-of-ai-search-intent-informational-navigational-comparative-transactional",
+                "landingPage": "/blog/understanding-the-4-types-of-ai-search-intent-informational-navigational-comparative-transactional"
+              },
+              "reason": "Landing page /blog/understanding-the-4-types-of-ai-search-intent-informational-navigational-comparative-transactional received 9 sessions with an engagement rate of 0% and a bounce rate of 100%.",
+              "metrics": {
+                "sessions": 9,
+                "bounceRate": 1,
+                "totalUsers": 9,
+                "engagementRate": 0
+              },
+              "recommendation": "Review the landing-page experience and engagement elements for /blog/understanding-the-4-types-of-ai-search-intent-informational-navigational-comparative-transactional.",
+              "score_breakdown": {
+                "inputs": {
+                  "erGap": 0.45,
+                  "vpsGap": 0,
+                  "sessions": 9,
+                  "bounceGap": 0.45,
+                  "bounceRate": 1,
+                  "durationGap": 0,
+                  "engagementRate": 0,
+                  "viewsPerSession": null,
+                  "averageSessionDuration": null
+                },
+                "volume": 0.006,
+                "formula": "min(1, sessions/1500) * max(ER_gap, bounce_gap, viewsPerSession_gap, duration_gap) * 100",
+                "payoffGap": 0.45,
+                "payoffGap_definition": "max(ER gap vs 0.45, bounce gap vs 0.55, viewsPerSession gap vs 1.5, duration gap vs 40s)"
+              },
+              "opportunity_type": "landing_underperformance"
+            },
+            {
+              "score": 0.24,
+              "entity": {
+                "label": "/agency-partner-program",
+                "landingPage": "/agency-partner-program"
+              },
+              "reason": "Landing page /agency-partner-program received 8 sessions with an engagement rate of 0% and a bounce rate of 100%.",
+              "metrics": {
+                "sessions": 8,
+                "bounceRate": 1,
+                "totalUsers": 8,
+                "engagementRate": 0
+              },
+              "recommendation": "Review the landing-page experience and engagement elements for /agency-partner-program.",
+              "score_breakdown": {
+                "inputs": {
+                  "erGap": 0.45,
+                  "vpsGap": 0,
+                  "sessions": 8,
+                  "bounceGap": 0.45,
+                  "bounceRate": 1,
+                  "durationGap": 0,
+                  "engagementRate": 0,
+                  "viewsPerSession": null,
+                  "averageSessionDuration": null
+                },
+                "volume": 0.005333,
+                "formula": "min(1, sessions/1500) * max(ER_gap, bounce_gap, viewsPerSession_gap, duration_gap) * 100",
+                "payoffGap": 0.45,
+                "payoffGap_definition": "max(ER gap vs 0.45, bounce gap vs 0.55, viewsPerSession gap vs 1.5, duration gap vs 40s)"
+              },
+              "opportunity_type": "landing_underperformance"
+            },
+            {
+              "score": 0.24,
+              "entity": {
+                "label": "/blog/how-generative-engines-parse-intent-llm-prompt-interpretation-explained",
+                "landingPage": "/blog/how-generative-engines-parse-intent-llm-prompt-interpretation-explained"
+              },
+              "reason": "Landing page /blog/how-generative-engines-parse-intent-llm-prompt-interpretation-explained received 8 sessions with an engagement rate of 0% and a bounce rate of 100%.",
+              "metrics": {
+                "sessions": 8,
+                "bounceRate": 1,
+                "totalUsers": 8,
+                "engagementRate": 0
+              },
+              "recommendation": "Review the landing-page experience and engagement elements for /blog/how-generative-engines-parse-intent-llm-prompt-interpretation-explained.",
+              "score_breakdown": {
+                "inputs": {
+                  "erGap": 0.45,
+                  "vpsGap": 0,
+                  "sessions": 8,
+                  "bounceGap": 0.45,
+                  "bounceRate": 1,
+                  "durationGap": 0,
+                  "engagementRate": 0,
+                  "viewsPerSession": null,
+                  "averageSessionDuration": null
+                },
+                "volume": 0.005333,
+                "formula": "min(1, sessions/1500) * max(ER_gap, bounce_gap, viewsPerSession_gap, duration_gap) * 100",
+                "payoffGap": 0.45,
+                "payoffGap_definition": "max(ER gap vs 0.45, bounce gap vs 0.55, viewsPerSession gap vs 1.5, duration gap vs 40s)"
+              },
+              "opportunity_type": "landing_underperformance"
+            },
+            {
+              "score": 0.24,
+              "entity": {
+                "label": "/perplexity-visibility-tracker",
+                "landingPage": "/perplexity-visibility-tracker"
+              },
+              "reason": "Landing page /perplexity-visibility-tracker received 8 sessions with an engagement rate of 0% and a bounce rate of 100%.",
+              "metrics": {
+                "sessions": 8,
+                "bounceRate": 1,
+                "totalUsers": 8,
+                "engagementRate": 0
+              },
+              "recommendation": "Review the landing-page experience and engagement elements for /perplexity-visibility-tracker.",
+              "score_breakdown": {
+                "inputs": {
+                  "erGap": 0.45,
+                  "vpsGap": 0,
+                  "sessions": 8,
+                  "bounceGap": 0.45,
+                  "bounceRate": 1,
+                  "durationGap": 0,
+                  "engagementRate": 0,
+                  "viewsPerSession": null,
+                  "averageSessionDuration": null
+                },
+                "volume": 0.005333,
+                "formula": "min(1, sessions/1500) * max(ER_gap, bounce_gap, viewsPerSession_gap, duration_gap) * 100",
+                "payoffGap": 0.45,
+                "payoffGap_definition": "max(ER gap vs 0.45, bounce gap vs 0.55, viewsPerSession gap vs 1.5, duration gap vs 40s)"
+              },
+              "opportunity_type": "landing_underperformance"
+            },
+            {
+              "score": 0.23,
+              "entity": {
+                "label": "/blog/ai-visibility-tracking-to-optimization-meet-the-govisible-action-center",
+                "landingPage": "/blog/ai-visibility-tracking-to-optimization-meet-the-govisible-action-center"
+              },
+              "reason": "Landing page /blog/ai-visibility-tracking-to-optimization-meet-the-govisible-action-center received 10 sessions with an engagement rate of 10% and a bounce rate of 90%.",
+              "metrics": {
+                "sessions": 10,
+                "bounceRate": 0.9,
+                "totalUsers": 10,
+                "engagementRate": 0.1
+              },
+              "recommendation": "Review the landing-page experience and engagement elements for /blog/ai-visibility-tracking-to-optimization-meet-the-govisible-action-center.",
+              "score_breakdown": {
+                "inputs": {
+                  "erGap": 0.35,
+                  "vpsGap": 0,
+                  "sessions": 10,
+                  "bounceGap": 0.35,
+                  "bounceRate": 0.9,
+                  "durationGap": 0,
+                  "engagementRate": 0.1,
+                  "viewsPerSession": null,
+                  "averageSessionDuration": null
+                },
+                "volume": 0.006667,
+                "formula": "min(1, sessions/1500) * max(ER_gap, bounce_gap, viewsPerSession_gap, duration_gap) * 100",
+                "payoffGap": 0.35,
+                "payoffGap_definition": "max(ER gap vs 0.45, bounce gap vs 0.55, viewsPerSession gap vs 1.5, duration gap vs 40s)"
+              },
+              "opportunity_type": "landing_underperformance"
+            },
+            {
+              "score": 0.21,
+              "entity": {
+                "label": "/blog/how-brands-can-avoid-ai-confusion-and-misrepresentation",
+                "landingPage": "/blog/how-brands-can-avoid-ai-confusion-and-misrepresentation"
+              },
+              "reason": "Landing page /blog/how-brands-can-avoid-ai-confusion-and-misrepresentation received 16 sessions with an engagement rate of 25% and a bounce rate of 75%.",
+              "metrics": {
+                "sessions": 16,
+                "bounceRate": 0.75,
+                "totalUsers": 16,
+                "engagementRate": 0.25
+              },
+              "recommendation": "Review the landing-page experience and engagement elements for /blog/how-brands-can-avoid-ai-confusion-and-misrepresentation.",
+              "score_breakdown": {
+                "inputs": {
+                  "erGap": 0.2,
+                  "vpsGap": 0,
+                  "sessions": 16,
+                  "bounceGap": 0.2,
+                  "bounceRate": 0.75,
+                  "durationGap": 0,
+                  "engagementRate": 0.25,
+                  "viewsPerSession": null,
+                  "averageSessionDuration": null
+                },
+                "volume": 0.010667,
+                "formula": "min(1, sessions/1500) * max(ER_gap, bounce_gap, viewsPerSession_gap, duration_gap) * 100",
+                "payoffGap": 0.2,
+                "payoffGap_definition": "max(ER gap vs 0.45, bounce gap vs 0.55, viewsPerSession gap vs 1.5, duration gap vs 40s)"
+              },
+              "opportunity_type": "landing_underperformance"
+            },
+            {
+              "score": 0.21,
+              "entity": {
+                "label": "/visible-partner-program",
+                "landingPage": "/visible-partner-program"
+              },
+              "reason": "Landing page /visible-partner-program received 7 sessions with an engagement rate of 0% and a bounce rate of 100%.",
+              "metrics": {
+                "sessions": 7,
+                "bounceRate": 1,
+                "totalUsers": 7,
+                "engagementRate": 0
+              },
+              "recommendation": "Review the landing-page experience and engagement elements for /visible-partner-program.",
+              "score_breakdown": {
+                "inputs": {
+                  "erGap": 0.45,
+                  "vpsGap": 0,
+                  "sessions": 7,
+                  "bounceGap": 0.45,
+                  "bounceRate": 1,
+                  "durationGap": 0,
+                  "engagementRate": 0,
+                  "viewsPerSession": null,
+                  "averageSessionDuration": null
+                },
+                "volume": 0.004667,
+                "formula": "min(1, sessions/1500) * max(ER_gap, bounce_gap, viewsPerSession_gap, duration_gap) * 100",
+                "payoffGap": 0.45,
+                "payoffGap_definition": "max(ER gap vs 0.45, bounce gap vs 0.55, viewsPerSession gap vs 1.5, duration gap vs 40s)"
+              },
+              "opportunity_type": "landing_underperformance"
+            },
+            {
+              "score": 0.2,
+              "entity": {
+                "label": "/framework",
+                "landingPage": "/framework"
+              },
+              "reason": "Landing page /framework received 11 sessions with an engagement rate of 18.18% and a bounce rate of 81.82%.",
+              "metrics": {
+                "sessions": 11,
+                "bounceRate": 0.8182,
+                "totalUsers": 10,
+                "engagementRate": 0.1818
+              },
+              "recommendation": "Review the landing-page experience and engagement elements for /framework.",
+              "score_breakdown": {
+                "inputs": {
+                  "erGap": 0.268182,
+                  "vpsGap": 0,
+                  "sessions": 11,
+                  "bounceGap": 0.268182,
+                  "bounceRate": 0.8182,
+                  "durationGap": 0,
+                  "engagementRate": 0.1818,
+                  "viewsPerSession": null,
+                  "averageSessionDuration": null
+                },
+                "volume": 0.007333,
+                "formula": "min(1, sessions/1500) * max(ER_gap, bounce_gap, viewsPerSession_gap, duration_gap) * 100",
+                "payoffGap": 0.268182,
+                "payoffGap_definition": "max(ER gap vs 0.45, bounce gap vs 0.55, viewsPerSession gap vs 1.5, duration gap vs 40s)"
+              },
+              "opportunity_type": "landing_underperformance"
+            },
+            {
+              "score": 0.2,
+              "entity": {
+                "label": "/blog/the-role-of-reviews-forums-and-mentions-in-ai-brand-visibility",
+                "landingPage": "/blog/the-role-of-reviews-forums-and-mentions-in-ai-brand-visibility"
+              },
+              "reason": "Landing page /blog/the-role-of-reviews-forums-and-mentions-in-ai-brand-visibility received 9 sessions with an engagement rate of 11.11% and a bounce rate of 88.89%.",
+              "metrics": {
+                "sessions": 9,
+                "bounceRate": 0.8889,
+                "totalUsers": 9,
+                "engagementRate": 0.1111
+              },
+              "recommendation": "Review the landing-page experience and engagement elements for /blog/the-role-of-reviews-forums-and-mentions-in-ai-brand-visibility.",
+              "score_breakdown": {
+                "inputs": {
+                  "erGap": 0.338889,
+                  "vpsGap": 0,
+                  "sessions": 9,
+                  "bounceGap": 0.338889,
+                  "bounceRate": 0.8889,
+                  "durationGap": 0,
+                  "engagementRate": 0.1111,
+                  "viewsPerSession": null,
+                  "averageSessionDuration": null
+                },
+                "volume": 0.006,
+                "formula": "min(1, sessions/1500) * max(ER_gap, bounce_gap, viewsPerSession_gap, duration_gap) * 100",
+                "payoffGap": 0.338889,
+                "payoffGap_definition": "max(ER gap vs 0.45, bounce gap vs 0.55, viewsPerSession gap vs 1.5, duration gap vs 40s)"
+              },
+              "opportunity_type": "landing_underperformance"
+            },
+            {
+              "score": 0.19,
+              "entity": {
+                "label": "/pricing",
+                "landingPage": "/pricing"
+              },
+              "reason": "Landing page /pricing received 33 sessions with an engagement rate of 36.36% and a bounce rate of 63.64%.",
+              "metrics": {
+                "sessions": 33,
+                "bounceRate": 0.6364,
+                "totalUsers": 29,
+                "engagementRate": 0.3636
+              },
+              "recommendation": "Review the landing-page experience and engagement elements for /pricing.",
+              "score_breakdown": {
+                "inputs": {
+                  "erGap": 0.086364,
+                  "vpsGap": 0,
+                  "sessions": 33,
+                  "bounceGap": 0.086364,
+                  "bounceRate": 0.6364,
+                  "durationGap": 0,
+                  "engagementRate": 0.3636,
+                  "viewsPerSession": null,
+                  "averageSessionDuration": null
+                },
+                "volume": 0.022,
+                "formula": "min(1, sessions/1500) * max(ER_gap, bounce_gap, viewsPerSession_gap, duration_gap) * 100",
+                "payoffGap": 0.086364,
+                "payoffGap_definition": "max(ER gap vs 0.45, bounce gap vs 0.55, viewsPerSession gap vs 1.5, duration gap vs 40s)"
+              },
+              "opportunity_type": "landing_underperformance"
+            },
+            {
+              "score": 0.19,
+              "entity": {
+                "label": "/blog/key-platforms-for-entity-optimization-across-industries",
+                "landingPage": "/blog/key-platforms-for-entity-optimization-across-industries"
+              },
+              "reason": "Landing page /blog/key-platforms-for-entity-optimization-across-industries received 13 sessions with an engagement rate of 23.08% and a bounce rate of 76.92%.",
+              "metrics": {
+                "sessions": 13,
+                "bounceRate": 0.7692,
+                "totalUsers": 13,
+                "engagementRate": 0.2308
+              },
+              "recommendation": "Review the landing-page experience and engagement elements for /blog/key-platforms-for-entity-optimization-across-industries.",
+              "score_breakdown": {
+                "inputs": {
+                  "erGap": 0.219231,
+                  "vpsGap": 0,
+                  "sessions": 13,
+                  "bounceGap": 0.219231,
+                  "bounceRate": 0.7692,
+                  "durationGap": 0,
+                  "engagementRate": 0.2308,
+                  "viewsPerSession": null,
+                  "averageSessionDuration": null
+                },
+                "volume": 0.008667,
+                "formula": "min(1, sessions/1500) * max(ER_gap, bounce_gap, viewsPerSession_gap, duration_gap) * 100",
+                "payoffGap": 0.219231,
+                "payoffGap_definition": "max(ER gap vs 0.45, bounce gap vs 0.55, viewsPerSession gap vs 1.5, duration gap vs 40s)"
+              },
+              "opportunity_type": "landing_underperformance"
+            },
+            {
+              "score": 0.18,
+              "entity": {
+                "label": "/blog/structured-content-engineering-how-brands-build-ai-readable-content",
+                "landingPage": "/blog/structured-content-engineering-how-brands-build-ai-readable-content"
+              },
+              "reason": "Landing page /blog/structured-content-engineering-how-brands-build-ai-readable-content received 6 sessions with an engagement rate of 0% and a bounce rate of 100%.",
+              "metrics": {
+                "sessions": 6,
+                "bounceRate": 1,
+                "totalUsers": 6,
+                "engagementRate": 0
+              },
+              "recommendation": "Review the landing-page experience and engagement elements for /blog/structured-content-engineering-how-brands-build-ai-readable-content.",
+              "score_breakdown": {
+                "inputs": {
+                  "erGap": 0.45,
+                  "vpsGap": 0,
+                  "sessions": 6,
+                  "bounceGap": 0.45,
+                  "bounceRate": 1,
+                  "durationGap": 0,
+                  "engagementRate": 0,
+                  "viewsPerSession": null,
+                  "averageSessionDuration": null
+                },
+                "volume": 0.004,
+                "formula": "min(1, sessions/1500) * max(ER_gap, bounce_gap, viewsPerSession_gap, duration_gap) * 100",
+                "payoffGap": 0.45,
+                "payoffGap_definition": "max(ER gap vs 0.45, bounce gap vs 0.55, viewsPerSession gap vs 1.5, duration gap vs 40s)"
+              },
+              "opportunity_type": "landing_underperformance"
+            },
+            {
+              "score": 0.18,
+              "entity": {
+                "label": "/gemini-visibility-tracker",
+                "landingPage": "/gemini-visibility-tracker"
+              },
+              "reason": "Landing page /gemini-visibility-tracker received 6 sessions with an engagement rate of 0% and a bounce rate of 100%.",
+              "metrics": {
+                "sessions": 6,
+                "bounceRate": 1,
+                "totalUsers": 6,
+                "engagementRate": 0
+              },
+              "recommendation": "Review the landing-page experience and engagement elements for /gemini-visibility-tracker.",
+              "score_breakdown": {
+                "inputs": {
+                  "erGap": 0.45,
+                  "vpsGap": 0,
+                  "sessions": 6,
+                  "bounceGap": 0.45,
+                  "bounceRate": 1,
+                  "durationGap": 0,
+                  "engagementRate": 0,
+                  "viewsPerSession": null,
+                  "averageSessionDuration": null
+                },
+                "volume": 0.004,
+                "formula": "min(1, sessions/1500) * max(ER_gap, bounce_gap, viewsPerSession_gap, duration_gap) * 100",
+                "payoffGap": 0.45,
+                "payoffGap_definition": "max(ER gap vs 0.45, bounce gap vs 0.55, viewsPerSession gap vs 1.5, duration gap vs 40s)"
+              },
+              "opportunity_type": "landing_underperformance"
+            },
+            {
+              "score": 0.18,
+              "entity": {
+                "label": "/intelligent-entity-optimization",
+                "landingPage": "/intelligent-entity-optimization"
+              },
+              "reason": "Landing page /intelligent-entity-optimization received 6 sessions with an engagement rate of 0% and a bounce rate of 100%.",
+              "metrics": {
+                "sessions": 6,
+                "bounceRate": 1,
+                "totalUsers": 6,
+                "engagementRate": 0
+              },
+              "recommendation": "Review the landing-page experience and engagement elements for /intelligent-entity-optimization.",
+              "score_breakdown": {
+                "inputs": {
+                  "erGap": 0.45,
+                  "vpsGap": 0,
+                  "sessions": 6,
+                  "bounceGap": 0.45,
+                  "bounceRate": 1,
+                  "durationGap": 0,
+                  "engagementRate": 0,
+                  "viewsPerSession": null,
+                  "averageSessionDuration": null
+                },
+                "volume": 0.004,
+                "formula": "min(1, sessions/1500) * max(ER_gap, bounce_gap, viewsPerSession_gap, duration_gap) * 100",
+                "payoffGap": 0.45,
+                "payoffGap_definition": "max(ER gap vs 0.45, bounce gap vs 0.55, viewsPerSession gap vs 1.5, duration gap vs 40s)"
+              },
+              "opportunity_type": "landing_underperformance"
+            },
+            {
+              "score": 0.18,
+              "entity": {
+                "label": "/templates/external-citation-tracker",
+                "landingPage": "/templates/external-citation-tracker"
+              },
+              "reason": "Landing page /templates/external-citation-tracker received 6 sessions with an engagement rate of 0% and a bounce rate of 100%.",
+              "metrics": {
+                "sessions": 6,
+                "bounceRate": 1,
+                "totalUsers": 6,
+                "engagementRate": 0
+              },
+              "recommendation": "Review the landing-page experience and engagement elements for /templates/external-citation-tracker.",
+              "score_breakdown": {
+                "inputs": {
+                  "erGap": 0.45,
+                  "vpsGap": 0,
+                  "sessions": 6,
+                  "bounceGap": 0.45,
+                  "bounceRate": 1,
+                  "durationGap": 0,
+                  "engagementRate": 0,
+                  "viewsPerSession": null,
+                  "averageSessionDuration": null
+                },
+                "volume": 0.004,
+                "formula": "min(1, sessions/1500) * max(ER_gap, bounce_gap, viewsPerSession_gap, duration_gap) * 100",
+                "payoffGap": 0.45,
+                "payoffGap_definition": "max(ER gap vs 0.45, bounce gap vs 0.55, viewsPerSession gap vs 1.5, duration gap vs 40s)"
+              },
+              "opportunity_type": "landing_underperformance"
+            },
+            {
+              "score": 0.18,
+              "entity": {
+                "label": "/voice-of-the-searcher",
+                "landingPage": "/voice-of-the-searcher"
+              },
+              "reason": "Landing page /voice-of-the-searcher received 6 sessions with an engagement rate of 0% and a bounce rate of 100%.",
+              "metrics": {
+                "sessions": 6,
+                "bounceRate": 1,
+                "totalUsers": 6,
+                "engagementRate": 0
+              },
+              "recommendation": "Review the landing-page experience and engagement elements for /voice-of-the-searcher.",
+              "score_breakdown": {
+                "inputs": {
+                  "erGap": 0.45,
+                  "vpsGap": 0,
+                  "sessions": 6,
+                  "bounceGap": 0.45,
+                  "bounceRate": 1,
+                  "durationGap": 0,
+                  "engagementRate": 0,
+                  "viewsPerSession": null,
+                  "averageSessionDuration": null
+                },
+                "volume": 0.004,
+                "formula": "min(1, sessions/1500) * max(ER_gap, bounce_gap, viewsPerSession_gap, duration_gap) * 100",
+                "payoffGap": 0.45,
+                "payoffGap_definition": "max(ER gap vs 0.45, bounce gap vs 0.55, viewsPerSession gap vs 1.5, duration gap vs 40s)"
+              },
+              "opportunity_type": "landing_underperformance"
+            },
+            {
+              "score": 0.17,
+              "entity": {
+                "label": "/learnability-testing-and-visibility-scoring",
+                "landingPage": "/learnability-testing-and-visibility-scoring"
+              },
+              "reason": "Landing page /learnability-testing-and-visibility-scoring received 8 sessions with an engagement rate of 12.5% and a bounce rate of 87.5%.",
+              "metrics": {
+                "sessions": 8,
+                "bounceRate": 0.875,
+                "totalUsers": 8,
+                "engagementRate": 0.125
+              },
+              "recommendation": "Review the landing-page experience and engagement elements for /learnability-testing-and-visibility-scoring.",
+              "score_breakdown": {
+                "inputs": {
+                  "erGap": 0.325,
+                  "vpsGap": 0,
+                  "sessions": 8,
+                  "bounceGap": 0.325,
+                  "bounceRate": 0.875,
+                  "durationGap": 0,
+                  "engagementRate": 0.125,
+                  "viewsPerSession": null,
+                  "averageSessionDuration": null
+                },
+                "volume": 0.005333,
+                "formula": "min(1, sessions/1500) * max(ER_gap, bounce_gap, viewsPerSession_gap, duration_gap) * 100",
+                "payoffGap": 0.325,
+                "payoffGap_definition": "max(ER gap vs 0.45, bounce gap vs 0.55, viewsPerSession gap vs 1.5, duration gap vs 40s)"
+              },
+              "opportunity_type": "landing_underperformance"
+            },
+            {
+              "score": 0.15,
+              "entity": {
+                "label": "/blog/how-govisible-audits-your-brand-across-ai-engines-a-deep-dive-into-multi-engine-visibility",
+                "landingPage": "/blog/how-govisible-audits-your-brand-across-ai-engines-a-deep-dive-into-multi-engine-visibility"
+              },
+              "reason": "Landing page /blog/how-govisible-audits-your-brand-across-ai-engines-a-deep-dive-into-multi-engine-visibility received 5 sessions with an engagement rate of 0% and a bounce rate of 100%.",
+              "metrics": {
+                "sessions": 5,
+                "bounceRate": 1,
+                "totalUsers": 5,
+                "engagementRate": 0
+              },
+              "recommendation": "Review the landing-page experience and engagement elements for /blog/how-govisible-audits-your-brand-across-ai-engines-a-deep-dive-into-multi-engine-visibility.",
+              "score_breakdown": {
+                "inputs": {
+                  "erGap": 0.45,
+                  "vpsGap": 0,
+                  "sessions": 5,
+                  "bounceGap": 0.45,
+                  "bounceRate": 1,
+                  "durationGap": 0,
+                  "engagementRate": 0,
+                  "viewsPerSession": null,
+                  "averageSessionDuration": null
+                },
+                "volume": 0.003333,
+                "formula": "min(1, sessions/1500) * max(ER_gap, bounce_gap, viewsPerSession_gap, duration_gap) * 100",
+                "payoffGap": 0.45,
+                "payoffGap_definition": "max(ER gap vs 0.45, bounce gap vs 0.55, viewsPerSession gap vs 1.5, duration gap vs 40s)"
+              },
+              "opportunity_type": "landing_underperformance"
+            },
+            {
+              "score": 0.15,
+              "entity": {
+                "label": "/blog/track-ai-bot-traffic-on-your-website-monitor-ai-crawlers-user-agents-and-crawl-activity",
+                "landingPage": "/blog/track-ai-bot-traffic-on-your-website-monitor-ai-crawlers-user-agents-and-crawl-activity"
+              },
+              "reason": "Landing page /blog/track-ai-bot-traffic-on-your-website-monitor-ai-crawlers-user-agents-and-crawl-activity received 5 sessions with an engagement rate of 0% and a bounce rate of 100%.",
+              "metrics": {
+                "sessions": 5,
+                "bounceRate": 1,
+                "totalUsers": 5,
+                "engagementRate": 0
+              },
+              "recommendation": "Review the landing-page experience and engagement elements for /blog/track-ai-bot-traffic-on-your-website-monitor-ai-crawlers-user-agents-and-crawl-activity.",
+              "score_breakdown": {
+                "inputs": {
+                  "erGap": 0.45,
+                  "vpsGap": 0,
+                  "sessions": 5,
+                  "bounceGap": 0.45,
+                  "bounceRate": 1,
+                  "durationGap": 0,
+                  "engagementRate": 0,
+                  "viewsPerSession": null,
+                  "averageSessionDuration": null
+                },
+                "volume": 0.003333,
+                "formula": "min(1, sessions/1500) * max(ER_gap, bounce_gap, viewsPerSession_gap, duration_gap) * 100",
+                "payoffGap": 0.45,
+                "payoffGap_definition": "max(ER gap vs 0.45, bounce gap vs 0.55, viewsPerSession gap vs 1.5, duration gap vs 40s)"
+              },
+              "opportunity_type": "landing_underperformance"
+            },
+            {
+              "score": 0.14,
+              "entity": {
+                "label": "/blog/common-mistakes-to-avoid-in-intent-mapping-for-ai-search",
+                "landingPage": "/blog/common-mistakes-to-avoid-in-intent-mapping-for-ai-search"
+              },
+              "reason": "Landing page /blog/common-mistakes-to-avoid-in-intent-mapping-for-ai-search received 9 sessions with an engagement rate of 22.22% and a bounce rate of 77.78%.",
+              "metrics": {
+                "sessions": 9,
+                "bounceRate": 0.7778,
+                "totalUsers": 9,
+                "engagementRate": 0.2222
+              },
+              "recommendation": "Review the landing-page experience and engagement elements for /blog/common-mistakes-to-avoid-in-intent-mapping-for-ai-search.",
+              "score_breakdown": {
+                "inputs": {
+                  "erGap": 0.227778,
+                  "vpsGap": 0,
+                  "sessions": 9,
+                  "bounceGap": 0.227778,
+                  "bounceRate": 0.7778,
+                  "durationGap": 0,
+                  "engagementRate": 0.2222,
+                  "viewsPerSession": null,
+                  "averageSessionDuration": null
+                },
+                "volume": 0.006,
+                "formula": "min(1, sessions/1500) * max(ER_gap, bounce_gap, viewsPerSession_gap, duration_gap) * 100",
+                "payoffGap": 0.227778,
+                "payoffGap_definition": "max(ER gap vs 0.45, bounce gap vs 0.55, viewsPerSession gap vs 1.5, duration gap vs 40s)"
+              },
+              "opportunity_type": "landing_underperformance"
+            },
+            {
+              "score": 0.14,
+              "entity": {
+                "label": "/blog",
+                "landingPage": "/blog"
+              },
+              "reason": "Landing page /blog received 7 sessions with an engagement rate of 14.29% and a bounce rate of 85.71%.",
+              "metrics": {
+                "sessions": 7,
+                "bounceRate": 0.8571,
+                "totalUsers": 7,
+                "engagementRate": 0.1429
+              },
+              "recommendation": "Review the landing-page experience and engagement elements for /blog.",
+              "score_breakdown": {
+                "inputs": {
+                  "erGap": 0.307143,
+                  "vpsGap": 0,
+                  "sessions": 7,
+                  "bounceGap": 0.307143,
+                  "bounceRate": 0.8571,
+                  "durationGap": 0,
+                  "engagementRate": 0.1429,
+                  "viewsPerSession": null,
+                  "averageSessionDuration": null
+                },
+                "volume": 0.004667,
+                "formula": "min(1, sessions/1500) * max(ER_gap, bounce_gap, viewsPerSession_gap, duration_gap) * 100",
+                "payoffGap": 0.307143,
+                "payoffGap_definition": "max(ER gap vs 0.45, bounce gap vs 0.55, viewsPerSession gap vs 1.5, duration gap vs 40s)"
+              },
+              "opportunity_type": "landing_underperformance"
+            },
+            {
+              "score": 0.14,
+              "entity": {
+                "label": "/blog/the-knowledge-graph-layer-how-ai-models-understand-and-index-brands",
+                "landingPage": "/blog/the-knowledge-graph-layer-how-ai-models-understand-and-index-brands"
+              },
+              "reason": "Landing page /blog/the-knowledge-graph-layer-how-ai-models-understand-and-index-brands received 7 sessions with an engagement rate of 14.29% and a bounce rate of 85.71%.",
+              "metrics": {
+                "sessions": 7,
+                "bounceRate": 0.8571,
+                "totalUsers": 7,
+                "engagementRate": 0.1429
+              },
+              "recommendation": "Review the landing-page experience and engagement elements for /blog/the-knowledge-graph-layer-how-ai-models-understand-and-index-brands.",
+              "score_breakdown": {
+                "inputs": {
+                  "erGap": 0.307143,
+                  "vpsGap": 0,
+                  "sessions": 7,
+                  "bounceGap": 0.307143,
+                  "bounceRate": 0.8571,
+                  "durationGap": 0,
+                  "engagementRate": 0.1429,
+                  "viewsPerSession": null,
+                  "averageSessionDuration": null
+                },
+                "volume": 0.004667,
+                "formula": "min(1, sessions/1500) * max(ER_gap, bounce_gap, viewsPerSession_gap, duration_gap) * 100",
+                "payoffGap": 0.307143,
+                "payoffGap_definition": "max(ER gap vs 0.45, bounce gap vs 0.55, viewsPerSession gap vs 1.5, duration gap vs 40s)"
+              },
+              "opportunity_type": "landing_underperformance"
+            },
+            {
+              "score": 0.14,
+              "entity": {
+                "label": "/blog/the-role-of-schema-markup-in-generative-engine-optimization",
+                "landingPage": "/blog/the-role-of-schema-markup-in-generative-engine-optimization"
+              },
+              "reason": "Landing page /blog/the-role-of-schema-markup-in-generative-engine-optimization received 7 sessions with an engagement rate of 14.29% and a bounce rate of 85.71%.",
+              "metrics": {
+                "sessions": 7,
+                "bounceRate": 0.8571,
+                "totalUsers": 7,
+                "engagementRate": 0.1429
+              },
+              "recommendation": "Review the landing-page experience and engagement elements for /blog/the-role-of-schema-markup-in-generative-engine-optimization.",
+              "score_breakdown": {
+                "inputs": {
+                  "erGap": 0.307143,
+                  "vpsGap": 0,
+                  "sessions": 7,
+                  "bounceGap": 0.307143,
+                  "bounceRate": 0.8571,
+                  "durationGap": 0,
+                  "engagementRate": 0.1429,
+                  "viewsPerSession": null,
+                  "averageSessionDuration": null
+                },
+                "volume": 0.004667,
+                "formula": "min(1, sessions/1500) * max(ER_gap, bounce_gap, viewsPerSession_gap, duration_gap) * 100",
+                "payoffGap": 0.307143,
+                "payoffGap_definition": "max(ER gap vs 0.45, bounce gap vs 0.55, viewsPerSession gap vs 1.5, duration gap vs 40s)"
+              },
+              "opportunity_type": "landing_underperformance"
+            },
+            {
+              "score": 0.14,
+              "entity": {
+                "label": "/chatgpt-visibility-tracker",
+                "landingPage": "/chatgpt-visibility-tracker"
+              },
+              "reason": "Landing page /chatgpt-visibility-tracker received 7 sessions with an engagement rate of 14.29% and a bounce rate of 85.71%.",
+              "metrics": {
+                "sessions": 7,
+                "bounceRate": 0.8571,
+                "totalUsers": 7,
+                "engagementRate": 0.1429
+              },
+              "recommendation": "Review the landing-page experience and engagement elements for /chatgpt-visibility-tracker.",
+              "score_breakdown": {
+                "inputs": {
+                  "erGap": 0.307143,
+                  "vpsGap": 0,
+                  "sessions": 7,
+                  "bounceGap": 0.307143,
+                  "bounceRate": 0.8571,
+                  "durationGap": 0,
+                  "engagementRate": 0.1429,
+                  "viewsPerSession": null,
+                  "averageSessionDuration": null
+                },
+                "volume": 0.004667,
+                "formula": "min(1, sessions/1500) * max(ER_gap, bounce_gap, viewsPerSession_gap, duration_gap) * 100",
+                "payoffGap": 0.307143,
+                "payoffGap_definition": "max(ER gap vs 0.45, bounce gap vs 0.55, viewsPerSession gap vs 1.5, duration gap vs 40s)"
+              },
+              "opportunity_type": "landing_underperformance"
+            },
+            {
+              "score": 0.14,
+              "entity": {
+                "label": "/intent-to-answer-mapping",
+                "landingPage": "/intent-to-answer-mapping"
+              },
+              "reason": "Landing page /intent-to-answer-mapping received 7 sessions with an engagement rate of 14.29% and a bounce rate of 85.71%.",
+              "metrics": {
+                "sessions": 7,
+                "bounceRate": 0.8571,
+                "totalUsers": 7,
+                "engagementRate": 0.1429
+              },
+              "recommendation": "Review the landing-page experience and engagement elements for /intent-to-answer-mapping.",
+              "score_breakdown": {
+                "inputs": {
+                  "erGap": 0.307143,
+                  "vpsGap": 0,
+                  "sessions": 7,
+                  "bounceGap": 0.307143,
+                  "bounceRate": 0.8571,
+                  "durationGap": 0,
+                  "engagementRate": 0.1429,
+                  "viewsPerSession": null,
+                  "averageSessionDuration": null
+                },
+                "volume": 0.004667,
+                "formula": "min(1, sessions/1500) * max(ER_gap, bounce_gap, viewsPerSession_gap, duration_gap) * 100",
+                "payoffGap": 0.307143,
+                "payoffGap_definition": "max(ER gap vs 0.45, bounce gap vs 0.55, viewsPerSession gap vs 1.5, duration gap vs 40s)"
+              },
+              "opportunity_type": "landing_underperformance"
+            },
+            {
+              "score": 0.14,
+              "entity": {
+                "label": "/templates/prompt-mining-canvas",
+                "landingPage": "/templates/prompt-mining-canvas"
+              },
+              "reason": "Landing page /templates/prompt-mining-canvas received 7 sessions with an engagement rate of 14.29% and a bounce rate of 85.71%.",
+              "metrics": {
+                "sessions": 7,
+                "bounceRate": 0.8571,
+                "totalUsers": 6,
+                "engagementRate": 0.1429
+              },
+              "recommendation": "Review the landing-page experience and engagement elements for /templates/prompt-mining-canvas.",
+              "score_breakdown": {
+                "inputs": {
+                  "erGap": 0.307143,
+                  "vpsGap": 0,
+                  "sessions": 7,
+                  "bounceGap": 0.307143,
+                  "bounceRate": 0.8571,
+                  "durationGap": 0,
+                  "engagementRate": 0.1429,
+                  "viewsPerSession": null,
+                  "averageSessionDuration": null
+                },
+                "volume": 0.004667,
+                "formula": "min(1, sessions/1500) * max(ER_gap, bounce_gap, viewsPerSession_gap, duration_gap) * 100",
+                "payoffGap": 0.307143,
+                "payoffGap_definition": "max(ER gap vs 0.45, bounce gap vs 0.55, viewsPerSession gap vs 1.5, duration gap vs 40s)"
+              },
+              "opportunity_type": "landing_underperformance"
+            },
+            {
+              "score": 0.11,
+              "entity": {
+                "label": "/blog/ai-citation-strategies",
+                "landingPage": "/blog/ai-citation-strategies"
+              },
+              "reason": "Landing page /blog/ai-citation-strategies received 8 sessions with an engagement rate of 25% and a bounce rate of 75%.",
+              "metrics": {
+                "sessions": 8,
+                "bounceRate": 0.75,
+                "totalUsers": 8,
+                "engagementRate": 0.25
+              },
+              "recommendation": "Review the landing-page experience and engagement elements for /blog/ai-citation-strategies.",
+              "score_breakdown": {
+                "inputs": {
+                  "erGap": 0.2,
+                  "vpsGap": 0,
+                  "sessions": 8,
+                  "bounceGap": 0.2,
+                  "bounceRate": 0.75,
+                  "durationGap": 0,
+                  "engagementRate": 0.25,
+                  "viewsPerSession": null,
+                  "averageSessionDuration": null
+                },
+                "volume": 0.005333,
+                "formula": "min(1, sessions/1500) * max(ER_gap, bounce_gap, viewsPerSession_gap, duration_gap) * 100",
+                "payoffGap": 0.2,
+                "payoffGap_definition": "max(ER gap vs 0.45, bounce gap vs 0.55, viewsPerSession gap vs 1.5, duration gap vs 40s)"
+              },
+              "opportunity_type": "landing_underperformance"
+            },
+            {
+              "score": 0.11,
+              "entity": {
+                "label": "/blog/tools-techniques-how-to-extract-and-analyze-searcher-prompts",
+                "landingPage": "/blog/tools-techniques-how-to-extract-and-analyze-searcher-prompts"
+              },
+              "reason": "Landing page /blog/tools-techniques-how-to-extract-and-analyze-searcher-prompts received 8 sessions with an engagement rate of 25% and a bounce rate of 75%.",
+              "metrics": {
+                "sessions": 8,
+                "bounceRate": 0.75,
+                "totalUsers": 8,
+                "engagementRate": 0.25
+              },
+              "recommendation": "Review the landing-page experience and engagement elements for /blog/tools-techniques-how-to-extract-and-analyze-searcher-prompts.",
+              "score_breakdown": {
+                "inputs": {
+                  "erGap": 0.2,
+                  "vpsGap": 0,
+                  "sessions": 8,
+                  "bounceGap": 0.2,
+                  "bounceRate": 0.75,
+                  "durationGap": 0,
+                  "engagementRate": 0.25,
+                  "viewsPerSession": null,
+                  "averageSessionDuration": null
+                },
+                "volume": 0.005333,
+                "formula": "min(1, sessions/1500) * max(ER_gap, bounce_gap, viewsPerSession_gap, duration_gap) * 100",
+                "payoffGap": 0.2,
+                "payoffGap_definition": "max(ER gap vs 0.45, bounce gap vs 0.55, viewsPerSession gap vs 1.5, duration gap vs 40s)"
+              },
+              "opportunity_type": "landing_underperformance"
+            },
+            {
+              "score": 0.11,
+              "entity": {
+                "label": "/blog/how-negative-brand-signals-can-undermine-ai-rankings",
+                "landingPage": "/blog/how-negative-brand-signals-can-undermine-ai-rankings"
+              },
+              "reason": "Landing page /blog/how-negative-brand-signals-can-undermine-ai-rankings received 6 sessions with an engagement rate of 16.67% and a bounce rate of 83.33%.",
+              "metrics": {
+                "sessions": 6,
+                "bounceRate": 0.8333,
+                "totalUsers": 6,
+                "engagementRate": 0.1667
+              },
+              "recommendation": "Review the landing-page experience and engagement elements for /blog/how-negative-brand-signals-can-undermine-ai-rankings.",
+              "score_breakdown": {
+                "inputs": {
+                  "erGap": 0.283333,
+                  "vpsGap": 0,
+                  "sessions": 6,
+                  "bounceGap": 0.283333,
+                  "bounceRate": 0.8333,
+                  "durationGap": 0,
+                  "engagementRate": 0.1667,
+                  "viewsPerSession": null,
+                  "averageSessionDuration": null
+                },
+                "volume": 0.004,
+                "formula": "min(1, sessions/1500) * max(ER_gap, bounce_gap, viewsPerSession_gap, duration_gap) * 100",
+                "payoffGap": 0.283333,
+                "payoffGap_definition": "max(ER gap vs 0.45, bounce gap vs 0.55, viewsPerSession gap vs 1.5, duration gap vs 40s)"
+              },
+              "opportunity_type": "landing_underperformance"
+            },
+            {
+              "score": 0.11,
+              "entity": {
+                "label": "/webinar/the-ai-blind-spot",
+                "landingPage": "/webinar/the-ai-blind-spot"
+              },
+              "reason": "Landing page /webinar/the-ai-blind-spot received 6 sessions with an engagement rate of 16.67% and a bounce rate of 83.33%.",
+              "metrics": {
+                "sessions": 6,
+                "bounceRate": 0.8333,
+                "totalUsers": 6,
+                "engagementRate": 0.1667
+              },
+              "recommendation": "Review the landing-page experience and engagement elements for /webinar/the-ai-blind-spot.",
+              "score_breakdown": {
+                "inputs": {
+                  "erGap": 0.283333,
+                  "vpsGap": 0,
+                  "sessions": 6,
+                  "bounceGap": 0.283333,
+                  "bounceRate": 0.8333,
+                  "durationGap": 0,
+                  "engagementRate": 0.1667,
+                  "viewsPerSession": null,
+                  "averageSessionDuration": null
+                },
+                "volume": 0.004,
+                "formula": "min(1, sessions/1500) * max(ER_gap, bounce_gap, viewsPerSession_gap, duration_gap) * 100",
+                "payoffGap": 0.283333,
+                "payoffGap_definition": "max(ER gap vs 0.45, bounce gap vs 0.55, viewsPerSession gap vs 1.5, duration gap vs 40s)"
+              },
+              "opportunity_type": "landing_underperformance"
+            },
+            {
+              "score": 0.1,
+              "entity": {
+                "label": "/blog/how-govisible-helps-you-track-competitor-visibility-across-ai-engines",
+                "landingPage": "/blog/how-govisible-helps-you-track-competitor-visibility-across-ai-engines"
+              },
+              "reason": "Landing page /blog/how-govisible-helps-you-track-competitor-visibility-across-ai-engines received 10 sessions with an engagement rate of 30% and a bounce rate of 70%.",
+              "metrics": {
+                "sessions": 10,
+                "bounceRate": 0.7,
+                "totalUsers": 10,
+                "engagementRate": 0.3
+              },
+              "recommendation": "Review the landing-page experience and engagement elements for /blog/how-govisible-helps-you-track-competitor-visibility-across-ai-engines.",
+              "score_breakdown": {
+                "inputs": {
+                  "erGap": 0.15,
+                  "vpsGap": 0,
+                  "sessions": 10,
+                  "bounceGap": 0.15,
+                  "bounceRate": 0.7,
+                  "durationGap": 0,
+                  "engagementRate": 0.3,
+                  "viewsPerSession": null,
+                  "averageSessionDuration": null
+                },
+                "volume": 0.006667,
+                "formula": "min(1, sessions/1500) * max(ER_gap, bounce_gap, viewsPerSession_gap, duration_gap) * 100",
+                "payoffGap": 0.15,
+                "payoffGap_definition": "max(ER gap vs 0.45, bounce gap vs 0.55, viewsPerSession gap vs 1.5, duration gap vs 40s)"
+              },
+              "opportunity_type": "landing_underperformance"
+            },
+            {
+              "score": 0.08,
+              "entity": {
+                "label": "/blog/how-to-format-content-for-ai-surfaced-answer-snippets",
+                "landingPage": "/blog/how-to-format-content-for-ai-surfaced-answer-snippets"
+              },
+              "reason": "Landing page /blog/how-to-format-content-for-ai-surfaced-answer-snippets received 5 sessions with an engagement rate of 20% and a bounce rate of 80%.",
+              "metrics": {
+                "sessions": 5,
+                "bounceRate": 0.8,
+                "totalUsers": 5,
+                "engagementRate": 0.2
+              },
+              "recommendation": "Review the landing-page experience and engagement elements for /blog/how-to-format-content-for-ai-surfaced-answer-snippets.",
+              "score_breakdown": {
+                "inputs": {
+                  "erGap": 0.25,
+                  "vpsGap": 0,
+                  "sessions": 5,
+                  "bounceGap": 0.25,
+                  "bounceRate": 0.8,
+                  "durationGap": 0,
+                  "engagementRate": 0.2,
+                  "viewsPerSession": null,
+                  "averageSessionDuration": null
+                },
+                "volume": 0.003333,
+                "formula": "min(1, sessions/1500) * max(ER_gap, bounce_gap, viewsPerSession_gap, duration_gap) * 100",
+                "payoffGap": 0.25,
+                "payoffGap_definition": "max(ER gap vs 0.45, bounce gap vs 0.55, viewsPerSession gap vs 1.5, duration gap vs 40s)"
+              },
+              "opportunity_type": "landing_underperformance"
+            },
+            {
+              "score": 0.06,
+              "entity": {
+                "label": "/blog/all-blogs",
+                "landingPage": "/blog/all-blogs"
+              },
+              "reason": "Landing page /blog/all-blogs received 13 sessions with an engagement rate of 38.46% and a bounce rate of 61.54%.",
+              "metrics": {
+                "sessions": 13,
+                "bounceRate": 0.6154,
+                "totalUsers": 13,
+                "engagementRate": 0.3846
+              },
+              "recommendation": "Review the landing-page experience and engagement elements for /blog/all-blogs.",
+              "score_breakdown": {
+                "inputs": {
+                  "erGap": 0.065385,
+                  "vpsGap": 0,
+                  "sessions": 13,
+                  "bounceGap": 0.065385,
+                  "bounceRate": 0.6154,
+                  "durationGap": 0,
+                  "engagementRate": 0.3846,
+                  "viewsPerSession": null,
+                  "averageSessionDuration": null
+                },
+                "volume": 0.008667,
+                "formula": "min(1, sessions/1500) * max(ER_gap, bounce_gap, viewsPerSession_gap, duration_gap) * 100",
+                "payoffGap": 0.065385,
+                "payoffGap_definition": "max(ER gap vs 0.45, bounce gap vs 0.55, viewsPerSession gap vs 1.5, duration gap vs 40s)"
+              },
+              "opportunity_type": "landing_underperformance"
+            },
+            {
+              "score": 0.06,
+              "entity": {
+                "label": "/about-visible",
+                "landingPage": "/about-visible"
+              },
+              "reason": "Landing page /about-visible received 11 sessions with an engagement rate of 36.36% and a bounce rate of 63.64%.",
+              "metrics": {
+                "sessions": 11,
+                "bounceRate": 0.6364,
+                "totalUsers": 11,
+                "engagementRate": 0.3636
+              },
+              "recommendation": "Review the landing-page experience and engagement elements for /about-visible.",
+              "score_breakdown": {
+                "inputs": {
+                  "erGap": 0.086364,
+                  "vpsGap": 0,
+                  "sessions": 11,
+                  "bounceGap": 0.086364,
+                  "bounceRate": 0.6364,
+                  "durationGap": 0,
+                  "engagementRate": 0.3636,
+                  "viewsPerSession": null,
+                  "averageSessionDuration": null
+                },
+                "volume": 0.007333,
+                "formula": "min(1, sessions/1500) * max(ER_gap, bounce_gap, viewsPerSession_gap, duration_gap) * 100",
+                "payoffGap": 0.086364,
+                "payoffGap_definition": "max(ER gap vs 0.45, bounce gap vs 0.55, viewsPerSession gap vs 1.5, duration gap vs 40s)"
+              },
+              "opportunity_type": "landing_underperformance"
+            },
+            {
+              "score": 0.06,
+              "entity": {
+                "label": "/blog/search-query-analysis",
+                "landingPage": "/blog/search-query-analysis"
+              },
+              "reason": "Landing page /blog/search-query-analysis received 11 sessions with an engagement rate of 36.36% and a bounce rate of 63.64%.",
+              "metrics": {
+                "sessions": 11,
+                "bounceRate": 0.6364,
+                "totalUsers": 11,
+                "engagementRate": 0.3636
+              },
+              "recommendation": "Review the landing-page experience and engagement elements for /blog/search-query-analysis.",
+              "score_breakdown": {
+                "inputs": {
+                  "erGap": 0.086364,
+                  "vpsGap": 0,
+                  "sessions": 11,
+                  "bounceGap": 0.086364,
+                  "bounceRate": 0.6364,
+                  "durationGap": 0,
+                  "engagementRate": 0.3636,
+                  "viewsPerSession": null,
+                  "averageSessionDuration": null
+                },
+                "volume": 0.007333,
+                "formula": "min(1, sessions/1500) * max(ER_gap, bounce_gap, viewsPerSession_gap, duration_gap) * 100",
+                "payoffGap": 0.086364,
+                "payoffGap_definition": "max(ER gap vs 0.45, bounce gap vs 0.55, viewsPerSession gap vs 1.5, duration gap vs 40s)"
+              },
+              "opportunity_type": "landing_underperformance"
+            },
+            {
+              "score": 0.05,
+              "entity": {
+                "label": "/blog/ai-visibility-insights",
+                "landingPage": "/blog/ai-visibility-insights"
+              },
+              "reason": "Landing page /blog/ai-visibility-insights received 6 sessions with an engagement rate of 33.33% and a bounce rate of 66.67%.",
+              "metrics": {
+                "sessions": 6,
+                "bounceRate": 0.6667,
+                "totalUsers": 6,
+                "engagementRate": 0.3333
+              },
+              "recommendation": "Review the landing-page experience and engagement elements for /blog/ai-visibility-insights.",
+              "score_breakdown": {
+                "inputs": {
+                  "erGap": 0.116667,
+                  "vpsGap": 0,
+                  "sessions": 6,
+                  "bounceGap": 0.116667,
+                  "bounceRate": 0.6667,
+                  "durationGap": 0,
+                  "engagementRate": 0.3333,
+                  "viewsPerSession": null,
+                  "averageSessionDuration": null
+                },
+                "volume": 0.004,
+                "formula": "min(1, sessions/1500) * max(ER_gap, bounce_gap, viewsPerSession_gap, duration_gap) * 100",
+                "payoffGap": 0.116667,
+                "payoffGap_definition": "max(ER gap vs 0.45, bounce gap vs 0.55, viewsPerSession gap vs 1.5, duration gap vs 40s)"
+              },
+              "opportunity_type": "landing_underperformance"
+            },
+            {
+              "score": 0.04,
+              "entity": {
+                "label": "/blog/the-anatomy-of-ai-optimized-content-headings-bullets-summaries",
+                "landingPage": "/blog/the-anatomy-of-ai-optimized-content-headings-bullets-summaries"
+              },
+              "reason": "Landing page /blog/the-anatomy-of-ai-optimized-content-headings-bullets-summaries received 8 sessions with an engagement rate of 37.5% and a bounce rate of 62.5%.",
+              "metrics": {
+                "sessions": 8,
+                "bounceRate": 0.625,
+                "totalUsers": 8,
+                "engagementRate": 0.375
+              },
+              "recommendation": "Review the landing-page experience and engagement elements for /blog/the-anatomy-of-ai-optimized-content-headings-bullets-summaries.",
+              "score_breakdown": {
+                "inputs": {
+                  "erGap": 0.075,
+                  "vpsGap": 0,
+                  "sessions": 8,
+                  "bounceGap": 0.075,
+                  "bounceRate": 0.625,
+                  "durationGap": 0,
+                  "engagementRate": 0.375,
+                  "viewsPerSession": null,
+                  "averageSessionDuration": null
+                },
+                "volume": 0.005333,
+                "formula": "min(1, sessions/1500) * max(ER_gap, bounce_gap, viewsPerSession_gap, duration_gap) * 100",
+                "payoffGap": 0.075,
+                "payoffGap_definition": "max(ER gap vs 0.45, bounce gap vs 0.55, viewsPerSession gap vs 1.5, duration gap vs 40s)"
+              },
+              "opportunity_type": "landing_underperformance"
+            },
+            {
+              "score": 0.04,
+              "entity": {
+                "label": "/govisible-platform",
+                "landingPage": "/govisible-platform"
+              },
+              "reason": "Landing page /govisible-platform received 8 sessions with an engagement rate of 37.5% and a bounce rate of 62.5%.",
+              "metrics": {
+                "sessions": 8,
+                "bounceRate": 0.625,
+                "totalUsers": 8,
+                "engagementRate": 0.375
+              },
+              "recommendation": "Review the landing-page experience and engagement elements for /govisible-platform.",
+              "score_breakdown": {
+                "inputs": {
+                  "erGap": 0.075,
+                  "vpsGap": 0,
+                  "sessions": 8,
+                  "bounceGap": 0.075,
+                  "bounceRate": 0.625,
+                  "durationGap": 0,
+                  "engagementRate": 0.375,
+                  "viewsPerSession": null,
+                  "averageSessionDuration": null
+                },
+                "volume": 0.005333,
+                "formula": "min(1, sessions/1500) * max(ER_gap, bounce_gap, viewsPerSession_gap, duration_gap) * 100",
+                "payoffGap": 0.075,
+                "payoffGap_definition": "max(ER gap vs 0.45, bounce gap vs 0.55, viewsPerSession gap vs 1.5, duration gap vs 40s)"
+              },
+              "opportunity_type": "landing_underperformance"
+            },
+            {
+              "score": 0.02,
+              "entity": {
+                "label": "/blog/entity-optimization-tips",
+                "landingPage": "/blog/entity-optimization-tips"
+              },
+              "reason": "Landing page /blog/entity-optimization-tips received 5 sessions with an engagement rate of 40% and a bounce rate of 60%.",
+              "metrics": {
+                "sessions": 5,
+                "bounceRate": 0.6,
+                "totalUsers": 5,
+                "engagementRate": 0.4
+              },
+              "recommendation": "Review the landing-page experience and engagement elements for /blog/entity-optimization-tips.",
+              "score_breakdown": {
+                "inputs": {
+                  "erGap": 0.05,
+                  "vpsGap": 0,
+                  "sessions": 5,
+                  "bounceGap": 0.05,
+                  "bounceRate": 0.6,
+                  "durationGap": 0,
+                  "engagementRate": 0.4,
+                  "viewsPerSession": null,
+                  "averageSessionDuration": null
+                },
+                "volume": 0.003333,
+                "formula": "min(1, sessions/1500) * max(ER_gap, bounce_gap, viewsPerSession_gap, duration_gap) * 100",
+                "payoffGap": 0.05,
+                "payoffGap_definition": "max(ER gap vs 0.45, bounce gap vs 0.55, viewsPerSession gap vs 1.5, duration gap vs 40s)"
+              },
+              "opportunity_type": "landing_underperformance"
+            },
+            {
+              "score": 0.01,
+              "entity": {
+                "label": "/govisible-ai-bot-tracker",
+                "landingPage": "/govisible-ai-bot-tracker"
+              },
+              "reason": "Landing page /govisible-ai-bot-tracker received 7 sessions with an engagement rate of 42.86% and a bounce rate of 57.14%.",
+              "metrics": {
+                "sessions": 7,
+                "bounceRate": 0.5714,
+                "totalUsers": 5,
+                "engagementRate": 0.4286
+              },
+              "recommendation": "Review the landing-page experience and engagement elements for /govisible-ai-bot-tracker.",
+              "score_breakdown": {
+                "inputs": {
+                  "erGap": 0.021429,
+                  "vpsGap": 0,
+                  "sessions": 7,
+                  "bounceGap": 0.021429,
+                  "bounceRate": 0.5714,
+                  "durationGap": 0,
+                  "engagementRate": 0.4286,
+                  "viewsPerSession": null,
+                  "averageSessionDuration": null
+                },
+                "volume": 0.004667,
+                "formula": "min(1, sessions/1500) * max(ER_gap, bounce_gap, viewsPerSession_gap, duration_gap) * 100",
+                "payoffGap": 0.021429,
+                "payoffGap_definition": "max(ER gap vs 0.45, bounce gap vs 0.55, viewsPerSession gap vs 1.5, duration gap vs 40s)"
+              },
+              "opportunity_type": "landing_underperformance"
+            },
+            {
+              "score": 0,
+              "entity": {
+                "label": "/",
+                "landingPage": "/"
+              },
+              "reason": "Landing page / received 432 sessions with an engagement rate of 54.4% and a bounce rate of 45.6%.",
+              "metrics": {
+                "sessions": 432,
+                "bounceRate": 0.456,
+                "totalUsers": 295,
+                "engagementRate": 0.544
+              },
+              "recommendation": "Review the landing-page experience and engagement elements for /.",
+              "score_breakdown": {
+                "inputs": {
+                  "erGap": 0,
+                  "vpsGap": 0,
+                  "sessions": 432,
+                  "bounceGap": 0,
+                  "bounceRate": 0.456,
+                  "durationGap": 0,
+                  "engagementRate": 0.544,
+                  "viewsPerSession": null,
+                  "averageSessionDuration": null
+                },
+                "volume": 0.288,
+                "formula": "min(1, sessions/1500) * max(ER_gap, bounce_gap, viewsPerSession_gap, duration_gap) * 100",
+                "payoffGap": 0,
+                "payoffGap_definition": "max(ER gap vs 0.45, bounce gap vs 0.55, viewsPerSession gap vs 1.5, duration gap vs 40s)"
+              },
+              "opportunity_type": "landing_underperformance"
+            },
+            {
+              "score": 0,
+              "entity": {
+                "label": "/ai-visibility-audit",
+                "landingPage": "/ai-visibility-audit"
+              },
+              "reason": "Landing page /ai-visibility-audit received 98 sessions with an engagement rate of 57.14% and a bounce rate of 42.86%.",
+              "metrics": {
+                "sessions": 98,
+                "bounceRate": 0.4286,
+                "totalUsers": 77,
+                "engagementRate": 0.5714
+              },
+              "recommendation": "Review the landing-page experience and engagement elements for /ai-visibility-audit.",
+              "score_breakdown": {
+                "inputs": {
+                  "erGap": 0,
+                  "vpsGap": 0,
+                  "sessions": 98,
+                  "bounceGap": 0,
+                  "bounceRate": 0.4286,
+                  "durationGap": 0,
+                  "engagementRate": 0.5714,
+                  "viewsPerSession": null,
+                  "averageSessionDuration": null
+                },
+                "volume": 0.065333,
+                "formula": "min(1, sessions/1500) * max(ER_gap, bounce_gap, viewsPerSession_gap, duration_gap) * 100",
+                "payoffGap": 0,
+                "payoffGap_definition": "max(ER gap vs 0.45, bounce gap vs 0.55, viewsPerSession gap vs 1.5, duration gap vs 40s)"
+              },
+              "opportunity_type": "landing_underperformance"
+            },
+            {
+              "score": 0,
+              "entity": {
+                "label": "/book-demo",
+                "landingPage": "/book-demo"
+              },
+              "reason": "Landing page /book-demo received 98 sessions with an engagement rate of 51.02% and a bounce rate of 48.98%.",
+              "metrics": {
+                "sessions": 98,
+                "bounceRate": 0.4898,
+                "totalUsers": 91,
+                "engagementRate": 0.5102
+              },
+              "recommendation": "Review the landing-page experience and engagement elements for /book-demo.",
+              "score_breakdown": {
+                "inputs": {
+                  "erGap": 0,
+                  "vpsGap": 0,
+                  "sessions": 98,
+                  "bounceGap": 0,
+                  "bounceRate": 0.4898,
+                  "durationGap": 0,
+                  "engagementRate": 0.5102,
+                  "viewsPerSession": null,
+                  "averageSessionDuration": null
+                },
+                "volume": 0.065333,
+                "formula": "min(1, sessions/1500) * max(ER_gap, bounce_gap, viewsPerSession_gap, duration_gap) * 100",
+                "payoffGap": 0,
+                "payoffGap_definition": "max(ER gap vs 0.45, bounce gap vs 0.55, viewsPerSession gap vs 1.5, duration gap vs 40s)"
+              },
+              "opportunity_type": "landing_underperformance"
+            },
+            {
+              "score": 0,
+              "entity": {
+                "label": "/ai-visibility-index/2026/automotive/services-and-maintenance",
+                "landingPage": "/ai-visibility-index/2026/automotive/services-and-maintenance"
+              },
+              "reason": "Landing page /ai-visibility-index/2026/automotive/services-and-maintenance received 17 sessions with an engagement rate of 64.71% and a bounce rate of 35.29%.",
+              "metrics": {
+                "sessions": 17,
+                "bounceRate": 0.3529,
+                "totalUsers": 7,
+                "engagementRate": 0.6471
+              },
+              "recommendation": "Review the landing-page experience and engagement elements for /ai-visibility-index/2026/automotive/services-and-maintenance.",
+              "score_breakdown": {
+                "inputs": {
+                  "erGap": 0,
+                  "vpsGap": 0,
+                  "sessions": 17,
+                  "bounceGap": 0,
+                  "bounceRate": 0.3529,
+                  "durationGap": 0,
+                  "engagementRate": 0.6471,
+                  "viewsPerSession": null,
+                  "averageSessionDuration": null
+                },
+                "volume": 0.011333,
+                "formula": "min(1, sessions/1500) * max(ER_gap, bounce_gap, viewsPerSession_gap, duration_gap) * 100",
+                "payoffGap": 0,
+                "payoffGap_definition": "max(ER gap vs 0.45, bounce gap vs 0.55, viewsPerSession gap vs 1.5, duration gap vs 40s)"
+              },
+              "opportunity_type": "landing_underperformance"
+            },
+            {
+              "score": 0,
+              "entity": {
+                "label": "/contact-us",
+                "landingPage": "/contact-us"
+              },
+              "reason": "Landing page /contact-us received 12 sessions with an engagement rate of 50% and a bounce rate of 50%.",
+              "metrics": {
+                "sessions": 12,
+                "bounceRate": 0.5,
+                "totalUsers": 11,
+                "engagementRate": 0.5
+              },
+              "recommendation": "Review the landing-page experience and engagement elements for /contact-us.",
+              "score_breakdown": {
+                "inputs": {
+                  "erGap": 0,
+                  "vpsGap": 0,
+                  "sessions": 12,
+                  "bounceGap": 0,
+                  "bounceRate": 0.5,
+                  "durationGap": 0,
+                  "engagementRate": 0.5,
+                  "viewsPerSession": null,
+                  "averageSessionDuration": null
+                },
+                "volume": 0.008,
+                "formula": "min(1, sessions/1500) * max(ER_gap, bounce_gap, viewsPerSession_gap, duration_gap) * 100",
+                "payoffGap": 0,
+                "payoffGap_definition": "max(ER gap vs 0.45, bounce gap vs 0.55, viewsPerSession gap vs 1.5, duration gap vs 40s)"
+              },
+              "opportunity_type": "landing_underperformance"
+            },
+            {
+              "score": 0,
+              "entity": {
+                "label": "/blog/ai-citation-source-monitoring",
+                "landingPage": "/blog/ai-citation-source-monitoring"
+              },
+              "reason": "Landing page /blog/ai-citation-source-monitoring received 11 sessions with an engagement rate of 63.64% and a bounce rate of 36.36%.",
+              "metrics": {
+                "sessions": 11,
+                "bounceRate": 0.3636,
+                "totalUsers": 7,
+                "engagementRate": 0.6364
+              },
+              "recommendation": "Review the landing-page experience and engagement elements for /blog/ai-citation-source-monitoring.",
+              "score_breakdown": {
+                "inputs": {
+                  "erGap": 0,
+                  "vpsGap": 0,
+                  "sessions": 11,
+                  "bounceGap": 0,
+                  "bounceRate": 0.3636,
+                  "durationGap": 0,
+                  "engagementRate": 0.6364,
+                  "viewsPerSession": null,
+                  "averageSessionDuration": null
+                },
+                "volume": 0.007333,
+                "formula": "min(1, sessions/1500) * max(ER_gap, bounce_gap, viewsPerSession_gap, duration_gap) * 100",
+                "payoffGap": 0,
+                "payoffGap_definition": "max(ER gap vs 0.45, bounce gap vs 0.55, viewsPerSession gap vs 1.5, duration gap vs 40s)"
+              },
+              "opportunity_type": "landing_underperformance"
+            },
+            {
+              "score": 0,
+              "entity": {
+                "label": "/blog/what-does-ai-think-about-your-brand",
+                "landingPage": "/blog/what-does-ai-think-about-your-brand"
+              },
+              "reason": "Landing page /blog/what-does-ai-think-about-your-brand received 11 sessions with an engagement rate of 45.45% and a bounce rate of 54.55%.",
+              "metrics": {
+                "sessions": 11,
+                "bounceRate": 0.5455,
+                "totalUsers": 7,
+                "engagementRate": 0.4545
+              },
+              "recommendation": "Review the landing-page experience and engagement elements for /blog/what-does-ai-think-about-your-brand.",
+              "score_breakdown": {
+                "inputs": {
+                  "erGap": 0,
+                  "vpsGap": 0,
+                  "sessions": 11,
+                  "bounceGap": 0,
+                  "bounceRate": 0.5455,
+                  "durationGap": 0,
+                  "engagementRate": 0.4545,
+                  "viewsPerSession": null,
+                  "averageSessionDuration": null
+                },
+                "volume": 0.007333,
+                "formula": "min(1, sessions/1500) * max(ER_gap, bounce_gap, viewsPerSession_gap, duration_gap) * 100",
+                "payoffGap": 0,
+                "payoffGap_definition": "max(ER gap vs 0.45, bounce gap vs 0.55, viewsPerSession gap vs 1.5, duration gap vs 40s)"
+              },
+              "opportunity_type": "landing_underperformance"
+            },
+            {
+              "score": 0,
+              "entity": {
+                "label": "/ai-visibility-index/2026/automotive/passenger-cars",
+                "landingPage": "/ai-visibility-index/2026/automotive/passenger-cars"
+              },
+              "reason": "Landing page /ai-visibility-index/2026/automotive/passenger-cars received 9 sessions with an engagement rate of 44.44% and a bounce rate of 55.56%.",
+              "metrics": {
+                "sessions": 9,
+                "bounceRate": 0.5556,
+                "totalUsers": 7,
+                "engagementRate": 0.4444
+              },
+              "recommendation": "Review the landing-page experience and engagement elements for /ai-visibility-index/2026/automotive/passenger-cars.",
+              "score_breakdown": {
+                "inputs": {
+                  "erGap": 0.005556,
+                  "vpsGap": 0,
+                  "sessions": 9,
+                  "bounceGap": 0.005556,
+                  "bounceRate": 0.5556,
+                  "durationGap": 0,
+                  "engagementRate": 0.4444,
+                  "viewsPerSession": null,
+                  "averageSessionDuration": null
+                },
+                "volume": 0.006,
+                "formula": "min(1, sessions/1500) * max(ER_gap, bounce_gap, viewsPerSession_gap, duration_gap) * 100",
+                "payoffGap": 0.005556,
+                "payoffGap_definition": "max(ER gap vs 0.45, bounce gap vs 0.55, viewsPerSession gap vs 1.5, duration gap vs 40s)"
+              },
+              "opportunity_type": "landing_underperformance"
+            },
+            {
+              "score": 0,
+              "entity": {
+                "label": "/blog/seo-keywords-vs-geo-prompts-whats-changing-in-search-behavior",
+                "landingPage": "/blog/seo-keywords-vs-geo-prompts-whats-changing-in-search-behavior"
+              },
+              "reason": "Landing page /blog/seo-keywords-vs-geo-prompts-whats-changing-in-search-behavior received 9 sessions with an engagement rate of 55.56% and a bounce rate of 44.44%.",
+              "metrics": {
+                "sessions": 9,
+                "bounceRate": 0.4444,
+                "totalUsers": 9,
+                "engagementRate": 0.5556
+              },
+              "recommendation": "Review the landing-page experience and engagement elements for /blog/seo-keywords-vs-geo-prompts-whats-changing-in-search-behavior.",
+              "score_breakdown": {
+                "inputs": {
+                  "erGap": 0,
+                  "vpsGap": 0,
+                  "sessions": 9,
+                  "bounceGap": 0,
+                  "bounceRate": 0.4444,
+                  "durationGap": 0,
+                  "engagementRate": 0.5556,
+                  "viewsPerSession": null,
+                  "averageSessionDuration": null
+                },
+                "volume": 0.006,
+                "formula": "min(1, sessions/1500) * max(ER_gap, bounce_gap, viewsPerSession_gap, duration_gap) * 100",
+                "payoffGap": 0,
+                "payoffGap_definition": "max(ER gap vs 0.45, bounce gap vs 0.55, viewsPerSession gap vs 1.5, duration gap vs 40s)"
+              },
+              "opportunity_type": "landing_underperformance"
+            }
+          ],
+          "category": "intelligence",
+          "capability": "landing_underperformance",
+          "__ga4CapabilitySection": true
+        }
+      ],
+      "__ga4Intelligence": true
+    }
+  },
+  "input": {
+    "itemsIn": 60,
+    "incoming": {
+      "googleAnalytics-1789984791245": {
+        "items": [
+          {
+            "json": {
+              "sessions": 432,
+              "bounceRate": 0.45601851851851855,
+              "totalUsers": 295,
+              "landingPage": "/",
+              "engagementRate": 0.5439814814814815
+            },
+            "pairedItem": {
+              "item": 0
+            }
+          },
+          {
+            "json": {
+              "sessions": 105,
+              "bounceRate": 0.9523809523809524,
+              "totalUsers": 65,
+              "landingPage": "(not set)",
+              "engagementRate": 0.047619047619047616
+            },
+            "pairedItem": {
+              "item": 0
+            }
+          },
+          {
+            "json": {
+              "sessions": 98,
+              "bounceRate": 0.42857142857142855,
+              "totalUsers": 77,
+              "landingPage": "/ai-visibility-audit",
+              "engagementRate": 0.5714285714285714
+            },
+            "pairedItem": {
+              "item": 0
+            }
+          },
+          {
+            "json": {
+              "sessions": 98,
+              "bounceRate": 0.4897959183673469,
+              "totalUsers": 91,
+              "landingPage": "/book-demo",
+              "engagementRate": 0.5102040816326531
+            },
+            "pairedItem": {
+              "item": 0
+            }
+          },
+          {
+            "json": {
+              "sessions": 33,
+              "bounceRate": 0.6363636363636364,
+              "totalUsers": 29,
+              "landingPage": "/pricing",
+              "engagementRate": 0.3636363636363637
+            },
+            "pairedItem": {
+              "item": 0
+            }
+          },
+          {
+            "json": {
+              "sessions": 19,
+              "bounceRate": 0.8947368421052632,
+              "totalUsers": 18,
+              "landingPage": "/blog/the-best-generative-engine-optimization-geo-tools",
+              "engagementRate": 0.10526315789473684
+            },
+            "pairedItem": {
+              "item": 0
+            }
+          },
+          {
+            "json": {
+              "sessions": 17,
+              "bounceRate": 0.35294117647058826,
+              "totalUsers": 7,
+              "landingPage": "/ai-visibility-index/2026/automotive/services-and-maintenance",
+              "engagementRate": 0.6470588235294118
+            },
+            "pairedItem": {
+              "item": 0
+            }
+          },
+          {
+            "json": {
+              "sessions": 16,
+              "bounceRate": 0.75,
+              "totalUsers": 16,
+              "landingPage": "/blog/how-brands-can-avoid-ai-confusion-and-misrepresentation",
+              "engagementRate": 0.25
+            },
+            "pairedItem": {
+              "item": 0
+            }
+          },
+          {
+            "json": {
+              "sessions": 13,
+              "bounceRate": 0.6153846153846154,
+              "totalUsers": 13,
+              "landingPage": "/blog/all-blogs",
+              "engagementRate": 0.38461538461538464
+            },
+            "pairedItem": {
+              "item": 0
+            }
+          },
+          {
+            "json": {
+              "sessions": 13,
+              "bounceRate": 0.7692307692307693,
+              "totalUsers": 13,
+              "landingPage": "/blog/key-platforms-for-entity-optimization-across-industries",
+              "engagementRate": 0.2307692307692308
+            },
+            "pairedItem": {
+              "item": 0
+            }
+          },
+          {
+            "json": {
+              "sessions": 12,
+              "bounceRate": 0.5,
+              "totalUsers": 11,
+              "landingPage": "/contact-us",
+              "engagementRate": 0.5
+            },
+            "pairedItem": {
+              "item": 0
+            }
+          },
+          {
+            "json": {
+              "sessions": 11,
+              "bounceRate": 0.6363636363636364,
+              "totalUsers": 11,
+              "landingPage": "/about-visible",
+              "engagementRate": 0.3636363636363637
+            },
+            "pairedItem": {
+              "item": 0
+            }
+          },
+          {
+            "json": {
+              "sessions": 11,
+              "bounceRate": 0.3636363636363637,
+              "totalUsers": 7,
+              "landingPage": "/blog/ai-citation-source-monitoring",
+              "engagementRate": 0.6363636363636364
+            },
+            "pairedItem": {
+              "item": 0
+            }
+          },
+          {
+            "json": {
+              "sessions": 11,
+              "bounceRate": 0.6363636363636364,
+              "totalUsers": 11,
+              "landingPage": "/blog/search-query-analysis",
+              "engagementRate": 0.3636363636363637
+            },
+            "pairedItem": {
+              "item": 0
+            }
+          },
+          {
+            "json": {
+              "sessions": 11,
+              "bounceRate": 0.5454545454545454,
+              "totalUsers": 7,
+              "landingPage": "/blog/what-does-ai-think-about-your-brand",
+              "engagementRate": 0.4545454545454546
+            },
+            "pairedItem": {
+              "item": 0
+            }
+          },
+          {
+            "json": {
+              "sessions": 11,
+              "bounceRate": 0.8181818181818182,
+              "totalUsers": 10,
+              "landingPage": "/framework",
+              "engagementRate": 0.18181818181818185
+            },
+            "pairedItem": {
+              "item": 0
+            }
+          },
+          {
+            "json": {
+              "sessions": 10,
+              "bounceRate": 0.9,
+              "totalUsers": 10,
+              "landingPage": "/blog/ai-visibility-tracking-to-optimization-meet-the-govisible-action-center",
+              "engagementRate": 0.1
+            },
+            "pairedItem": {
+              "item": 0
+            }
+          },
+          {
+            "json": {
+              "sessions": 10,
+              "bounceRate": 0.7,
+              "totalUsers": 10,
+              "landingPage": "/blog/how-govisible-helps-you-track-competitor-visibility-across-ai-engines",
+              "engagementRate": 0.3
+            },
+            "pairedItem": {
+              "item": 0
+            }
+          },
+          {
+            "json": {
+              "sessions": 9,
+              "bounceRate": 1,
+              "totalUsers": 9,
+              "landingPage": "",
+              "engagementRate": 0
+            },
+            "pairedItem": {
+              "item": 0
+            }
+          },
+          {
+            "json": {
+              "sessions": 9,
+              "bounceRate": 0.5555555555555556,
+              "totalUsers": 7,
+              "landingPage": "/ai-visibility-index/2026/automotive/passenger-cars",
+              "engagementRate": 0.4444444444444444
+            },
+            "pairedItem": {
+              "item": 0
+            }
+          },
+          {
+            "json": {
+              "sessions": 9,
+              "bounceRate": 0.7777777777777778,
+              "totalUsers": 9,
+              "landingPage": "/blog/common-mistakes-to-avoid-in-intent-mapping-for-ai-search",
+              "engagementRate": 0.2222222222222222
+            },
+            "pairedItem": {
+              "item": 0
+            }
+          },
+          {
+            "json": {
+              "sessions": 9,
+              "bounceRate": 0.4444444444444444,
+              "totalUsers": 9,
+              "landingPage": "/blog/seo-keywords-vs-geo-prompts-whats-changing-in-search-behavior",
+              "engagementRate": 0.5555555555555556
+            },
+            "pairedItem": {
+              "item": 0
+            }
+          },
+          {
+            "json": {
+              "sessions": 9,
+              "bounceRate": 0.8888888888888888,
+              "totalUsers": 9,
+              "landingPage": "/blog/the-role-of-reviews-forums-and-mentions-in-ai-brand-visibility",
+              "engagementRate": 0.1111111111111111
+            },
+            "pairedItem": {
+              "item": 0
+            }
+          },
+          {
+            "json": {
+              "sessions": 9,
+              "bounceRate": 1,
+              "totalUsers": 9,
+              "landingPage": "/blog/understanding-the-4-types-of-ai-search-intent-informational-navigational-comparative-transactional",
+              "engagementRate": 0
+            },
+            "pairedItem": {
+              "item": 0
+            }
+          },
+          {
+            "json": {
+              "sessions": 8,
+              "bounceRate": 1,
+              "totalUsers": 8,
+              "landingPage": "/agency-partner-program",
+              "engagementRate": 0
+            },
+            "pairedItem": {
+              "item": 0
+            }
+          },
+          "…truncated (60 items total)"
+        ],
+        "endDate": "2026-09-23",
+        "rowCount": 60,
+        "startDate": "2026-08-25",
+        "propertyId": "properties/488600391"
+      }
+    },
+    "loopMeta": null,
+    "nodeData": {
+      "label": "GA4 MCP Tools",
+      "limit": 50,
+      "minShare": 0,
+      "nodeType": "ga4McpTool",
+      "available": true,
+      "libraryId": "ga4-mcp-tools",
+      "minVolume": 0,
+      "cacheDirty": false,
+      "capability": "landing_underperformance",
+      "minSessions": 0,
+      "capabilities": [
+        "landing_underperformance"
+      ],
+      "minBounceRate": 0,
+      "libraryCategory": "SEO",
+      "libraryProvider": "OpsAi",
+      "maxEngagementRate": 1,
+      "capabilitySettings": {
+        "engagement_opportunities": {
+          "limit": 50,
+          "minSessions": 250,
+          "minBounceRate": 0.6,
+          "maxEngagementRate": 0.4
+        },
+        "landing_underperformance": {
+          "limit": 50,
+          "minScore": 0,
+          "minSessions": 0,
+          "minBounceRate": 0,
+          "maxEngagementRate": 1
+        },
+        "acquisition_concentration": {
+          "minShare": 0.5,
+          "minVolume": 0,
+          "minConcentrationShare": 0
+        }
+      },
+      "minConcentrationShare": 0
+    },
+    "nodeType": "ga4McpTool",
+    "resolved": null,
+    "contextInput": {},
+    "inputSources": {
+      "main": {
+        "nodeId": "googleAnalytics-1789984791245",
+        "runIndex": 0,
+        "outputPort": "main"
+      }
+    },
+    "executionIndex": 0
+  }
+}

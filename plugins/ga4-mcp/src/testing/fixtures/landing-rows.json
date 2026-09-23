@@ -82,5 +82,24 @@
     "pagePath": "/borderline",
     "sessions": 2000,
     "engagementRate": 0.38
+  },
+  "not_set_only": {
+    "landingPage": "(not set)",
+    "sessions": 105,
+    "engagementRate": 0.0476,
+    "bounceRate": 0.9524
+  },
+  "not_set_with_pagepath": {
+    "landingPage": "(not set)",
+    "pagePath": "/pricing",
+    "sessions": 105,
+    "engagementRate": 0.0476,
+    "bounceRate": 0.9524
+  },
+  "not_set_padded": {
+    "landingPage": "(not set) ",
+    "sessions": 200,
+    "engagementRate": 0.1,
+    "bounceRate": 0.9
   }
 }

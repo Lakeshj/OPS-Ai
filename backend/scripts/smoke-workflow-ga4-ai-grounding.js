@@ -392,6 +392,308 @@ const registerGa4AiGroundingTests = ({ check, section, assert: a }) => {
     assertX.match(g.systemPrompt, /page_performance is DATA/);
   });
 
+  section("STEP 10A — page_performance DATA grounding/reporting");
+
+  check("10A-1 page_performance DATA-only — no false empty statement", () => {
+    const manyPages = Array.from({ length: 60 }, (_, i) => ({
+      json: {
+        capability: "page_performance",
+        row_kind: "ranked_page",
+        opportunity_type: null,
+        rank: i + 1,
+        entity: {
+          pagePath: i === 0 ? "/" : `/page-${i}/`,
+          label: i === 0 ? "/" : `/page-${i}/`,
+        },
+        metrics: { sessions: 500 - i },
+        sortMetric: "sessions",
+        sortDirection: "desc",
+        reason: "Ranked by sessions",
+        __ga4Intelligence: true,
+        source: "google_analytics",
+      },
+    }));
+    const g = ga4Intel().applyAiGrounding({
+      systemPrompt:
+        "Which pages got the most sessions in the last 30 days? Show me the top pages and their sessions.",
+      userPrompt: "",
+      input: manyPages,
+    });
+    assertX.equal(g.grounded, true);
+    assertX.equal(g.empty, false);
+    assertX.equal(g.evidence.hasDataRows, true);
+    assertX.equal(g.evidence.hasOpportunityRows, false);
+    assertX.equal(g.evidence.hasAnyStructuredMcpRows, true);
+    assertX.equal(g.evidence.dataRowCount, 60);
+    assertX.match(g.systemPrompt, /Structured GA4 MCP page-performance data was provided/);
+    assertX.match(g.systemPrompt, /Do NOT say: "No structured GA4 MCP opportunity\/data rows/);
+    assertX.ok(
+      !/Respond exactly: "No structured GA4 MCP opportunity\/data rows/.test(
+        g.systemPrompt
+      )
+    );
+    assertX.match(g.systemPrompt, /Do NOT invent a Data limitations section/);
+    assertX.match(g.userPrompt, /page_performance/);
+    assertX.match(g.userPrompt, /"rank": 1/);
+    assertX.match(g.userPrompt, /"hasDataRows": true/);
+  });
+
+  check("10A-2 opportunity-only — no claim that DATA rows exist", () => {
+    const g = ga4Intel().applyAiGrounding({
+      systemPrompt: "Biggest engagement opportunities?",
+      userPrompt: "",
+      input: engagementMcp,
+    });
+    assertX.equal(g.evidence.hasOpportunityRows, true);
+    assertX.equal(g.evidence.hasDataRows, false);
+    assertX.equal(g.evidence.hasAnyStructuredMcpRows, true);
+    assertX.match(
+      g.systemPrompt,
+      /no page_performance DATA rows were provided/i
+    );
+    assertX.ok(
+      !/Structured GA4 MCP page-performance data was provided/.test(
+        g.systemPrompt
+      )
+    );
+  });
+
+  check("10A-3 opportunity + page_performance — both preserved", () => {
+    const g = ga4Intel().applyAiGrounding({
+      systemPrompt: "Show opportunities and top pages",
+      userPrompt: "",
+      input: [...engagementMcp, ...pagePerfMcp],
+    });
+    assertX.equal(g.evidence.hasOpportunityRows, true);
+    assertX.equal(g.evidence.hasDataRows, true);
+    assertX.match(
+      g.systemPrompt,
+      /Both opportunity and DATA capability rows are present/
+    );
+    assertX.match(g.userPrompt, /engagement_opportunities/);
+    assertX.match(g.userPrompt, /page_performance/);
+  });
+
+  check("10A-4 truly empty GA4 MCP — empty behavior remains", () => {
+    const emptyCtx = ga4Intel().buildIntelligenceContext({
+      property: "properties/1",
+      capabilities: [
+        {
+          capability: "page_performance",
+          category: "data",
+          results: [],
+          count: 0,
+        },
+      ],
+    });
+    const g = ga4Intel().applyAiGrounding({
+      systemPrompt: "Analyze GA4",
+      userPrompt: "report",
+      input: emptyCtx,
+    });
+    assertX.equal(g.empty, true);
+    assertX.equal(g.evidence.hasAnyStructuredMcpRows, false);
+    assertX.equal(g.evidence.hasDataRows, false);
+    assertX.match(
+      g.systemPrompt,
+      /Respond exactly: "No structured GA4 MCP opportunity\/data rows/
+    );
+  });
+
+  check("10A-5 page_performance + actual warning — no fabricated limitation", () => {
+    const ctx = ga4Intel().buildIntelligenceContext({
+      property: "properties/1",
+      capabilities: [
+        {
+          capability: "page_performance",
+          category: "data",
+          results: pagePerfMcp.map((it) => it.json),
+          count: 1,
+        },
+      ],
+      warnings: [
+        {
+          code: "GA4_EVENT_CROSS_METRIC_RISK",
+          capability: "page_performance",
+          message:
+            "eventName is present. page_performance ranks row-level page×event rows without summing sessions/users/page views across events.",
+        },
+      ],
+    });
+    const g = ga4Intel().applyAiGrounding({
+      systemPrompt: "Top pages by sessions",
+      userPrompt: "",
+      input: ctx,
+    });
+    assertX.equal(g.evidence.hasDataRows, true);
+    assertX.equal(g.evidence.hasWarnings, true);
+    assertX.equal(g.empty, false);
+    assertX.match(g.systemPrompt, /GA4_EVENT_CROSS_METRIC_RISK/);
+    assertX.match(g.systemPrompt, /MCP warnings \(authoritative/);
+    assertX.ok(!/Do NOT invent a Data limitations section/.test(g.systemPrompt));
+    assertX.match(
+      g.systemPrompt,
+      /Structured GA4 MCP page-performance data was provided/
+    );
+  });
+
+  section("STEP 9D — acquisition handoff + AI warning fidelity");
+
+  check("9D-1 flat channel rows → successful acquisition → AI", () => {
+    const {
+      processUpstreamItems,
+    } = require("../../plugins/ga4-mcp/src/adapters/processUpstream");
+    const FIX = require("../../plugins/ga4-mcp/src/testing/fixtures/acquisition-rows.json");
+    const inputItems = FIX.VERIFIED_LIVE_CHANNEL_9.map((json) => ({ json }));
+    const proc = processUpstreamItems({
+      capabilities: ["acquisition_concentration"],
+      inputItems,
+      nodeData: { propertyId: "properties/1" },
+    });
+    assertX.equal(proc.ok, true);
+    assertX.equal(inputItems.length, 9);
+    assertX.equal(proc.items.length, 1);
+    assertX.notEqual(proc.items.length, inputItems.length);
+    assertX.equal(proc.items[0].json.capability, "acquisition_concentration");
+    assertX.equal(
+      proc.items[0].json.entity.sessionDefaultChannelGroup,
+      "Direct"
+    );
+    assertX.ok(
+      !(proc.output.warnings || []).some(
+        (w) => w.code === "GA4_ACQUISITION_DIM_MISSING"
+      )
+    );
+
+    const g = mcpGround()({
+      systemPrompt: "Which acquisition channels are concentrated?",
+      userPrompt: "",
+      input: proc.items,
+    });
+    assertX.equal(g.grounded, true);
+    assertX.equal(g.source, "ga4");
+    assertX.equal(g.empty, false);
+    assertX.equal(g.evidence.hasOpportunityRows, true);
+    assertX.match(g.userPrompt, /sessionDefaultChannelGroup/);
+    assertX.match(g.userPrompt, /Direct/);
+    assertX.match(g.systemPrompt, /do NOT claim that dimension is missing/i);
+    assertX.match(
+      g.systemPrompt,
+      /acquisition_concentration opportunities are present/
+    );
+    assertX.ok(
+      !/Respond exactly: "No structured GA4 MCP opportunity\/data rows/.test(
+        g.systemPrompt
+      )
+    );
+    // Phrase may appear only as a forbidden invention rule, never as required response
+    assertX.ok(
+      !/Respond exactly:[\s\S]{0,80}valid acquisition dimension was not provided/i.test(
+        g.systemPrompt
+      )
+    );
+  });
+
+  check("9D-2 empty + GA4_NO_MATCHES → not missing dimension", () => {
+    const ctx = ga4Intel().buildIntelligenceContext({
+      property: "properties/1",
+      capabilities: [
+        {
+          capability: "acquisition_concentration",
+          results: [],
+          count: 0,
+        },
+      ],
+      warnings: [
+        {
+          code: "GA4_NO_MATCHES",
+          capability: "acquisition_concentration",
+          message:
+            "No acquisition concentration opportunities met the threshold (share >= 0.35, volume >= 100) for sessionDefaultChannelGroup.",
+          selectedDimension: "sessionDefaultChannelGroup",
+        },
+      ],
+    });
+    const g = ga4Intel().applyAiGrounding({
+      systemPrompt: "Show acquisition concentration",
+      userPrompt: "",
+      input: ctx,
+    });
+    assertX.equal(g.empty, true);
+    assertX.equal(g.evidence.hasWarnings, true);
+    assertX.match(g.systemPrompt, /GA4_NO_MATCHES/);
+    assertX.match(
+      g.systemPrompt,
+      /no qualifying opportunities\/matches/i
+    );
+    assertX.match(
+      g.systemPrompt,
+      /Do NOT claim the acquisition dimension was missing/
+    );
+    assertX.ok(
+      !/Respond exactly: "No structured GA4 MCP opportunity\/data rows/.test(
+        g.systemPrompt
+      )
+    );
+  });
+
+  check("9D-3 empty + GA4_ACQUISITION_DIM_MISSING → report actual warning", () => {
+    const {
+      processUpstreamItems,
+    } = require("../../plugins/ga4-mcp/src/adapters/processUpstream");
+    const proc = processUpstreamItems({
+      capabilities: ["acquisition_concentration"],
+      inputItems: [
+        { json: { pagePath: "/pricing", sessions: 2000, totalUsers: 1800 } },
+      ],
+      nodeData: {},
+    });
+    assertX.equal(proc.ok, true);
+    assertX.equal(proc.items.length, 1);
+    assertX.ok(
+      (proc.output.warnings || []).some(
+        (w) => w.code === "GA4_ACQUISITION_DIM_MISSING"
+      )
+    );
+
+    const g = mcpGround()({
+      systemPrompt: "Show acquisition concentration",
+      userPrompt: "",
+      input: proc.items,
+    });
+    assertX.equal(g.evidence.hasWarnings, true);
+    assertX.match(g.systemPrompt, /GA4_ACQUISITION_DIM_MISSING/);
+    assertX.match(g.systemPrompt, /truly\s+absent|missing-dimension warning/i);
+    assertX.ok(
+      !/Respond exactly: "No structured GA4 MCP opportunity\/data rows/.test(
+        g.systemPrompt
+      )
+    );
+  });
+
+  check("9D-4 channel success forbids invented missing-dimension refusal", () => {
+    const g = ga4Intel().applyAiGrounding({
+      systemPrompt: "Which channels have concentration opportunities?",
+      userPrompt: "",
+      input: acquisitionMcp,
+    });
+    assertX.equal(g.evidence.hasOpportunityRows, true);
+    assertX.match(g.userPrompt, /sessionDefaultChannelGroup|Organic Search/);
+    assertX.match(
+      g.systemPrompt,
+      /Never invent an acquisition dimension/
+    );
+    assertX.match(
+      g.systemPrompt,
+      /do NOT claim that dimension is missing/i
+    );
+    assertX.match(
+      g.systemPrompt,
+      /Do not treat upstream native GA4 row count as MCP opportunity count/
+    );
+    assertX.match(g.systemPrompt, /Never recalculate or replace the MCP score/);
+  });
+
   check("GA4AI-MCP-5 multi-capability preserves all caps", () => {
     const g = ga4Intel().applyAiGrounding({
       systemPrompt: "Show me the biggest GA4 opportunities.",
@@ -760,6 +1062,228 @@ const registerGa4AiGroundingTests = ({ check, section, assert: a }) => {
     });
     assertX.equal(gen.source, "ga4");
     assertX.equal(gen.grounded, true);
+  });
+
+  section("STEP 8E — zero-result capability sections in AI grounding");
+
+  check("8E-1 landing zero + GA4_NO_MATCHES — no invent opportunities", () => {
+    const items = [
+      {
+        json: {
+          __ga4Intelligence: true,
+          __ga4CapabilitySection: true,
+          capability: "landing_underperformance",
+          category: "intelligence",
+          results: [],
+          count: 0,
+          filters: {},
+          source: "google_analytics",
+          warnings: [
+            {
+              code: "GA4_NO_MATCHES",
+              message:
+                "No landing underperformance opportunities matched the configured filters.",
+              capability: "landing_underperformance",
+            },
+          ],
+        },
+      },
+    ];
+    const g = applyMcpAiGrounding({
+      systemPrompt:
+        "Analyze the structured GA4 MCP landing underperformance opportunities.",
+      userPrompt: "Which landing pages are underperforming?",
+      input: items,
+    });
+    assertX.equal(g.source, "ga4");
+    assertX.equal(g.evidence.hasZeroResultCapabilitySections, true);
+    assertX.match(g.systemPrompt, /GA4_NO_MATCHES/);
+    assertX.match(g.systemPrompt, /zero qualifying|zeroResult/i);
+    assertX.match(g.systemPrompt, /not selected/i);
+    assertX.ok(
+      !/Respond exactly: "No structured GA4 MCP opportunity\/data rows/.test(
+        g.systemPrompt
+      )
+    );
+  });
+
+  check("8E-2 landing zero + unresolved warning preserved", () => {
+    const items = [
+      {
+        json: {
+          __ga4Intelligence: true,
+          __ga4CapabilitySection: true,
+          capability: "landing_underperformance",
+          category: "intelligence",
+          results: [],
+          count: 0,
+          filters: {},
+          source: "google_analytics",
+          warnings: [
+            {
+              code: "GA4_LANDING_ENTITY_UNRESOLVED",
+              message: 'landingPage was unresolved ("(not set)").',
+              capability: "landing_underperformance",
+            },
+            {
+              code: "GA4_NO_MATCHES",
+              message: "No landing underperformance opportunities matched.",
+              capability: "landing_underperformance",
+            },
+          ],
+        },
+      },
+    ];
+    const g = applyMcpAiGrounding({
+      systemPrompt:
+        "Analyze the structured GA4 MCP landing underperformance opportunities.",
+      userPrompt: "Which landing pages are underperforming?",
+      input: items,
+    });
+    assertX.match(g.systemPrompt, /GA4_LANDING_ENTITY_UNRESOLVED/);
+    assertX.match(g.userPrompt, /GA4_LANDING_ENTITY_UNRESOLVED|landing_underperformance/);
+  });
+
+  check("8E-3 landing zero + page DATA — both acknowledged", () => {
+    const items = [
+      {
+        json: {
+          __ga4Intelligence: true,
+          __ga4CapabilitySection: true,
+          capability: "landing_underperformance",
+          category: "intelligence",
+          results: [],
+          count: 0,
+          filters: {},
+          source: "google_analytics",
+          warnings: [
+            {
+              code: "GA4_NO_MATCHES",
+              message: "No landing underperformance opportunities matched.",
+              capability: "landing_underperformance",
+            },
+          ],
+        },
+      },
+      {
+        json: {
+          __ga4Intelligence: true,
+          capability: "page_performance",
+          opportunity_type: null,
+          row_kind: "ranked_page",
+          rank: 1,
+          entity: { pagePath: "/", label: "/" },
+          metrics: { sessions: 100 },
+          sortMetric: "sessions",
+          sortDirection: "desc",
+          source: "google_analytics",
+        },
+      },
+    ];
+    const g = applyMcpAiGrounding({
+      systemPrompt:
+        "Analyze the structured GA4 MCP landing underperformance opportunities.",
+      userPrompt: "Summarize landing and page performance.",
+      input: items,
+    });
+    assertX.equal(g.empty, false);
+    assertX.equal(g.evidence.hasDataRows, true);
+    assertX.equal(g.evidence.hasZeroResultCapabilitySections, true);
+    assertX.match(g.userPrompt, /landing_underperformance/);
+    assertX.match(g.userPrompt, /page_performance/);
+    assertX.match(g.systemPrompt, /zero qualifying|zeroResult|unselected/i);
+    assertX.ok(
+      !/Respond exactly: "No structured GA4 MCP opportunity\/data rows/.test(
+        g.systemPrompt
+      )
+    );
+    assertX.ok(!/only page_performance was selected/i.test(g.systemPrompt));
+  });
+
+  check("8E-4 all-four zero intel + page DATA — execution summary", () => {
+    const items = [
+      {
+        json: {
+          __ga4Intelligence: true,
+          __ga4CapabilitySection: true,
+          capability: "engagement_opportunities",
+          category: "intelligence",
+          results: [],
+          count: 0,
+          filters: {},
+          source: "google_analytics",
+          warnings: [
+            { code: "GA4_NO_MATCHES", capability: "engagement_opportunities" },
+          ],
+        },
+      },
+      {
+        json: {
+          __ga4Intelligence: true,
+          __ga4CapabilitySection: true,
+          capability: "landing_underperformance",
+          category: "intelligence",
+          results: [],
+          count: 0,
+          filters: {},
+          source: "google_analytics",
+          warnings: [
+            { code: "GA4_NO_MATCHES", capability: "landing_underperformance" },
+          ],
+        },
+      },
+      {
+        json: {
+          __ga4Intelligence: true,
+          __ga4CapabilitySection: true,
+          capability: "acquisition_concentration",
+          category: "intelligence",
+          results: [],
+          count: 0,
+          filters: {},
+          source: "google_analytics",
+          warnings: [
+            {
+              code: "GA4_ACQUISITION_DIM_MISSING",
+              capability: "acquisition_concentration",
+            },
+          ],
+        },
+      },
+      {
+        json: {
+          __ga4Intelligence: true,
+          capability: "page_performance",
+          opportunity_type: null,
+          row_kind: "ranked_page",
+          rank: 1,
+          entity: { pagePath: "/", label: "/" },
+          metrics: { sessions: 50 },
+          sortMetric: "sessions",
+          sortDirection: "desc",
+          source: "google_analytics",
+        },
+      },
+    ];
+    const g = applyMcpAiGrounding({
+      systemPrompt: "Summarize the GA4 opportunities and page performance data.",
+      userPrompt: "What did GA4 MCP find?",
+      input: items,
+    });
+    assertX.equal(g.empty, false);
+    assertX.equal(g.evidence.hasDataRows, true);
+    assertX.equal(g.evidence.zeroResultCapabilityCount, 3);
+    assertX.match(g.userPrompt, /engagement_opportunities/);
+    assertX.match(g.userPrompt, /landing_underperformance/);
+    assertX.match(g.userPrompt, /acquisition_concentration/);
+    assertX.match(g.userPrompt, /page_performance/);
+    assertX.match(g.systemPrompt, /Capability execution summary/);
+    assertX.match(g.systemPrompt, /GA4_ACQUISITION_DIM_MISSING/);
+    assertX.ok(
+      !/Respond exactly: "No structured GA4 MCP opportunity\/data rows/.test(
+        g.systemPrompt
+      )
+    );
   });
 };
 

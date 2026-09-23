@@ -252,16 +252,28 @@ const main = () => {
     });
     assert.equal(result.ok, true);
     const eng = result.items.filter(
-      (it) => it.json.capability === "engagement_opportunities"
+      (it) =>
+        it.json.capability === "engagement_opportunities" &&
+        it.json.__ga4CapabilitySection !== true
     );
-    const page = result.items.filter(
-      (it) => it.json.capability === "page_performance"
+    const pageData = result.items.filter(
+      (it) =>
+        it.json.capability === "page_performance" &&
+        it.json.row_kind === "ranked_page"
+    );
+    const pageZero = result.items.filter(
+      (it) =>
+        it.json.capability === "page_performance" &&
+        it.json.__ga4CapabilitySection === true
     );
     assert.equal(eng.length, 1);
     assert.equal(eng[0].json.opportunity_type, "low_engagement");
     // page_performance-specific minSessions must not affect engagement,
-    // and must filter page DATA rows independently
-    assert.equal(page.length, 0);
+    // and must filter page DATA rows independently (STEP 8E: zero-result
+    // section may still be preserved).
+    assert.equal(pageData.length, 0);
+    assert.equal(pageZero.length, 1);
+    assert.equal(pageZero[0].json.count, 0);
     // Engagement perCapability filters isolated
     const engOut = (result.output.perCapability || []).find(
       (p) => p.capability === "engagement_opportunities"
@@ -300,6 +312,13 @@ const main = () => {
     for (const it of result.items) {
       const row = it.json;
       assert.ok(row.capability);
+      if (row.__ga4CapabilitySection === true) {
+        // Zero-result sections are not opportunities (STEP 8E).
+        assert.equal(row.count, 0);
+        assert.equal(row.opportunity_type, undefined);
+        assert.equal(row.score, undefined);
+        continue;
+      }
       if (row.capability === "engagement_opportunities") {
         assert.equal(row.opportunity_type, "low_engagement");
         assert.notEqual(row.opportunity_type, "landing_underperformance");

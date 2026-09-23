@@ -169,7 +169,7 @@ const processSingleCapability = ({ id, rows, filters, nodeData, inventory }) => 
     filters: { ...normalizedFilters },
   };
 
-  const { context: intelligenceContext, section } =
+  const { context: intelligenceContextBase, section } =
     buildContextFromCapabilityRun({
       capability: id,
       filters: normalizedFilters,
@@ -177,6 +177,14 @@ const processSingleCapability = ({ id, rows, filters, nodeData, inventory }) => 
       property: resolvedMeta.property,
       period: resolvedMeta.period,
     });
+
+  const capWarnings = Array.isArray(result.warnings) ? result.warnings : [];
+  const intelligenceContext = {
+    ...intelligenceContextBase,
+    warnings: capWarnings.map((w) =>
+      w && typeof w === "object" ? { ...w } : w
+    ),
+  };
 
   const stampedItems =
     rawItems.length > 0
@@ -186,9 +194,9 @@ const processSingleCapability = ({ id, rows, filters, nodeData, inventory }) => 
         }))
       : [];
 
-  // Single-capability empty runs emit an IntelligenceContext envelope item
-  // (GSC parity) so AI can ground on "zero results". Multi-select omits
-  // empty envelopes so sibling capabilities are not polluted.
+  // Empty runs emit a zero-result capability section (not an opportunity row)
+  // so AI/downstream can see "executed + count 0 + warnings". Multi-select
+  // appends these when one.items is empty (STEP 8E).
   const emptyEnvelopeItems =
     rawItems.length === 0
       ? [
@@ -198,6 +206,9 @@ const processSingleCapability = ({ id, rows, filters, nodeData, inventory }) => 
               property: resolvedMeta.property,
               period: resolvedMeta.period,
               source: "google_analytics",
+              warnings: capWarnings.map((w) =>
+                w && typeof w === "object" ? { ...w } : w
+              ),
               [MARKER]: true,
             },
             pairedItem: { item: 0 },
@@ -368,24 +379,41 @@ const processUpstreamItems = ({
       warnings.push(...one.output.warnings);
     }
 
-    for (const item of one.items || []) {
-      const json = item?.json;
-      // Re-stamp with THIS capability id — never inherit another capability's identity.
-      const stamped =
-        json && typeof json === "object" && !Array.isArray(json)
-          ? tagIntelligenceItem(json, {
-              capability: id,
-              property: json.property,
-              period: json.period,
-              filters: json.filters,
-            })
-          : json;
-      allItems.push({
-        ...item,
-        json: stamped,
-        pairedItem: { item: paired },
-      });
-      paired += 1;
+    const rowItems = Array.isArray(one.items) ? one.items : [];
+    if (rowItems.length > 0) {
+      for (const item of rowItems) {
+        const json = item?.json;
+        // Re-stamp with THIS capability id — never inherit another capability's identity.
+        const stamped =
+          json && typeof json === "object" && !Array.isArray(json)
+            ? tagIntelligenceItem(json, {
+                capability: id,
+                property: json.property,
+                period: json.period,
+                filters: json.filters,
+              })
+            : json;
+        allItems.push({
+          ...item,
+          json: stamped,
+          pairedItem: { item: paired },
+        });
+        paired += 1;
+      }
+    } else if (
+      one.ok &&
+      Array.isArray(one.emptyEnvelopeItems) &&
+      one.emptyEnvelopeItems.length > 0
+    ) {
+      // Preserve zero-result sections (count:0, results:[], warnings).
+      // Do NOT stamp as opportunity rows (no score / opportunity_type / entity).
+      for (const item of one.emptyEnvelopeItems) {
+        allItems.push({
+          ...item,
+          pairedItem: { item: paired },
+        });
+        paired += 1;
+      }
     }
   }
 
