@@ -611,10 +611,19 @@ const runLlmNode = async (node, context, options = {}) => {
     json = { ...json, opportunities: structuredOpportunities };
   }
 
+  const reportRows =
+    Array.isArray(enrichedOpportunities) && enrichedOpportunities.length
+      ? enrichedOpportunities
+      : structuredOpportunities;
+  const humanReport = humanReportForAiOpportunities(
+    reportRows,
+    mcpOpportunityDetails || enrichedOpportunities || []
+  );
+
   return {
     resolved,
     output: {
-      text,
+      text: humanReport || text,
       json,
       jsonError,
       provider,
@@ -826,6 +835,53 @@ const formatGa4LandingIntelligenceReport = ({
   });
 
   return lines.join("\n").trimEnd();
+};
+
+/** Readable list for non-landing AI opportunity arrays (queries, pages, etc.). */
+const formatReadableRecordList = (rows, title = "AI report") => {
+  if (!Array.isArray(rows) || !rows.length) return null;
+  const lines = [title, ""];
+  rows.forEach((row, idx) => {
+    const obj = row && typeof row === "object" && !Array.isArray(row) ? row : { value: row };
+    const rank = obj.rank != null ? obj.rank : idx + 1;
+    const heading =
+      obj.landingPage ??
+      obj.pagePath ??
+      obj.query ??
+      obj.page ??
+      obj.keyword ??
+      obj.name ??
+      obj.title ??
+      `Item ${rank}`;
+    lines.push(`${rank}. ${heading}`);
+    for (const [key, value] of Object.entries(obj)) {
+      if (value == null || value === "" || typeof value === "object") continue;
+      if (["rank", "landingPage", "pagePath", "query", "page", "keyword", "name", "title"].includes(key)) {
+        continue;
+      }
+      const shown =
+        /rate$/i.test(key) && typeof value === "number" && value <= 1
+          ? formatRatePercent(value)
+          : value;
+      lines.push(`   ${key}: ${shown}`);
+    }
+    lines.push("");
+  });
+  return lines.join("\n").trimEnd();
+};
+
+const humanReportForAiOpportunities = (rows, mcpDetails) => {
+  if (!Array.isArray(rows) || !rows.length) return null;
+  const landing = rows.some(
+    (row) => row && typeof row === "object" && (row.landingPage != null || row.pagePath != null)
+  );
+  if (landing) {
+    return formatGa4LandingIntelligenceReport({
+      opportunities: rows,
+      mcpDetails,
+    });
+  }
+  return formatReadableRecordList(rows);
 };
 
 /**

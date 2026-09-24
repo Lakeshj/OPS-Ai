@@ -15,6 +15,37 @@ if (env === "production" && !credentialsKey) {
   );
 }
 
+/** First public https origin in CORS_ORIGIN, without a dev port. */
+const resolvePublicHttpsOrigin = () => {
+  const raw = String(process.env.CORS_ORIGIN || "")
+    .split(",")
+    .map((s) => s.trim().replace(/\/$/, ""))
+    .find((s) => /^https:\/\//i.test(s));
+  if (!raw) return "";
+  try {
+    const url = new URL(raw);
+    if (!url.hostname || /^(localhost|127\.0\.0\.1)$/i.test(url.hostname)) return "";
+    return `https://${url.hostname}`;
+  } catch {
+    return "";
+  }
+};
+
+/**
+ * Local keeps http://localhost:5013/... .
+ * A copied localhost GOOGLE_OAUTH_REDIRECT_URI must not win on the live site
+ * when CORS_ORIGIN already has the public https host.
+ */
+const resolveGoogleOAuthRedirectUri = () => {
+  const configured = String(process.env.GOOGLE_OAUTH_REDIRECT_URI || "").trim();
+  const localhost = !configured || /localhost|127\.0\.0\.1/i.test(configured);
+  const publicOrigin = resolvePublicHttpsOrigin();
+  if (localhost && publicOrigin) {
+    return `${publicOrigin}/api/google-oauth/callback`;
+  }
+  return configured || "http://localhost:5013/api/google-oauth/callback";
+};
+
 const config = {
   env,
   port: parseInt(process.env.PORT, 10) || 5013,
@@ -86,18 +117,7 @@ const config = {
   googleOAuth: {
     clientId: (process.env.GOOGLE_OAUTH_CLIENT_ID || "").trim(),
     clientSecret: (process.env.GOOGLE_OAUTH_CLIENT_SECRET || "").trim(),
-    redirectUri: (
-      process.env.GOOGLE_OAUTH_REDIRECT_URI ||
-      (() => {
-        // Prefer public HTTPS origin from CORS (production), else local Express.
-        const cors = String(process.env.CORS_ORIGIN || "")
-          .split(",")
-          .map((s) => s.trim().replace(/\/$/, ""))
-          .find((s) => /^https:\/\/[^/\s]+$/i.test(s));
-        if (cors) return `${cors}/api/google-oauth/callback`;
-        return "http://localhost:5013/api/google-oauth/callback";
-      })()
-    ).trim(),
+    redirectUri: resolveGoogleOAuthRedirectUri(),
   },
   oauth2: {
     redirectUri: (
