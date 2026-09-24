@@ -28,14 +28,15 @@ const registerPart14D55CTests = ({ check, section, assert: a }) => {
   check("GMAILMANAGED-1 native Gmail defaults to PLATFORM_MANAGED", () => {
     const e = registry().getSupportedPredefined("google_gmail");
     assertX.equal(e.oauth.appModeDefault, "PLATFORM_MANAGED");
-    assertX.equal(e.oauth.nativeAuthPolicy, "HYBRID_MANAGED_PRIMARY");
+    assertX.equal(e.oauth.nativeAuthPolicy, "PLATFORM_MANAGED_ONLY");
     assertX.equal(e.dbType, "google_gmail");
   });
 
   check("GMAILMANAGED-2 normal Gmail Connect opens Google OAuth directly", () => {
     assertX.ok(picker().includes("connectGmailManagedDirect"));
     assertX.ok(picker().includes("startGoogleOAuthPopup"));
-    assertX.ok(modal().includes("Managed OAuth2 (recommended)"));
+    assertX.ok(picker().includes("gmailDirectSignIn"));
+    assertX.ok(modal().includes("isPlatformManagedOnlyGoogle"));
   });
 
   check("GMAILMANAGED-3 normal Gmail Connect does not open Generic OAuth2 modal", () => {
@@ -48,11 +49,7 @@ const registerPart14D55CTests = ({ check, section, assert: a }) => {
     assertX.ok(picker().includes("startGoogleOAuthPopup"));
     assertX.ok(popup().includes("accounts.google.com") || popup().includes("startGoogleOAuth"));
     // Fresh connect must not reuse an old credential id
-    assertX.ok(
-      /connectGmailManagedDirect[\s\S]*?omit credentialId|Important: omit credentialId/.test(
-        picker()
-      )
-    );
+    assertX.ok(picker().includes("Omit credentialId"));
   });
 
   check("GMAILMANAGED-5 authorization URL includes select_account", async () => {
@@ -315,7 +312,7 @@ const registerPart14D55CTests = ({ check, section, assert: a }) => {
     assertX.ok(http().includes("oauthManaged") || http().includes("google_gmail"));
     const e = registry().getSupportedPredefined("google_gmail");
     assertX.equal(e.oauth.appModeDefault, "PLATFORM_MANAGED");
-    assertX.equal(e.oauth.nativeAuthPolicy, "HYBRID_MANAGED_PRIMARY");
+    assertX.equal(e.oauth.nativeAuthPolicy, "PLATFORM_MANAGED_ONLY");
     assertX.equal(registry().publicEntry(e).oauthManaged, true);
   });
 
@@ -338,17 +335,17 @@ const registerPart14D55CTests = ({ check, section, assert: a }) => {
     assertX.ok(!modal().includes("GOOGLE_OAUTH_CLIENT_SECRET"));
   });
 
-  check("GMAILMANAGED-20 Gmail Manage offers Managed and Custom OAuth2", () => {
-    assertX.ok(picker().includes("hybridGoogle"));
+  check("GMAILMANAGED-20 Gmail Connect is platform-managed only (no Custom OAuth2)", () => {
+    assertX.ok(picker().includes("gmailDirectSignIn"));
+    assertX.ok(picker().includes("gmailManagedOnly"));
     assertX.equal(
       require("../config/googleNativeAuthPolicy").getGoogleNativeAuthPolicy(
         "google_gmail"
       ),
-      "HYBRID_MANAGED_PRIMARY"
+      "PLATFORM_MANAGED_ONLY"
     );
-    assertX.ok(modal().includes("Managed OAuth2 (recommended)"));
-    assertX.ok(modal().includes("Custom OAuth2"));
-    assertX.ok(modal().includes("Service Account"));
+    assertX.ok(modal().includes("forceManaged"));
+    assertX.ok(modal().includes("isPlatformManagedOnlyGoogle"));
   });
 
   check("GMAILMANAGED-scopes Gmail V1 scopes unchanged", () => {
@@ -387,33 +384,38 @@ const registerPart14D55CTests = ({ check, section, assert: a }) => {
     assertX.ok(/Gmail API is not enabled/i.test(err.message));
   });
 
-  // —— 14D.5.5C.2 native Gmail hybrid managed-primary UX ——
+  // —— 14D.5.5C.2 native Gmail platform-managed-only UX ——
   check("GMAILMANAGEDONLY-1 native Gmail Connect opens Google OAuth directly", () => {
     assertX.ok(picker().includes("connectGmailManagedDirect"));
-    assertX.ok(picker().includes("hybridGoogle"));
-    assertX.ok(modal().includes("Sign in with Google"));
+    assertX.ok(picker().includes("gmailDirectSignIn"));
+    assertX.ok(modal().includes("Sign in with Google") || modal().includes("forceManaged"));
   });
 
-  check("GMAILMANAGEDONLY-2 native Gmail exposes Custom OAuth2 in Manage", () => {
-    assertX.ok(modal().includes("Custom OAuth2"));
-    assertX.ok(modal().includes("Managed OAuth2 (recommended)"));
-    assertX.ok(!picker().includes("&& gmailManagedOnly ?"));
+  check("GMAILMANAGEDONLY-2 native Gmail does not expose Custom OAuth2 setup", () => {
+    assertX.ok(picker().includes("gmailManagedOnly"));
+    assertX.ok(picker().includes("managedOnly={gmailManagedOnly}"));
+    assertX.ok(modal().includes("forceManaged"));
+    // Setup credential dropdown is hidden when forceManaged
+    assertX.ok(modal().includes("{!forceManaged ? ("));
   });
 
-  check("GMAILMANAGEDONLY-3 native Gmail Custom path exposes Client ID", () => {
-    assertX.ok(modal().includes("Client ID"));
+  check("GMAILMANAGEDONLY-3 native Gmail hides Client ID when managed-only", () => {
     assertX.ok(modal().includes("{!forceManaged"));
+    assertX.ok(modal().includes("isPlatformManagedOnlyGoogle"));
   });
 
-  check("GMAILMANAGEDONLY-4 native Gmail Custom path exposes Client Secret", () => {
+  check("GMAILMANAGEDONLY-4 native Gmail hides Client Secret when managed-only", () => {
     assertX.ok(modal().includes("Client Secret"));
     assertX.ok(modal().includes("isPlatformManagedOnlyGoogle"));
   });
 
-  check("GMAILMANAGEDONLY-5 native Gmail lists Service Account as unavailable", () => {
-    assertX.ok(modal().includes("Service Account"));
-    assertX.ok(modal().includes('value="service_account"'));
-    assertX.ok(modal().includes("disabled"));
+  check("GMAILMANAGEDONLY-5 native Gmail policy is PLATFORM_MANAGED_ONLY", () => {
+    const policy = require("../config/googleNativeAuthPolicy");
+    assertX.equal(
+      policy.getGoogleNativeAuthPolicy("google_gmail"),
+      "PLATFORM_MANAGED_ONLY"
+    );
+    assertX.ok(policy.isPlatformManagedOnlyGoogle("google_gmail"));
   });
 
   check("GMAILMANAGEDONLY-6 managed Sign in starts platform Google OAuth", () => {
@@ -455,12 +457,9 @@ const registerPart14D55CTests = ({ check, section, assert: a }) => {
   });
 
   check("GMAILMANAGEDONLY-8 connect another account starts a fresh OAuth (no old credentialId)", () => {
-    assertX.ok(picker().includes("Use a different Gmail account"));
+    assertX.ok(picker().includes("Change Gmail account"));
     assertX.ok(picker().includes("connectGmailManagedDirect"));
-    assertX.ok(picker().includes("omit credentialId"));
-    assertX.ok(
-      picker().includes("shared across every workflow in this workspace")
-    );
+    assertX.ok(picker().includes("Omit credentialId"));
   });
 
   check("GMAILMANAGEDONLY-8b fresh Gmail OAuth uses Google AccountChooser", async () => {
@@ -521,14 +520,17 @@ const registerPart14D55CTests = ({ check, section, assert: a }) => {
     assertX.ok(oauth2Modal.includes("Authorization URL"));
   });
 
-  check("GMAILMANAGEDONLY-14 Custom OAuth2 remains available when platform is down", () => {
-    assertX.ok(modal().includes("Custom OAuth2"));
-    assertX.ok(modal().includes("Managed OAuth2 (recommended)"));
+  check("GMAILMANAGEDONLY-14 platform-down shows managed-unavailable (no Custom fallback)", () => {
+    assertX.ok(picker().includes("gmailManagedOnly"));
     assertX.ok(
-      modal().includes(
+      picker().includes(
         "Google sign-in is not available on this OpsAi instance yet"
-      )
+      ) ||
+        modal().includes(
+          "Google sign-in is not available on this OpsAi instance yet"
+        )
     );
+    assertX.ok(modal().includes("forceManaged"));
   });
 
   check("GMAILMANAGEDONLY-15 normal Gmail UI never exposes GOOGLE_OAUTH_* env names", () => {

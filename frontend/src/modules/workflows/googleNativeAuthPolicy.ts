@@ -1,8 +1,9 @@
 /**
  * Canonical native Google provider authentication policies.
  *
- * Gmail is HYBRID_MANAGED_PRIMARY — Manage offers Managed (recommended) + Custom.
- * GSC / GA4 / Sheets are HYBRID_CUSTOM_PRIMARY — custom OAuth app is primary.
+ * Gmail is PLATFORM_MANAGED_ONLY — Connect opens Google sign-in directly
+ * (no Custom OAuth2 Client ID/Secret UI). GSC / GA4 / Sheets stay
+ * HYBRID_CUSTOM_PRIMARY — custom OAuth app is primary.
  * Never decide native connection UX from generic "isGoogle" alone.
  */
 
@@ -21,7 +22,7 @@ export const GOOGLE_NATIVE_AUTH_POLICY: Record<
   GoogleCredentialProduct,
   GoogleNativeAuthPolicy
 > = {
-  google_gmail: "HYBRID_MANAGED_PRIMARY",
+  google_gmail: "PLATFORM_MANAGED_ONLY",
   google_gsc: "HYBRID_CUSTOM_PRIMARY",
   google_ga4: "HYBRID_CUSTOM_PRIMARY",
   google_sheets: "HYBRID_CUSTOM_PRIMARY",

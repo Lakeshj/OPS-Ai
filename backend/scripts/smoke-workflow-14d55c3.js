@@ -31,16 +31,16 @@ const registerPart14D55C3Tests = ({ check, section, assert: a }) => {
       "utf8"
     );
 
-  check("GOOGLEPOLICY-1 Gmail policy = HYBRID_MANAGED_PRIMARY", () => {
+  check("GOOGLEPOLICY-1 Gmail policy = PLATFORM_MANAGED_ONLY", () => {
     assertX.equal(
       policy().getGoogleNativeAuthPolicy("google_gmail"),
-      "HYBRID_MANAGED_PRIMARY"
+      "PLATFORM_MANAGED_ONLY"
     );
     assertX.equal(
       policy().defaultAppModeForProduct("google_gmail"),
       "PLATFORM_MANAGED"
     );
-    assertX.ok(fePolicy().includes('google_gmail: "HYBRID_MANAGED_PRIMARY"'));
+    assertX.ok(fePolicy().includes('google_gmail: "PLATFORM_MANAGED_ONLY"'));
   });
 
   check("GOOGLEPOLICY-2 GSC policy = HYBRID_CUSTOM_PRIMARY", () => {
@@ -68,15 +68,7 @@ const registerPart14D55C3Tests = ({ check, section, assert: a }) => {
     );
   });
 
-  check("GOOGLEPOLICY-5 Gmail CUSTOM_APP ignores platformManagedAvailable=false", () => {
-    assertX.equal(
-      policy().shouldShowPlatformManagedUnavailableWarning({
-        product: "google_gmail",
-        platformManagedAvailable: false,
-        selectedAppMode: "CUSTOM_APP",
-      }),
-      false
-    );
+  check("GOOGLEPOLICY-5 Gmail PLATFORM_MANAGED_ONLY warns when platform OAuth missing", () => {
     assertX.equal(
       policy().shouldShowPlatformManagedUnavailableWarning({
         product: "google_gmail",
@@ -84,6 +76,14 @@ const registerPart14D55C3Tests = ({ check, section, assert: a }) => {
         selectedAppMode: "PLATFORM_MANAGED",
       }),
       true
+    );
+    assertX.equal(
+      policy().shouldShowPlatformManagedUnavailableWarning({
+        product: "google_gmail",
+        platformManagedAvailable: true,
+        selectedAppMode: "PLATFORM_MANAGED",
+      }),
+      false
     );
   });
 
@@ -121,9 +121,9 @@ const registerPart14D55C3Tests = ({ check, section, assert: a }) => {
   });
 
   check("GOOGLEPOLICY-9 GSC selected CUSTOM_APP does not show managed-unavailable copy", () => {
-    assertX.ok(picker().includes("hybridGoogle ? ("));
+    assertX.ok(picker().includes("showGoogleNativeConnect ? ("));
     assertX.ok(
-      !/hybridGoogle \? \([\s\S]*?Google sign-in is not available/.test(
+      !/showGoogleNativeConnect \? \([\s\S]*?Google sign-in is not available/.test(
         picker()
       )
     );
@@ -151,12 +151,15 @@ const registerPart14D55C3Tests = ({ check, section, assert: a }) => {
     );
   });
 
-  check("GOOGLEPOLICY-12 Gmail Manage exposes Managed / Custom / Service Account", () => {
-    assertX.ok(modal().includes("Managed OAuth2 (recommended)"));
-    assertX.ok(modal().includes("Custom OAuth2"));
-    assertX.ok(modal().includes("Service Account"));
-    assertX.ok(modal().includes('value="service_account"'));
+  check("GOOGLEPOLICY-12 Gmail is platform-managed only (no Custom OAuth2 UI)", () => {
+    assertX.ok(picker().includes("gmailManagedOnly"));
     assertX.ok(picker().includes("managedOnly={gmailManagedOnly}"));
+    assertX.ok(modal().includes("forceManaged"));
+    assertX.ok(modal().includes("isPlatformManagedOnlyGoogle"));
+    assertX.equal(
+      policy().getGoogleNativeAuthPolicy("google_gmail"),
+      "PLATFORM_MANAGED_ONLY"
+    );
   });
 
   check("GOOGLEPOLICY-13 GSC still exposes provider credential modal for CUSTOM_APP setup", () => {
@@ -187,7 +190,7 @@ const registerPart14D55C3Tests = ({ check, section, assert: a }) => {
       registry().getSupportedPredefined("google_gsc")
     );
     assertX.equal(gmail.oauthMode, "predefined_platform_managed");
-    assertX.equal(gmail.nativeAuthPolicy, "HYBRID_MANAGED_PRIMARY");
+    assertX.equal(gmail.nativeAuthPolicy, "PLATFORM_MANAGED_ONLY");
     assertX.equal(gsc.oauthMode, "predefined_custom_app");
     assertX.equal(gsc.nativeAuthPolicy, "HYBRID_CUSTOM_PRIMARY");
   });
@@ -206,7 +209,7 @@ const registerPart14D55C3Tests = ({ check, section, assert: a }) => {
 
   check("GOOGLEPOLICY-docs provider change discipline present", () => {
     assertX.ok(docs().includes("GOOGLEPOLICY"));
-    assertX.ok(docs().includes("HYBRID_MANAGED_PRIMARY"));
+    assertX.ok(docs().includes("PLATFORM_MANAGED_ONLY"));
     assertX.ok(docs().includes("HYBRID_CUSTOM_PRIMARY"));
   });
 };

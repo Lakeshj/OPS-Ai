@@ -37,14 +37,13 @@ const registerPart14D54BTests = ({ check, section, assert: a }) => {
     const types = readFe("modules/workflows/types.ts");
     assertX.ok(types.includes('connectAction: "Connect Gmail"'));
     assertX.ok(picker().includes("connectGmailManagedDirect"));
-    assertX.ok(picker().includes("hybridGoogle"));
-    assertX.ok(modal().includes("Sign in with Google"));
-    assertX.ok(modal().includes("Managed OAuth2 (recommended)"));
+    assertX.ok(picker().includes("gmailDirectSignIn"));
+    assertX.ok(modal().includes("forceManaged") || modal().includes("Sign in with Google"));
     assertX.equal(
       require("../config/googleNativeAuthPolicy").getGoogleNativeAuthPolicy(
         "google_gmail"
       ),
-      "HYBRID_MANAGED_PRIMARY"
+      "PLATFORM_MANAGED_ONLY"
     );
   });
 

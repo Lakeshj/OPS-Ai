@@ -95,6 +95,10 @@ export function CredentialPicker({
   const gmailManagedOnly = isPlatformManagedOnlyGoogle(googleProduct);
   const hybridGoogle = isHybridGoogleCredential(googleProduct);
   const gmailManagedPrimary = isHybridManagedPrimaryGoogle(googleProduct);
+  /** Gmail / Gmail Trigger: direct Google sign-in (no Custom OAuth2 Client ID UI). */
+  const gmailDirectSignIn = gmailManagedOnly || gmailManagedPrimary;
+  /** Show native Google connect chrome for hybrid products and managed-only Gmail. */
+  const showGoogleNativeConnect = hybridGoogle || gmailManagedOnly;
 
   const reload = useCallback(() => {
     if (!workspaceId) return;
@@ -178,8 +182,14 @@ export function CredentialPicker({
    * succeeds). Optionally replace the previous account on this node.
    */
   const connectGmailManagedDirect = async () => {
-    if (!workspaceId || !googleProduct || !gmailManagedPrimary) return;
+    if (!workspaceId || !googleProduct || !gmailDirectSignIn) return;
     if (!platformManagedAvailable) {
+      if (gmailManagedOnly) {
+        toast.error(
+          "Google sign-in is not available on this OpsAi instance yet. Ask your admin to configure platform Gmail OAuth."
+        );
+        return;
+      }
       openGoogleModal(undefined, { setupMode: "custom" });
       toast.message(
         "Managed Google sign-in is unavailable. Configure Custom OAuth2, or contact your admin."
@@ -210,7 +220,9 @@ export function CredentialPicker({
         toast.error(errText);
         if (/access_denied|verification|test user|blocked/i.test(errText)) {
           toast.message(
-            "Managed sign-in is fine for Gmail — Google blocked this inbox on the shared app (Testing mode). Add it as a Test user, or optionally use Manage → Custom OAuth2."
+            gmailManagedOnly
+              ? "Google blocked this inbox on the shared OpsAi app (Testing mode). Ask your admin to add it as a Test user, or complete Google verification."
+              : "Managed sign-in is fine for Gmail — Google blocked this inbox on the shared app (Testing mode). Add it as a Test user, or optionally use Manage → Custom OAuth2."
           );
         }
       }
@@ -227,7 +239,7 @@ export function CredentialPicker({
 
   const save = async () => {
     if (isGoogleType(type) && googleProduct) {
-      if (gmailManagedPrimary) {
+      if (gmailDirectSignIn) {
         void connectGmailManagedDirect();
         return;
       }
@@ -314,7 +326,7 @@ export function CredentialPicker({
         {fieldLabel}
       </Label>
       {/* Gmail: no shared account dropdown — only this node's inbox. */}
-      {gmailManagedPrimary ? (
+      {gmailDirectSignIn ? (
         <div className="rounded-md border border-border/60 bg-muted/20 px-2.5 py-2 text-sm">
           {selected?.accountEmail ||
             (selected
@@ -346,7 +358,7 @@ export function CredentialPicker({
         </Select>
       )}
 
-      {googleOnly && googleProduct && hybridGoogle ? (
+      {googleOnly && googleProduct && showGoogleNativeConnect ? (
         <div className="space-y-2">
           {selected && selected.connected === false ? (
             <p className="rounded-md border border-amber-500/40 bg-amber-500/10 px-2 py-1.5 text-[11px] text-amber-900 dark:text-amber-100">
@@ -364,7 +376,7 @@ export function CredentialPicker({
           ) : (
             <p className="text-[11px] text-muted-foreground">
               {googleProduct === "google_gmail"
-                ? "Sign in with Google (managed). Nothing is stored until login succeeds. Each Gmail node keeps its own inbox — older accounts are not reused here."
+                ? "Sign in with Google. Nothing is stored until login succeeds. Each Gmail node keeps its own inbox — older accounts are not reused here."
                 : "Connect a Google account for this node. Add another node to use a different account."}
             </p>
           )}
@@ -372,7 +384,7 @@ export function CredentialPicker({
           <div className="flex flex-wrap gap-2">
             {selected ? (
               <>
-                {gmailManagedPrimary ? (
+                {gmailDirectSignIn ? (
                   <Button
                     type="button"
                     size="sm"
@@ -384,24 +396,26 @@ export function CredentialPicker({
                     {connecting ? "Connecting…" : "Change Gmail account"}
                   </Button>
                 ) : null}
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="outline"
-                  onClick={() =>
-                    openGoogleModal(selected.id, {
-                      autoConnect: selected.connected === false,
-                      setupMode:
-                        selectedAppMode === "PLATFORM_MANAGED"
-                          ? "managed"
-                          : selectedAppMode === "CUSTOM_APP"
-                            ? "custom"
-                            : defaultGoogleSetupMode(googleProduct),
-                    })
-                  }
-                >
-                  {selected.connected === false ? "Reconnect" : "Manage"}
-                </Button>
+                {!gmailManagedOnly ? (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={() =>
+                      openGoogleModal(selected.id, {
+                        autoConnect: selected.connected === false,
+                        setupMode:
+                          selectedAppMode === "PLATFORM_MANAGED"
+                            ? "managed"
+                            : selectedAppMode === "CUSTOM_APP"
+                              ? "custom"
+                              : defaultGoogleSetupMode(googleProduct),
+                      })
+                    }
+                  >
+                    {selected.connected === false ? "Reconnect" : "Manage"}
+                  </Button>
+                ) : null}
                 <Button
                   type="button"
                   size="sm"
@@ -418,12 +432,12 @@ export function CredentialPicker({
                 size="sm"
                 disabled={connecting}
                 className={
-                  gmailManagedPrimary
+                  gmailDirectSignIn
                     ? "gap-2 bg-white text-gray-800 hover:bg-gray-100 dark:bg-white dark:text-gray-900"
                     : undefined
                 }
                 onClick={() => {
-                  if (gmailManagedPrimary) {
+                  if (gmailDirectSignIn) {
                     void connectGmailManagedDirect();
                     return;
                   }
@@ -432,11 +446,11 @@ export function CredentialPicker({
                   });
                 }}
               >
-                {gmailManagedPrimary ? <GoogleMark /> : null}
+                {gmailDirectSignIn ? <GoogleMark /> : null}
                 {connecting ? "Connecting…" : connectPrimary}
               </Button>
             )}
-            {listed.length > 0 && !gmailManagedPrimary ? (
+            {listed.length > 0 && !gmailDirectSignIn ? (
               <Button
                 type="button"
                 size="sm"

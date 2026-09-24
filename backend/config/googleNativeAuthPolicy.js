@@ -2,11 +2,12 @@
  * Canonical native Google provider authentication policies (backend mirror).
  * Keep in sync with frontend/src/modules/workflows/googleNativeAuthPolicy.ts
  *
- * Gmail = HYBRID_MANAGED_PRIMARY. GSC / GA4 / Sheets = HYBRID_CUSTOM_PRIMARY.
+ * Gmail = PLATFORM_MANAGED_ONLY (direct Google sign-in).
+ * GSC / GA4 / Sheets = HYBRID_CUSTOM_PRIMARY.
  */
 
 const GOOGLE_NATIVE_AUTH_POLICY = Object.freeze({
-  google_gmail: "HYBRID_MANAGED_PRIMARY",
+  google_gmail: "PLATFORM_MANAGED_ONLY",
   google_gsc: "HYBRID_CUSTOM_PRIMARY",
   google_ga4: "HYBRID_CUSTOM_PRIMARY",
   google_sheets: "HYBRID_CUSTOM_PRIMARY",

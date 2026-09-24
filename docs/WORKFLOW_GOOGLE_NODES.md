@@ -11,12 +11,12 @@ Native Google integrations for workflows. Tokens live only in encrypted `workflo
 
 | Product | Policy | Author UX |
 | --- | --- | --- |
-| Gmail (`google_gmail`) | `HYBRID_MANAGED_PRIMARY` | Manage → Managed OAuth2 (recommended), Custom OAuth2, Service Account (not yet). Permissions are granted on Google’s consent screen. |
+| Gmail (`google_gmail`) | `PLATFORM_MANAGED_ONLY` | Connect → Google sign-in popup directly (no Client ID/Secret). Permissions are granted on Google’s consent screen. |
 | Search Console (`google_gsc`) | `HYBRID_CUSTOM_PRIMARY` | Connect → custom OAuth app (Client ID/Secret). Setup credential selectable when platform OAuth exists. |
 | Analytics (`google_ga4`) | `HYBRID_CUSTOM_PRIMARY` | Same hybrid CUSTOM_APP-primary flow |
 | Sheets (`google_sheets`) | `HYBRID_CUSTOM_PRIMARY` | Same hybrid CUSTOM_APP-primary flow |
 
-`platformManagedAvailable` / `GOOGLE_OAUTH_*` matter for Managed OAuth2 paths. `CUSTOM_APP` connections ignore platform client env and never show Gmail’s “sign-in is not available” warning.
+`platformManagedAvailable` / `GOOGLE_OAUTH_*` are required for Gmail. GSC / GA4 / Sheets `CUSTOM_APP` connections ignore platform client env.
 
 Credentials are **workspace-scoped**: every Gmail node picks a `credentialId`. Multiple nodes/workflows can reuse one account, or each node can use a different connected account via Connect another account.
 
@@ -46,16 +46,14 @@ Normal author flow is **frontend-configured** (`CUSTOM_APP`):
 
 When platform OAuth is configured, Setup credential may also offer Managed OAuth2 as an optional path. When it is not configured, Setup stays locked to custom Google OAuth app (no dead-end Managed option).
 
-### Gmail (HYBRID_MANAGED_PRIMARY)
+### Gmail (PLATFORM_MANAGED_ONLY)
 
-1. Connect / Manage opens the credential modal
-2. Setup credential: **Managed OAuth2 (recommended)**, **Custom OAuth2**, or Service Account (disabled for now)
-3. Managed uses operator-owned `GOOGLE_OAUTH_CLIENT_*`; Custom uses the author’s Client ID/Secret (same pattern as GSC)
-4. Sign in with Google → Google account chooser → Google consent screen (permissions are chosen / shown by Google, not OpsAi)
-5. OpsAi probes Gmail API; connect fails clearly if Gmail API is disabled, the OAuth app is unverified/testing without this user, or scopes were denied
-6. Sharing tab: who can reuse the connection (not secrets)
+1. Connect / Change Gmail account opens Google sign-in directly (OpsAi Cloud OAuth app)
+2. Google account chooser → Google consent screen (permissions are chosen / shown by Google, not OpsAi)
+3. OpsAi probes Gmail API; connect fails clearly if Gmail API is disabled, the OAuth app is unverified/testing without this user, or scopes were denied
+4. No Custom OAuth2 Client ID/Secret UI on Gmail or Gmail Trigger (unlike GSC / GA4 / Sheets)
 
-If Managed shows `Error 403: access_denied` / “has not completed the Google verification process”, either add the Google account as a **test user** on the OpsAi Cloud project, or switch Setup to **Custom OAuth2** with a client that already has Gmail API + scopes configured.
+If Google shows `Error 403: access_denied` / “has not completed the Google verification process”, add the Google account as a **test user** on the OpsAi Cloud project, or complete Google verification for the platform OAuth app.
 
 Google authorization/token endpoints are owned by the provider registry — authors do **not** enter them for predefined Google types.
 

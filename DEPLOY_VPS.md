@@ -70,7 +70,11 @@ Set: `DB_*`, `JWT_SECRET`, `PORT` (e.g. `5013` or `5014` — whatever is free), 
 
 ```env
 CORS_ORIGIN=https://opsai.socialchamps.com
-# Google OAuth callback shown in workflow Google credential modals (GSC/GA4/Gmail/Sheets)
+# Required for Gmail + Gmail Trigger (PLATFORM_MANAGED_ONLY — Sign in with Google).
+# Same OpsAi Cloud OAuth client as local; never entered by workflow authors.
+GOOGLE_OAUTH_CLIENT_ID=your-google-oauth-client-id.apps.googleusercontent.com
+GOOGLE_OAUTH_CLIENT_SECRET=your-google-oauth-client-secret
+# Must match Google Cloud → OAuth client → Authorized redirect URIs exactly:
 GOOGLE_OAUTH_REDIRECT_URI=https://opsai.socialchamps.com/api/google-oauth/callback
 ```
 
@@ -82,6 +86,17 @@ CORS_ORIGIN=https://opsai.socialchamps.com:3001,https://opsai.socialchamps.com:3
 
 If `GOOGLE_OAUTH_REDIRECT_URI` is omitted but `CORS_ORIGIN` is the public HTTPS site, the backend builds  
 `https://opsai.socialchamps.com/api/google-oauth/callback` automatically. Still add that exact URI in Google Cloud → OAuth client → **Authorized redirect URIs**.
+
+**Gmail / Gmail Trigger on live (must match local behavior):**
+
+1. Deploy includes the Gmail `PLATFORM_MANAGED_ONLY` code (same CredentialPicker for both nodes).
+2. Live `backend/.env` has `GOOGLE_OAUTH_CLIENT_ID` + `GOOGLE_OAUTH_CLIENT_SECRET` (without these, Connect Gmail shows “sign-in is not available”).
+3. Live redirect URI is registered on the **same** Google Cloud OAuth client used for `GOOGLE_OAUTH_*`.
+4. Gmail API is enabled on that Google Cloud project.
+5. If the OAuth app is in **Testing** mode, add each inbox as a Test user (or complete Google verification).
+6. After editing live `.env`, restart `opsai-backend` (PM2/systemd).
+
+GSC / GA4 / Sheets stay Custom OAuth2 on live — they do **not** require platform `GOOGLE_OAUTH_CLIENT_*`.
 ```bash
 # Frontend
 cp source/frontend/.env.example source/frontend/.env.local
