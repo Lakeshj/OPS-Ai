@@ -180,19 +180,13 @@ export function CredentialPicker({
   /**
    * Gmail managed sign-in: always create-on-callback (nothing stored until Google
    * succeeds). Optionally replace the previous account on this node.
+   * Credentials stay workspace-scoped; each Gmail node keeps its own inbox.
    */
   const connectGmailManagedDirect = async () => {
     if (!workspaceId || !googleProduct || !gmailDirectSignIn) return;
     if (!platformManagedAvailable) {
-      if (gmailManagedOnly) {
-        toast.error(
-          "Google sign-in is not available on this OpsAi instance yet. Ask your admin to configure platform Gmail OAuth."
-        );
-        return;
-      }
-      openGoogleModal(undefined, { setupMode: "custom" });
-      toast.message(
-        "Managed Google sign-in is unavailable. Configure Custom OAuth2, or contact your admin."
+      toast.error(
+        "Couldn't start Google sign-in on this server yet. Platform Google login credentials need to be configured on the server, then restart the backend."
       );
       return;
     }
@@ -217,19 +211,29 @@ export function CredentialPicker({
       } else {
         // Failed / cancelled — do not keep a stub credential on this node.
         const errText = result.error || "Google connect failed";
-        toast.error(errText);
-        if (/access_denied|verification|test user|blocked/i.test(errText)) {
-          toast.message(
-            gmailManagedOnly
-              ? "Google blocked this inbox on the shared OpsAi app (Testing mode). Ask your admin to add it as a Test user, or complete Google verification."
-              : "Managed sign-in is fine for Gmail — Google blocked this inbox on the shared app (Testing mode). Add it as a Test user, or optionally use Manage → Custom OAuth2."
+        if (/deleted_client|oauth client was deleted/i.test(errText)) {
+          toast.error(
+            "Google rejected this login app (OAuth client was deleted). Create a new Google Cloud OAuth client, update the server's platform Google login credentials, then click Connect Gmail again."
           );
+        } else if (/access_denied|verification|test user|blocked/i.test(errText)) {
+          toast.error(errText);
+          toast.message(
+            "This Google account may need to be added as a Test user on the OpsAi OAuth app (Google Cloud → OAuth consent screen), or the app needs verification."
+          );
+        } else {
+          toast.error(errText);
         }
       }
     } catch (err) {
-      toast.error(
-        err instanceof Error ? err.message : "Could not start Google sign-in"
-      );
+      const msg =
+        err instanceof Error ? err.message : "Could not start Google sign-in";
+      if (/deleted_client|oauth client was deleted/i.test(msg)) {
+        toast.error(
+          "Google rejected this login app (OAuth client was deleted). Create a new Google Cloud OAuth client, update the server's platform Google login credentials, then click Connect Gmail again."
+        );
+      } else {
+        toast.error(msg);
+      }
     } finally {
       setConnecting(false);
     }

@@ -322,12 +322,17 @@ const googleOAuthCallback = asyncHandler(async (req, res) => {
   const googleOAuth = require("../../services/googleOAuth.service");
   try {
     if (req.query.error) {
+      const code = String(req.query.error || "");
       const reason = String(req.query.error_description || req.query.error || "")
         .slice(0, 180);
-      const friendly =
-        /access_denied/i.test(String(req.query.error))
-          ? "Google blocked sign-in (access_denied). If the app is in Testing, add this Google account as a test user — or use Custom OAuth2 with your own Google Cloud client. Unverified apps cannot be used by arbitrary Gmail accounts."
-          : reason || "Google connect failed";
+      let friendly = reason || "Google connect failed";
+      if (/deleted_client/i.test(code) || /oauth client was deleted/i.test(reason)) {
+        friendly =
+          "Google rejected this login app (OAuth client was deleted). Create a new Google Cloud OAuth client, update the server's platform Google login credentials, then try Connect Gmail again.";
+      } else if (/access_denied/i.test(code)) {
+        friendly =
+          "Google blocked sign-in (access_denied). If the OAuth app is in Testing mode, add this Google account as a test user on the consent screen, then try Connect Gmail again.";
+      }
       googleOAuth.applyOAuthPopupResponseHeaders(res);
       res.status(400).send(
         googleOAuth.oauthCallbackHtml({

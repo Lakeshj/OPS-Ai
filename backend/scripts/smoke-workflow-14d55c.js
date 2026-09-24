@@ -161,9 +161,8 @@ const registerPart14D55CTests = ({ check, section, assert: a }) => {
 
   check("GMAILMANAGED-11 missing managed config warns inside Manage modal", () => {
     assertX.ok(
-      modal().includes(
-        "Google sign-in is not available on this OpsAi instance yet. Please contact your workspace administrator."
-      )
+      modal().includes("Couldn't start Google sign-in yet") ||
+        modal().includes("Google sign-in isn't ready on this server yet")
     );
     assertX.ok(modal().includes("platformManagedAvailable"));
   });
@@ -523,12 +522,9 @@ const registerPart14D55CTests = ({ check, section, assert: a }) => {
   check("GMAILMANAGEDONLY-14 platform-down shows managed-unavailable (no Custom fallback)", () => {
     assertX.ok(picker().includes("gmailManagedOnly"));
     assertX.ok(
-      picker().includes(
-        "Google sign-in is not available on this OpsAi instance yet"
-      ) ||
-        modal().includes(
-          "Google sign-in is not available on this OpsAi instance yet"
-        )
+      picker().includes("Couldn't start Google sign-in on this server yet") ||
+        modal().includes("Google sign-in isn't ready on this server yet") ||
+        modal().includes("Couldn't start Google sign-in yet")
     );
     assertX.ok(modal().includes("forceManaged"));
   });

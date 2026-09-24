@@ -377,7 +377,7 @@ export function GoogleCredentialModal({
     if (isManaged && !platformManagedAvailable) {
       setBanner({
         kind: "error",
-        text: "Google sign-in is not available on this OpsAi instance yet. Please contact your workspace administrator.",
+        text: "Couldn't start Google sign-in yet. Platform Google login credentials need to be configured on the server, then restart the backend.",
       });
       return;
     }
@@ -733,8 +733,9 @@ export function GoogleCredentialModal({
                     <>
                       {!platformManagedAvailable ? (
                         <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-3 text-sm text-amber-950 dark:text-amber-50">
-                          Google sign-in is not available on this OpsAi instance
-                          yet. Please contact your workspace administrator.
+                          Google sign-in isn&apos;t ready on this server yet.
+                          Configure platform Google login credentials, then
+                          restart the backend.
                         </div>
                       ) : (
                         <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-3">

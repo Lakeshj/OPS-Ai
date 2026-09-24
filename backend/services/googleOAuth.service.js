@@ -313,13 +313,15 @@ const sanitizeGoogleError = (status, body, options = {}) => {
       ? "GOOGLE_UNAUTHORIZED"
       : status === 403
         ? "GOOGLE_FORBIDDEN"
-        : status === 429
-          ? "GOOGLE_QUOTA"
-          : status === 400
-            ? "GOOGLE_BAD_REQUEST"
-            : status >= 500
-              ? "GOOGLE_UNAVAILABLE"
-              : "GOOGLE_ERROR";
+        : status === 404
+          ? "GOOGLE_NOT_FOUND"
+          : status === 429
+            ? "GOOGLE_QUOTA"
+            : status === 400
+              ? "GOOGLE_BAD_REQUEST"
+              : status >= 500
+                ? "GOOGLE_UNAVAILABLE"
+                : "GOOGLE_ERROR";
   const bodyText =
     typeof body === "string"
       ? body
@@ -331,27 +333,48 @@ const sanitizeGoogleError = (status, body, options = {}) => {
     /SERVICE_DISABLED|accessNotConfigured|Gmail API has not been used|API has not been used in project/i.test(
       bodyText
     );
+  const gmailProjectNumber = String(
+    config.googleOAuth?.clientId || process.env.GOOGLE_OAUTH_CLIENT_ID || ""
+  )
+    .split("-")[0]
+    .replace(/\D/g, "");
+  const gmailEnableUrl = gmailProjectNumber
+    ? `https://console.cloud.google.com/apis/library/gmail.googleapis.com?project=${gmailProjectNumber}`
+    : "https://console.cloud.google.com/apis/library/gmail.googleapis.com";
   const forbiddenMessage = gmailApiDisabled
-    ? "Gmail API is not enabled on the OpsAi Google Cloud project. Ask an admin to enable Gmail API, add Gmail scopes on the OAuth consent screen, then reconnect and grant permissions."
+    ? `Gmail API is not enabled for Google Cloud project ${gmailProjectNumber || "this OAuth client"}. Open ${gmailEnableUrl}, click Enable, wait a minute, then connect Gmail again.`
     : product === "google_gmail"
       ? "Google denied Gmail access. Reconnect and enable the Gmail permissions you need (read/manage, send, drafts). If this keeps failing, enable Gmail API on the OpsAi Google Cloud project."
       : "Google denied access to this resource. Check property permissions.";
+  const insufficientScope =
+    /insufficientPermissions|ACCESS_TOKEN_SCOPE_INSUFFICIENT|insufficient authentication scopes/i.test(
+      bodyText
+    );
   const message =
     status === 401
       ? "Google credential expired or was revoked. Reconnect it in Credentials."
       : status === 403
-        ? forbiddenMessage
-        : status === 429
-          ? "Google API quota exceeded. Try again later."
-          : status === 400
-            ? "Google rejected the request. Check site URL, property ID, or parameters."
-            : status >= 500
-              ? "Google API is temporarily unavailable."
-              : "Google API request failed.";
+        ? insufficientScope
+          ? "This Google account is missing the Gmail permission required for this step. Reconnect and grant Gmail access."
+          : forbiddenMessage
+        : status === 404
+          ? product === "google_gmail"
+            ? "Gmail message or label was not found."
+            : "Google resource was not found."
+          : status === 429
+            ? "Google API quota exceeded. Try again later."
+            : status === 400
+              ? product === "google_gmail"
+                ? "Gmail rejected the request. Check the recipient, message id, or search filters."
+                : "Google rejected the request. Check site URL, property ID, or parameters."
+              : status >= 500
+                ? "Google API is temporarily unavailable."
+                : "Google API request failed.";
   const err = new Error(message);
   err.code = code;
   err.statusCode = status >= 400 && status < 600 ? status : 502;
   err.providerStatus = status;
+  if (status === 429) err.retryable = true;
   return err;
 };
 

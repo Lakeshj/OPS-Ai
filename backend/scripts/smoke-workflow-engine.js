@@ -9554,6 +9554,11 @@ require("./smoke-workflow-14d55c3").registerPart14D55C3Tests({
   section,
   assert,
 });
+require("./smoke-workflow-gmail-v1").registerGmailV1Tests({
+  check,
+  section,
+  assert,
+});
 
 (async () => {
   for (const task of queue) await task();

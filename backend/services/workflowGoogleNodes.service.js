@@ -500,6 +500,8 @@ const buildRfc822 = ({
   text,
   html,
   attachments,
+  inReplyTo,
+  references,
 }) => {
   const crypto = require("crypto");
   const boundary = `opsai_${crypto.randomBytes(10).toString("hex")}`;
@@ -510,6 +512,8 @@ const buildRfc822 = ({
   if (replyTo) headers.push(`Reply-To: ${replyTo}`);
   if (fromName) headers.push(`From: ${fromName}`);
   headers.push(`Subject: ${subject || ""}`);
+  if (inReplyTo) headers.push(`In-Reply-To: ${inReplyTo}`);
+  if (references) headers.push(`References: ${references}`);
   headers.push("MIME-Version: 1.0");
 
   const parts = [];
@@ -605,12 +609,12 @@ const decodeBody = (payload) => {
   return walk(payload);
 };
 
-const gmailSendLike = async (node, context, item, { replyToMessageId, threadId } = {}) => {
+const gmailSendLike = async (node, context, item, reply = {}) => {
   const data = node.data || {};
   const credentialId = requireCredential(data);
-  const to = String(expr(data.to, context, item) || "").trim();
+  const to = String(reply.to || expr(data.to, context, item) || "").trim();
   if (!to) throw new Error("Gmail Send requires a recipient (To)");
-  const subject = String(expr(data.subject, context, item) || "");
+  const subject = String(reply.subject || expr(data.subject, context, item) || "");
   const emailType = String(data.emailType || "text");
   const message = String(expr(data.message || data.text || data.html, context, item) || "");
   const attachments = collectAttachments(item, data);
@@ -625,10 +629,12 @@ const gmailSendLike = async (node, context, item, { replyToMessageId, threadId }
       text: emailType === "html" ? "" : message,
       html: emailType === "html" ? message : "",
       attachments,
+      inReplyTo: reply.inReplyTo,
+      references: reply.references,
     })
   );
   const body = { raw };
-  if (threadId) body.threadId = threadId;
+  if (reply.threadId) body.threadId = reply.threadId;
   const res = await googleApiRequest({
     credentialId,
     workspaceId: context.workspaceId,
@@ -638,7 +644,6 @@ const gmailSendLike = async (node, context, item, { replyToMessageId, threadId }
     body,
     timeoutMs: Number(data.timeoutMs) || 25000,
   });
-  void replyToMessageId;
   return {
     items: [{ json: gmailMessageSummary(res.body || {}) }],
     output: gmailMessageSummary(res.body || {}),
@@ -651,18 +656,24 @@ const gmailGet = async (node, context, item) => {
   const credentialId = requireCredential(data);
   const id = String(expr(data.messageId || data.id, context, item) || "").trim();
   if (!id) throw new Error("Message id is required");
-  const format = data.includeBody ? "full" : "metadata";
+  const wantBody = data.includeBody === true || data.simple === false || data.simple === "false";
+  const format = wantBody ? "full" : "metadata";
+  const metaHeaders = ["From", "To", "Cc", "Subject", "Date", "Message-ID", "References", "Reply-To"]
+    .map((name) => `metadataHeaders=${encodeURIComponent(name)}`)
+    .join("&");
   const res = await googleApiRequest({
     credentialId,
     workspaceId: context.workspaceId,
     requiredType: "google_gmail",
-    url: `https://gmail.googleapis.com/gmail/v1/users/me/messages/${encodeURIComponent(id)}?format=${format}`,
+    url: `https://gmail.googleapis.com/gmail/v1/users/me/messages/${encodeURIComponent(id)}?format=${format}${
+      format === "metadata" ? `&${metaHeaders}` : ""
+    }`,
     method: "GET",
     timeoutMs: Number(data.timeoutMs) || 25000,
   });
   const msg = res.body || {};
   const headers = headerMap(msg.payload);
-  const bodies = data.includeBody ? decodeBody(msg.payload) : { text: "", html: "" };
+  const bodies = wantBody ? decodeBody(msg.payload) : { text: "", html: "" };
   const json = {
     ...gmailMessageSummary(msg),
     from: headers.from || "",
@@ -671,7 +682,10 @@ const gmailGet = async (node, context, item) => {
     subject: headers.subject || "",
     date: headers.date || "",
     snippet: msg.snippet || "",
-    ...(data.includeBody ? { body: bodies.html || bodies.text } : {}),
+    messageIdHeader: headers["message-id"] || "",
+    references: headers.references || "",
+    replyToAddress: headers["reply-to"] || "",
+    ...(wantBody ? { body: bodies.html || bodies.text } : {}),
     attachmentMetadata: (msg.payload?.parts || [])
       .filter((p) => p.filename)
       .map((p) => ({ fileName: p.filename, mimeType: p.mimeType, size: p.body?.size || 0 })),
@@ -683,13 +697,48 @@ const gmailGet = async (node, context, item) => {
   };
 };
 
+const gmailSearchDate = (value) => {
+  const raw = String(value || "").trim();
+  if (!raw) return "";
+  const iso = raw.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (iso) return `${iso[1]}/${iso[2]}/${iso[3]}`;
+  const slash = raw.match(/^(\d{4})\/(\d{2})\/(\d{2})/);
+  if (slash) return `${slash[1]}/${slash[2]}/${slash[3]}`;
+  return raw.replace(/\s+/g, "");
+};
+
+const quoteGmailTerm = (value) => {
+  const text = String(value || "").trim();
+  if (!text) return "";
+  return /[\s:]/.test(text) ? `"${text.replace(/"/g, "")}"` : text;
+};
+
+const buildGmailListQuery = (data, context, item) => {
+  const parts = [];
+  const q = String(expr(data.q || data.query, context, item) || "").trim();
+  if (q) parts.push(q);
+  const sender = String(expr(data.sender || data.from, context, item) || "").trim();
+  if (sender) parts.push(`from:${quoteGmailTerm(sender)}`);
+  const readStatus = String(data.readStatus || "any");
+  if (readStatus === "unread") parts.push("is:unread");
+  if (readStatus === "read") parts.push("is:read");
+  const after = gmailSearchDate(expr(data.receivedAfter, context, item));
+  const before = gmailSearchDate(expr(data.receivedBefore, context, item));
+  if (after) parts.push(`after:${after}`);
+  if (before) parts.push(`before:${before}`);
+  for (const label of parseLabelList(data.labelIds, context, item)) {
+    parts.push(`label:${quoteGmailTerm(label)}`);
+  }
+  return parts.join(" ").trim();
+};
+
 const gmailList = async (node, context, item, resource = "messages") => {
   const data = node.data || {};
   const credentialId = requireCredential(data);
   const limit = data.returnAll
     ? GMAIL_LIST_MAX
     : Math.min(Math.max(Number(data.limit) || 10, 1), GMAIL_LIST_MAX);
-  const q = String(expr(data.q || data.query, context, item) || "").trim();
+  const q = resource === "messages" ? buildGmailListQuery(data, context, item) : String(expr(data.q || data.query, context, item) || "").trim();
   const items = [];
   let pageToken = "";
   const path =
@@ -716,6 +765,9 @@ const gmailList = async (node, context, item, resource = "messages") => {
   while (items.length < limit) {
     const params = new URLSearchParams({ maxResults: String(Math.min(limit - items.length, 50)) });
     if (q && path !== "drafts") params.set("q", q);
+    if (path === "messages" && (data.includeSpamTrash === true || data.includeSpamTrash === "true")) {
+      params.set("includeSpamTrash", "true");
+    }
     if (pageToken) params.set("pageToken", pageToken);
     const res = await googleApiRequest({
       credentialId,
@@ -741,6 +793,23 @@ const gmailList = async (node, context, item, resource = "messages") => {
     }
     pageToken = res.body?.nextPageToken || "";
     if (!pageToken || !data.returnAll) break;
+  }
+  const simple = data.simple !== false && data.simple !== "false";
+  if (path === "messages" && !simple && items.length) {
+    const detailed = [];
+    for (const row of items) {
+      const got = await gmailGet(
+        { ...node, data: { ...data, messageId: row.json?.id, simple: false, includeBody: true } },
+        context,
+        item
+      );
+      detailed.push(got.items[0]);
+    }
+    return {
+      items: detailed,
+      output: { count: detailed.length },
+      resolved: { credentialId, limit, q, simple: false },
+    };
   }
   return {
     items,
@@ -800,13 +869,26 @@ const runGmail = async (node, context, item) => {
     const id = String(expr(data.messageId, context, item) || "").trim();
     if (!id) throw new Error("Reply requires messageId");
     const got = await gmailGet(
-      { ...node, data: { ...data, includeBody: false } },
+      { ...node, data: { ...data, messageId: id, simple: true, includeBody: false } },
       context,
       item
     );
+    const original = got.output || {};
+    const messageIdHeader = original.messageIdHeader || "";
+    const priorRefs = original.references || "";
+    const references = [priorRefs, messageIdHeader].filter(Boolean).join(" ").trim();
+    const senderOnly = data.replyToSenderOnly === true || data.replyToSenderOnly === "true";
+    const to = senderOnly
+      ? original.replyToAddress || original.from || ""
+      : String(expr(data.to, context, item) || "").trim() || original.replyToAddress || original.from || "";
+    const subjectRaw = String(expr(data.subject, context, item) || "").trim();
+    const subject = subjectRaw || (original.subject ? `Re: ${original.subject}` : "");
     return gmailSendLike(node, context, item, {
-      replyToMessageId: id,
-      threadId: got.output.threadId,
+      to,
+      subject,
+      threadId: original.threadId,
+      inReplyTo: messageIdHeader || undefined,
+      references: references || undefined,
     });
   }
   if (resource === "message" && operation === "get") return gmailGet(node, context, item);
@@ -880,13 +962,18 @@ const runGmail = async (node, context, item) => {
   if (resource === "label" && operation === "create") {
     const credentialId = requireCredential(data);
     const name = String(expr(data.labelName || data.name, context, item) || "").trim();
+    if (!name) throw new Error("Label name is required");
     const res = await googleApiRequest({
       credentialId,
       workspaceId: context.workspaceId,
       requiredType: "google_gmail",
       url: "https://gmail.googleapis.com/gmail/v1/users/me/labels",
       method: "POST",
-      body: { name },
+      body: {
+        name,
+        labelListVisibility: data.labelListVisibility || "labelShow",
+        messageListVisibility: data.messageListVisibility || "show",
+      },
     });
     return {
       items: [{ json: { id: res.body?.id, name: res.body?.name } }],
