@@ -926,8 +926,31 @@ const getErrorRoutingForRun = async (workflowId, runId, authUser) => {
 const listRuns = async (workflowId, authUser) => {
   // Allow listing runs for soft-deleted workflows (historical retention).
   await getById(workflowId, authUser, { allowDeleted: true });
+  // Do NOT SELECT r.* with ORDER BY — definition_snapshot_json / input_json /
+  // output_json can be multi-MB after GA4/GSC fan-out runs. MySQL filesorts
+  // the full selected row into sort_buffer → ER_OUT_OF_SORTMEMORY.
+  // List consumers only need metadata; hydrate fat payloads via getRunById.
   const [rows] = await pool.execute(
-    `SELECT r.*, w.name AS workflow_live_name, w.deleted_at
+    `SELECT r.id,
+            r.workflow_id,
+            r.status,
+            r.error,
+            r.waiting_node_id,
+            r.waiting_reason,
+            r.resume_at,
+            r.parent_run_id,
+            r.parent_node_id,
+            r.parent_execution_index,
+            r.root_run_id,
+            r.workflow_name_snapshot,
+            r.started_at,
+            r.finished_at,
+            r.created_by,
+            r.created_at,
+            (r.definition_snapshot_json IS NOT NULL) AS has_definition_snapshot,
+            w.workspace_id,
+            w.name AS workflow_live_name,
+            w.deleted_at
      FROM workflow_runs r
      INNER JOIN workflows w ON w.id = r.workflow_id
      WHERE r.workflow_id = ?
@@ -935,7 +958,21 @@ const listRuns = async (workflowId, authUser) => {
      LIMIT 100`,
     [workflowId]
   );
-  const runs = rows.map(formatRun);
+  const runs = rows.map((row) => {
+    const formatted = formatRun({
+      ...row,
+      // Intentionally omitted from list query (see comment above).
+      input_json: null,
+      output_json: null,
+      definition_snapshot_json: row.has_definition_snapshot ? true : null,
+    });
+    return {
+      ...formatted,
+      hasDefinitionSnapshot: Boolean(row.has_definition_snapshot),
+      // Never attach historicalDefinition on list — use getRunById for that.
+      historicalDefinition: undefined,
+    };
+  });
   // Lightweight child counts for history badges (same-workspace parent runs).
   if (runs.length === 0) return runs;
   const ids = runs.map((r) => r.id);

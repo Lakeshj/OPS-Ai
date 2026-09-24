@@ -8,7 +8,7 @@ import {
   useStore,
   type NodeProps,
 } from "@xyflow/react";
-import { AlertCircle, Check, Pin, Plus, X } from "lucide-react";
+import { AlertCircle, Check, Loader2, Pin, Plus, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { nodeHasMissingConfig } from "@/modules/workflows/nodeValidation";
 import {
@@ -40,8 +40,9 @@ const base =
 const statusStyles: Record<string, string> = {
   succeeded: "ring-2 ring-emerald-500/50",
   failed: "ring-2 ring-destructive/60",
-  running: "ring-2 ring-amber-500/50",
-  pending: "",
+  running: "ring-2 ring-amber-500/70 shadow-[0_0_0_1px_rgba(245,158,11,0.25)]",
+  waiting: "ring-2 ring-sky-500/50",
+  pending: "opacity-90",
   skipped: "opacity-60",
 };
 
@@ -110,8 +111,31 @@ function StatusBadge({
   }
   if (runStatus === "running") {
     return (
-      <span className="rounded-full bg-amber-500/15 px-1.5 py-0.5 text-[9px] capitalize text-amber-700 dark:text-amber-300">
-        running
+      <span
+        className="flex h-5 w-5 items-center justify-center rounded-full bg-amber-500 text-white"
+        title="Running"
+      >
+        <Loader2 className="h-3 w-3 animate-spin" strokeWidth={2.5} />
+      </span>
+    );
+  }
+  if (runStatus === "waiting") {
+    return (
+      <span
+        className="flex h-5 w-5 items-center justify-center rounded-full bg-sky-500 text-white"
+        title="Waiting"
+      >
+        <Loader2 className="h-3 w-3 animate-spin" strokeWidth={2.5} />
+      </span>
+    );
+  }
+  if (runStatus === "pending") {
+    return (
+      <span
+        className="flex h-5 w-5 items-center justify-center rounded-full border border-muted-foreground/30 bg-muted/80 text-muted-foreground"
+        title="Queued"
+      >
+        <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-muted-foreground/70" />
       </span>
     );
   }
@@ -217,7 +241,23 @@ function WorkflowNodeComponent({ id, data, type, selected }: NodeProps) {
           : description;
 
   const nodeBody = (
-    <div
+    <div className="relative pt-1">
+      {(runStatus === "running" || runStatus === "waiting") && (
+        <div
+          className={cn(
+            "pointer-events-none absolute -top-7 left-1/2 z-30 flex -translate-x-1/2 items-center gap-1.5 rounded-full border px-2.5 py-1 text-[10px] font-semibold shadow-md backdrop-blur-sm",
+            runStatus === "waiting"
+              ? "border-sky-400/40 bg-sky-500/95 text-white"
+              : "border-amber-400/40 bg-amber-500/95 text-white"
+          )}
+          role="status"
+          aria-live="polite"
+        >
+          <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin" strokeWidth={2.5} />
+          <span>{runStatus === "waiting" ? "Waiting" : "Running"}</span>
+        </div>
+      )}
+      <div
       className={cn(
         base,
         "relative transition-[box-shadow,transform] duration-200",
@@ -500,6 +540,7 @@ function WorkflowNodeComponent({ id, data, type, selected }: NodeProps) {
           {auxiliaryOutputPorts.map((p) => p.label || p.id).join(" · ")}
         </div>
       )}
+    </div>
     </div>
   );
 

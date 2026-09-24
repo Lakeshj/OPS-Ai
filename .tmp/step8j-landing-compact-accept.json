@@ -1,0 +1,72 @@
+{
+  "criteria": {
+    "1_mcp_opportunities_50": true,
+    "2_ai_input_opportunities_50": true,
+    "3_ai_output_contains_all_50": true,
+    "4_finishReason_stop": true,
+    "5_truncated_false": true,
+    "6_jsonError_null": true,
+    "7_no_score_recalculation": true,
+    "8_no_invented_opportunities": true,
+    "9_no_ga4_mcp_prod_logic_change": true,
+    "extra_no_reason_in_ai_input": true,
+    "extra_output_contract_present": true,
+    "extra_ai_omitted_reason_recommendation": true,
+    "extra_ranks_deterministic": true,
+    "extra_mcp_details_restored": true
+  },
+  "allPass": true,
+  "counts": {
+    "mcpOpportunities": 50,
+    "aiInputOpportunities": 50,
+    "aiOutputOpportunities": 50,
+    "enrichedMerged": 50,
+    "mcpDetails": 50,
+    "inventedLandings": [],
+    "missingLandings": []
+  },
+  "finishReason": "stop",
+  "truncated": false,
+  "jsonError": null,
+  "usage": {
+    "prompt_tokens": 6148,
+    "completion_tokens": 3246,
+    "total_tokens": 9394,
+    "prompt_tokens_details": {
+      "cached_tokens": 0,
+      "audio_tokens": 0
+    },
+    "completion_tokens_details": {
+      "reasoning_tokens": 0,
+      "audio_tokens": 0,
+      "accepted_prediction_tokens": 0,
+      "rejected_prediction_tokens": 0
+    }
+  },
+  "maxTokens": 6000,
+  "responseChars": 9829,
+  "promptHasReasonKey": false,
+  "promptHasRecommendationKey": false,
+  "hasReasonInPromptHeuristic": false,
+  "sampleAiRow": {
+    "rank": 1,
+    "landingPage": "/blog/the-best-generative-engine-optimization-geo-tools",
+    "sessions": 19,
+    "engagementRate": 0.1053,
+    "bounceRate": 0.8947,
+    "score": 0.44
+  },
+  "sampleEnriched": {
+    "rank": 1,
+    "landingPage": "/blog/the-best-generative-engine-optimization-geo-tools",
+    "sessions": 19,
+    "engagementRate": 0.1053,
+    "bounceRate": 0.8947,
+    "score": 0.44,
+    "reason": "Landing page /blog/the-best-generative-engine-optimization-geo-tools received 19 sessions with an engagement rate of 10.53% and a bounce rate of 89.47%.",
+    "recommendation": "Review the landing-page experience and engagement elements for /blog/the-best-generative-engine-optimization-geo-tools.",
+    "_mergedFromMcp": true
+  },
+  "responseHead": "{\n  \"opportunities\": [\n    {\n      \"rank\": 1,\n      \"landingPage\": \"/blog/the-best-generative-engine-optimization-geo-tools\",\n      \"sessions\": 19,\n      \"engagementRate\": 0.1053,\n      \"bounceRate\": 0.8947,\n      \"score\": 0.44\n    },\n    {\n      \"rank\": 2,\n      \"landingPage\": \"/blog/understanding-the-4-types-of-ai-search-intent-informational-navigational-comparative-transactional\",\n      \"sessio",
+  "responseTail": "gagementRate\": 0.4444,\n      \"bounceRate\": 0.5556,\n      \"score\": 0\n    },\n    {\n      \"rank\": 50,\n      \"landingPage\": \"/blog/seo-keywords-vs-geo-prompts-whats-changing-in-search-behavior\",\n      \"sessions\": 9,\n      \"engagementRate\": 0.5556,\n      \"bounceRate\": 0.4444,\n      \"score\": 0\n    }\n  ]\n}"
+}

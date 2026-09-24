@@ -611,6 +611,117 @@ const registerPart14D5Tests = ({ check, section, assert: a }) => {
     assertX.equal(r.startDate, "2026-09-02");
   });
 
+  check("GSC-7b comparison dual fetch + period tags (no mixing)", async () => {
+    const store = new Map();
+    store.set("c1", mockCred("google_gsc"));
+    const bodies = [];
+    await withGoogle(
+      async (url, opts) => {
+        bodies.push(JSON.parse(opts.body));
+        const isPrimary = bodies.length === 1;
+        return {
+          status: 200,
+          ok: true,
+          body: {
+            rows: [
+              {
+                keys: [isPrimary ? "primary-q" : "compare-q"],
+                clicks: isPrimary ? 10 : 3,
+                impressions: 100,
+                ctr: 0.1,
+                position: 4,
+              },
+            ],
+          },
+        };
+      },
+      async () => {
+        const result = await exec("googleSearchConsole", {
+          credentialId: "c1",
+          siteUrl: "https://example.com/",
+          dateRange: "custom",
+          startDate: "2026-06-21",
+          endDate: "2026-09-20",
+          comparisonEnabled: true,
+          comparisonStartDate: "2026-03-21",
+          comparisonEndDate: "2026-06-20",
+        });
+        assertX.equal(bodies.length, 2, "two GSC API requests");
+        assertX.equal(bodies[0].startDate, "2026-06-21");
+        assertX.equal(bodies[0].endDate, "2026-09-20");
+        assertX.equal(bodies[1].startDate, "2026-03-21");
+        assertX.equal(bodies[1].endDate, "2026-06-20");
+        assertX.equal(result.items.length, 2);
+        assertX.equal(result.items[0].json.period, "primary");
+        assertX.equal(result.items[0].json.query, "primary-q");
+        assertX.equal(result.items[0].json.rangeStartDate, "2026-06-21");
+        assertX.equal(result.items[1].json.period, "comparison");
+        assertX.equal(result.items[1].json.query, "compare-q");
+        assertX.equal(result.items[1].json.rangeEndDate, "2026-06-20");
+        assertX.equal(result.output.comparison.enabled, true);
+        assertX.equal(result.output.comparison.primaryRowCount, 1);
+        assertX.equal(result.output.comparison.comparisonRowCount, 1);
+        assertX.equal(result.resolved.comparison.startDate, "2026-03-21");
+      },
+      { store }
+    );
+  });
+
+  check("GSC-7c comparison disabled → single request, no period tag", async () => {
+    const { result, captured } = await runGsc({
+      dateRange: "custom",
+      startDate: "2026-08-01",
+      endDate: "2026-08-07",
+      comparisonEnabled: false,
+    });
+    assertX.equal(captured.body.startDate, "2026-08-01");
+    assertX.equal(result.items[0].json.period, undefined);
+    assertX.equal(result.output.comparison, undefined);
+    assertX.equal(result.resolved.comparison, undefined);
+  });
+
+  check("GSC-7d resolvePrimaryAndComparison rejects invalid compare range", () => {
+    assertX.throws(
+      () =>
+        dates().resolvePrimaryAndComparison({
+          dateRange: "custom",
+          startDate: "2026-06-21",
+          endDate: "2026-09-20",
+          comparisonEnabled: true,
+          comparisonStartDate: "2026-06-20",
+          comparisonEndDate: "2026-03-21",
+        }),
+      /Compare Against startDate must be on or before endDate/
+    );
+    assertX.throws(
+      () =>
+        dates().resolvePrimaryAndComparison({
+          dateRange: "last7days",
+          comparisonEnabled: true,
+        }),
+      /comparisonStartDate and comparisonEndDate/
+    );
+  });
+
+  check("GSC-7e comparison on + explicit primary dates override preset", () => {
+    const r = dates().resolvePrimaryAndComparison(
+      {
+        dateRange: "last30days",
+        comparisonEnabled: true,
+        startDate: "2026-06-21",
+        endDate: "2026-09-20",
+        comparisonStartDate: "2026-03-21",
+        comparisonEndDate: "2026-06-20",
+      },
+      { nowMs: Date.UTC(2026, 8, 20) }
+    );
+    assertX.equal(r.dateRange.startDate, "2026-06-21");
+    assertX.equal(r.dateRange.endDate, "2026-09-20");
+    assertX.equal(r.comparison.enabled, true);
+    assertX.equal(r.comparison.startDate, "2026-03-21");
+    assertX.equal(r.comparison.endDate, "2026-06-20");
+  });
+
   check("GSC-8 row limit", async () => {
     const { captured } = await runGsc({ rowLimit: 25 });
     assertX.equal(captured.body.rowLimit, 25);
@@ -811,6 +922,72 @@ const registerPart14D5Tests = ({ check, section, assert: a }) => {
     });
     assertX.equal(r.startDate, "2026-08-01");
     assertX.equal(r.endDate, "2026-08-31");
+  });
+
+  check("GA4-6b comparison dual fetch + period tags (no mixing)", async () => {
+    const store = new Map();
+    store.set("c1", mockCred("google_ga4"));
+    const bodies = [];
+    await withGoogle(
+      async (url, opts) => {
+        bodies.push(JSON.parse(opts.body));
+        const isPrimary = bodies.length === 1;
+        return {
+          status: 200,
+          ok: true,
+          body: {
+            dimensionHeaders: [{ name: "date" }],
+            metricHeaders: [{ name: "sessions" }],
+            rows: [
+              {
+                dimensionValues: [{ value: isPrimary ? "20260621" : "20260321" }],
+                metricValues: [{ value: isPrimary ? "50" : "20" }],
+              },
+            ],
+          },
+        };
+      },
+      async () => {
+        const result = await exec("googleAnalytics", {
+          credentialId: "c1",
+          propertyId: "123",
+          metrics: ["sessions"],
+          dimensions: ["date"],
+          dateRange: "custom",
+          startDate: "2026-06-21",
+          endDate: "2026-09-20",
+          comparisonEnabled: true,
+          comparisonStartDate: "2026-03-21",
+          comparisonEndDate: "2026-06-20",
+        });
+        assertX.equal(bodies.length, 2, "two GA4 API requests");
+        assertX.equal(bodies[0].dateRanges[0].startDate, "2026-06-21");
+        assertX.equal(bodies[0].dateRanges[0].endDate, "2026-09-20");
+        assertX.equal(bodies[1].dateRanges[0].startDate, "2026-03-21");
+        assertX.equal(bodies[1].dateRanges[0].endDate, "2026-06-20");
+        assertX.equal(bodies[0].dateRanges.length, 1);
+        assertX.equal(bodies[1].dateRanges.length, 1);
+        assertX.equal(result.items.length, 2);
+        assertX.equal(result.items[0].json.period, "primary");
+        assertX.equal(result.items[0].json.sessions, 50);
+        assertX.equal(result.items[1].json.period, "comparison");
+        assertX.equal(result.items[1].json.sessions, 20);
+        assertX.equal(result.output.comparison.enabled, true);
+        assertX.equal(result.output.startDate, "2026-06-21");
+        assertX.equal(result.output.endDate, "2026-09-20");
+      },
+      { store }
+    );
+  });
+
+  check("GA4-6c comparison disabled → single request, no period tag", async () => {
+    const { result, captured } = await runGa4({
+      dateRange: "last30days",
+      comparisonEnabled: false,
+    });
+    assertX.equal(captured.body.dateRanges.length, 1);
+    assertX.equal(result.items[0].json.period, undefined);
+    assertX.equal(result.output.comparison, undefined);
   });
 
   check("GA4-7 multiple metrics", async () => {

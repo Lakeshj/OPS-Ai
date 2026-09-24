@@ -731,15 +731,27 @@ const normalizeFlowPosition = (
 
 const toFlowNodes = (
   definition: WorkflowDefinition,
-  latestRun?: WorkflowRun | null
+  latestRun?: WorkflowRun | null,
+  workflowExecuting = false
 ): Node[] => {
   const stepByNode = new Map((latestRun?.steps || []).map((s) => [s.nodeId, s]));
+  const runActive =
+    workflowExecuting ||
+    latestRun?.status === "running" ||
+    latestRun?.status === "queued" ||
+    latestRun?.status === "waiting";
   return (definition.nodes || []).map((n, index) => {
     const step = stepByNode.get(n.id);
     const preview = step?.output != null ? formatStepOutput(step.output) : "";
     const rawData = (n.data || {}) as WorkflowNodeData;
     const normalizedData =
       n.type === "switch" ? normalizeSwitchRules(rawData, n.id) : rawData;
+    const stepStatus = step?.status ? String(step.status) : "";
+    // While the workflow is executing, nodes not yet started show as pending
+    // so the canvas doesn't look frozen with only the top-right "Running" pill.
+    const runStatus =
+      stepStatus ||
+      (runActive && !stepStatus ? "pending" : undefined);
     return {
       id: n.id,
       type: n.type,
@@ -747,7 +759,7 @@ const toFlowNodes = (
       data: {
         ...normalizedData,
         label: normalizedData.label || n.type,
-        runStatus: step?.status,
+        runStatus,
         runPreview: preview ? preview.slice(0, 120) : undefined,
       },
     };
@@ -1074,21 +1086,34 @@ function WorkflowCanvasInner({
   }, [running, latestRun, workflowId, applyEditorSession]);
 
   useEffect(() => {
-    setNodes(toFlowNodes(definition, latestRun));
+    setNodes(toFlowNodes(definition, latestRun, Boolean(running)));
     setEdges(toFlowEdges(definition));
     setWorkflowSettings(definition.settings || { timezone: "UTC" });
+    // Intentionally omit latestRun/running — status patches are applied below so
+    // canvas drag positions are not reset on every poll tick.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- definition-driven reset only
   }, [definition, setNodes, setEdges]);
 
   useEffect(() => {
-    if (!latestRun?.steps) return;
-    const stepByNode = new Map(latestRun.steps.map((s) => [s.nodeId, s]));
+    const runActive =
+      Boolean(running) ||
+      latestRun?.status === "running" ||
+      latestRun?.status === "queued" ||
+      latestRun?.status === "waiting";
+    const stepByNode = new Map(
+      (latestRun?.steps || []).map((s) => [s.nodeId, s])
+    );
     setNodes((prev) =>
       prev.map((n) => {
         const step = stepByNode.get(n.id);
         if (!step) {
           return {
             ...n,
-            data: { ...n.data, runStatus: undefined, runPreview: undefined },
+            data: {
+              ...n.data,
+              runStatus: runActive ? "pending" : undefined,
+              runPreview: undefined,
+            },
           };
         }
         const preview = step.output != null ? formatStepOutput(step.output) : "";
@@ -1102,7 +1127,7 @@ function WorkflowCanvasInner({
         };
       })
     );
-  }, [latestRun, setNodes]);
+  }, [latestRun, running, setNodes]);
 
   const selectedNode = useMemo(
     () => nodes.find((n) => n.id === selectedId) || null,
@@ -2398,7 +2423,7 @@ function WorkflowCanvasInner({
         toast.message("Saved — tip: insert AI for a real reply");
       }
       const def = buildDefinition();
-      setNodes(toFlowNodes(def, latestRun));
+      setNodes(toFlowNodes(def, latestRun, Boolean(running)));
       await onSave(def);
     } catch (error) {
       const message =
@@ -2468,7 +2493,7 @@ function WorkflowCanvasInner({
       }
 
       const def = buildDefinition();
-      setNodes(toFlowNodes(def, latestRun));
+      setNodes(toFlowNodes(def, latestRun, Boolean(running)));
       await onSave(def);
       const webhookNode = def.nodes?.find(
         (n) => (n.type || n.data?.nodeType) === "webhook"

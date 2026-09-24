@@ -191,6 +191,15 @@ export const NODE_PARAMETER_SCHEMAS: Record<WorkflowNodeType, ParamDescriptor[]>
         min: 0,
         max: 2,
       },
+      {
+        name: "maxTokens",
+        displayName: "Max Output Tokens",
+        type: "number",
+        default: 1200,
+        min: 1,
+        description:
+          "Maximum number of tokens the AI can generate in its response.",
+      },
     ],
 
     bot: [
@@ -820,9 +829,12 @@ export const NODE_PARAMETER_SCHEMAS: Record<WorkflowNodeType, ParamDescriptor[]>
       },
       {
         name: "maxTokens",
-        displayName: "Max tokens",
+        displayName: "Max Output Tokens",
         type: "number",
         default: 1200,
+        min: 1,
+        description:
+          "Maximum number of tokens the AI can generate in its response.",
       },
     ],
 
@@ -1209,7 +1221,7 @@ export const NODE_PARAMETER_SCHEMAS: Record<WorkflowNodeType, ParamDescriptor[]>
       },
       {
         name: "dateRange",
-        displayName: "Date range",
+        displayName: "Primary Date Range",
         type: "options",
         default: "last7days",
         options: [
@@ -1223,19 +1235,53 @@ export const NODE_PARAMETER_SCHEMAS: Record<WorkflowNodeType, ParamDescriptor[]>
       },
       {
         name: "startDate",
-        displayName: "Start date",
+        displayName: "Primary Start Date",
         type: "string",
         expression: true,
         placeholder: "YYYY-MM-DD",
-        displayOptions: { show: { dateRange: ["custom"] } },
+        displayOptions: {
+          showAny: [
+            { dateRange: ["custom"] },
+            { comparisonEnabled: [true] },
+          ],
+        },
       },
       {
         name: "endDate",
-        displayName: "End date",
+        displayName: "Primary End Date",
         type: "string",
         expression: true,
         placeholder: "YYYY-MM-DD",
-        displayOptions: { show: { dateRange: ["custom"] } },
+        displayOptions: {
+          showAny: [
+            { dateRange: ["custom"] },
+            { comparisonEnabled: [true] },
+          ],
+        },
+      },
+      {
+        name: "comparisonEnabled",
+        displayName: "Compare Against",
+        type: "boolean",
+        default: false,
+        description:
+          "Fetch a second date range. Primary and comparison rows stay tagged separately (period=primary|comparison).",
+      },
+      {
+        name: "comparisonStartDate",
+        displayName: "Compare Against Start Date",
+        type: "string",
+        expression: true,
+        placeholder: "YYYY-MM-DD",
+        displayOptions: { show: { comparisonEnabled: [true] } },
+      },
+      {
+        name: "comparisonEndDate",
+        displayName: "Compare Against End Date",
+        type: "string",
+        expression: true,
+        placeholder: "YYYY-MM-DD",
+        displayOptions: { show: { comparisonEnabled: [true] } },
       },
       {
         name: "rowLimit",
@@ -1303,7 +1349,7 @@ export const NODE_PARAMETER_SCHEMAS: Record<WorkflowNodeType, ParamDescriptor[]>
       },
       {
         name: "dateRange",
-        displayName: "Date range",
+        displayName: "Primary Date Range",
         type: "options",
         default: "last7days",
         options: [
@@ -1319,19 +1365,53 @@ export const NODE_PARAMETER_SCHEMAS: Record<WorkflowNodeType, ParamDescriptor[]>
       },
       {
         name: "startDate",
-        displayName: "Start date",
+        displayName: "Primary Start Date",
         type: "string",
         expression: true,
         placeholder: "YYYY-MM-DD",
-        displayOptions: { show: { dateRange: ["custom"] } },
+        displayOptions: {
+          showAny: [
+            { dateRange: ["custom"] },
+            { comparisonEnabled: [true] },
+          ],
+        },
       },
       {
         name: "endDate",
-        displayName: "End date",
+        displayName: "Primary End Date",
         type: "string",
         expression: true,
         placeholder: "YYYY-MM-DD",
-        displayOptions: { show: { dateRange: ["custom"] } },
+        displayOptions: {
+          showAny: [
+            { dateRange: ["custom"] },
+            { comparisonEnabled: [true] },
+          ],
+        },
+      },
+      {
+        name: "comparisonEnabled",
+        displayName: "Compare Against",
+        type: "boolean",
+        default: false,
+        description:
+          "Fetch a second date range. Primary and comparison rows stay tagged separately (period=primary|comparison).",
+      },
+      {
+        name: "comparisonStartDate",
+        displayName: "Compare Against Start Date",
+        type: "string",
+        expression: true,
+        placeholder: "YYYY-MM-DD",
+        displayOptions: { show: { comparisonEnabled: [true] } },
+      },
+      {
+        name: "comparisonEndDate",
+        displayName: "Compare Against End Date",
+        type: "string",
+        expression: true,
+        placeholder: "YYYY-MM-DD",
+        displayOptions: { show: { comparisonEnabled: [true] } },
       },
       {
         name: "metrics",
@@ -1742,9 +1822,12 @@ export const NODE_PARAMETER_SCHEMAS: Record<WorkflowNodeType, ParamDescriptor[]>
       },
       {
         name: "maxTokens",
-        displayName: "Max output tokens",
+        displayName: "Max Output Tokens",
         type: "number",
         default: 1200,
+        min: 1,
+        description:
+          "Maximum number of tokens the AI can generate in its response.",
       },
       {
         name: "outputFormat",

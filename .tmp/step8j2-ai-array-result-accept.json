@@ -1,0 +1,50 @@
+{
+  "criteria": {
+    "1_ai_output_50": true,
+    "2_typeof_object": true,
+    "3_Array_isArray_true": true,
+    "4_not_string": true,
+    "5_item_json_array": true,
+    "6_result_renders_50": true,
+    "7_result_not_raw_json": true,
+    "8_mcp_reason_preserved": true,
+    "9_finishReason_stop": true,
+    "10_truncated_false": true
+  },
+  "allPass": true,
+  "counts": {
+    "mcpOpportunities": 50,
+    "aiOpportunities": 50,
+    "enriched": 50
+  },
+  "finishReason": "stop",
+  "truncated": false,
+  "jsonError": null,
+  "usage": {
+    "prompt_tokens": 6086,
+    "completion_tokens": 3246,
+    "total_tokens": 9332,
+    "prompt_tokens_details": {
+      "cached_tokens": 0,
+      "audio_tokens": 0
+    },
+    "completion_tokens_details": {
+      "reasoning_tokens": 0,
+      "audio_tokens": 0,
+      "accepted_prediction_tokens": 0,
+      "rejected_prediction_tokens": 0
+    }
+  },
+  "sampleAiOpportunity": {
+    "rank": 1,
+    "landingPage": "/blog/the-best-generative-engine-optimization-geo-tools",
+    "sessions": 19,
+    "engagementRate": 0.1053,
+    "bounceRate": 0.8947,
+    "score": 0.44
+  },
+  "sampleItemOpportunityType": "object",
+  "sampleItemIsArray": true,
+  "resultHead": "GA4 Intelligence Report\n\nLanding Underperformance Opportunities\n\n1. Landing Page: /blog/the-best-generative-engine-optimization-geo-tools\n   Sessions: 19\n   Engagement Rate: 10.53%\n   Bounce Rate: 89.47%\n   MCP Score: 0.44\n   Reason: Landing page /blog/the-best-generative-engine-optimization-geo-tools received 19 sessions with an engagement rate of 10.53% and a bounce rate of 89.47%.\n   Recommendation: Review the landing-page experience and engagement elements for /blog/the-best-generative-engin",
+  "resultTail": "sions: 9\n   Engagement Rate: 55.56%\n   Bounce Rate: 44.44%\n   MCP Score: 0\n   Reason: Landing page /blog/seo-keywords-vs-geo-prompts-whats-changing-in-search-behavior received 9 sessions with an engagement rate of 55.56% and a bounce rate of 44.44%.\n   Recommendation: Review the landing-page experience and engagement elements for /blog/seo-keywords-vs-geo-prompts-whats-changing-in-search-behavior."
+}

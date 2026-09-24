@@ -157,6 +157,8 @@ export type ParamCustomRenderer =
 export interface DisplayOptions {
   show?: Record<string, Array<string | number | boolean>>;
   hide?: Record<string, Array<string | number | boolean>>;
+  /** OR of AND-groups — visible when any group fully matches. */
+  showAny?: Array<Record<string, Array<string | number | boolean>>>;
 }
 
 export interface ParamOption {

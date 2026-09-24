@@ -2,10 +2,12 @@
 
 import React, { useMemo, useState } from "react";
 import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { cn } from "@/lib/utils";
 import type { WorkflowItem } from "@/modules/workflows/types";
-import { ChevronDown, ChevronRight, Search } from "lucide-react";
+import { Check, ChevronDown, ChevronRight, Copy, Search } from "lucide-react";
+import { toast } from "sonner";
 import {
   looksLikeMarkdownProse,
   plainPreview,
@@ -38,6 +40,34 @@ type SchemaField = {
   type: FieldType;
   depth: number;
 };
+
+function ProseCopyButton({ text }: { text: string }) {
+  const [copied, setCopied] = useState(false);
+
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1500);
+    } catch {
+      toast.error("Clipboard not available");
+    }
+  };
+
+  return (
+    <Button
+      type="button"
+      variant="ghost"
+      size="sm"
+      className="h-6 gap-1 px-1.5 text-[10px]"
+      onClick={() => void copy()}
+      title="Copy preview"
+    >
+      {copied ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
+      {copied ? "Copied" : "Copy"}
+    </Button>
+  );
+}
 
 const COLUMN_PRIORITY = [
   "query",
@@ -688,8 +718,11 @@ export function ItemDataViewer({
 
       {prosePreview && (mode === "table" || mode === "schema") && (
         <div className="rounded-lg border border-dashed border-border bg-muted/20 px-3 py-2">
-          <div className="mb-1 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-            Preview
+          <div className="mb-1 flex items-center justify-between gap-2">
+            <div className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+              Preview
+            </div>
+            <ProseCopyButton text={prosePreview} />
           </div>
           <WorkflowProseContent text={prosePreview} compact />
         </div>

@@ -1,4 +1,4 @@
-const { getClientForProvider } = require("../config/aiClients");
+const aiClients = require("../config/aiClients");
 const { withGenerationOptions } = require("../utils/openaiCompletionOptions");
 const assistantsService = require("../modules/assistants/assistants.service");
 const { pool } = require("../config/database");
@@ -369,6 +369,9 @@ const runLlmNode = async (node, context, options = {}) => {
   let ga4Grounded = false;
   let ga4GroundingMode = null;
   let runtimeDataAttached = false;
+  let ga4CompactStats = null;
+  let ga4CompactAiPayload = null;
+  let ga4LandingOutputCompactness = false;
   let userInstructions = String(systemPrompt || "").trim() || null;
   try {
     const {
@@ -391,6 +394,37 @@ const runLlmNode = async (node, context, options = {}) => {
       if (grounded.source === "ga4") {
         ga4Grounded = true;
         ga4GroundingMode = "ga4_mcp";
+        ga4CompactAiPayload = grounded.compactAiPayload || null;
+        ga4LandingOutputCompactness = Boolean(grounded.landingOutputCompactness);
+        const compact = grounded.compactAiPayload;
+        if (compact && typeof compact === "object") {
+          const oppN = Array.isArray(compact.opportunities)
+            ? compact.opportunities.length
+            : 0;
+          const dataN = Array.isArray(compact.data) ? compact.data.length : 0;
+          const incoming = Array.isArray(context?.inputItems)
+            ? context.inputItems.length
+            : null;
+          ga4CompactStats = {
+            ga4CompactOpportunities: oppN,
+            ga4CompactDataRows: dataN,
+            ga4UpstreamItemCount: incoming,
+            ga4CompactPayloadChars: String(grounded.userPrompt || "").length,
+            ga4LandingOutputCompactness,
+          };
+          try {
+            console.log("[ga4-ai-compact:runtime]", {
+              ga4UpstreamRows: incoming,
+              mcpOpportunityRows: grounded.evidence?.opportunityRowCount ?? null,
+              opportunitiesSentToAi: oppN,
+              dataRowsSentToAi: dataN,
+              groundedUserPromptChars: ga4CompactStats.ga4CompactPayloadChars,
+              landingOutputCompactness: ga4LandingOutputCompactness,
+            });
+          } catch {
+            // ignore
+          }
+        }
       }
     }
   } catch (err) {
@@ -492,7 +526,7 @@ const runLlmNode = async (node, context, options = {}) => {
     );
   }
 
-  const { client } = getClientForProvider(provider, model);
+  const { client } = aiClients.getClientForProvider(provider, model);
   const generationOptions = withGenerationOptions(model || "gpt-4o-mini", {
     messages: [
       { role: "system", content: systemPrompt },
@@ -514,16 +548,67 @@ const runLlmNode = async (node, context, options = {}) => {
   } catch (err) {
     throw failWith(err instanceof Error ? err.message : String(err), resolved);
   }
-  const text = completion.choices?.[0]?.message?.content || "";
+  const choice = completion.choices?.[0] || {};
+  const text = choice.message?.content || "";
+  const finishReason = choice.finish_reason || null;
+  const usage = completion.usage || null;
 
   let json = null;
   let jsonError = null;
   if (wantsJson) {
     try {
-      json = JSON.parse(extractJsonBlock(text));
+      json = parseAiResponseJson(text);
     } catch (err) {
-      jsonError = err instanceof Error ? err.message : String(err);
+      const parseMsg = err instanceof Error ? err.message : String(err);
+      if (finishReason === "length") {
+        jsonError = `AI output truncated (finish_reason=length) before valid JSON completed: ${parseMsg}`;
+      } else {
+        jsonError = parseMsg;
+      }
     }
+  } else if (ga4LandingOutputCompactness) {
+    // Landing compact contract asks for JSON even when outputFormat=text so the
+    // Result node can still display `text` while we parse opportunities for merge.
+    try {
+      json = parseAiResponseJson(text);
+    } catch {
+      json = null;
+    }
+  } else if (looksLikeJsonObjectText(text)) {
+    // Best-effort: if the model returned JSON in text mode, parse once so
+    // WorkflowItem.json.opportunities is a real array (not a string).
+    try {
+      json = parseAiResponseJson(text);
+    } catch {
+      json = null;
+    }
+  }
+
+  let enrichedOpportunities = null;
+  let mcpOpportunityDetails = null;
+  if (ga4Grounded && intelligenceContext) {
+    try {
+      const {
+        mergeAiOpportunitiesWithMcpDetails,
+      } = require("../../plugins/ga4-mcp/src/contracts/intelligenceContext");
+      const merged = mergeAiOpportunitiesWithMcpDetails({
+        aiText: text,
+        aiJson: json,
+        intelligenceContext,
+      });
+      enrichedOpportunities = merged.enrichedOpportunities;
+      mcpOpportunityDetails = merged.mcpOpportunityDetails;
+    } catch {
+      // Enrichment is best-effort — never fail the AI node.
+    }
+  }
+
+  const structuredOpportunities = coerceOpportunitiesArray(
+    json && typeof json === "object" ? json.opportunities : null
+  );
+  // Ensure WorkflowItem consumers see a real array — never a JSON string.
+  if (structuredOpportunities && json && typeof json === "object") {
+    json = { ...json, opportunities: structuredOpportunities };
   }
 
   return {
@@ -535,6 +620,24 @@ const runLlmNode = async (node, context, options = {}) => {
       provider,
       model: generationOptions.model,
       isLlm: true,
+      // Internal diagnostics (finish_reason / usage) — preserved for operators;
+      // primary user-facing fields remain text/json (Result uses structured json when present).
+      finishReason,
+      usage,
+      maxTokens: generationOptions.max_tokens ?? generationOptions.max_completion_tokens ?? null,
+      truncated: finishReason === "length",
+      // Top-level array for expressions / Item viewer (same reference as json.opportunities).
+      ...(structuredOpportunities
+        ? { opportunities: structuredOpportunities }
+        : {}),
+      // MCP reason/recommendation restored beside compact AI payload (not regenerated).
+      ...(Array.isArray(enrichedOpportunities)
+        ? { enrichedOpportunities }
+        : {}),
+      ...(Array.isArray(mcpOpportunityDetails)
+        ? { mcpOpportunityDetails }
+        : {}),
+      ...(ga4CompactAiPayload ? { compactAiPayload: ga4CompactAiPayload } : {}),
       assistantId: assistantMeta?.id || null,
       assistantName: assistantMeta?.name || data.assistantName || null,
       // Messages sent to the model (debug). Instructions stay primary for UI.
@@ -549,6 +652,7 @@ const runLlmNode = async (node, context, options = {}) => {
         groundingApplied:
           Boolean(intelligenceContext) || Boolean(ga4Grounded),
         runtimeDataAttached: Boolean(runtimeDataAttached),
+        ...(ga4CompactStats || {}),
       },
       systemPrompt,
       userPrompt: String(userPrompt || ""),
@@ -569,6 +673,221 @@ const extractJsonBlock = (text) => {
   const closer = opener === "{" ? "}" : "]";
   const end = candidate.lastIndexOf(closer);
   return end > start ? candidate.slice(start, end + 1) : candidate;
+};
+
+const looksLikeJsonObjectText = (text) => {
+  const raw = String(text || "").trim();
+  if (!raw) return false;
+  const block = extractJsonBlock(raw);
+  return block.startsWith("{") || block.startsWith("[");
+};
+
+/**
+ * Coerce opportunities to a real array. Parses a JSON string at most once.
+ * Never double-stringifies.
+ */
+const coerceOpportunitiesArray = (value) => {
+  if (Array.isArray(value)) return value;
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  try {
+    const parsed = JSON.parse(trimmed);
+    if (Array.isArray(parsed)) return parsed;
+    if (
+      parsed &&
+      typeof parsed === "object" &&
+      Array.isArray(parsed.opportunities)
+    ) {
+      return parsed.opportunities;
+    }
+  } catch {
+    return null;
+  }
+  return null;
+};
+
+/**
+ * Normalize a parsed AI JSON object so `opportunities` is an array when present.
+ */
+const normalizeAiStructuredJson = (parsed) => {
+  if (parsed == null) return parsed;
+  if (Array.isArray(parsed)) {
+    return { opportunities: parsed };
+  }
+  if (typeof parsed !== "object") return parsed;
+  const out = { ...parsed };
+  if (Object.prototype.hasOwnProperty.call(out, "opportunities")) {
+    const coerced = coerceOpportunitiesArray(out.opportunities);
+    if (coerced) {
+      out.opportunities = coerced;
+    } else if (
+      typeof out.opportunities === "string" &&
+      out.opportunities.trim()
+    ) {
+      // Malformed string — leave as-is for callers; Result falls back to text.
+    }
+  }
+  return out;
+};
+
+/**
+ * Parse AI response text into structured JSON exactly once (plus one unwrap if
+ * the model returned a JSON-encoded string of JSON). Coerces opportunities to
+ * a real array so WorkflowItem.json never stores a stringified array.
+ */
+const parseAiResponseJson = (text) => {
+  const block = extractJsonBlock(text);
+  let parsed = JSON.parse(block);
+  // Single unwrap when the entire payload was JSON-stringified once.
+  if (typeof parsed === "string") {
+    const inner = parsed.trim();
+    if (inner.startsWith("{") || inner.startsWith("[")) {
+      parsed = JSON.parse(inner);
+    }
+  }
+  return normalizeAiStructuredJson(parsed);
+};
+
+const formatRatePercent = (value) => {
+  if (value == null || value === "") return null;
+  const num = Number(value);
+  if (!Number.isFinite(num)) return String(value);
+  return `${(num * 100).toFixed(2)}%`;
+};
+
+/**
+ * Human-readable GA4 landing report. Reason/recommendation come from MCP
+ * side-channel details (enrichedOpportunities / mcpOpportunityDetails), never
+ * from AI regeneration.
+ */
+const formatGa4LandingIntelligenceReport = ({
+  opportunities,
+  mcpDetails = [],
+} = {}) => {
+  if (!Array.isArray(opportunities) || !opportunities.length) return null;
+
+  const details = Array.isArray(mcpDetails) ? mcpDetails : [];
+  const byRank = new Map();
+  const byLanding = new Map();
+  for (const d of details) {
+    if (!d || typeof d !== "object") continue;
+    if (d.rank != null) byRank.set(Number(d.rank), d);
+    if (d.landingPage != null) byLanding.set(String(d.landingPage), d);
+  }
+
+  const lines = [
+    "GA4 Intelligence Report",
+    "",
+    "Landing Underperformance Opportunities",
+    "",
+  ];
+
+  opportunities.forEach((row, idx) => {
+    const obj = row && typeof row === "object" ? row : {};
+    const rank = obj.rank != null ? Number(obj.rank) : idx + 1;
+    const landingPage =
+      obj.landingPage != null
+        ? String(obj.landingPage)
+        : obj.pagePath != null
+          ? String(obj.pagePath)
+          : "(unknown)";
+    const mcp =
+      (Number.isFinite(rank) && byRank.get(rank)) ||
+      byLanding.get(landingPage) ||
+      null;
+    const sessions = obj.sessions ?? mcp?.sessions ?? mcp?.metrics?.sessions;
+    const engagementRate =
+      obj.engagementRate ??
+      mcp?.engagementRate ??
+      mcp?.metrics?.engagementRate;
+    const bounceRate =
+      obj.bounceRate ?? mcp?.bounceRate ?? mcp?.metrics?.bounceRate;
+    const score = obj.score ?? mcp?.score;
+    const reason = obj.reason ?? mcp?.reason ?? null;
+    const recommendation = obj.recommendation ?? mcp?.recommendation ?? null;
+
+    lines.push(`${rank}. Landing Page: ${landingPage}`);
+    if (sessions != null) lines.push(`   Sessions: ${sessions}`);
+    if (engagementRate != null) {
+      lines.push(`   Engagement Rate: ${formatRatePercent(engagementRate)}`);
+    }
+    if (bounceRate != null) {
+      lines.push(`   Bounce Rate: ${formatRatePercent(bounceRate)}`);
+    }
+    if (score != null) lines.push(`   MCP Score: ${score}`);
+    if (reason != null && String(reason).trim()) {
+      lines.push(`   Reason: ${reason}`);
+    }
+    if (recommendation != null && String(recommendation).trim()) {
+      lines.push(`   Recommendation: ${recommendation}`);
+    }
+    lines.push("");
+  });
+
+  return lines.join("\n").trimEnd();
+};
+
+/**
+ * Resolve landing opportunities + MCP details from an LLM step output and/or
+ * a mapped Result value. Backward compatible:
+ * - real array → use directly
+ * - JSON string of an array/object → parse once
+ * - normal AI prose → null (caller keeps text)
+ * - malformed JSON → null
+ */
+const resolveLandingOpportunitiesForResult = (llmOut, mapped) => {
+  const fromLlmJson = coerceOpportunitiesArray(
+    llmOut && typeof llmOut === "object"
+      ? llmOut.json?.opportunities ?? llmOut.opportunities
+      : null
+  );
+  let opportunities = fromLlmJson;
+
+  if (!opportunities) {
+    if (typeof mapped === "string") {
+      const trimmed = mapped.trim();
+      if (looksLikeJsonObjectText(trimmed)) {
+        try {
+          const parsed = parseAiResponseJson(trimmed);
+          opportunities = coerceOpportunitiesArray(parsed?.opportunities);
+        } catch {
+          opportunities = null;
+        }
+      }
+    } else if (mapped && typeof mapped === "object" && !Array.isArray(mapped)) {
+      opportunities = coerceOpportunitiesArray(mapped.opportunities);
+    } else if (Array.isArray(mapped)) {
+      opportunities = mapped;
+    }
+  }
+
+  if (!Array.isArray(opportunities) || !opportunities.length) {
+    return null;
+  }
+
+  const enriched =
+    llmOut && Array.isArray(llmOut.enrichedOpportunities)
+      ? llmOut.enrichedOpportunities
+      : null;
+  const mcpDetails =
+    llmOut && Array.isArray(llmOut.mcpOpportunityDetails)
+      ? llmOut.mcpOpportunityDetails
+      : enriched || [];
+
+  // Prefer enriched rows when they cover the same set (includes MCP reason).
+  const reportRows =
+    enriched && enriched.length === opportunities.length
+      ? enriched
+      : opportunities;
+
+  const report = formatGa4LandingIntelligenceReport({
+    opportunities: reportRows,
+    mcpDetails,
+  });
+  if (!report) return null;
+
+  return { opportunities, report, mcpDetails };
 };
 
 const SINGLE_EXPRESSION = /^\{\{\s*([^}]+?)\s*\}\}$/;
@@ -2728,12 +3047,35 @@ const handlers = {
       }
     }
 
+    // Prefer structured json.opportunities from the LLM step (real array) over
+    // raw AI JSON text. Render a human report; MCP reason/recommendation come
+    // from enrichedOpportunities / mcpOpportunityDetails.
+    const referencedId =
+      /\{\{\s*steps\.([^.}\s]+)/.exec(String(effectiveMapFrom))?.[1] || null;
+    const llmOut =
+      (referencedId && context.steps?.[referencedId]) ||
+      (llmStep ? llmStep[1] : null) ||
+      null;
+    const landingResolved = resolveLandingOpportunitiesForResult(llmOut, mapped);
+    if (landingResolved?.report) {
+      mapped = landingResolved.report;
+    }
+
     // Historical Result contract (pre-10B): terminal scalar `output.result` only.
     // Canonical WorkflowItem[] for callable return are captured by the engine from
     // Result's *incoming* items (__callableReturnItems) — not by changing Result
     // into a passthrough node.
     return {
-      resolved: { mapFrom, effectiveMapFrom },
+      resolved: {
+        mapFrom,
+        effectiveMapFrom,
+        ...(landingResolved
+          ? {
+              landingOpportunities: landingResolved.opportunities.length,
+              landingReport: true,
+            }
+          : {}),
+      },
       output: {
         result: mapped,
       },
@@ -2766,6 +3108,12 @@ module.exports = {
   getByPath,
   ExpressionReferenceError,
   runLlmNodeForItem: runLlmNode,
+  extractJsonBlock,
+  coerceOpportunitiesArray,
+  normalizeAiStructuredJson,
+  parseAiResponseJson,
+  formatGa4LandingIntelligenceReport,
+  resolveLandingOpportunitiesForResult,
   // Shared HTTP primitives (Part 13A HTTP Tool reuses these)
   buildUrl,
   applyCredential,

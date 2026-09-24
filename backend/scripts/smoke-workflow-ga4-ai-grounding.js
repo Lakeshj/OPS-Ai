@@ -349,6 +349,265 @@ const registerGa4AiGroundingTests = ({ check, section, assert: a }) => {
     assertX.match(g.userPrompt, /"score": 32/);
     assertX.match(g.userPrompt, /"sessions": 1200/);
     assertX.match(g.systemPrompt, /Never calculate or replace the MCP score/);
+    assertX.ok(!/"score_breakdown"/.test(g.userPrompt));
+    assertX.ok(!/"__ga4Intelligence"/.test(g.userPrompt));
+    assertX.ok(
+      !/"traffic": 20/.test(g.userPrompt),
+      "score_breakdown internals must not reach AI prompt"
+    );
+    // {{input}} dump must not be re-embedded as the User request body.
+    assertX.ok(!/User request:\s*\[/.test(g.userPrompt));
+    assertX.match(
+      g.userPrompt,
+      /Use the GA4 MCP opportunities\/data above/
+    );
+  });
+
+  check("GA4AI-MCP-1b compact payload shape for landing opportunities", () => {
+    const g = ga4Intel().applyAiGrounding({
+      systemPrompt: "Report landing opportunities",
+      userPrompt: "list them",
+      input: landingMcp,
+    });
+    assertX.ok(g.compactAiPayload);
+    assertX.equal(g.compactAiPayload.source, "google_analytics");
+    assertX.equal(g.compactAiPayload.opportunities.length, 1);
+    const row = g.compactAiPayload.opportunities[0];
+    assertX.equal(row.rank, 1);
+    assertX.equal(row.landingPage, "/lp");
+    assertX.equal(row.score, 41);
+    assertX.equal(row.sessions, 800);
+    assertX.ok(!("score_breakdown" in row));
+    assertX.ok(!("filters" in row));
+    assertX.ok(!("reason" in row), "reason omitted from AI input");
+    assertX.ok(!("recommendation" in row), "recommendation omitted from AI input");
+    assertX.match(g.userPrompt, /"landingPage": "\/lp"/);
+    assertX.match(g.systemPrompt, /OUTPUT CONTRACT/);
+    assertX.match(g.systemPrompt, /Do NOT regenerate, paraphrase, or echo MCP reason/);
+    assertX.equal(g.landingOutputCompactness, true);
+  });
+
+  check("GA4AI-MCP-1c merge restores MCP reason/recommendation beside AI rows", () => {
+    const {
+      applyAiGrounding,
+      mergeAiOpportunitiesWithMcpDetails,
+    } = ga4Intel();
+    const g = applyAiGrounding({
+      systemPrompt: "Report landing opportunities",
+      userPrompt: "list them",
+      input: landingMcp,
+    });
+    const aiText = JSON.stringify({
+      opportunities: [
+        {
+          rank: 1,
+          landingPage: "/lp",
+          sessions: 800,
+          engagementRate: 0.12,
+          bounceRate: 0.81,
+          score: 41,
+        },
+      ],
+    });
+    const merged = mergeAiOpportunitiesWithMcpDetails({
+      aiText,
+      intelligenceContext: g.intelligenceContext,
+    });
+    assertX.equal(merged.enrichedOpportunities.length, 1);
+    assertX.equal(merged.enrichedOpportunities[0].score, 41);
+    assertX.equal(
+      merged.enrichedOpportunities[0].reason,
+      "Landing /lp underperforms on engagement"
+    );
+    assertX.equal(
+      merged.enrichedOpportunities[0].recommendation,
+      "Tighten landing message match on /lp"
+    );
+    assertX.ok(!/"reason"/.test(g.userPrompt));
+  });
+
+  check("GA4AI-MCP-1d opportunities coerced to real array (not JSON string)", () => {
+    const {
+      parseAiResponseJson,
+      coerceOpportunitiesArray,
+      normalizeAiStructuredJson,
+      deriveItems,
+    } = require("../services/workflowNodes.service");
+    const { normalizeItem } = require("../services/workflowProvenance.service");
+
+    const asStringInside = {
+      opportunities: JSON.stringify([
+        {
+          rank: 1,
+          landingPage: "/lp",
+          sessions: 19,
+          engagementRate: 0.1053,
+          bounceRate: 0.8947,
+          score: 0.44,
+        },
+      ]),
+    };
+    const normalized = normalizeAiStructuredJson(asStringInside);
+    assertX.ok(Array.isArray(normalized.opportunities));
+    assertX.equal(typeof normalized.opportunities, "object");
+    assertX.equal(normalized.opportunities.length, 1);
+    assertX.notEqual(typeof normalized.opportunities, "string");
+
+    const fromText = parseAiResponseJson(JSON.stringify(asStringInside));
+    assertX.ok(Array.isArray(fromText.opportunities));
+    assertX.equal(fromText.opportunities[0].landingPage, "/lp");
+
+    const doubleWrapped = JSON.stringify(JSON.stringify({ opportunities: [{ rank: 1, score: 1 }] }));
+    // text body is "\"{...}\"" — extract then unwrap once
+    const unwrapped = parseAiResponseJson(JSON.parse(doubleWrapped));
+    assertX.ok(Array.isArray(unwrapped.opportunities));
+
+    const llmOutput = {
+      text: JSON.stringify({
+        opportunities: [
+          {
+            rank: 1,
+            landingPage: "/lp",
+            sessions: 19,
+            engagementRate: 0.1053,
+            bounceRate: 0.8947,
+            score: 0.44,
+          },
+        ],
+      }),
+      json: fromText,
+      opportunities: fromText.opportunities,
+      isLlm: true,
+      enrichedOpportunities: [
+        {
+          rank: 1,
+          landingPage: "/lp",
+          sessions: 19,
+          engagementRate: 0.1053,
+          bounceRate: 0.8947,
+          score: 0.44,
+          reason: "Landing /lp underperforms on engagement",
+          recommendation: "Tighten landing message match on /lp",
+        },
+      ],
+      mcpOpportunityDetails: [
+        {
+          rank: 1,
+          landingPage: "/lp",
+          reason: "Landing /lp underperforms on engagement",
+          recommendation: "Tighten landing message match on /lp",
+        },
+      ],
+    };
+    const item = normalizeItem(deriveItems(llmOutput)[0], 0);
+    assertX.ok(Array.isArray(item.json.opportunities));
+    assertX.equal(typeof item.json.opportunities, "object");
+    assertX.notEqual(typeof item.json.opportunities, "string");
+    assertX.equal(coerceOpportunitiesArray(item.json.opportunities).length, 1);
+  });
+
+  check("GA4AI-MCP-1e Result renders human report from json.opportunities + MCP details", async () => {
+    const {
+      handlers,
+      formatGa4LandingIntelligenceReport,
+      resolveLandingOpportunitiesForResult,
+    } = require("../services/workflowNodes.service");
+
+    const opportunities = Array.from({ length: 50 }, (_, i) => ({
+      rank: i + 1,
+      landingPage: `/page-${i + 1}`,
+      sessions: 10 + i,
+      engagementRate: 0.1,
+      bounceRate: 0.9,
+      score: Number((0.5 - i * 0.01).toFixed(2)),
+    }));
+    const mcpDetails = opportunities.map((o) => ({
+      rank: o.rank,
+      landingPage: o.landingPage,
+      metrics: {
+        sessions: o.sessions,
+        engagementRate: o.engagementRate,
+        bounceRate: o.bounceRate,
+      },
+      score: o.score,
+      reason: `MCP reason for ${o.landingPage}`,
+      recommendation: `MCP rec for ${o.landingPage}`,
+    }));
+    const enriched = opportunities.map((o, i) => ({
+      ...o,
+      reason: mcpDetails[i].reason,
+      recommendation: mcpDetails[i].recommendation,
+    }));
+
+    const llmOut = {
+      text: JSON.stringify({ opportunities }),
+      json: { opportunities },
+      opportunities,
+      isLlm: true,
+      enrichedOpportunities: enriched,
+      mcpOpportunityDetails: mcpDetails,
+    };
+
+    assertX.ok(Array.isArray(llmOut.json.opportunities));
+    assertX.notEqual(typeof llmOut.json.opportunities, "string");
+
+    const resolved = resolveLandingOpportunitiesForResult(llmOut, llmOut.text);
+    assertX.equal(resolved.opportunities.length, 50);
+    assertX.match(resolved.report, /GA4 Intelligence Report/);
+    assertX.match(resolved.report, /Landing Underperformance Opportunities/);
+    assertX.match(resolved.report, /1\. Landing Page: \/page-1/);
+    assertX.match(resolved.report, /50\. Landing Page: \/page-50/);
+    assertX.match(resolved.report, /MCP Score: 0\.5/);
+    assertX.match(resolved.report, /Reason: MCP reason for \/page-1/);
+    assertX.match(resolved.report, /Recommendation: MCP rec for \/page-50/);
+    assertX.ok(!/^\s*\{/.test(resolved.report.trim()), "not raw JSON");
+    assertX.ok(!/"opportunities"\s*:/.test(resolved.report), "not raw JSON key");
+
+    // Stringified opportunities field still parses once
+    const fromStringField = resolveLandingOpportunitiesForResult(
+      {
+        ...llmOut,
+        json: { opportunities: JSON.stringify(opportunities) },
+        opportunities: undefined,
+      },
+      "plain prose fallback should not win"
+    );
+    assertX.equal(fromStringField.opportunities.length, 50);
+
+    const report = await handlers.result(
+      { id: "result-1", type: "result", data: { mapFrom: "{{steps.ai-1.text}}" } },
+      {
+        input: {},
+        steps: { "ai-1": llmOut },
+        inputItems: [{ json: llmOut }],
+      }
+    );
+    assertX.equal(typeof report.output.result, "string");
+    assertX.match(report.output.result, /GA4 Intelligence Report/);
+    assertX.match(report.output.result, /50\. Landing Page: \/page-50/);
+    assertX.match(report.output.result, /Reason: MCP reason for \/page-1/);
+    assertX.equal(report.resolved.landingOpportunities, 50);
+    assertX.equal(report.resolved.landingReport, true);
+
+    // Prose AI text without opportunities → unchanged
+    const prose = await handlers.result(
+      { id: "result-1", type: "result", data: { mapFrom: "{{steps.ai-1.text}}" } },
+      {
+        input: {},
+        steps: {
+          "ai-1": { text: "Here is a plain summary.", isLlm: true },
+        },
+        inputItems: [],
+      }
+    );
+    assertX.equal(prose.output.result, "Here is a plain summary.");
+
+    const sample = formatGa4LandingIntelligenceReport({
+      opportunities: opportunities.slice(0, 1),
+      mcpDetails: mcpDetails.slice(0, 1),
+    });
+    assertX.match(sample, /Engagement Rate: 10\.00%/);
+    assertX.match(sample, /Bounce Rate: 90\.00%/);
   });
 
   check("GA4AI-MCP-2 structured landing MCP input", () => {
@@ -435,7 +694,11 @@ const registerGa4AiGroundingTests = ({ check, section, assert: a }) => {
     assertX.match(g.systemPrompt, /Do NOT invent a Data limitations section/);
     assertX.match(g.userPrompt, /page_performance/);
     assertX.match(g.userPrompt, /"rank": 1/);
-    assertX.match(g.userPrompt, /"hasDataRows": true/);
+    assertX.match(g.systemPrompt, /hasDataRows: true/);
+    assertX.ok(
+      !/"score_breakdown"/.test(g.userPrompt),
+      "compact AI payload must omit score_breakdown"
+    );
   });
 
   check("10A-2 opportunity-only — no claim that DATA rows exist", () => {

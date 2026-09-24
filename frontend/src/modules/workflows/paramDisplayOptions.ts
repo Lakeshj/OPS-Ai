@@ -65,12 +65,27 @@ export function valuesWithParamDefaults(
   return next;
 }
 
-/** True when ALL show rules match and NO hide rule matches. */
+/** True when ALL show rules match and NO hide rule matches.
+ * Optional showAny: OR of AND-groups (any one group matching is enough).
+ */
 export function isParamVisible(
   param: Pick<ParamDescriptor, "displayOptions">,
   values: ParamValues
 ): boolean {
-  const { show, hide } = param.displayOptions || {};
+  const { show, hide, showAny } = (param.displayOptions || {}) as DisplayOptions & {
+    showAny?: Array<Record<string, Array<string | number | boolean>>>;
+  };
+
+  if (showAny && showAny.length > 0) {
+    const anyMatch = showAny.some((group) => {
+      for (const [key, allowed] of Object.entries(group || {})) {
+        if (!allowed?.length) continue;
+        if (!conditionMatches(values[key], allowed)) return false;
+      }
+      return Object.keys(group || {}).length > 0;
+    });
+    if (!anyMatch) return false;
+  }
 
   if (show) {
     for (const [key, allowed] of Object.entries(show)) {

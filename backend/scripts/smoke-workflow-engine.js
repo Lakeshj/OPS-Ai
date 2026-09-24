@@ -9419,6 +9419,11 @@ require("./smoke-workflow-ai-12c").registerPart12CTests({
   section,
   assert,
 });
+require("./smoke-workflow-ai-max-tokens").registerAiMaxTokensTests({
+  check,
+  section,
+  assert,
+});
 require("./smoke-workflow-post-12c-ui").registerPost12CUiTests({
   check,
   section,

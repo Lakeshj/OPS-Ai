@@ -259,6 +259,11 @@ export function WorkflowResultsPanel({
     [latestRun?.steps, definition]
   );
 
+  const finalResultText =
+    latestRun?.output != null && latestRun.status === "succeeded"
+      ? formatStepOutput(latestRun.output)
+      : null;
+
   const waitingLabel = (() => {
     if (!latestRun || latestRun.status !== "waiting") return null;
     if (latestRun.waitingReason === "child_run") {
@@ -385,12 +390,15 @@ export function WorkflowResultsPanel({
 
             <ErrorRoutingSummary routing={errorRouting} />
 
-            {latestRun.output != null && latestRun.status === "succeeded" && (
+            {finalResultText != null && (
               <div className="rounded-md border border-emerald-500/20 bg-emerald-500/5 p-3">
-                <div className="mb-1 text-[11px] font-semibold uppercase text-muted-foreground">
-                  Final result
+                <div className="mb-1 flex items-center justify-between gap-2">
+                  <div className="text-[11px] font-semibold uppercase text-muted-foreground">
+                    Final result
+                  </div>
+                  <CopyButton value={finalResultText} label="final result" />
                 </div>
-                <WorkflowProseContent text={formatStepOutput(latestRun.output)} />
+                <WorkflowProseContent text={finalResultText} />
               </div>
             )}
 

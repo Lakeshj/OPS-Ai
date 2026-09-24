@@ -7,7 +7,7 @@ const {
   googleApiRequest,
   sanitizeGoogleError,
 } = require("./googleOAuth.service");
-const { resolveDateRange } = require("./workflowGoogleDateRange");
+const { resolvePrimaryAndComparison } = require("./workflowGoogleDateRange");
 const { parseSpreadsheetRef } = require("./resourceLocator");
 const {
   GA4_METRICS,
@@ -69,6 +69,16 @@ const requireCredential = (data, connectProduct) => {
 
 const encodeSiteUrl = (siteUrl) => encodeURIComponent(String(siteUrl || "").trim());
 
+const tagPeriodRow = (json, period, range) => {
+  if (!period) return json;
+  return {
+    ...json,
+    period,
+    rangeStartDate: range.startDate,
+    rangeEndDate: range.endDate,
+  };
+};
+
 const gscQuery = async (node, context, item) => {
   const data = node.data || {};
   const credentialId = requireCredential(data, "Google Search Console");
@@ -80,10 +90,14 @@ const gscQuery = async (node, context, item) => {
     data.dimension || (data.operation === "getPages" ? "page" : "query")
   );
   const dim = dimension === "page" ? "page" : "query";
-  const range = resolveDateRange(data.dateRange || "last7days", {
+  const ranges = resolvePrimaryAndComparison(data, {
     startDate: expr(data.startDate, context, item),
     endDate: expr(data.endDate, context, item),
+    comparisonStartDate: expr(data.comparisonStartDate, context, item),
+    comparisonEndDate: expr(data.comparisonEndDate, context, item),
   });
+  const primary = ranges.dateRange;
+  const comparison = ranges.comparison;
   const rowLimit = Math.min(
     Math.max(Number(data.rowLimit) || 1000, 1),
     data.returnAll ? GSC_RETURN_ALL_MAX : GSC_ROW_MAX
@@ -92,51 +106,74 @@ const gscQuery = async (node, context, item) => {
   const dataState = data.dataState ? String(data.dataState) : undefined;
   const aggregationType = data.aggregationType ? String(data.aggregationType) : undefined;
 
-  const rows = [];
-  let startRow = Math.max(Number(data.startRow) || 0, 0);
-  const pageSize = Math.min(rowLimit, 25000);
+  const fetchPeriodRows = async (range, period) => {
+    const rows = [];
+    let startRow = Math.max(Number(data.startRow) || 0, 0);
+    const pageSize = Math.min(rowLimit, 25000);
 
-  while (rows.length < rowLimit) {
-    const remaining = rowLimit - rows.length;
-    const body = {
-      startDate: range.startDate,
-      endDate: range.endDate,
-      dimensions: [dim],
-      rowLimit: Math.min(remaining, pageSize),
-      startRow,
-    };
-    if (searchType) body.searchType = searchType;
-    if (dataState) body.dataState = dataState;
-    if (aggregationType) body.aggregationType = aggregationType;
-
-    const res = await googleApiRequest({
-      credentialId,
-      workspaceId: context.workspaceId,
-      requiredType: "google_gsc",
-      url: `https://searchconsole.googleapis.com/webmasters/v3/sites/${encodeSiteUrl(siteUrl)}/searchAnalytics/query`,
-      method: "POST",
-      body,
-      timeoutMs: Number(data.timeoutMs) || 25000,
-    });
-    const batch = Array.isArray(res.body?.rows) ? res.body.rows : [];
-    for (const row of batch) {
-      const keys = Array.isArray(row.keys) ? row.keys : [];
-      const value = keys[0] || "";
-      // Canonical table columns: query|page, clicks, impressions, ctr, position.
-      // Do not also emit `key` — it duplicates query/page.
-      const json = {
-        clicks: Number(row.clicks) || 0,
-        impressions: Number(row.impressions) || 0,
-        ctr: Number(row.ctr) || 0,
-        position: Number(row.position) || 0,
+    while (rows.length < rowLimit) {
+      const remaining = rowLimit - rows.length;
+      const body = {
+        startDate: range.startDate,
+        endDate: range.endDate,
+        dimensions: [dim],
+        rowLimit: Math.min(remaining, pageSize),
+        startRow,
       };
-      if (dim === "page") json.page = value;
-      else json.query = value;
-      rows.push({ json });
+      if (searchType) body.searchType = searchType;
+      if (dataState) body.dataState = dataState;
+      if (aggregationType) body.aggregationType = aggregationType;
+
+      const res = await googleApiRequest({
+        credentialId,
+        workspaceId: context.workspaceId,
+        requiredType: "google_gsc",
+        url: `https://searchconsole.googleapis.com/webmasters/v3/sites/${encodeSiteUrl(siteUrl)}/searchAnalytics/query`,
+        method: "POST",
+        body,
+        timeoutMs: Number(data.timeoutMs) || 25000,
+      });
+      const batch = Array.isArray(res.body?.rows) ? res.body.rows : [];
+      for (const row of batch) {
+        const keys = Array.isArray(row.keys) ? row.keys : [];
+        const value = keys[0] || "";
+        // Canonical table columns: query|page, clicks, impressions, ctr, position.
+        // Do not also emit `key` — it duplicates query/page.
+        const json = {
+          clicks: Number(row.clicks) || 0,
+          impressions: Number(row.impressions) || 0,
+          ctr: Number(row.ctr) || 0,
+          position: Number(row.position) || 0,
+        };
+        if (dim === "page") json.page = value;
+        else json.query = value;
+        rows.push({
+          json: tagPeriodRow(json, period, range),
+        });
+      }
+      if (batch.length === 0 || !data.returnAll) break;
+      startRow += batch.length;
+      if (batch.length < body.rowLimit) break;
     }
-    if (batch.length === 0 || !data.returnAll) break;
-    startRow += batch.length;
-    if (batch.length < body.rowLimit) break;
+    return rows;
+  };
+
+  let rows;
+  let primaryRowCount;
+  let comparisonRowCount = 0;
+  if (comparison.enabled) {
+    const primaryRows = await fetchPeriodRows(primary, "primary");
+    const comparisonRows = await fetchPeriodRows(
+      { startDate: comparison.startDate, endDate: comparison.endDate },
+      "comparison"
+    );
+    primaryRowCount = primaryRows.length;
+    comparisonRowCount = comparisonRows.length;
+    // Keep periods distinguishable — concatenate tagged sets, never merge metrics.
+    rows = [...primaryRows, ...comparisonRows];
+  } else {
+    rows = await fetchPeriodRows(primary, null);
+    primaryRowCount = rows.length;
   }
 
   return {
@@ -144,17 +181,47 @@ const gscQuery = async (node, context, item) => {
     output: {
       siteUrl,
       dimension: dim,
-      startDate: range.startDate,
-      endDate: range.endDate,
+      startDate: primary.startDate,
+      endDate: primary.endDate,
       rowCount: rows.length,
+      dateRange: {
+        startDate: primary.startDate,
+        endDate: primary.endDate,
+        preset: primary.preset,
+      },
+      ...(comparison.enabled
+        ? {
+            comparison: {
+              enabled: true,
+              startDate: comparison.startDate,
+              endDate: comparison.endDate,
+              primaryRowCount,
+              comparisonRowCount,
+            },
+          }
+        : {}),
     },
     resolved: {
       credentialId,
       siteUrl,
       dimension: dim,
       rowLimit,
-      startDate: range.startDate,
-      endDate: range.endDate,
+      startDate: primary.startDate,
+      endDate: primary.endDate,
+      dateRange: {
+        startDate: primary.startDate,
+        endDate: primary.endDate,
+        preset: primary.preset,
+      },
+      ...(comparison.enabled
+        ? {
+            comparison: {
+              enabled: true,
+              startDate: comparison.startDate,
+              endDate: comparison.endDate,
+            },
+          }
+        : {}),
     },
   };
 };
@@ -252,10 +319,14 @@ const ga4Report = async (node, context, item) => {
     }
     propertyId = `properties/${propertyId}`;
   }
-  const range = resolveDateRange(data.dateRange || "last7days", {
+  const ranges = resolvePrimaryAndComparison(data, {
     startDate: expr(data.startDate, context, item),
     endDate: expr(data.endDate, context, item),
+    comparisonStartDate: expr(data.comparisonStartDate, context, item),
+    comparisonEndDate: expr(data.comparisonEndDate, context, item),
   });
+  const primary = ranges.dateRange;
+  const comparison = ranges.comparison;
   const metrics = parseList(data.metrics).length
     ? parseList(data.metrics)
     : ["sessions", "totalUsers"];
@@ -274,78 +345,134 @@ const ga4Report = async (node, context, item) => {
     ? GA4_ROW_MAX
     : Math.min(Math.max(Number(data.limit) || 100, 1), GA4_ROW_MAX);
 
-  const body = {
-    dateRanges: [{ startDate: range.startDate, endDate: range.endDate }],
-    metrics: metrics.map((name) => ({ name })),
-    limit,
-  };
-  if (dimensions.length) body.dimensions = dimensions.map((name) => ({ name }));
-
-  const dimFilterRaw = parseGa4FilterInput(data.dimensionFilter);
-  const dimFilter = ga4FilterExpression(dimFilterRaw);
-  if (dimFilter) body.dimensionFilter = dimFilter;
-
-  const metFilterRaw = parseGa4FilterInput(data.metricFilter);
-  const metFilter = ga4FilterExpression(
-    metFilterRaw ? { ...metFilterRaw, kind: "metric" } : null
-  );
-  if (metFilter) body.metricFilter = metFilter;
-
-  const orderByField = String(data.orderByField || "").trim();
-  if (orderByField) {
-    const desc = data.orderDirection !== "ascending";
-    if (metrics.includes(orderByField)) {
-      body.orderBys = [{ metric: { metricName: orderByField }, desc }];
-    } else if (dimensions.includes(orderByField)) {
-      body.orderBys = [{ dimension: { dimensionName: orderByField }, desc }];
-    } else {
-      throw new Error(
-        "Order by must be one of the selected metrics or dimensions"
-      );
+  const buildBody = (range) => {
+    const body = {
+      dateRanges: [{ startDate: range.startDate, endDate: range.endDate }],
+      metrics: metrics.map((name) => ({ name })),
+      limit,
+    };
+    if (dimensions.length) {
+      body.dimensions = dimensions.map((name) => ({ name }));
     }
+
+    const dimFilterRaw = parseGa4FilterInput(data.dimensionFilter);
+    const dimFilter = ga4FilterExpression(dimFilterRaw);
+    if (dimFilter) body.dimensionFilter = dimFilter;
+
+    const metFilterRaw = parseGa4FilterInput(data.metricFilter);
+    const metFilter = ga4FilterExpression(
+      metFilterRaw ? { ...metFilterRaw, kind: "metric" } : null
+    );
+    if (metFilter) body.metricFilter = metFilter;
+
+    const orderByField = String(data.orderByField || "").trim();
+    if (orderByField) {
+      const desc = data.orderDirection !== "ascending";
+      if (metrics.includes(orderByField)) {
+        body.orderBys = [{ metric: { metricName: orderByField }, desc }];
+      } else if (dimensions.includes(orderByField)) {
+        body.orderBys = [{ dimension: { dimensionName: orderByField }, desc }];
+      } else {
+        throw new Error(
+          "Order by must be one of the selected metrics or dimensions"
+        );
+      }
+    }
+    return body;
+  };
+
+  const fetchPeriodItems = async (range, period) => {
+    const body = buildBody(range);
+    const res = await googleApiRequest({
+      credentialId,
+      workspaceId: context.workspaceId,
+      requiredType: "google_ga4",
+      url: `https://analyticsdata.googleapis.com/v1beta/${propertyId}:runReport`,
+      method: "POST",
+      body,
+      timeoutMs: Number(data.timeoutMs) || 25000,
+    });
+
+    const headerDims = (res.body?.dimensionHeaders || []).map((h) => h.name);
+    const headerMets = (res.body?.metricHeaders || []).map((h) => h.name);
+    return (res.body?.rows || []).map((row) => {
+      const json = {};
+      (row.dimensionValues || []).forEach((v, i) => {
+        json[headerDims[i] || `dimension${i}`] = v.value;
+      });
+      (row.metricValues || []).forEach((v, i) => {
+        const name = headerMets[i] || `metric${i}`;
+        const num = Number(v.value);
+        json[name] = Number.isFinite(num) ? num : v.value;
+      });
+      return { json: tagPeriodRow(json, period, range) };
+    });
+  };
+
+  let items;
+  let primaryRowCount;
+  let comparisonRowCount = 0;
+  if (comparison.enabled) {
+    const primaryItems = await fetchPeriodItems(primary, "primary");
+    const comparisonItems = await fetchPeriodItems(
+      { startDate: comparison.startDate, endDate: comparison.endDate },
+      "comparison"
+    );
+    primaryRowCount = primaryItems.length;
+    comparisonRowCount = comparisonItems.length;
+    // Keep periods distinguishable — concatenate tagged sets, never merge metrics.
+    items = [...primaryItems, ...comparisonItems];
+  } else {
+    items = await fetchPeriodItems(primary, null);
+    primaryRowCount = items.length;
   }
-
-  const res = await googleApiRequest({
-    credentialId,
-    workspaceId: context.workspaceId,
-    requiredType: "google_ga4",
-    url: `https://analyticsdata.googleapis.com/v1beta/${propertyId}:runReport`,
-    method: "POST",
-    body,
-    timeoutMs: Number(data.timeoutMs) || 25000,
-  });
-
-  const headerDims = (res.body?.dimensionHeaders || []).map((h) => h.name);
-  const headerMets = (res.body?.metricHeaders || []).map((h) => h.name);
-  const items = (res.body?.rows || []).map((row) => {
-    const json = {};
-    (row.dimensionValues || []).forEach((v, i) => {
-      json[headerDims[i] || `dimension${i}`] = v.value;
-    });
-    (row.metricValues || []).forEach((v, i) => {
-      const name = headerMets[i] || `metric${i}`;
-      const num = Number(v.value);
-      json[name] = Number.isFinite(num) ? num : v.value;
-    });
-    return { json };
-  });
 
   return {
     items,
     output: {
       propertyId,
-      startDate: range.startDate,
-      endDate: range.endDate,
+      startDate: primary.startDate,
+      endDate: primary.endDate,
       rowCount: items.length,
+      dateRange: {
+        startDate: primary.startDate,
+        endDate: primary.endDate,
+        preset: primary.preset,
+      },
+      ...(comparison.enabled
+        ? {
+            comparison: {
+              enabled: true,
+              startDate: comparison.startDate,
+              endDate: comparison.endDate,
+              primaryRowCount,
+              comparisonRowCount,
+            },
+          }
+        : {}),
     },
     resolved: {
       credentialId,
       propertyId,
       metrics,
       dimensions,
-      startDate: range.startDate,
-      endDate: range.endDate,
+      startDate: primary.startDate,
+      endDate: primary.endDate,
+      dateRange: {
+        startDate: primary.startDate,
+        endDate: primary.endDate,
+        preset: primary.preset,
+      },
       limit,
+      ...(comparison.enabled
+        ? {
+            comparison: {
+              enabled: true,
+              startDate: comparison.startDate,
+              endDate: comparison.endDate,
+            },
+          }
+        : {}),
     },
   };
 };

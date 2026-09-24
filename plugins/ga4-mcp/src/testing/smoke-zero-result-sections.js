@@ -254,8 +254,12 @@ function run() {
     assert.equal(g.empty, false);
     assert.equal(g.evidence.hasDataRows, true);
     assert.equal(g.evidence.hasZeroResultCapabilitySections, true);
-    assert.ok(/landing_underperformance/.test(g.userPrompt));
+    assert.ok(
+      /landing_underperformance/.test(g.userPrompt) ||
+        /landing_underperformance/.test(g.systemPrompt)
+    );
     assert.ok(/page_performance/.test(g.userPrompt));
+    assert.ok(!/"score_breakdown"/.test(g.userPrompt));
     assert.ok(/zeroResult/.test(g.systemPrompt) || /count=0/.test(g.systemPrompt) || /zero qualifying/.test(g.systemPrompt));
     assert.ok(!/Respond exactly: "No structured GA4 MCP opportunity\/data rows/.test(g.systemPrompt));
     assert.ok(/Do NOT say they were unselected|do not claim those capabilities were unselected|Do NOT claim the capability was not selected/i.test(g.systemPrompt));
