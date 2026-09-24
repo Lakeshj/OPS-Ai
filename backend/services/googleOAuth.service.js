@@ -792,13 +792,10 @@ const startGoogleOAuth = async (
   params.delete("login_hint");
   params.delete("authuser");
 
-  const authUrl = `${AUTH_URL}?${params.toString()}`;
-  // Fresh Gmail connects: route through AccountChooser so "Use another account"
-  // is always available (otherwise Google often sticks to authuser=0/1).
-  const url =
-    product === "google_gmail" && !credentialId
-      ? `https://accounts.google.com/AccountChooser?continue=${encodeURIComponent(authUrl)}`
-      : authUrl;
+  // Direct OAuth URL. Wrapping this in AccountChooser?continue= truncates `state`
+  // on both local and live, and the callback then fails with Invalid OAuth state.
+  // prompt=select_account consent already opens the Google account picker.
+  const url = `${AUTH_URL}?${params.toString()}`;
 
   let callbackOrigin = "";
   try {
@@ -859,7 +856,22 @@ const finishGoogleOAuth = async (code, state) => {
     oauthAppMode: app.mode,
   });
   if (!res.ok) {
-    throw sanitizeGoogleError(res.status === 401 ? 401 : 400, null);
+    const googleError =
+      res.body && typeof res.body === "object" ? String(res.body.error || "") : "";
+    hooks.logger({
+      event: "oauth_code_exchange_rejected",
+      status: res.status,
+      googleError: googleError || null,
+      oauthAppMode: app.mode,
+    });
+    if (res.status === 401 || googleError === "invalid_client") {
+      throw new AppError(
+        "Google rejected the platform login secret. Use the client secret from the same Google Cloud OAuth client as the client id, restart the backend, then connect Gmail again.",
+        401,
+        "GOOGLE_OAUTH_CLIENT_REJECTED"
+      );
+    }
+    throw sanitizeGoogleError(res.status, res.body, { product: parsed.product });
   }
   const json = res.body && typeof res.body === "object" ? res.body : {};
   const requestedScopes = Array.isArray(parsed.requestedScopes)

@@ -461,7 +461,7 @@ const registerPart14D55CTests = ({ check, section, assert: a }) => {
     assertX.ok(picker().includes("Omit credentialId"));
   });
 
-  check("GMAILMANAGEDONLY-8b fresh Gmail OAuth uses Google AccountChooser", async () => {
+  check("GMAILMANAGEDONLY-8b fresh Gmail OAuth keeps a verifiable state", async () => {
     const prevId = process.env.GOOGLE_OAUTH_CLIENT_ID;
     const prevSecret = process.env.GOOGLE_OAUTH_CLIENT_SECRET;
     process.env.GOOGLE_OAUTH_CLIENT_ID = "opsai-test-google-client";
@@ -471,17 +471,14 @@ const registerPart14D55CTests = ({ check, section, assert: a }) => {
         { workspaceId: "ws-oauth", product: "google_gmail" },
         { userId: "u-chooser", role: "Admin" }
       );
-      assertX.ok(
-        String(started.url).startsWith(
-          "https://accounts.google.com/AccountChooser?continue="
-        )
-      );
-      const continueUrl = decodeURIComponent(
-        String(started.url).split("continue=")[1] || ""
-      );
-      assertX.ok(continueUrl.includes("accounts.google.com/o/oauth2/v2/auth"));
-      assertX.ok(continueUrl.includes("select_account"));
-      assertX.ok(!continueUrl.includes("login_hint"));
+      const auth = new URL(started.url);
+      assertX.ok(String(started.url).includes("accounts.google.com/o/oauth2/v2/auth"));
+      assertX.ok(!String(started.url).includes("AccountChooser"));
+      assertX.ok(String(auth.searchParams.get("prompt") || "").includes("select_account"));
+      assertX.equal(auth.searchParams.get("login_hint"), null);
+      const parsed = oauth().verifyState(auth.searchParams.get("state"));
+      assertX.equal(parsed.product, "google_gmail");
+      assertX.equal(parsed.userId, "u-chooser");
     } finally {
       if (prevId == null) delete process.env.GOOGLE_OAUTH_CLIENT_ID;
       else process.env.GOOGLE_OAUTH_CLIENT_ID = prevId;
