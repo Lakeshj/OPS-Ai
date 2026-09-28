@@ -53,6 +53,12 @@ const expr = (value, context, item) => {
   });
 };
 
+/** Turn an AI opportunities payload into the same report Result shows. */
+const emailBody = (value) => {
+  const { humanizeWorkflowText } = require("./workflowNodes.service");
+  return humanizeWorkflowText(value);
+};
+
 const requireCredential = (data, connectProduct) => {
   const id = String(data.credentialId || "").trim();
   if (!id) {
@@ -616,7 +622,7 @@ const gmailSendLike = async (node, context, item, reply = {}) => {
   if (!to) throw new Error("Gmail Send requires a recipient (To)");
   const subject = String(reply.subject || expr(data.subject, context, item) || "");
   const emailType = String(data.emailType || "text");
-  const message = String(expr(data.message || data.text || data.html, context, item) || "");
+  const message = emailBody(expr(data.message || data.text || data.html, context, item));
   const attachments = collectAttachments(item, data);
   const raw = toBase64Url(
     buildRfc822({
@@ -913,7 +919,7 @@ const runGmail = async (node, context, item) => {
       buildRfc822({
         to,
         subject: expr(data.subject, context, item) || "",
-        text: expr(data.message, context, item) || "",
+        text: emailBody(expr(data.message, context, item)),
       })
     );
     const res = await googleApiRequest({

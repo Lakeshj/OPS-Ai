@@ -70,6 +70,8 @@ function ProseCopyButton({ text }: { text: string }) {
 }
 
 const COLUMN_PRIORITY = [
+  "result",
+  "text",
   "query",
   "page",
   "clicks",
@@ -307,10 +309,14 @@ function collectTableKeys(rows: WorkflowItem[]): string[] {
   const keys = new Set<string>();
   const hideInput = shouldHideInputColumn(rows);
   const hideResult = shouldHideResultColumn(rows);
+  const hideStructured = rows.some((row) =>
+    Boolean(readableReport(row.json as Record<string, unknown> | undefined))
+  );
   for (const row of rows) {
     for (const key of Object.keys(row.json || {})) {
       if (key === "input" && hideInput) continue;
       if (key === "result" && hideResult) continue;
+      if (hideStructured && (key === "text" || STRUCTURED_AI_KEYS.has(key))) continue;
       if (looksLikeNodeIdKey(key)) continue;
       const val = (row.json || {})[key];
       if (val != null && typeof val === "object" && !Array.isArray(val)) continue;
@@ -338,14 +344,115 @@ function formatCellValue(value: unknown, maxLen = 200): string {
   }
 }
 
-/** Long AI/Result prose fields shown as rendered markdown above the table. */
-function extractProseField(json: Record<string, unknown> | undefined): string | null {
-  if (!json || typeof json !== "object") return null;
+const STRUCTURED_AI_KEYS = new Set([
+  "opportunities",
+  "enrichedOpportunities",
+  "mcpOpportunityDetails",
+  "compactAiPayload",
+]);
+
+function formatRatePercent(value: unknown): string | null {
+  if (value == null || value === "") return null;
+  const num = Number(value);
+  if (!Number.isFinite(num)) return String(value);
+  return `${(num * 100).toFixed(2)}%`;
+}
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  return value as Record<string, unknown>;
+}
+
+function landingRowsOf(json: Record<string, unknown> | undefined): unknown[] | null {
+  if (!json) return null;
+  const direct = json.opportunities;
+  const nested = asRecord(json.json)?.opportunities;
+  const rows = Array.isArray(direct) ? direct : Array.isArray(nested) ? nested : null;
+  if (!rows?.length) return null;
+  const landing = rows.some((row) => {
+    const obj = asRecord(row);
+    return obj != null && (obj.landingPage != null || obj.pagePath != null);
+  });
+  return landing ? rows : null;
+}
+
+function detailRowsOf(json: Record<string, unknown>): unknown[] {
+  if (Array.isArray(json.mcpOpportunityDetails)) return json.mcpOpportunityDetails;
+  if (Array.isArray(json.enrichedOpportunities)) return json.enrichedOpportunities;
+  return [];
+}
+
+/** Same landing report the Result node writes, for the output table and preview. */
+function formatLandingReport(rows: unknown[], details: unknown[]): string {
+  const byRank = new Map<number, Record<string, unknown>>();
+  const byLanding = new Map<string, Record<string, unknown>>();
+  for (const entry of details) {
+    const d = asRecord(entry);
+    if (!d) continue;
+    if (d.rank != null) byRank.set(Number(d.rank), d);
+    if (d.landingPage != null) byLanding.set(String(d.landingPage), d);
+  }
+  const lines = ["GA4 Intelligence Report", "", "Landing Underperformance Opportunities", ""];
+  rows.forEach((row, idx) => {
+    const obj = asRecord(row) || {};
+    const rank = obj.rank != null ? Number(obj.rank) : idx + 1;
+    const landingPage =
+      obj.landingPage != null
+        ? String(obj.landingPage)
+        : obj.pagePath != null
+          ? String(obj.pagePath)
+          : "(unknown)";
+    const mcp =
+      (Number.isFinite(rank) ? byRank.get(rank) : undefined) ||
+      byLanding.get(landingPage) ||
+      null;
+    const metrics = asRecord(mcp?.metrics);
+    const sessions = obj.sessions ?? mcp?.sessions ?? metrics?.sessions;
+    const engagementRate =
+      obj.engagementRate ?? mcp?.engagementRate ?? metrics?.engagementRate;
+    const bounceRate = obj.bounceRate ?? mcp?.bounceRate ?? metrics?.bounceRate;
+    const score = obj.score ?? mcp?.score;
+    const reason = obj.reason ?? mcp?.reason ?? null;
+    const recommendation = obj.recommendation ?? mcp?.recommendation ?? null;
+    lines.push(`${rank}. Landing Page: ${landingPage}`);
+    if (sessions != null) lines.push(`   Sessions: ${sessions}`);
+    if (engagementRate != null) {
+      lines.push(`   Engagement Rate: ${formatRatePercent(engagementRate)}`);
+    }
+    if (bounceRate != null) lines.push(`   Bounce Rate: ${formatRatePercent(bounceRate)}`);
+    if (score != null) lines.push(`   MCP Score: ${score}`);
+    if (reason != null && String(reason).trim()) lines.push(`   Reason: ${reason}`);
+    if (recommendation != null && String(recommendation).trim()) {
+      lines.push(`   Recommendation: ${recommendation}`);
+    }
+    lines.push("");
+  });
+  return lines.join("\n").trimEnd();
+}
+
+function readableReport(json: Record<string, unknown> | undefined): string | null {
+  if (!json) return null;
   for (const key of ["result", "text", "message", "summary"]) {
     const v = json[key];
     if (typeof v === "string" && looksLikeMarkdownProse(v)) return v;
   }
-  return null;
+  const rows = landingRowsOf(json);
+  if (!rows) return null;
+  return formatLandingReport(rows, detailRowsOf(json));
+}
+
+/** Long AI/Result prose fields shown as rendered markdown above the table. */
+function extractProseField(json: Record<string, unknown> | undefined): string | null {
+  return readableReport(json);
+}
+
+/** Show the landing report in the table instead of the raw opportunities array. */
+function withReadableReport(row: WorkflowItem): WorkflowItem {
+  const json = (row.json || {}) as Record<string, unknown>;
+  if (typeof json.result === "string" && looksLikeMarkdownProse(json.result)) return row;
+  const report = readableReport(json);
+  if (!report) return row;
+  return { ...row, json: { ...json, result: report } };
 }
 
 function flattenSchemaFields(
@@ -628,7 +735,8 @@ export function ItemDataViewer({
   const [mode, setMode] = useState<ViewMode>("table");
   const [query, setQuery] = useState("");
   const rows = useMemo(
-    () => normalizeItems(items, data, { canonicalItemsOnly }),
+    () =>
+      normalizeItems(items, data, { canonicalItemsOnly }).map(withReadableReport),
     [items, data, canonicalItemsOnly]
   );
 

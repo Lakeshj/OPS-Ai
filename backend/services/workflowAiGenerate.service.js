@@ -136,9 +136,16 @@ const executeAiGenerate = async (node, context) => {
     const result = await runLlmNodeForItem(node, itemContext, {
       requireBot: false,
     });
+    const text = String(result.output?.text || "");
+    const trimmed = text.trim();
+    const readable =
+      Boolean(trimmed) && !trimmed.startsWith("{") && !trimmed.startsWith("[");
     items.push({
       json: {
-        text: result.output?.text || "",
+        text,
+        // Human report the output table and Gmail send. Structured
+        // opportunities stay on `json` for expressions.
+        ...(readable ? { result: text } : {}),
         json: result.output?.json ?? undefined,
         provider: result.output?.provider,
         model: result.output?.model,

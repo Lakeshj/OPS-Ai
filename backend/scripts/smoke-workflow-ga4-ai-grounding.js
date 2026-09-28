@@ -511,6 +511,7 @@ const registerGa4AiGroundingTests = ({ check, section, assert: a }) => {
       handlers,
       formatGa4LandingIntelligenceReport,
       resolveLandingOpportunitiesForResult,
+      humanizeWorkflowText,
     } = require("../services/workflowNodes.service");
 
     const opportunities = Array.from({ length: 50 }, (_, i) => ({
@@ -608,6 +609,27 @@ const registerGa4AiGroundingTests = ({ check, section, assert: a }) => {
     });
     assertX.match(sample, /Engagement Rate: 10\.00%/);
     assertX.match(sample, /Bounce Rate: 90\.00%/);
+
+    // Gmail (and any {{input}} / {{input.opportunities}} body) gets the report,
+    // not the JSON array.
+    const emailedArray = humanizeWorkflowText(opportunities);
+    assertX.match(emailedArray, /1\. Landing Page: \/page-1/);
+    assertX.ok(!/"opportunities"\s*:/.test(emailedArray));
+    const emailedObject = humanizeWorkflowText({
+      opportunities,
+      text: JSON.stringify({ opportunities }),
+      mcpOpportunityDetails: mcpDetails,
+    });
+    assertX.match(emailedObject, /GA4 Intelligence Report/);
+    assertX.match(emailedObject, /Reason: MCP reason for \/page-1/);
+    const emailedJson = humanizeWorkflowText(JSON.stringify({ opportunities }));
+    assertX.match(emailedJson, /50\. Landing Page: \/page-50/);
+    assertX.equal(humanizeWorkflowText("Hello from OpsAi"), "Hello from OpsAi");
+    const emailedReport = humanizeWorkflowText({
+      text: sample,
+      opportunities,
+    });
+    assertX.equal(emailedReport, sample);
   });
 
   check("GA4AI-MCP-2 structured landing MCP input", () => {

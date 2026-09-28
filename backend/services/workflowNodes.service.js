@@ -635,7 +635,10 @@ const runLlmNode = async (node, context, options = {}) => {
       usage,
       maxTokens: generationOptions.max_tokens ?? generationOptions.max_completion_tokens ?? null,
       truncated: finishReason === "length",
-      // Top-level array for expressions / Item viewer (same reference as json.opportunities).
+      // Same human report Result renders. Item viewer and Gmail prefer this
+      // over the opportunities array.
+      ...(humanReport ? { result: humanReport } : {}),
+      // Structured array stays available for expressions and Result merge.
       ...(structuredOpportunities
         ? { opportunities: structuredOpportunities }
         : {}),
@@ -882,6 +885,53 @@ const humanReportForAiOpportunities = (rows, mcpDetails) => {
     });
   }
   return formatReadableRecordList(rows);
+};
+
+/**
+ * Email / downstream body. Opportunity JSON becomes the same landing report
+ * Result shows. Ordinary prose is left unchanged.
+ */
+const humanizeWorkflowText = (value) => {
+  if (value == null) return "";
+  if (typeof value === "number" || typeof value === "boolean") return String(value);
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (!trimmed || !looksLikeJsonObjectText(trimmed)) return value;
+    try {
+      return humanizeWorkflowText(parseAiResponseJson(trimmed));
+    } catch {
+      return value;
+    }
+  }
+  if (Array.isArray(value)) {
+    return humanReportForAiOpportunities(value, []) || JSON.stringify(value, null, 2);
+  }
+  if (typeof value === "object") {
+    const prose = [value.result, value.text, value.message, value.summary].find(
+      (entry) =>
+        typeof entry === "string" &&
+        entry.trim() &&
+        !looksLikeJsonObjectText(entry.trim())
+    );
+    if (prose) return prose;
+    const opportunities =
+      coerceOpportunitiesArray(value.opportunities) ||
+      coerceOpportunitiesArray(value.json?.opportunities) ||
+      null;
+    const details = Array.isArray(value.mcpOpportunityDetails)
+      ? value.mcpOpportunityDetails
+      : Array.isArray(value.enrichedOpportunities)
+        ? value.enrichedOpportunities
+        : [];
+    const report = humanReportForAiOpportunities(opportunities, details);
+    if (report) return report;
+    try {
+      return JSON.stringify(value, null, 2);
+    } catch {
+      return String(value);
+    }
+  }
+  return String(value);
 };
 
 /**
@@ -3170,6 +3220,7 @@ module.exports = {
   parseAiResponseJson,
   formatGa4LandingIntelligenceReport,
   resolveLandingOpportunitiesForResult,
+  humanizeWorkflowText,
   // Shared HTTP primitives (Part 13A HTTP Tool reuses these)
   buildUrl,
   applyCredential,
