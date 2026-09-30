@@ -2,7 +2,7 @@
  * Canonical native Google provider authentication policies.
  *
  * Gmail is PLATFORM_MANAGED_ONLY — Connect opens Google sign-in directly
- * (no Custom OAuth2 Client ID/Secret UI). GSC / GA4 / Sheets stay
+ * (no Custom OAuth2 Client ID/Secret UI). GSC / GA4 / Sheets / Ads stay
  * HYBRID_CUSTOM_PRIMARY — custom OAuth app is primary.
  * Never decide native connection UX from generic "isGoogle" alone.
  */
@@ -11,7 +11,8 @@ export type GoogleCredentialProduct =
   | "google_gmail"
   | "google_gsc"
   | "google_ga4"
-  | "google_sheets";
+  | "google_sheets"
+  | "google_ads";
 
 export type GoogleNativeAuthPolicy =
   | "PLATFORM_MANAGED_ONLY"
@@ -26,6 +27,7 @@ export const GOOGLE_NATIVE_AUTH_POLICY: Record<
   google_gsc: "HYBRID_CUSTOM_PRIMARY",
   google_ga4: "HYBRID_CUSTOM_PRIMARY",
   google_sheets: "HYBRID_CUSTOM_PRIMARY",
+  google_ads: "HYBRID_CUSTOM_PRIMARY",
 };
 
 export function isGoogleCredentialProduct(
@@ -35,7 +37,8 @@ export function isGoogleCredentialProduct(
     type === "google_gmail" ||
     type === "google_gsc" ||
     type === "google_ga4" ||
-    type === "google_sheets"
+    type === "google_sheets" ||
+    type === "google_ads"
   );
 }
 

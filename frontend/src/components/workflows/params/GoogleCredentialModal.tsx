@@ -86,6 +86,7 @@ type FormState = {
   name: string;
   clientId: string;
   clientSecret: string;
+  developerToken: string;
   allowedDomainsText: string;
   customScopes: string;
 };
@@ -123,6 +124,7 @@ export function GoogleCredentialModal({
     name: initialName || meta?.label || "Google",
     clientId: "",
     clientSecret: "",
+    developerToken: "",
     allowedDomainsText: "",
     customScopes: "",
   });
@@ -142,6 +144,7 @@ export function GoogleCredentialModal({
   const [activeId, setActiveId] = useState(credentialId || "");
   const [connected, setConnected] = useState(false);
   const [hasClientSecret, setHasClientSecret] = useState(false);
+  const [hasDeveloperToken, setHasDeveloperToken] = useState(false);
   const [details, setDetails] = useState<{
     createdAt?: string;
     updatedAt?: string;
@@ -178,10 +181,12 @@ export function GoogleCredentialModal({
       name: initialName || meta?.label || "Google",
       clientId: "",
       clientSecret: "",
+      developerToken: "",
       allowedDomainsText: "",
       customScopes: "",
     });
     setHasClientSecret(false);
+    setHasDeveloperToken(false);
     setAllowedDomainsMode("all");
     setSharingScope("all");
 
@@ -220,6 +225,7 @@ export function GoogleCredentialModal({
         setSetupMode(nextSetup);
         setConnected(Boolean(view.connected || ed.connected));
         setHasClientSecret(Boolean(ed.hasClientSecret));
+        setHasDeveloperToken(Boolean(ed.hasDeveloperToken));
         setSharingScope(
           (String(
             ed.sharingScope || view.sharing || "all"
@@ -251,6 +257,7 @@ export function GoogleCredentialModal({
           name: view.name || meta?.label || "Google",
           clientId: String(ed.clientId || ""),
           clientSecret: "",
+          developerToken: "",
           allowedDomainsText: allowed.join("\n"),
           customScopes: String(ed.customScopes || ""),
         });
@@ -323,15 +330,21 @@ export function GoogleCredentialModal({
         customScopes: form.customScopes.trim() || undefined,
         sharingScope,
       };
+      const secret: Record<string, string> = {};
+      if (!isManaged && form.clientSecret.trim()) {
+        secret.clientSecret = form.clientSecret.trim();
+      }
+      if (product === "google_ads" && form.developerToken.trim()) {
+        secret.developerToken = form.developerToken.trim();
+      }
       if (activeId) {
         await workflowCredentialsApi.update(activeId, {
           name: form.name.trim(),
-          secret: !isManaged && form.clientSecret.trim()
-            ? { clientSecret: form.clientSecret.trim() }
-            : undefined,
+          secret: Object.keys(secret).length ? secret : undefined,
           config,
         });
         if (form.clientSecret.trim()) setHasClientSecret(true);
+        if (form.developerToken.trim()) setHasDeveloperToken(true);
         toast.success(
           connected
             ? "Connection saved"
@@ -345,9 +358,13 @@ export function GoogleCredentialModal({
         workspaceId,
         name: form.name.trim(),
         type: product,
-        secret: isManaged
-          ? { oauthAppMode }
-          : { clientSecret: form.clientSecret.trim(), oauthAppMode },
+        secret: {
+          oauthAppMode,
+          ...(!isManaged ? { clientSecret: form.clientSecret.trim() } : {}),
+          ...(product === "google_ads" && form.developerToken.trim()
+            ? { developerToken: form.developerToken.trim() }
+            : {}),
+        },
         config,
       });
       setActiveId(created.id);
@@ -728,6 +745,34 @@ export function GoogleCredentialModal({
                       </p>
                     ) : null}
                   </div>
+
+                  {product === "google_ads" ? (
+                    <div>
+                      <Label className="text-[11px]">Developer token</Label>
+                      <Input
+                        type="password"
+                        value={form.developerToken}
+                        placeholder={
+                          hasDeveloperToken
+                            ? "•••••••• (saved — enter to replace)"
+                            : "Optional"
+                        }
+                        onChange={(e) =>
+                          setField("developerToken", e.target.value)
+                        }
+                        autoComplete="new-password"
+                      />
+                      <p className="mt-1 text-[11px] text-muted-foreground">
+                        Optional. Kept for legacy compatibility. Stored
+                        encrypted on the credential, not on the workflow.
+                      </p>
+                      {errors.developerToken ? (
+                        <p className="mt-1 text-[11px] text-destructive">
+                          {errors.developerToken}
+                        </p>
+                      ) : null}
+                    </div>
+                  ) : null}
 
                   {isManaged ? (
                     <>

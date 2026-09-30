@@ -152,7 +152,9 @@ export type ParamCustomRenderer =
   /** GA4 structured dimension/metric filter object */
   | "ga4Filter"
   /** GA4 order-by limited to selected metrics/dimensions */
-  | "ga4OrderBy";
+  | "ga4OrderBy"
+  /** Provider, tool, and schema-driven parameters for the dynamic MCP node */
+  | "mcpDynamicTool";
 
 export interface DisplayOptions {
   show?: Record<string, Array<string | number | boolean>>;
@@ -1984,6 +1986,49 @@ export const NODE_CONTRACTS: Record<WorkflowNodeType, NodeContract> = {
       "Requires upstream Google Analytics report rows",
       "Runs GA4 intelligence/data capabilities on previous-node data",
       "Multi-select executes every selected capability independently",
+    ],
+  },
+
+  mcpDynamicTool: {
+    type: "mcpDynamicTool",
+    version: 1,
+    category: "SEO",
+    label: "Dynamic MCP Tool",
+    inputs: [mainIn()],
+    outputs: [mainOut, errorOut],
+    cardinality: "1-to-N",
+    pairedItemPolicy: "fanOut",
+    settings: SETTINGS_ACTION,
+    capabilities: CAP_ACTION,
+    isSideEffecting: true,
+    params: [],
+    dirtyTriggers: ["params", "edges", "pin", "disabled"],
+    edgeCases: [
+      "Tool list and parameter fields come from the shared MCP registry",
+      "Dropdown lists read-only, low-risk tools",
+      "Uses the provider credential already stored for GA4 or Search Console",
+      "Unavailable tools can be saved but do not call Google",
+    ],
+  },
+
+  googleAds: {
+    type: "googleAds",
+    version: 1,
+    category: "SEO",
+    label: "Google Ads",
+    inputs: [mainIn()],
+    outputs: [mainOut, errorOut],
+    cardinality: "1-to-N",
+    pairedItemPolicy: "fanOut",
+    settings: SETTINGS_ACTION,
+    capabilities: CAP_ACTION,
+    isSideEffecting: true,
+    params: [],
+    dirtyTriggers: ["params", "edges", "pin", "disabled"],
+    edgeCases: [
+      "Read-only Google Ads reports",
+      "GAQL is chosen on the server from the report type",
+      "Credential stores the developer token; the node stores credentialId only",
     ],
   },
 };

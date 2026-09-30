@@ -258,7 +258,23 @@ const applyGa4NativeAiGrounding = ({
   const availableDimensions = listAvailableDimensions(keys);
   const availableMetrics = listAvailableMetrics(keys);
   const dateMeta = extractDateRangeMeta(input, rows, context);
-  const dateRangeDescription = describeDateRange(dateMeta);
+  const {
+    extractComparisonDataset,
+    COMPARISON_RULES,
+  } = require("./workflowComparisonPeriods");
+  const comparisonDataset = extractComparisonDataset(rows);
+  const dateRangeDescription = comparisonDataset
+    ? [
+        comparisonDataset.primaryRange
+          ? `primary ${comparisonDataset.primaryRange.startDate || "?"} → ${comparisonDataset.primaryRange.endDate || "?"}`
+          : null,
+        comparisonDataset.comparisonRange
+          ? `comparison ${comparisonDataset.comparisonRange.startDate || "?"} → ${comparisonDataset.comparisonRange.endDate || "?"}`
+          : null,
+      ]
+        .filter(Boolean)
+        .join("; ") || describeDateRange(dateMeta)
+    : describeDateRange(dateMeta);
   const questionText = `${systemPrompt}\n${userPrompt}`;
   const wantsAcquisition = asksAcquisitionChannels(questionText);
   const hasChannelDim = hasAcquisitionChannelDimension(availableDimensions);
@@ -320,6 +336,8 @@ const applyGa4NativeAiGrounding = ({
     "",
     "## GA4 evidence rules",
     GA4_AI_GROUNDING_RULES,
+    comparisonDataset ? "" : null,
+    comparisonDataset ? COMPARISON_RULES : null,
     "",
     schemaBlock,
     refusalBlock,

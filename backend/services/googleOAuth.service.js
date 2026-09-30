@@ -39,6 +39,11 @@ const GOOGLE_PRODUCTS = Object.freeze({
     label: "Google Sheets",
     scopes: ["https://www.googleapis.com/auth/spreadsheets"],
   },
+  google_ads: {
+    type: "google_ads",
+    label: "Google Ads",
+    scopes: ["https://www.googleapis.com/auth/adwords"],
+  },
 });
 
 /** Author-facing Gmail permission toggles (maps to OAuth scopes). */
@@ -189,7 +194,7 @@ const verifyState = (state) => {
 const redactLog = (fields = {}) => {
   const out = {};
   for (const [k, v] of Object.entries(fields)) {
-    if (/authorization|access[_-]?token|refresh[_-]?token|client[_-]?secret/i.test(k)) {
+    if (/authorization|access[_-]?token|refresh[_-]?token|client[_-]?secret|developer[_-]?token/i.test(k)) {
       out[k] = "[REDACTED]";
       continue;
     }
@@ -306,8 +311,72 @@ const requireClientConfig = () => {
   };
 };
 
+const adsErrorCodes = (body) => {
+  const details = body?.error?.details;
+  const codes = [];
+  if (!Array.isArray(details)) return codes;
+  for (const detail of details) {
+    const errors = Array.isArray(detail?.errors) ? detail.errors : [];
+    for (const entry of errors) {
+      const errorCode = entry?.errorCode;
+      if (errorCode && typeof errorCode === "object") {
+        for (const [group, value] of Object.entries(errorCode)) {
+          codes.push(`${group}:${value}`);
+        }
+      }
+    }
+  }
+  return codes;
+};
+
+const describeGoogleAdsError = (status, body) => {
+  const codes = adsErrorCodes(body).join(" ");
+  const blob = `${codes} ${typeof body === "string" ? body : JSON.stringify(body || {})}`;
+  let code = "GOOGLE_ADS_ERROR";
+  let message = "Google Ads request failed.";
+  let retryable = false;
+  if (status === 429 || /quota|RESOURCE_EXHAUSTED|rate.?exceed/i.test(blob)) {
+    code = "GOOGLE_ADS_QUOTA";
+    message = "Google Ads API quota exceeded. Try again later.";
+    retryable = true;
+  } else if (/DEVELOPER_TOKEN|developerTokenError/i.test(blob)) {
+    code = "GOOGLE_ADS_DEVELOPER_TOKEN";
+    message = "Google Ads developer token was rejected. Update it on the Google Ads credential.";
+  } else if (status === 401 || /AUTHENTICATION|UNAUTHENTICATED|invalid_grant/i.test(blob)) {
+    code = "GOOGLE_UNAUTHORIZED";
+    message = "Google Ads credential expired or was revoked. Reconnect it.";
+  } else if (
+    /USER_PERMISSION_DENIED|CUSTOMER_NOT_ENABLED|NOT_ADS_USER|CUSTOMER_NOT_FOUND|login-customer-id/i.test(
+      blob
+    )
+  ) {
+    code = "GOOGLE_ADS_CUSTOMER_UNAUTHORIZED";
+    message =
+      "This Google account cannot access that customer. Check the customer ID and login customer ID.";
+  } else if (status === 400 || /QUERY_ERROR|BAD_ENUM|UNRECOGNIZED_FIELD|REQUEST_ERROR/i.test(blob)) {
+    code = "GOOGLE_ADS_QUERY";
+    message = "Google Ads rejected the report configuration.";
+  } else if (status === 403) {
+    code = "GOOGLE_ADS_CUSTOMER_UNAUTHORIZED";
+    message = "Google Ads denied access to this customer.";
+  } else if (status >= 500) {
+    code = "GOOGLE_ADS_UNAVAILABLE";
+    message = "Google Ads API is temporarily unavailable.";
+    retryable = true;
+  }
+  const err = new Error(message);
+  err.code = code;
+  err.statusCode = status === 401 ? 400 : status >= 400 && status < 600 ? status : 502;
+  err.providerStatus = status;
+  err.retryable = retryable;
+  return err;
+};
+
 const sanitizeGoogleError = (status, body, options = {}) => {
   const product = String(options.product || options.requiredType || "");
+  if (product === "google_ads") {
+    return describeGoogleAdsError(status, body);
+  }
   const code =
     status === 401
       ? "GOOGLE_UNAUTHORIZED"
@@ -557,6 +626,12 @@ const googleAuthorizedFetch = async ({
       ...headers,
       Authorization: `Bearer ${tok.accessToken}`,
     };
+    if (product === "google_ads") {
+      const developerToken = String(
+        tok?.developerToken || secret?.developerToken || ""
+      ).trim();
+      if (developerToken) hdrs["developer-token"] = developerToken;
+    }
     if (body != null && !hdrs["Content-Type"] && !hdrs["content-type"]) {
       hdrs["Content-Type"] = "application/json";
     }
@@ -919,6 +994,9 @@ const finishGoogleOAuth = async (code, state) => {
   if (app.mode === OAUTH_APP_MODE.CUSTOM_APP && existing?.secret?.clientSecret) {
     tokenSecret.clientSecret = existing.secret.clientSecret;
   }
+  if (existing?.secret?.developerToken) {
+    tokenSecret.developerToken = existing.secret.developerToken;
+  }
   if (!tokenSecret.accessToken) {
     throw new AppError("Google did not return an access token", 502, "GOOGLE_OAUTH_FAILED");
   }
@@ -1103,6 +1181,8 @@ const testGoogleCredential = async (credentialId, authUser) => {
       "https://analyticsadmin.googleapis.com/v1beta/accountSummaries?pageSize=1",
     google_gmail: "https://gmail.googleapis.com/gmail/v1/users/me/profile",
     google_sheets: null,
+    google_ads:
+      "https://googleads.googleapis.com/v21/customers:listAccessibleCustomers",
   };
   if (!probes[type]) {
     const secret = decryptSecret(rows[0].secret_json);

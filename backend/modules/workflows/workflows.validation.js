@@ -40,6 +40,7 @@ const validateCredential = (req) => {
     "google_ga4",
     "google_gmail",
     "google_sheets",
+    "google_ads",
   ]);
   if (googleTypes.has(type)) {
     if (!secret || typeof secret !== "object") {

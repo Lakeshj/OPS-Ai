@@ -38,6 +38,10 @@ const {
   buildContextFromCapabilityRun,
   extractSourceMeta,
 } = require("../contracts/intelligenceContext");
+const {
+  partitionPeriodRows,
+  attachComparisonDataset,
+} = require("../../../../backend/services/workflowComparisonPeriods");
 
 /** Expand one raw capability entry into id strings. */
 const expandCapabilityEntry = (entry) => {
@@ -297,11 +301,38 @@ const processUpstreamItems = ({
   }
 
   const { rows, inventory, warnings: upstreamWarnings } = upstream;
+  const { scoringRows, comparisonRows } = partitionPeriodRows(rows);
+  const comparisonMeta = {
+    primaryRows: scoringRows,
+    comparisonRows,
+    source: "google_analytics",
+    property: nodeData?.propertyId || nodeData?.property || null,
+  };
+
+  if (!scoringRows.length && comparisonRows.length) {
+    return attachComparisonDataset(
+      {
+        ok: true,
+        items: [],
+        output: {
+          ...emptyProcessorEnvelope(ids),
+          ok: true,
+          capabilities: ids,
+          executed: [],
+          count: 0,
+          itemsIn: 0,
+          warnings: upstreamWarnings || [],
+          inventory,
+        },
+      },
+      comparisonMeta
+    );
+  }
 
   if (ids.length === 1) {
     const one = processSingleCapability({
       id: ids[0],
-      rows,
+      rows: scoringRows,
       filters,
       nodeData,
       inventory,
@@ -314,18 +345,21 @@ const processUpstreamItems = ({
       one.items && one.items.length
         ? one.items
         : one.emptyEnvelopeItems || [];
-    return {
-      ...one,
-      items,
-      output: {
-        ...one.output,
-        capabilities: ids,
-        executed: one.ok ? [ids[0]] : [],
-        count: one.output?.count ?? 0,
-        warnings,
-        inventory,
+    return attachComparisonDataset(
+      {
+        ...one,
+        items,
+        output: {
+          ...one.output,
+          capabilities: ids,
+          executed: one.ok ? [ids[0]] : [],
+          count: one.output?.count ?? 0,
+          warnings,
+          inventory,
+        },
       },
-    };
+      comparisonMeta
+    );
   }
 
   const perCapability = [];
@@ -339,7 +373,7 @@ const processUpstreamItems = ({
     // Never pass shared filters — each capability extracts its own.
     const one = processSingleCapability({
       id,
-      rows,
+      rows: scoringRows,
       filters: undefined,
       nodeData,
       inventory,
@@ -439,25 +473,28 @@ const processUpstreamItems = ({
     };
   }
 
-  return {
-    ok: true,
-    items: allItems,
-    output: {
+  return attachComparisonDataset(
+    {
       ok: true,
-      capabilities: ids,
-      executed,
-      failures: failures.length ? failures : undefined,
-      capability: ids[0],
-      labels: ids.map((capId) => labelForCapabilityId(capId)),
-      perCapability,
-      itemsIn: rows.length,
-      itemsOut: allItems.length,
-      count: allItems.length,
-      warnings,
-      inventory,
-      scaffold: true,
+      items: allItems,
+      output: {
+        ok: true,
+        capabilities: ids,
+        executed,
+        failures: failures.length ? failures : undefined,
+        capability: ids[0],
+        labels: ids.map((capId) => labelForCapabilityId(capId)),
+        perCapability,
+        itemsIn: scoringRows.length,
+        itemsOut: allItems.length,
+        count: allItems.length,
+        warnings,
+        inventory,
+        scaffold: true,
+      },
     },
-  };
+    comparisonMeta
+  );
 };
 
 module.exports = {

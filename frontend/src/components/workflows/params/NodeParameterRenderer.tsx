@@ -33,6 +33,7 @@ import { WorkflowPickerField } from "./special/WorkflowPickerField";
 import { CapabilitySettingsField } from "./CapabilitySettingsField";
 import { Ga4FilterField } from "./Ga4FilterField";
 import { Ga4OrderByField } from "./Ga4OrderByField";
+import { DynamicMcpToolField } from "./DynamicMcpToolField";
 import type { KeywordAssistant, WorkspaceDocument } from "@/modules/shared/types";
 
 export type ParameterRenderContext = {
@@ -112,6 +113,17 @@ function renderSpecial(
           param={param}
           values={values}
           onChange={onChange}
+        />
+      );
+    case "mcpDynamicTool":
+      return (
+        <DynamicMcpToolField
+          key={param.name}
+          values={values}
+          onChange={onChange}
+          workspaceId={context.workspaceId}
+          workflowId={context.workflowId}
+          previewContext={context.previewContext}
         />
       );
     case "googleGscSites":

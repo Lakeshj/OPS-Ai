@@ -772,17 +772,29 @@ const applyAiGrounding = ({ systemPrompt = "", userPrompt = "", input } = {}) =>
     "## GSC MCP evidence rules",
     AI_MCP_GROUNDING_RULES,
     emptyGuard,
+    (() => {
+      const {
+        extractComparisonDataset,
+        COMPARISON_RULES,
+      } = require("../../../../backend/services/workflowComparisonPeriods");
+      return extractComparisonDataset(input) ? `\n${COMPARISON_RULES}` : null;
+    })(),
   ]
     .filter((part) => part != null && part !== false)
     .join("\n")
     .trim();
 
+  const {
+    extractComparisonDataset,
+  } = require("../../../../backend/services/workflowComparisonPeriods");
+  const comparisonDataset = extractComparisonDataset(input);
   const contextJson = JSON.stringify(
     {
       kind: context.kind,
       source: context.source,
       property: context.property,
       period: context.period,
+      ...(comparisonDataset ? { comparisonDataset } : {}),
       capabilities: context.capabilities.map((s) => ({
         capability: s.capability,
         filters: s.filters,

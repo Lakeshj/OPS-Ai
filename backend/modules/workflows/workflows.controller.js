@@ -318,6 +318,40 @@ const gscMcpIntentHints = asyncHandler(async (req, res) => {
   res.json(host.intentHints(String(req.body?.text || req.query.text || "")));
 });
 
+const listMcpProviders = asyncHandler(async (_req, res) => {
+  const registry = require("../../services/mcpDynamicRegistry.service");
+  res.json(registry.listProviders());
+});
+
+const listMcpTools = asyncHandler(async (req, res) => {
+  const registry = require("../../services/mcpDynamicRegistry.service");
+  res.json(registry.listTools({ provider: req.query.provider, exposure: "dropdown" }));
+});
+
+const getMcpTool = asyncHandler(async (req, res) => {
+  const registry = require("../../services/mcpDynamicRegistry.service");
+  res.json(registry.getToolDefinition(req.params.provider, req.params.toolId));
+});
+
+const executeMcpTool = asyncHandler(async (req, res) => {
+  const registry = require("../../services/mcpDynamicRegistry.service");
+  const params =
+    req.body?.params && typeof req.body.params === "object" && !Array.isArray(req.body.params)
+      ? req.body.params
+      : {};
+  const inputItems = Array.isArray(req.body?.inputItems) ? req.body.inputItems : [];
+  const result = await registry.executeTool({
+    provider: req.params.provider,
+    toolId: req.params.toolId,
+    params,
+    credentialId: req.body?.credentialId,
+    inputItems,
+    workspaceId: req.body?.workspaceId,
+    authUser: req.user,
+  });
+  res.json(result);
+});
+
 const googleOAuthCallback = asyncHandler(async (req, res) => {
   const googleOAuth = require("../../services/googleOAuth.service");
   try {
@@ -859,6 +893,10 @@ module.exports = {
   listGscMcpTools,
   executeGscMcpTool,
   gscMcpIntentHints,
+  listMcpProviders,
+  listMcpTools,
+  getMcpTool,
+  executeMcpTool,
   googleOAuthCallback,
   copilotContext,
   copilotValidatePlan,

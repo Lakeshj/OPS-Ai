@@ -1,4 +1,5 @@
 import { apiClient } from "@/modules/shared/apiClient";
+import type { McpDynamicProvider, McpDynamicTool } from "./mcpDynamicTools";
 import type {
   Workflow,
   WorkflowCredential,
@@ -299,6 +300,19 @@ export const workflowsApi = {
     // Use apiClient base via fetch through get — blob download handled by caller
     return apiClient.get<Record<string, unknown>>(`/workflows/${id}/export`);
   },
+
+  listMcpProviders: () =>
+    apiClient.get<McpDynamicProvider[]>("/workflows/plugins/mcp/providers"),
+
+  listMcpTools: (provider: string) =>
+    apiClient.get<McpDynamicTool[]>(
+      `/workflows/plugins/mcp/tools?provider=${encodeURIComponent(provider)}`
+    ),
+
+  getMcpTool: (provider: string, toolId: string) =>
+    apiClient.get<McpDynamicTool>(
+      `/workflows/plugins/mcp/tools/${encodeURIComponent(provider)}/${encodeURIComponent(toolId)}`
+    ),
 };
 
 /** Secrets are write-only: the API never returns a stored secret value. */

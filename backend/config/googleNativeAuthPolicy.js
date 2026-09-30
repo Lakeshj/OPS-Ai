@@ -3,7 +3,7 @@
  * Keep in sync with frontend/src/modules/workflows/googleNativeAuthPolicy.ts
  *
  * Gmail = PLATFORM_MANAGED_ONLY (direct Google sign-in).
- * GSC / GA4 / Sheets = HYBRID_CUSTOM_PRIMARY.
+ * GSC / GA4 / Sheets / Ads = HYBRID_CUSTOM_PRIMARY.
  */
 
 const GOOGLE_NATIVE_AUTH_POLICY = Object.freeze({
@@ -11,6 +11,7 @@ const GOOGLE_NATIVE_AUTH_POLICY = Object.freeze({
   google_gsc: "HYBRID_CUSTOM_PRIMARY",
   google_ga4: "HYBRID_CUSTOM_PRIMARY",
   google_sheets: "HYBRID_CUSTOM_PRIMARY",
+  google_ads: "HYBRID_CUSTOM_PRIMARY",
 });
 
 const getGoogleNativeAuthPolicy = (type) =>

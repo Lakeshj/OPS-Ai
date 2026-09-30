@@ -28,6 +28,7 @@ const GOOGLE_CREDENTIAL_TYPES = new Set([
   "google_ga4",
   "google_gmail",
   "google_sheets",
+  "google_ads",
 ]);
 
 const CREDENTIAL_TYPES = new Set([
@@ -95,6 +96,17 @@ const listByWorkspace = async (workspaceId, authUser) => {
     [workspaceId]
   );
   return rows.map(formatCredential);
+};
+
+const buildGoogleCreateSecret = ({ type, mode, secret }) => {
+  const developerToken = String(secret?.developerToken || "").trim();
+  return {
+    oauthAppMode: mode,
+    ...(mode === OAUTH_APP_MODE.CUSTOM_APP
+      ? { clientSecret: String(secret?.clientSecret || "") }
+      : {}),
+    ...(type === "google_ads" && developerToken ? { developerToken } : {}),
+  };
 };
 
 const validateGoogleCreate = ({ type, secret, config }) => {
@@ -171,13 +183,11 @@ const create = async ({ workspaceId, name, type, secret, config }, authUser) => 
       sharingScope,
       connected: false,
     });
-    secretPayload =
-      checked.mode === OAUTH_APP_MODE.CUSTOM_APP
-        ? {
-            clientSecret: String(secret.clientSecret || ""),
-            oauthAppMode: checked.mode,
-          }
-        : { oauthAppMode: checked.mode };
+    secretPayload = buildGoogleCreateSecret({
+      type,
+      mode: checked.mode,
+      secret,
+    });
   } else if (!HTTP_CREDENTIAL_TYPES.has(type)) {
     throw new AppError(
       `Unsupported credential type: ${type}`,
@@ -309,10 +319,19 @@ const update = async (credentialId, { name, secret, config }, authUser) => {
     connected: googleConnected(existingSecret, existingConfig),
     accountEmail: existingConfig.accountEmail,
   };
+  const nextDeveloperToken =
+    row.type === "google_ads" &&
+    secret?.developerToken !== undefined &&
+    String(secret.developerToken || "").trim()
+      ? String(secret.developerToken).trim()
+      : existingSecret.developerToken;
   const nextSecretObj = {
     ...existingSecret,
     oauthAppMode: mode,
     clientSecret: mode === OAUTH_APP_MODE.CUSTOM_APP ? nextSecret : undefined,
+    ...(row.type === "google_ads" && nextDeveloperToken
+      ? { developerToken: nextDeveloperToken }
+      : {}),
   };
   await pool.execute(
     `UPDATE workflow_credentials
@@ -375,6 +394,7 @@ const getEditorView = async (id, authUser) => {
             : OAUTH_APP_MODE.CUSTOM_APP),
         clientId: cfg.clientId || "",
         hasClientSecret: Boolean(secret.clientSecret),
+        hasDeveloperToken: Boolean(secret.developerToken),
         hasAccessToken: Boolean(secret.accessToken),
         hasRefreshToken: Boolean(secret.refreshToken),
         connected: googleConnected(secret, cfg),
@@ -481,4 +501,6 @@ module.exports = {
   GOOGLE_CREDENTIAL_TYPES,
   formatCredential,
   OAUTH_APP_MODE,
+  validateGoogleCreate,
+  buildGoogleCreateSecret,
 };

@@ -1154,6 +1154,19 @@ export const NODE_PARAMETER_SCHEMAS: Record<WorkflowNodeType, ParamDescriptor[]>
       },
     ],
 
+    mcpDynamicTool: [
+      {
+        name: "provider",
+        displayName: "Provider",
+        type: "string",
+        default: "",
+        required: true,
+        customRenderer: "mcpDynamicTool",
+        description:
+          "Provider, tool, account, and parameters. The tool list comes from the shared registry.",
+      },
+    ],
+
     ga4McpTool: [
       {
         name: "_upstreamNotice",
@@ -1322,6 +1335,243 @@ export const NODE_PARAMETER_SCHEMAS: Record<WorkflowNodeType, ParamDescriptor[]>
         type: "notice",
         description:
           "GSC MCP is not a user-facing workflow node. Use Google Search Console for analytics, or GSC MCP Tools on an AI Agent. Replace this node.",
+      },
+    ],
+
+    googleAds: [
+      {
+        name: "credentialId",
+        displayName: "Google Ads Account",
+        type: "credential",
+        customRenderer: "credential",
+        required: true,
+        credentialTypes: ["google_ads"],
+      },
+      {
+        name: "resource",
+        displayName: "Resource",
+        type: "options",
+        default: "report",
+        options: [{ name: "Report", value: "report" }],
+      },
+      {
+        name: "operation",
+        displayName: "Operation",
+        type: "options",
+        default: "runReport",
+        options: [{ name: "Run Report", value: "runReport" }],
+      },
+      {
+        name: "reportType",
+        displayName: "Report",
+        type: "options",
+        default: "campaign_performance",
+        required: true,
+        options: [
+          { name: "Campaign Performance", value: "campaign_performance" },
+          { name: "Ad Group Performance", value: "ad_group_performance" },
+          { name: "Keyword Performance", value: "keyword_performance" },
+          { name: "Search Terms", value: "search_terms" },
+          { name: "Device Performance", value: "device_performance" },
+          { name: "Geographic Performance", value: "geographic_performance" },
+          { name: "Conversion Performance", value: "conversion_performance" },
+        ],
+      },
+      {
+        name: "customerId",
+        displayName: "Customer ID",
+        type: "string",
+        required: true,
+        expression: true,
+        placeholder: "1234567890",
+        description: "10-digit Google Ads customer ID. Dashes are ignored.",
+      },
+      {
+        name: "loginCustomerId",
+        displayName: "Login customer ID",
+        type: "string",
+        expression: true,
+        placeholder: "Manager account ID",
+        description: "Optional manager account ID when access is through an MCC.",
+      },
+      {
+        name: "dateRange",
+        displayName: "Date range",
+        type: "options",
+        default: "last7days",
+        options: [
+          { name: "Today", value: "today" },
+          { name: "Yesterday", value: "yesterday" },
+          { name: "Last 7 days", value: "last7days" },
+          { name: "Last 28 days", value: "last28days" },
+          { name: "Last 30 days", value: "last30days" },
+          { name: "Last calendar week", value: "lastCalendarWeek" },
+          { name: "Last calendar month", value: "lastCalendarMonth" },
+          { name: "Custom", value: "custom" },
+        ],
+      },
+      {
+        name: "startDate",
+        displayName: "Start date",
+        type: "string",
+        expression: true,
+        placeholder: "YYYY-MM-DD",
+        displayOptions: { show: { dateRange: ["custom"] } },
+      },
+      {
+        name: "endDate",
+        displayName: "End date",
+        type: "string",
+        expression: true,
+        placeholder: "YYYY-MM-DD",
+        displayOptions: { show: { dateRange: ["custom"] } },
+      },
+      {
+        name: "campaignStatus",
+        displayName: "Campaign status",
+        type: "options",
+        default: "any",
+        options: [
+          { name: "Any", value: "any" },
+          { name: "Enabled", value: "ENABLED" },
+          { name: "Paused", value: "PAUSED" },
+          { name: "Removed", value: "REMOVED" },
+        ],
+        displayOptions: {
+          show: {
+            reportType: [
+              "campaign_performance",
+              "ad_group_performance",
+              "device_performance",
+              "geographic_performance",
+              "conversion_performance",
+            ],
+          },
+        },
+      },
+      {
+        name: "campaignId",
+        displayName: "Campaign ID",
+        type: "string",
+        expression: true,
+        displayOptions: {
+          show: {
+            reportType: [
+              "campaign_performance",
+              "ad_group_performance",
+              "keyword_performance",
+              "search_terms",
+              "device_performance",
+              "geographic_performance",
+              "conversion_performance",
+            ],
+          },
+        },
+      },
+      {
+        name: "campaignName",
+        displayName: "Campaign name contains",
+        type: "string",
+        expression: true,
+        displayOptions: {
+          show: {
+            reportType: [
+              "campaign_performance",
+              "ad_group_performance",
+              "device_performance",
+            ],
+          },
+        },
+      },
+      {
+        name: "adGroupStatus",
+        displayName: "Ad group status",
+        type: "options",
+        default: "any",
+        options: [
+          { name: "Any", value: "any" },
+          { name: "Enabled", value: "ENABLED" },
+          { name: "Paused", value: "PAUSED" },
+          { name: "Removed", value: "REMOVED" },
+        ],
+        displayOptions: {
+          show: {
+            reportType: ["ad_group_performance", "keyword_performance"],
+          },
+        },
+      },
+      {
+        name: "adGroupId",
+        displayName: "Ad group ID",
+        type: "string",
+        expression: true,
+        displayOptions: {
+          show: {
+            reportType: [
+              "ad_group_performance",
+              "keyword_performance",
+              "search_terms",
+            ],
+          },
+        },
+      },
+      {
+        name: "keywordStatus",
+        displayName: "Keyword status",
+        type: "options",
+        default: "any",
+        options: [
+          { name: "Any", value: "any" },
+          { name: "Enabled", value: "ENABLED" },
+          { name: "Paused", value: "PAUSED" },
+          { name: "Removed", value: "REMOVED" },
+        ],
+        displayOptions: { show: { reportType: ["keyword_performance"] } },
+      },
+      {
+        name: "keywordText",
+        displayName: "Keyword contains",
+        type: "string",
+        expression: true,
+        displayOptions: { show: { reportType: ["keyword_performance"] } },
+      },
+      {
+        name: "searchTerm",
+        displayName: "Search term contains",
+        type: "string",
+        expression: true,
+        displayOptions: { show: { reportType: ["search_terms"] } },
+      },
+      {
+        name: "device",
+        displayName: "Device",
+        type: "options",
+        default: "any",
+        options: [
+          { name: "Any", value: "any" },
+          { name: "Mobile", value: "MOBILE" },
+          { name: "Tablet", value: "TABLET" },
+          { name: "Desktop", value: "DESKTOP" },
+          { name: "Connected TV", value: "CONNECTED_TV" },
+          { name: "Other", value: "OTHER" },
+        ],
+        displayOptions: { show: { reportType: ["device_performance"] } },
+      },
+      {
+        name: "returnAll",
+        displayName: "Return all",
+        type: "boolean",
+        default: false,
+        description: "Pages through results up to the safety ceiling.",
+      },
+      {
+        name: "limit",
+        displayName: "Limit",
+        type: "number",
+        default: 100,
+        min: 1,
+        max: 10000,
+        displayOptions: { hide: { returnAll: [true] } },
       },
     ],
 

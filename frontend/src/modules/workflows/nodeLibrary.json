@@ -696,6 +696,17 @@
       "engineType": "googleAnalytics"
     },
     {
+      "id": "google-ads",
+      "name": "Google Ads",
+      "category": "SEO",
+      "type": "Action",
+      "description": "Run a read-only Google Ads report for campaigns, ad groups, keywords, search terms, devices, locations, or conversions.",
+      "icon": "chart",
+      "provider": "Google",
+      "available": true,
+      "engineType": "googleAds"
+    },
+    {
       "id": "ga4-mcp-tools",
       "name": "GA4 MCP Tools",
       "category": "SEO",
@@ -705,6 +716,17 @@
       "provider": "OpsAi",
       "available": true,
       "engineType": "ga4McpTool"
+    },
+    {
+      "id": "mcp-dynamic-tool",
+      "name": "Dynamic MCP Tool",
+      "category": "SEO",
+      "type": "Action",
+      "description": "Run a read-only tool from the shared MCP registry. Parameters follow the selected tool schema.",
+      "icon": "search",
+      "provider": "OpsAi",
+      "available": true,
+      "engineType": "mcpDynamicTool"
     },
     {
       "id": "microsoft-outlook",

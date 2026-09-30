@@ -9559,6 +9559,21 @@ require("./smoke-workflow-gmail-v1").registerGmailV1Tests({
   section,
   assert,
 });
+require("./smoke-workflow-comparison-intelligence").registerComparisonIntelligenceTests({
+  check,
+  section,
+  assert,
+});
+require("./smoke-workflow-mcp-dynamic").registerMcpDynamicTests({
+  check,
+  section,
+  assert,
+});
+require("./smoke-workflow-google-ads-v1").registerGoogleAdsV1Tests({
+  check,
+  section,
+  assert,
+});
 
 (async () => {
   for (const task of queue) await task();

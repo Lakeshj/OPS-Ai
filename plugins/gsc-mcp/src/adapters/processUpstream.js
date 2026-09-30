@@ -31,6 +31,10 @@ const {
 const { runIntelligence } = require("../intelligence");
 const { runAction } = require("../actions");
 const { resultToWorkflowItems } = require("./workflowNode");
+const {
+  partitionPeriodRows,
+  attachComparisonDataset,
+} = require("../../../../backend/services/workflowComparisonPeriods");
 
 const PROCESSOR_CAPABILITY_IDS = Object.freeze([
   ...ESSENTIAL_INTELLIGENCE_IDS,
@@ -391,6 +395,7 @@ const processUpstreamItems = ({
   }
 
   const rows = rowsFromInputItems(inputItems);
+  const { scoringRows, comparisonRows } = partitionPeriodRows(rows);
   if (!rows.length) {
     const err = {
       code: "MCP_UPSTREAM_REQUIRED",
@@ -407,17 +412,45 @@ const processUpstreamItems = ({
     sourceMeta: sourceMeta || {},
   });
 
+  const comparisonMeta = {
+    primaryRows: scoringRows,
+    comparisonRows,
+    source: "google_search_console",
+    property: resolvedMeta.property || null,
+  };
+
+  if (!scoringRows.length && comparisonRows.length) {
+    return attachComparisonDataset(
+      {
+        ok: true,
+        items: [],
+        output: {
+          ok: true,
+          capabilities: ids,
+          executed: [],
+          count: 0,
+          itemsIn: 0,
+          property: resolvedMeta.property,
+        },
+      },
+      comparisonMeta
+    );
+  }
+
   if (ids.length === 1) {
-    return processSingleCapability({
-      id: ids[0],
-      rows,
-      title,
-      // Single-cap may still accept explicit filters override
-      filters,
-      previousRows,
-      nodeData,
-      resolvedMeta,
-    });
+    return attachComparisonDataset(
+      processSingleCapability({
+        id: ids[0],
+        rows: scoringRows,
+        title,
+        // Single-cap may still accept explicit filters override
+        filters,
+        previousRows,
+        nodeData,
+        resolvedMeta,
+      }),
+      comparisonMeta
+    );
   }
 
   const perCapability = [];
@@ -433,7 +466,7 @@ const processUpstreamItems = ({
     // Always execute every selected id; one failure must not discard others.
     const one = processSingleCapability({
       id,
-      rows,
+      rows: scoringRows,
       title: undefined,
       filters: undefined,
       previousRows,
@@ -538,7 +571,8 @@ const processUpstreamItems = ({
     }
   }
 
-  return {
+  return attachComparisonDataset(
+    {
     ok: true,
     items: allItems,
     output: {
@@ -551,7 +585,7 @@ const processUpstreamItems = ({
       perCapability,
       property: resolvedMeta.property,
       period: resolvedMeta.period,
-      itemsIn: rows.length,
+      itemsIn: scoringRows.length,
       itemsOut: allItems.length,
       count: allItems.length,
       intelligenceContext: intelligenceContext || undefined,
@@ -564,7 +598,9 @@ const processUpstreamItems = ({
       property: resolvedMeta.property,
       period: resolvedMeta.period,
     },
-  };
+  },
+    comparisonMeta
+  );
 };
 
 module.exports = {

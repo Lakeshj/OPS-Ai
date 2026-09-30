@@ -1237,6 +1237,11 @@ const applyAiGrounding = ({ systemPrompt = "", userPrompt = "", input } = {}) =>
   const empty = !evidence.hasAnyStructuredMcpRows;
   const evidenceRules = buildEvidenceStateRules(evidence);
   const compactPayload = buildCompactAiPayload(context);
+  const {
+    extractComparisonDataset,
+    COMPARISON_RULES,
+  } = require("../../../../backend/services/workflowComparisonPeriods");
+  const comparisonDataset = extractComparisonDataset(input);
 
   const userInstructions = String(systemPrompt || "").trim()
     ? String(systemPrompt).trim()
@@ -1261,6 +1266,8 @@ const applyAiGrounding = ({ systemPrompt = "", userPrompt = "", input } = {}) =>
     evidenceRules,
     landingOppCount > 0 ? "" : null,
     landingOppCount > 0 ? LANDING_OUTPUT_COMPACTNESS_RULES : null,
+    comparisonDataset ? "" : null,
+    comparisonDataset ? COMPARISON_RULES : null,
   ]
     .filter((part) => part != null && part !== false)
     .join("\n")
@@ -1268,7 +1275,11 @@ const applyAiGrounding = ({ systemPrompt = "", userPrompt = "", input } = {}) =>
 
   // Compact AI-only payload — strips score_breakdown / filters / markers /
   // reason / recommendation. Original MCP WorkflowItems unchanged.
-  const contextJson = JSON.stringify(compactPayload, null, 2);
+  const contextJson = JSON.stringify(
+    comparisonDataset ? { ...compactPayload, comparisonDataset } : compactPayload,
+    null,
+    2
+  );
 
   logCompactAiPayloadStats({
     compactPayload,

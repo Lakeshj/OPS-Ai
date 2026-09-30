@@ -55,11 +55,13 @@ const ALLOWED_NODE_TYPES = new Set([
   "aiHttpTool",
   "gscMcpTool",
   "ga4McpTool",
+  "mcpDynamicTool",
   "respondToWebhook",
   // Part 14D.5 — native Google / SEO / AI Generate / XLSX
   "googleSearchConsole",
   "gscMcp",
   "googleAnalytics",
+  "googleAds",
   "gmail",
   "gmailTrigger",
   "googleSheets",
@@ -179,6 +181,18 @@ const validateDefinition = (definition) => {
         400,
         "VALIDATION_ERROR"
       );
+    }
+    if (type === "mcpDynamicTool" && node.data) {
+      const {
+        sanitizeDynamicMcpNodeData,
+      } = require("../../services/mcpDynamicRegistry.service");
+      node.data = sanitizeDynamicMcpNodeData(node.data);
+    }
+    if (type === "googleAds" && node.data) {
+      const {
+        sanitizeGoogleAdsNodeData,
+      } = require("../../services/workflowGoogleAds.service");
+      node.data = sanitizeGoogleAdsNodeData(node.data);
     }
   }
   const switchErrors = validateSwitchEdges(definition);

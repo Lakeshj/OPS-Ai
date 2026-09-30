@@ -49,10 +49,12 @@ export type WorkflowNodeType =
   | "aiHttpTool"
   | "gscMcpTool"
   | "ga4McpTool"
+  | "mcpDynamicTool"
   | "respondToWebhook"
   | "googleSearchConsole"
   | "gscMcp"
   | "googleAnalytics"
+  | "googleAds"
   | "gmail"
   | "gmailTrigger"
   | "googleSheets"
@@ -219,6 +221,7 @@ export type WorkflowCredentialType =
   | "google_ga4"
   | "google_gmail"
   | "google_sheets"
+  | "google_ads"
   | "oauth2";
 
 export interface WorkflowCredential {
@@ -311,6 +314,14 @@ export const CREDENTIAL_TYPE_FIELDS: Record<
     fields: [],
     oauth: true,
   },
+  google_ads: {
+    label: "Google Ads",
+    accountLabel: "Google Ads Account",
+    connectAction: "Connect Google Ads",
+    connectAnotherAction: "Connect another Google Ads account",
+    fields: [],
+    oauth: true,
+  },
   oauth2: {
     label: "OAuth2",
     fields: [{ key: "clientSecret", label: "Client Secret", secret: true }],
@@ -373,6 +384,9 @@ export interface WorkflowNodeData {
   outputFormat?: string;
   temperature?: number;
   maxTokens?: number;
+  /** Dynamic MCP tool */
+  toolId?: string;
+  params?: Record<string, unknown>;
   /** HTTP */
   url?: string;
   method?: string;
@@ -417,7 +431,34 @@ export interface WorkflowNodeData {
   maxItems?: number;
   keep?: "first" | "last";
   direction?: "asc" | "desc";
-  operation?: "count" | "sum" | "avg" | "min" | "max" | "concat" | "list";
+  operation?:
+    | "count"
+    | "sum"
+    | "avg"
+    | "min"
+    | "max"
+    | "concat"
+    | "list"
+    | "runReport";
+  /** Google Ads report */
+  resource?: string;
+  reportType?: string;
+  customerId?: string;
+  loginCustomerId?: string;
+  dateRange?: string;
+  startDate?: string;
+  endDate?: string;
+  returnAll?: boolean;
+  limit?: number;
+  campaignStatus?: string;
+  campaignId?: string;
+  campaignName?: string;
+  adGroupStatus?: string;
+  adGroupId?: string;
+  keywordStatus?: string;
+  keywordText?: string;
+  searchTerm?: string;
+  device?: string;
   separator?: string;
   mode?: "append" | "combine" | "all" | "each";
   /** Code node */

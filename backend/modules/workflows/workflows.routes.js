@@ -44,6 +44,10 @@ const {
   listGscMcpTools,
   executeGscMcpTool,
   gscMcpIntentHints,
+  listMcpProviders,
+  listMcpTools,
+  getMcpTool,
+  executeMcpTool,
   copilotContext,
   copilotValidatePlan,
   copilotApplyPlan,
@@ -81,6 +85,10 @@ router.get("/google-oauth/sheet-tabs", listSheetTabs);
 router.get("/plugins/gsc-mcp/tools", listGscMcpTools);
 router.post("/plugins/gsc-mcp/execute", executeGscMcpTool);
 router.post("/plugins/gsc-mcp/intent", gscMcpIntentHints);
+router.get("/plugins/mcp/providers", listMcpProviders);
+router.get("/plugins/mcp/tools", listMcpTools);
+router.get("/plugins/mcp/tools/:provider/:toolId", getMcpTool);
+router.post("/plugins/mcp/tools/:provider/:toolId/execute", executeMcpTool);
 
 // Part 14D.4 — unified + n8n import (before /:id)
 router.post("/import/preview", previewWorkflowImport);

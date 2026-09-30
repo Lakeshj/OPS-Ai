@@ -1271,6 +1271,11 @@ const executeGoogleNode = async (node, context) => {
       const first = itemsIn[0];
       return wrapFanOut(await ga4Report(node, context, first), first);
     }
+    if (type === "googleAds") {
+      const { runGoogleAdsReport } = require("./workflowGoogleAds.service");
+      const first = itemsIn[0];
+      return wrapFanOut(await runGoogleAdsReport(node, context, first), first);
+    }
     if (type === "gmail") {
       const out = [];
       let last = null;

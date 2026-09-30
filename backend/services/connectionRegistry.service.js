@@ -26,6 +26,7 @@ const GOOGLE_HOSTS = Object.freeze({
   ],
   gmail: ["gmail.googleapis.com", "www.googleapis.com"],
   sheets: ["sheets.googleapis.com", "www.googleapis.com"],
+  ads: ["googleads.googleapis.com", "www.googleapis.com"],
 });
 
 const GENERIC_METHODS = Object.freeze([
@@ -171,6 +172,23 @@ const PREDEFINED = Object.freeze([
     ]),
     testConnection: { kind: "google" },
     search: ["google", "sheets", "spreadsheet", "oauth2"],
+  },
+  {
+    id: "google_ads",
+    displayName: "Google Ads",
+    provider: "Google",
+    category: "Google",
+    authScheme: "oauth2_bearer",
+    kind: KIND.PREDEFINED,
+    status: STATUS.SUPPORTED,
+    dbType: "google_ads",
+    allowedDomains: GOOGLE_HOSTS.ads,
+    requestApplication: { type: "bearer" },
+    oauth: googleOAuthDef("google_ads", [
+      "https://www.googleapis.com/auth/adwords",
+    ]),
+    testConnection: { kind: "google" },
+    search: ["google", "ads", "adwords", "oauth2"],
   },
 ]);
 

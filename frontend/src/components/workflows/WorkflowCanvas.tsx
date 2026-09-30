@@ -197,10 +197,12 @@ const nodeTypes = {
   aiHttpTool: WorkflowNode,
   gscMcpTool: WorkflowNode,
   ga4McpTool: WorkflowNode,
+  mcpDynamicTool: WorkflowNode,
   respondToWebhook: WorkflowNode,
   googleSearchConsole: WorkflowNode,
   gscMcp: WorkflowNode,
   googleAnalytics: WorkflowNode,
+  googleAds: WorkflowNode,
   gmail: WorkflowNode,
   gmailTrigger: WorkflowNode,
   googleSheets: WorkflowNode,
@@ -609,6 +611,29 @@ const defaultDataForType = (type: WorkflowNodeType): WorkflowNodeData => {
         label: "Integration",
         nodeType: "integration",
         available: false,
+      };
+    case "googleAds":
+      return {
+        label: "Google Ads",
+        nodeType: "googleAds",
+        credentialId: "",
+        resource: "report",
+        operation: "runReport",
+        reportType: "campaign_performance",
+        customerId: "",
+        loginCustomerId: "",
+        dateRange: "last7days",
+        returnAll: false,
+        limit: 100,
+      };
+    case "mcpDynamicTool":
+      return {
+        label: "Dynamic MCP Tool",
+        nodeType: "mcpDynamicTool",
+        provider: "",
+        toolId: "",
+        credentialId: "",
+        params: {},
       };
     case "trigger":
     default:

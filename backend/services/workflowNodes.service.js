@@ -468,7 +468,19 @@ const runLlmNode = async (node, context, options = {}) => {
   }
 
   // Non-MCP / non-native-GA4: still inject runtime evidence when needed.
+  // Raw GSC rows (comparison on) get the same period rules as GA4 native rows.
   if (!intelligenceContext && !ga4Grounded) {
+    try {
+      const { comparisonRulesForInput } = require("./workflowComparisonPeriods");
+      const comparisonRules = comparisonRulesForInput(
+        resolveRuntimePromptPayload(context) ?? expressionInput
+      );
+      if (comparisonRules) {
+        systemPrompt = `${systemPrompt}\n\n${comparisonRules}`;
+      }
+    } catch {
+      // Comparison rules are best-effort.
+    }
     const runtimePayload = resolveRuntimePromptPayload(context);
     const attached = attachRuntimeDataToPrompt(userPrompt, runtimePayload);
     userPrompt = attached.prompt;
@@ -1367,7 +1379,8 @@ const applyCredential = async (
     type === "google_gsc" ||
     type === "google_ga4" ||
     type === "google_gmail" ||
-    type === "google_sheets"
+    type === "google_sheets" ||
+    type === "google_ads"
   ) {
     const googleOAuth = require("./googleOAuth.service");
     const tok = await googleOAuth.getValidAccessToken(secret, config || {});
@@ -3052,11 +3065,19 @@ const handlers = {
     } = require("./ga4McpPluginHost.service");
     return executeGa4McpToolsProcessor(node, context);
   },
+  mcpDynamicTool: async (node, context) => {
+    const { executeDynamicMcpNode } = require("./mcpDynamicRegistry.service");
+    return executeDynamicMcpNode(node, context);
+  },
   gscMcp: async (node, context) => {
     const { executeGscMcpNode } = require("./mcpPluginHost.service");
     return executeGscMcpNode(node, context);
   },
   googleAnalytics: async (node, context) => {
+    const { executeGoogleNode } = require("./workflowGoogleNodes.service");
+    return executeGoogleNode(node, context);
+  },
+  googleAds: async (node, context) => {
     const { executeGoogleNode } = require("./workflowGoogleNodes.service");
     return executeGoogleNode(node, context);
   },

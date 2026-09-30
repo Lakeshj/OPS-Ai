@@ -182,6 +182,7 @@ const ICON_BY_TYPE: Record<string, LucideIcon> = {
   xlsxBuilder: Table2,
   googleSearchConsole: Search,
   googleAnalytics: LineChart,
+  googleAds: BarChart3,
   googleSheets: Sheet,
   gmail: Mail,
   email: Mail,
@@ -195,6 +196,7 @@ const ICON_BY_TYPE: Record<string, LucideIcon> = {
   bot: Bot,
   gscMcpTool: Link2,
   ga4McpTool: BarChart3,
+  mcpDynamicTool: Layers,
   integration: Circle,
   migrationUnsupported: AlertCircle,
 };
@@ -229,6 +231,7 @@ const FALLBACK_BLURBS: Record<string, string> = {
   xlsxBuilder: "Build an Excel file",
   googleSearchConsole: "Pull Search Console data",
   googleAnalytics: "Pull Analytics reports",
+  googleAds: "Run a read-only Ads report",
   googleSheets: "Read or write Sheets",
   gmail: "Send or read Gmail",
   email: "Send an email",
@@ -241,6 +244,7 @@ const FALLBACK_BLURBS: Record<string, string> = {
   bot: "Run a Keyword Assistant",
   gscMcpTool: "Process GSC rows with intelligence",
   ga4McpTool: "Process GA4 rows with intelligence",
+  mcpDynamicTool: "Run a read-only registry tool",
 };
 
 const libraryByEngine = (() => {
