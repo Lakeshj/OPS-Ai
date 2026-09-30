@@ -129,6 +129,12 @@ const isGa4McpStructuredRow = (row) => {
 const looksLikeGa4Rows = (rows) => {
   if (!rows.length) return false;
   if (rows.some(isGa4McpStructuredRow)) return false;
+  try {
+    const { looksLikeGoogleAdsRow } = require("./workflowGoogleAdsAiGrounding");
+    if (rows.some(looksLikeGoogleAdsRow)) return false;
+  } catch {
+    /* ads grounding optional */
+  }
   const keys = keysOfRows(rows);
   let metricHits = 0;
   let dimHits = 0;

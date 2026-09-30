@@ -430,15 +430,60 @@ function formatLandingReport(rows: unknown[], details: unknown[]): string {
   return lines.join("\n").trimEnd();
 }
 
+function looksLikeGoogleAdsOpportunity(row: unknown): boolean {
+  const obj = asRecord(row);
+  if (!obj) return false;
+  const meta = asRecord(obj._meta);
+  if (meta?.provider === "google_ads") return true;
+  if (obj.source === "google_ads" || obj.provider === "google_ads") return true;
+  if (obj.costMicros != null || obj.averageCpc != null || obj.keywordText != null || obj.searchTerm != null) {
+    return true;
+  }
+  return obj.campaignId != null && (obj.impressions != null || obj.clicks != null || obj.cost != null);
+}
+
+function formatGoogleAdsOpportunityReport(rows: unknown[]): string {
+  const lines = ["Google Ads Report", ""];
+  rows.forEach((row, index) => {
+    const obj = asRecord(row) || {};
+    const name =
+      obj.keywordText ?? obj.searchTerm ?? obj.adGroupName ?? obj.campaignName ?? obj.device ?? "Campaign";
+    lines.push(`${index + 1}. ${String(name)}`);
+    for (const [key, label] of [
+      ["campaignId", "Campaign ID"],
+      ["campaignStatus", "Status"],
+      ["impressions", "Impressions"],
+      ["clicks", "Clicks"],
+      ["ctr", "CTR"],
+      ["cost", "Cost"],
+      ["averageCpc", "Average CPC"],
+      ["conversions", "Conversions"],
+      ["conversionsValue", "Conversion value"],
+    ] as const) {
+      const value = obj[key];
+      if (value == null || value === "" || typeof value === "object") continue;
+      lines.push(`   - ${label}: ${String(value)}`);
+    }
+    lines.push("");
+  });
+  return lines.join("\n").trimEnd();
+}
+
 function readableReport(json: Record<string, unknown> | undefined): string | null {
   if (!json) return null;
   for (const key of ["result", "text", "message", "summary"]) {
     const v = json[key];
     if (typeof v === "string" && looksLikeMarkdownProse(v)) return v;
   }
-  const rows = landingRowsOf(json);
-  if (!rows) return null;
-  return formatLandingReport(rows, detailRowsOf(json));
+  const direct = json.opportunities;
+  const nested = asRecord(json.json)?.opportunities;
+  const rows = Array.isArray(direct) ? direct : Array.isArray(nested) ? nested : null;
+  if (rows?.length && rows.every(looksLikeGoogleAdsOpportunity)) {
+    return formatGoogleAdsOpportunityReport(rows);
+  }
+  const landing = landingRowsOf(json);
+  if (!landing) return null;
+  return formatLandingReport(landing, detailRowsOf(json));
 }
 
 /** Long AI/Result prose fields shown as rendered markdown above the table. */

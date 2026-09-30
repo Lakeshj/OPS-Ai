@@ -281,7 +281,7 @@ const registerGoogleAdsV1Tests = ({ check, section, assert: a }) => {
     );
     assertX.equal(calls.length, 2);
     assertX.equal(calls[0].method, "POST");
-    assertX.ok(calls[0].url.endsWith("/customers/1234567890/googleAds:search"));
+    assertX.ok(calls[0].url.includes("/v25/customers/1234567890/googleAds:search"));
     assertX.equal(calls[0].requiredType, "google_ads");
     assertX.equal(calls[1].body.pageToken, "page-2");
     assertX.equal(result.items.length, 2);
@@ -372,6 +372,53 @@ const registerGoogleAdsV1Tests = ({ check, section, assert: a }) => {
     );
     assertX.equal(dev.code, "GOOGLE_ADS_DEVELOPER_TOKEN");
     assertX.equal(String(dev.message).includes("SHOULD_NOT_LEAK"), false);
+    assertX.equal(ads().ADS_API_VERSION, "v25");
+    const production = oauth().sanitizeGoogleError(
+      403,
+      {
+        error: {
+          status: "PERMISSION_DENIED",
+          message: "token SHOULD_NOT_LEAK",
+          details: [
+            {
+              requestId: "req-safe-1",
+              errors: [
+                {
+                  errorCode: {
+                    authorizationError: "CLOUD_PROJECT_NOT_APPROVED_FOR_PRODUCTION",
+                  },
+                  message: "raw Google text SHOULD_NOT_LEAK",
+                },
+              ],
+            },
+          ],
+        },
+      },
+      {
+        product: "google_ads",
+        apiVersion: "v25",
+        customerId: "7887133215",
+        loginCustomerId: "675-305-9302",
+        developerHeaderSent: false,
+      }
+    );
+    assertX.equal(production.code, "GOOGLE_ADS_API_ERROR");
+    assertX.equal(production.message.includes("CLOUD_PROJECT_NOT_APPROVED_FOR_PRODUCTION"), true);
+    assertX.equal(production.message.includes("httpStatus: 403"), true);
+    assertX.equal(production.message.includes("customerId: 7887133215"), true);
+    assertX.equal(production.message.includes("loginCustomerId: 6753059302"), true);
+    assertX.equal(production.message.includes("developerHeaderSent: no"), true);
+    assertX.equal(production.message.includes("SHOULD_NOT_LEAK"), false);
+    assertX.equal(/oauth/i.test(production.message), false);
+    const missingVersion = oauth().sanitizeGoogleError(
+      404,
+      "<!DOCTYPE html><title>Error 404</title>",
+      { product: "google_ads", apiVersion: "v21" }
+    );
+    assertX.equal(missingVersion.message.includes("Google Ads request failed."), false);
+    assertX.equal(missingVersion.message.includes("code: NOT_FOUND"), true);
+    assertX.equal(missingVersion.message.includes("httpStatus: 404"), true);
+    assertX.equal(missingVersion.message.includes("<html"), false);
   });
 
   const actor = { id: "user-a", userId: "user-a", role: "Admin" };
@@ -748,6 +795,294 @@ const registerGoogleAdsV1Tests = ({ check, section, assert: a }) => {
     );
     assertX.ok(nodeSrc.includes('type === "googleAds"'));
     assertX.equal(nodeSrc.includes("googleAds:mutate"), false);
+  });
+
+  check("ADS-AI Google Ads rows are not rendered as a GA4 landing report", async () => {
+    const grounding = require("../services/workflowGoogleAdsAiGrounding");
+    const ga4Ground = require("../services/workflowGa4AiGrounding");
+    const { handlers, resolveLandingOpportunitiesForResult } = require("../services/workflowNodes.service");
+    const campaign = {
+      source: "google_ads",
+      provider: "google_ads",
+      reportType: "campaign_performance",
+      campaignId: "11",
+      campaignName: "Brand",
+      campaignStatus: "PAUSED",
+      impressions: 100,
+      clicks: 10,
+      ctr: 0.1,
+      costMicros: 2500000,
+      cost: 2.5,
+      averageCpcMicros: 250000,
+      averageCpc: 0.25,
+      conversions: 1,
+      conversionsValue: 4,
+      date: "2026-09-01",
+    };
+    const keyword = {
+      source: "google_ads",
+      provider: "google_ads",
+      reportType: "keyword_performance",
+      campaignName: "Brand",
+      keywordText: "running shoes",
+      impressions: 40,
+      clicks: 4,
+      ctr: 0.1,
+      cost: 1,
+    };
+    const searchTerm = {
+      source: "google_ads",
+      provider: "google_ads",
+      reportType: "search_terms",
+      searchTerm: "buy shoes",
+      campaignName: "Brand",
+      impressions: 8,
+      clicks: 1,
+      cost: 0.4,
+    };
+    const adsGround = grounding.applyGoogleAdsAiGrounding({
+      systemPrompt: "Summarize the rows.",
+      userPrompt: "{{input}}",
+      input: [{ json: campaign }],
+    });
+    assertX.equal(adsGround.grounded, true);
+    assertX.equal(adsGround.source, "google_ads");
+    assertX.equal(adsGround.entity, "campaign");
+    assertX.match(adsGround.systemPrompt, /source: google_ads/);
+    assertX.match(adsGround.systemPrompt, /Do not call this a GA4 Intelligence Report/);
+    assertX.match(adsGround.systemPrompt, /landing_underperformance/);
+    assertX.match(adsGround.systemPrompt, /Do not invent Landing Page/);
+    const ga4 = ga4Ground.applyGa4NativeAiGrounding({
+      systemPrompt: "Summarize",
+      userPrompt: "",
+      input: [{ json: campaign }],
+    });
+    assertX.equal(ga4.grounded, false);
+    for (const [row, entity] of [
+      [keyword, "keyword"],
+      [searchTerm, "search term"],
+    ]) {
+      const grounded = grounding.applyGoogleAdsAiGrounding({
+        systemPrompt: "",
+        userPrompt: "",
+        input: [{ json: row }],
+      });
+      assertX.equal(grounded.entity, entity);
+      assertX.match(grounded.systemPrompt, /Do not call this a GA4 Intelligence Report/);
+    }
+    const report = grounding.formatGoogleAdsReport([campaign]);
+    assertX.match(report, /Google Ads Report/);
+    assertX.match(report, /Campaign: Brand/);
+    assertX.match(report, /Impressions: 100/);
+    assertX.match(report, /Cost: 2\.5/);
+    assertX.equal(report.includes("GA4 Intelligence Report"), false);
+    assertX.equal(report.includes("Landing Underperformance"), false);
+    assertX.equal(report.includes("Landing Page"), false);
+    assertX.equal(report.includes("(unknown)"), false);
+    const resolved = resolveLandingOpportunitiesForResult(
+      { isLlm: true, text: "GA4 Intelligence Report", json: { opportunities: [campaign] }, opportunities: [campaign] },
+      "GA4 Intelligence Report"
+    );
+    assertX.match(resolved.report, /Campaign: Brand/);
+    assertX.equal(resolved.report.includes("GA4 Intelligence Report"), false);
+    assertX.equal(resolved.report.includes("Landing Page"), false);
+    const result = await handlers.result(
+      { id: "result-1", type: "result", data: { mapFrom: "{{steps.ai-1.text}}" } },
+      {
+        steps: {
+          "ai-1": {
+            isLlm: true,
+            text: "GA4 Intelligence Report\nLanding Page: (unknown)",
+            json: { opportunities: [campaign] },
+            opportunities: [campaign],
+          },
+        },
+        input: {},
+      }
+    );
+    assertX.match(String(result.output.result), /Campaign: Brand/);
+    assertX.equal(String(result.output.result).includes("GA4 Intelligence Report"), false);
+    assertX.equal(String(result.output.result).includes("Landing Page"), false);
+    assertX.equal(result.resolved.googleAdsReport, true);
+    assertX.equal(result.resolved.landingReport, false);
+  });
+
+  check("ADS-PROV Google Ads _meta stays out of GA4 landing interpretation", () => {
+    const grounding = require("../services/workflowGoogleAdsAiGrounding");
+    const ga4Ground = require("../services/workflowGa4AiGrounding");
+    const { resolveLandingOpportunitiesForResult } = require("../services/workflowNodes.service");
+    const normalized = ads().normalizeAdsRow(
+      sampleRow,
+      "campaign_performance",
+      {
+        customerId: "788-713-3215",
+        startDate: "2026-09-01",
+        endDate: "2026-09-07",
+      }
+    );
+    assertX.equal(normalized._meta.resource, "campaign");
+    assertX.equal(
+      ads().normalizeAdsRow(sampleRow, "keyword_performance")._meta.resource,
+      "keyword"
+    );
+    assertX.equal(
+      ads().normalizeAdsRow(sampleRow, "search_terms")._meta.resource,
+      "search_term"
+    );
+    assertX.equal(normalized.impressions, 100);
+    assertX.equal(normalized.clicks, 10);
+    assertX.equal(normalized.ctr, 0.1);
+    assertX.equal(normalized.cost, 2.5);
+    assertX.equal(normalized.conversions, 2);
+    assertX.deepEqual(normalized._meta, {
+      provider: "google_ads",
+      resource: "campaign",
+      report: "campaign_performance",
+      customerId: "7887133215",
+      dateRange: { startDate: "2026-09-01", endDate: "2026-09-07" },
+    });
+    assertX.equal(JSON.stringify(normalized._meta).includes("developerToken"), false);
+    assertX.equal(JSON.stringify(normalized._meta).includes("accessToken"), false);
+    const boundary = {
+      _meta: {
+        provider: "google_ads",
+        resource: "campaign",
+        report: "campaign_performance",
+        customerId: "7887133215",
+        dateRange: { startDate: "2026-09-01", endDate: "2026-09-07" },
+      },
+      campaignId: "11",
+      campaignName: "Brand",
+      campaignStatus: "PAUSED",
+      impressions: 100,
+      clicks: 10,
+      ctr: 0.1,
+      cost: 2.5,
+    };
+    const adsGround = grounding.applyGoogleAdsAiGrounding({
+      systemPrompt: "Summarize the rows.",
+      userPrompt: "",
+      input: [{ json: boundary }],
+    });
+    assertX.equal(adsGround.grounded, true);
+    assertX.equal(adsGround.source, "google_ads");
+    assertX.equal(adsGround.entity, "campaign");
+    assertX.match(adsGround.systemPrompt, /Never invent landingPage/);
+    assertX.match(adsGround.systemPrompt, /Never invent sessions/);
+    assertX.match(adsGround.systemPrompt, /Never invent engagementRate/);
+    assertX.match(adsGround.systemPrompt, /Never invent bounceRate/);
+    assertX.equal(ga4Ground.applyGa4NativeAiGrounding({
+      systemPrompt: "",
+      userPrompt: "",
+      input: [{ json: boundary }],
+    }).grounded, false);
+    const report = grounding.formatGoogleAdsReport([boundary]);
+    assertX.match(report, /Campaign: Brand/);
+    assertX.match(report, /Impressions: 100/);
+    assertX.equal(report.includes("GA4 Intelligence Report"), false);
+    assertX.equal(report.includes("landing_underperformance"), false);
+    assertX.equal(report.includes("landingPage"), false);
+    assertX.equal(report.includes("sessions"), false);
+    assertX.equal(report.includes("engagementRate"), false);
+    assertX.equal(report.includes("bounceRate"), false);
+    const resolved = resolveLandingOpportunitiesForResult(
+      {
+        isLlm: true,
+        text: "GA4 Intelligence Report",
+        opportunities: [boundary],
+      },
+      "GA4 Intelligence Report"
+    );
+    assertX.equal(resolved.source, "google_ads");
+    assertX.equal(resolved.report.includes("GA4 Intelligence Report"), false);
+    assertX.equal(resolved.report.includes("landing_underperformance"), false);
+    assertX.equal(resolved.report.includes("Landing Page"), false);
+  });
+
+  check("ADS-RPT geographic entity and _meta survive on every report type", () => {
+    const geoQuery = ads().buildReportQuery({
+      reportType: "geographic_performance",
+      startDate: "2026-09-24",
+      endDate: "2026-09-30",
+      limit: 5,
+    });
+    assertX.ok(geoQuery.gaql.includes("geographic_view.country_criterion_id"));
+    assertX.ok(geoQuery.gaql.includes("geographic_view.location_type"));
+    assertX.ok(geoQuery.gaql.includes("FROM geographic_view"));
+
+    const geo = ads().normalizeAdsRow(
+      {
+        ...sampleRow,
+        geographicView: {
+          countryCriterionId: "2356",
+          locationType: "LOCATION_OF_PRESENCE",
+        },
+      },
+      "geographic_performance",
+      {
+        customerId: "788-713-3215",
+        startDate: "2026-09-24",
+        endDate: "2026-09-30",
+      }
+    );
+    assertX.equal(geo.countryCriterionId, "2356");
+    assertX.equal(geo.locationType, "LOCATION_OF_PRESENCE");
+    assertX.equal(geo.campaignId, "11");
+    assertX.equal(geo._meta.provider, "google_ads");
+    assertX.equal(geo._meta.resource, "geographic");
+    assertX.equal(geo._meta.report, "geographic_performance");
+    assertX.equal(Object.prototype.hasOwnProperty.call(geo, "country"), false);
+
+    const keyword = ads().normalizeAdsRow(
+      {
+        ...sampleRow,
+        adGroupCriterion: {
+          status: "ENABLED",
+          keyword: { text: "running shoes", matchType: "EXACT" },
+        },
+      },
+      "keyword_performance",
+      { customerId: "7887133215", startDate: "2026-09-24", endDate: "2026-09-30" }
+    );
+    assertX.equal(keyword.keywordText, "running shoes");
+    assertX.equal(keyword._meta.provider, "google_ads");
+    assertX.equal(keyword._meta.resource, "keyword");
+    assertX.equal(keyword._meta.report, "keyword_performance");
+
+    const searchTerm = ads().normalizeAdsRow(
+      {
+        ...sampleRow,
+        searchTermView: { searchTerm: "buy shoes" },
+      },
+      "search_terms",
+      { customerId: "7887133215", startDate: "2026-09-24", endDate: "2026-09-30" }
+    );
+    assertX.equal(searchTerm.searchTerm, "buy shoes");
+    assertX.equal(searchTerm._meta.provider, "google_ads");
+    assertX.equal(searchTerm._meta.resource, "search_term");
+    assertX.equal(searchTerm._meta.report, "search_terms");
+
+    const resources = {
+      campaign_performance: "campaign",
+      ad_group_performance: "ad_group",
+      keyword_performance: "keyword",
+      search_terms: "search_term",
+      device_performance: "device",
+      geographic_performance: "geographic",
+      conversion_performance: "conversion",
+    };
+    for (const [reportType, resource] of Object.entries(resources)) {
+      const row = ads().normalizeAdsRow(sampleRow, reportType, {
+        customerId: "7887133215",
+        startDate: "2026-09-24",
+        endDate: "2026-09-30",
+      });
+      assertX.equal(row._meta.provider, "google_ads", reportType);
+      assertX.equal(row._meta.resource, resource, reportType);
+      assertX.equal(row._meta.report, reportType, reportType);
+      assertX.equal(row.provider, "google_ads", reportType);
+      assertX.equal(row.source, "google_ads", reportType);
+    }
   });
 };
 

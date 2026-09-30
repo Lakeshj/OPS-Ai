@@ -2,16 +2,20 @@
  * Google Ads V1 — read-only reporting.
  * GAQL is built only from this module. The node never sends mutate requests.
  *
- * API: Google Ads API v21 GoogleAdsService.Search
- * https://googleads.googleapis.com/v21/customers/{customerId}/googleAds:search
+ * API: Google Ads API v25 (v25.2 is served on the /v25/ REST prefix).
+ * https://googleads.googleapis.com/v25/customers/{customerId}/googleAds:search
  *
  * costMicros / averageCpcMicros are the API values (1 currency unit = 1_000_000 micros).
  * cost and averageCpc are those values divided by 1_000_000. ctr is the API ratio (0.1 = 10%).
  * currencyCode is copied from customer.currency_code when the API returns it.
  */
 const { resolveDateRange } = require("./workflowGoogleDateRange");
+const {
+  GOOGLE_ADS_API_VERSION,
+  annotateGoogleAdsError,
+} = require("./googleOAuth.service");
 
-const ADS_API_VERSION = "v21";
+const ADS_API_VERSION = GOOGLE_ADS_API_VERSION;
 const ADS_ROW_MAX = 10000;
 const ADS_PAGE_MAX = 40;
 const CUSTOMER_ID_RE = /^\d{10}$/;
@@ -317,7 +321,17 @@ const asNumber = (value) => {
 
 const majorUnits = (micros) => (micros == null ? null : micros / 1_000_000);
 
-const normalizeAdsRow = (row, reportType) => {
+const ADS_RESOURCE_BY_REPORT = Object.freeze({
+  campaign_performance: "campaign",
+  ad_group_performance: "ad_group",
+  keyword_performance: "keyword",
+  search_terms: "search_term",
+  device_performance: "device",
+  geographic_performance: "geographic",
+  conversion_performance: "conversion",
+});
+
+const normalizeAdsRow = (row, reportType, provenance = {}) => {
   const report = REPORTS[reportType];
   const customer = row?.customer || {};
   const campaign = row?.campaign || {};
@@ -330,6 +344,9 @@ const normalizeAdsRow = (row, reportType) => {
   const segments = row?.segments || {};
   const currency = customer.currencyCode ? String(customer.currencyCode) : null;
   const json = {
+    source: "google_ads",
+    provider: "google_ads",
+    reportType,
     customerId: customer.id != null ? String(customer.id) : null,
     currencyCode: currency,
     date: segments.date || null,
@@ -377,6 +394,19 @@ const normalizeAdsRow = (row, reportType) => {
     json.allConversions = asNumber(metrics.allConversions);
     json.allConversionsValue = asNumber(metrics.allConversionsValue);
   }
+  const metaCustomerId = String(
+    provenance.customerId || json.customerId || ""
+  ).replace(/\D/g, "");
+  json._meta = {
+    provider: "google_ads",
+    resource: ADS_RESOURCE_BY_REPORT[reportType] || "campaign",
+    report: reportType,
+    customerId: metaCustomerId,
+    dateRange: {
+      startDate: provenance.startDate ? String(provenance.startDate) : "",
+      endDate: provenance.endDate ? String(provenance.endDate) : "",
+    },
+  };
   return json;
 };
 
@@ -480,14 +510,25 @@ const runGoogleAdsReport = async (node, context, item, deps = {}) => {
           err?.retryable === true ||
           err?.code === "GOOGLE_QUOTA" ||
           err?.code === "GOOGLE_ADS_QUOTA";
-        if (!retryable || attempt >= 2) throw err;
+        if (!retryable || attempt >= 2) {
+          throw annotateGoogleAdsError(err, {
+            reportType,
+            apiVersion: ADS_API_VERSION,
+            customerId,
+            loginCustomerId,
+          });
+        }
         attempt += 1;
         await sleep(deps.retryDelayMs != null ? deps.retryDelayMs : 200 * attempt);
       }
     }
     const results = Array.isArray(res?.body?.results) ? res.body.results : [];
     for (const row of results) {
-      const json = normalizeAdsRow(row, reportType);
+      const json = normalizeAdsRow(row, reportType, {
+        customerId,
+        startDate: range.startDate,
+        endDate: range.endDate,
+      });
       if (!json.customerId) json.customerId = customerId;
       items.push({ json });
       if (items.length >= built.limit) break;

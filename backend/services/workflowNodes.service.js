@@ -441,8 +441,29 @@ const runLlmNode = async (node, context, options = {}) => {
     }
   }
 
-  // Native GA4 runReport rows only (not MCP IntelligenceContext).
+  // Native GA4 runReport rows only (not MCP IntelligenceContext, not Google Ads).
   if (!intelligenceContext) {
+    try {
+      const { applyGoogleAdsAiGrounding } = require("./workflowGoogleAdsAiGrounding");
+      const { resolveGa4GroundingInput } = require("./workflowGa4AiGrounding");
+      const groundingInput = resolveGa4GroundingInput(context, expressionInput);
+      const adsGround = applyGoogleAdsAiGrounding({
+        systemPrompt,
+        userPrompt: String(userPrompt || ""),
+        input: groundingInput,
+      });
+      if (adsGround.grounded) {
+        systemPrompt = adsGround.systemPrompt;
+        userPrompt = adsGround.userPrompt;
+        userInstructions = adsGround.userInstructions || userInstructions;
+        mcpGroundingSource = "google_ads";
+      }
+    } catch {
+      // Google Ads grounding is best-effort.
+    }
+  }
+
+  if (!intelligenceContext && mcpGroundingSource !== "google_ads") {
     try {
       const {
         applyGa4NativeAiGrounding,
@@ -887,6 +908,12 @@ const formatReadableRecordList = (rows, title = "AI report") => {
 
 const humanReportForAiOpportunities = (rows, mcpDetails) => {
   if (!Array.isArray(rows) || !rows.length) return null;
+  try {
+    const { looksLikeGoogleAdsRows, formatGoogleAdsReport } = require("./workflowGoogleAdsAiGrounding");
+    if (looksLikeGoogleAdsRows(rows)) return formatGoogleAdsReport(rows);
+  } catch {
+    /* ads formatter optional */
+  }
   const landing = rows.some(
     (row) => row && typeof row === "object" && (row.landingPage != null || row.pagePath != null)
   );
@@ -998,6 +1025,27 @@ const resolveLandingOpportunitiesForResult = (llmOut, mapped) => {
     enriched && enriched.length === opportunities.length
       ? enriched
       : opportunities;
+
+  try {
+    const { looksLikeGoogleAdsRows, formatGoogleAdsReport } = require("./workflowGoogleAdsAiGrounding");
+    if (looksLikeGoogleAdsRows(reportRows)) {
+      const adsReport = formatGoogleAdsReport(reportRows);
+      if (adsReport) return { opportunities, report: adsReport, mcpDetails, source: "google_ads" };
+    }
+  } catch {
+    /* ads formatter optional */
+  }
+
+  const landingShaped = reportRows.some(
+    (row) =>
+      row &&
+      typeof row === "object" &&
+      (row.landingPage != null ||
+        row.pagePath != null ||
+        row.opportunity_type === "landing_underperformance" ||
+        row.capability === "landing_underperformance")
+  );
+  if (!landingShaped) return null;
 
   const report = formatGa4LandingIntelligenceReport({
     opportunities: reportRows,
@@ -3199,7 +3247,8 @@ const handlers = {
         ...(landingResolved
           ? {
               landingOpportunities: landingResolved.opportunities.length,
-              landingReport: true,
+              landingReport: landingResolved.source !== "google_ads",
+              ...(landingResolved.source === "google_ads" ? { googleAdsReport: true } : {}),
             }
           : {}),
       },
