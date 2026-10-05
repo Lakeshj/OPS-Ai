@@ -290,7 +290,8 @@ const resolveProvenancePolicy = (
   if (
     nodeType === "gscMcpTool" ||
     nodeType === "ga4McpTool" ||
-    nodeType === "mcpDynamicTool"
+    nodeType === "mcpDynamicTool" ||
+    nodeType === "googleAdsMcpTool"
   ) {
     return "fanOut";
   }
@@ -372,6 +373,7 @@ const applyNodeProvenance = (
         nodeType !== "gscMcpTool" &&
         nodeType !== "ga4McpTool" &&
         nodeType !== "mcpDynamicTool" &&
+        nodeType !== "googleAdsMcpTool" &&
         !field &&
         inputs.length === outputs.length
       ) {

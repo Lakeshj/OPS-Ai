@@ -16,6 +16,7 @@ export type McpSchemaProperty = {
   title?: string;
   description?: string;
   enum?: string[];
+  enumNames?: string[];
   items?: { type?: string };
   minimum?: number;
   maximum?: number;
@@ -32,6 +33,7 @@ export type McpDynamicTool = {
   authType: string;
   access: "read" | "write" | "admin";
   risk: "low" | "medium" | "high";
+  uiGroup?: "common" | "performance" | "advanced" | "internal";
   implemented: boolean;
 };
 
@@ -42,6 +44,7 @@ export type McpParamField = {
   description: string;
   required: boolean;
   enumValues?: string[];
+  enumLabels?: string[];
   itemType?: string;
   minimum?: number;
   maximum?: number;
@@ -61,6 +64,7 @@ export function fieldsFromInputSchema(schema: McpInputSchema | undefined): McpPa
       description: spec?.description || "",
       required: required.has(name),
       enumValues: Array.isArray(spec?.enum) ? spec.enum : undefined,
+      enumLabels: Array.isArray(spec?.enumNames) ? spec.enumNames : undefined,
       itemType: spec?.items?.type,
       minimum: spec?.minimum,
       maximum: spec?.maximum,

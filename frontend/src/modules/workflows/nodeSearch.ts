@@ -87,11 +87,14 @@ function editDistance(a: string, b: string): number {
 }
 
 function metaFor(node: LibraryNode): NodeSearchMeta {
-  return (
+  const fromMap =
     NODE_SEARCH_META[node.id] ||
     (node.engineType ? NODE_SEARCH_META[node.engineType] : undefined) ||
-    {}
-  );
+    {};
+  return {
+    aliases: [...(node.aliases || []), ...(fromMap.aliases || [])],
+    keywords: [...(node.keywords || []), ...(fromMap.keywords || [])],
+  };
 }
 
 function bestMatchForNode(
@@ -190,6 +193,7 @@ export function searchNodes(options: SearchNodesOptions = {}): RankedLibraryNode
 
   const q = query.trim();
   let list = nodes.filter((n) => {
+    if (n.hidden) return false;
     if (category !== "all" && n.category !== category) return false;
     if (availability === "available" && !n.available) return false;
     return true;

@@ -92,6 +92,7 @@ import {
   resolveNodeInputPorts,
 } from "@/modules/workflows/dynamicPorts";
 import {
+  applyLibraryNodePreset,
   resolveEngineType,
   type LibraryNode,
 } from "@/modules/workflows/nodeLibrary";
@@ -122,6 +123,37 @@ const UI_ONLY_DATA_KEYS = new Set([
   "cacheDirty",
   "needsNaming",
 ]);
+
+const AUTOSAVE_MS = 800;
+
+/** Stable snapshot of what gets persisted, ignoring canvas-only flags. */
+function persistFingerprint(def: WorkflowDefinition, workflowName: string) {
+  const nodes = (def.nodes || []).map((n) => {
+    const data = { ...(n.data || {}) } as Record<string, unknown>;
+    delete data.cacheDirty;
+    delete data.runStatus;
+    delete data.runPreview;
+    return {
+      id: n.id,
+      type: n.type,
+      position: n.position,
+      data,
+    };
+  });
+  const edges = (def.edges || []).map((e) => ({
+    id: e.id,
+    source: e.source,
+    target: e.target,
+    sourceHandle: e.sourceHandle ?? null,
+    targetHandle: e.targetHandle ?? null,
+  }));
+  return JSON.stringify({
+    name: workflowName.trim(),
+    settings: def.settings || {},
+    nodes,
+    edges,
+  });
+}
 
 function isExecutionAffectingPatch(patch: WorkflowNodeData): boolean {
   return Object.keys(patch).some((key) => !UI_ONLY_DATA_KEYS.has(key));
@@ -198,6 +230,7 @@ const nodeTypes = {
   gscMcpTool: WorkflowNode,
   ga4McpTool: WorkflowNode,
   mcpDynamicTool: WorkflowNode,
+  googleAdsMcpTool: WorkflowNode,
   respondToWebhook: WorkflowNode,
   googleSearchConsole: WorkflowNode,
   gscMcp: WorkflowNode,
@@ -348,7 +381,10 @@ type Props = {
   name: string;
   onNameChange: (name: string) => void;
   definition: WorkflowDefinition;
-  onSave: (definition: WorkflowDefinition) => Promise<void>;
+  onSave: (
+    definition: WorkflowDefinition,
+    options?: { quiet?: boolean }
+  ) => Promise<void>;
   onRun: (input: Record<string, unknown>) => Promise<void>;
   saving?: boolean;
   running?: boolean;
@@ -635,6 +671,13 @@ const defaultDataForType = (type: WorkflowNodeType): WorkflowNodeData => {
         credentialId: "",
         params: {},
       };
+    case "googleAdsMcpTool":
+      return {
+        label: "Google Ads MCP Tools",
+        nodeType: "googleAdsMcpTool",
+        toolId: "",
+        params: {},
+      };
     case "trigger":
     default:
       return { label: "Manual Trigger", nodeType: "trigger" };
@@ -644,28 +687,31 @@ const defaultDataForType = (type: WorkflowNodeType): WorkflowNodeData => {
 const dataFromLibraryNode = (node: LibraryNode): WorkflowNodeData => {
   const engineType = resolveEngineType(node);
   const base = defaultDataForType(engineType);
-  return {
-    ...base,
-    label: node.name,
-    nodeType: engineType,
-    libraryId: node.id,
-    libraryCategory: node.category,
-    libraryProvider: node.provider || undefined,
-    available: node.available,
-    ...(engineType === "aiAgent" ? { needsNaming: true } : {}),
-    ...(engineType === "ai" && node.provider
-      ? {
-          provider:
-            node.provider.toLowerCase().includes("gemini")
-              ? "gemini"
-              : node.provider.toLowerCase().includes("deepseek")
-                ? "deepseek"
-                : node.provider.toLowerCase().includes("openai")
-                  ? "openai"
-                  : base.provider,
-        }
-      : {}),
-  };
+  return applyLibraryNodePreset(
+    {
+      ...base,
+      label: node.name,
+      nodeType: engineType,
+      libraryId: node.id,
+      libraryCategory: node.category,
+      libraryProvider: node.provider || undefined,
+      available: node.available,
+      ...(engineType === "aiAgent" ? { needsNaming: true } : {}),
+      ...(engineType === "ai" && node.provider
+        ? {
+            provider:
+              node.provider.toLowerCase().includes("gemini")
+                ? "gemini"
+                : node.provider.toLowerCase().includes("deepseek")
+                  ? "deepseek"
+                  : node.provider.toLowerCase().includes("openai")
+                    ? "openai"
+                    : base.provider,
+          }
+        : {}),
+    },
+    node
+  );
 };
 
 const aiTemplateDefinition = (): WorkflowDefinition => ({
@@ -987,6 +1033,12 @@ function WorkflowCanvasInner({
   const [renameOpensDialog, setRenameOpensDialog] = useState(false);
   const [renameDraft, setRenameDraft] = useState("");
   const prevRunningRef = useRef(false);
+  const lastSavedKey = useRef<string | null>(null);
+  const autosaveFailedKey = useRef<string | null>(null);
+  const suppressDefinitionReset = useRef(false);
+  const onSaveRef = useRef(onSave);
+  onSaveRef.current = onSave;
+  const [autosaveNote, setAutosaveNote] = useState("");
   const history = useWorkflowHistory({ nodes, edges });
   const historyPushedRef = useRef(false);
 
@@ -1111,6 +1163,11 @@ function WorkflowCanvasInner({
   }, [running, latestRun, workflowId, applyEditorSession]);
 
   useEffect(() => {
+    // A save we just sent must not replace in-progress canvas edits.
+    if (suppressDefinitionReset.current) {
+      suppressDefinitionReset.current = false;
+      return;
+    }
     setNodes(toFlowNodes(definition, latestRun, Boolean(running)));
     setEdges(toFlowEdges(definition));
     setWorkflowSettings(definition.settings || { timezone: "UTC" });
@@ -1233,6 +1290,7 @@ function WorkflowCanvasInner({
         };
         delete data.runStatus;
         delete data.runPreview;
+        delete data.cacheDirty;
         return {
           id: n.id,
           type: (n.type || "ai") as WorkflowNodeType,
@@ -1249,6 +1307,77 @@ function WorkflowCanvasInner({
       })),
     };
   }, [nodes, edges, workflowSettings]);
+
+  const rememberSaved = useCallback((def: WorkflowDefinition) => {
+    lastSavedKey.current = persistFingerprint(def, name);
+    autosaveFailedKey.current = null;
+    setAutosaveNote("Saved");
+  }, [name]);
+
+  useEffect(() => {
+    lastSavedKey.current = null;
+    autosaveFailedKey.current = null;
+    setAutosaveNote("");
+  }, [workflowId]);
+
+  useEffect(() => {
+    if (historicalView || !workflowId) return;
+
+    const localIds = nodes
+      .map((n) => n.id)
+      .slice()
+      .sort()
+      .join("\0");
+    const serverIds = (definition.nodes || [])
+      .map((n) => n.id)
+      .slice()
+      .sort()
+      .join("\0");
+    const def = buildDefinition();
+    const key = persistFingerprint(def, name);
+
+    if (lastSavedKey.current === null) {
+      // Wait until the canvas has loaded this workflow before treating
+      // the current graph as the saved baseline.
+      if (localIds !== serverIds) return;
+      lastSavedKey.current = key;
+      return;
+    }
+    if (key === lastSavedKey.current) return;
+    if (key === autosaveFailedKey.current) return;
+
+    setAutosaveNote("");
+    const timer = window.setTimeout(() => {
+      void (async () => {
+        const current = buildDefinition();
+        const currentKey = persistFingerprint(current, name);
+        if (currentKey === lastSavedKey.current) return;
+        if (currentKey === autosaveFailedKey.current) return;
+        suppressDefinitionReset.current = true;
+        try {
+          await onSaveRef.current(current, { quiet: true });
+          lastSavedKey.current = currentKey;
+          autosaveFailedKey.current = null;
+          setAutosaveNote("Saved");
+        } catch {
+          suppressDefinitionReset.current = false;
+          autosaveFailedKey.current = currentKey;
+          setAutosaveNote("Couldn't save");
+          toast.error("Couldn't autosave");
+        }
+      })();
+    }, AUTOSAVE_MS);
+    return () => window.clearTimeout(timer);
+  }, [
+    nodes,
+    edges,
+    workflowSettings,
+    name,
+    definition,
+    workflowId,
+    historicalView,
+    buildDefinition,
+  ]);
 
   const invalidateEditorCache = useCallback(
     async (event: EditorInvalidationEvent) => {
@@ -2449,8 +2578,11 @@ function WorkflowCanvasInner({
       }
       const def = buildDefinition();
       setNodes(toFlowNodes(def, latestRun, Boolean(running)));
+      suppressDefinitionReset.current = true;
       await onSave(def);
+      rememberSaved(def);
     } catch (error) {
+      suppressDefinitionReset.current = false;
       const message =
         error instanceof Error ? error.message : "Failed to save workflow";
       setLocalError(message);
@@ -2519,7 +2651,14 @@ function WorkflowCanvasInner({
 
       const def = buildDefinition();
       setNodes(toFlowNodes(def, latestRun, Boolean(running)));
-      await onSave(def);
+      suppressDefinitionReset.current = true;
+      try {
+        await onSave(def);
+        rememberSaved(def);
+      } catch (error) {
+        suppressDefinitionReset.current = false;
+        throw error;
+      }
       const webhookNode = def.nodes?.find(
         (n) => (n.type || n.data?.nodeType) === "webhook"
       );
@@ -2547,7 +2686,14 @@ function WorkflowCanvasInner({
     setPublishing(true);
     try {
       const def = buildDefinition();
-      await onSave(def);
+      suppressDefinitionReset.current = true;
+      try {
+        await onSave(def);
+        rememberSaved(def);
+      } catch (error) {
+        suppressDefinitionReset.current = false;
+        throw error;
+      }
       await onPublish();
       toast.success("Workflow published — schedule triggers are now active");
     } catch (error) {
@@ -2585,6 +2731,14 @@ function WorkflowCanvasInner({
         >
           {saving ? "Saving..." : "Save"}
         </Button>
+        {!historicalView && !saving && autosaveNote ? (
+          <span
+            className="self-center text-xs text-muted-foreground"
+            data-testid="workflow-autosave-status"
+          >
+            {autosaveNote}
+          </span>
+        ) : null}
         <Button
           type="button"
           onClick={handleRun}
@@ -3085,14 +3239,21 @@ function WorkflowCanvasInner({
               ...buildDefinition(),
               settings: nextSettings,
             };
-            if (onSaveWorkflowSettings) {
-              await onSaveWorkflowSettings({
-                description: nextDesc,
-                timezone: nextSettings.timezone || "UTC",
-                definition: def,
-              });
-            } else {
-              await onSave(def);
+            suppressDefinitionReset.current = true;
+            try {
+              if (onSaveWorkflowSettings) {
+                await onSaveWorkflowSettings({
+                  description: nextDesc,
+                  timezone: nextSettings.timezone || "UTC",
+                  definition: def,
+                });
+              } else {
+                await onSave(def);
+              }
+              rememberSaved(def);
+            } catch (error) {
+              suppressDefinitionReset.current = false;
+              throw error;
             }
           }}
         />

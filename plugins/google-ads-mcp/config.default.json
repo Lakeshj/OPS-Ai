@@ -1,0 +1,6 @@
+{
+  "mode": "read_only_api",
+  "providerId": "google_ads",
+  "allowMutations": false,
+  "notes": "API version and HTTP client are supplied by the backend host from the shared Google Ads client. This plugin does not store OAuth tokens."
+}

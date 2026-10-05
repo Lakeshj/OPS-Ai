@@ -36,6 +36,7 @@ type Props = {
   onExecuteWorkflow?: () => void;
   executing?: boolean;
   previewContext?: import("./ExpressionField").ExpressionFieldContext;
+  workflowNodes?: import("@/modules/workflows/googleAdsMcpSource").GoogleAdsSourceNodeRef[];
 };
 
 export function NodeInspector({
@@ -53,6 +54,7 @@ export function NodeInspector({
   onExecuteWorkflow,
   executing,
   previewContext,
+  workflowNodes,
 }: Props) {
   const [assistants, setAssistants] = useState<KeywordAssistant[]>([]);
   const [documents, setDocuments] = useState<WorkspaceDocument[]>([]);
@@ -130,6 +132,7 @@ export function NodeInspector({
     documents: textDocuments,
     spreadsheetDocs,
     assistants,
+    workflowNodes,
     uploadingSpreadsheet: uploading,
     onUploadSpreadsheet: uploadSpreadsheet,
   };

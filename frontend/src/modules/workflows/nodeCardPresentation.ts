@@ -80,6 +80,7 @@ const FILES_GOOGLE_EMAIL = new Set<string>([
   "gmail",
   "email",
   "gscMcp",
+  "googleAdsMcpTool",
 ]);
 
 const AI = new Set<string>([
@@ -197,6 +198,7 @@ const ICON_BY_TYPE: Record<string, LucideIcon> = {
   gscMcpTool: Link2,
   ga4McpTool: BarChart3,
   mcpDynamicTool: Layers,
+  googleAdsMcpTool: BarChart3,
   integration: Circle,
   migrationUnsupported: AlertCircle,
 };
@@ -245,6 +247,7 @@ const FALLBACK_BLURBS: Record<string, string> = {
   gscMcpTool: "Process GSC rows with intelligence",
   ga4McpTool: "Process GA4 rows with intelligence",
   mcpDynamicTool: "Run a read-only registry tool",
+  googleAdsMcpTool: "Read-only Google Ads MCP tools",
 };
 
 const libraryByEngine = (() => {

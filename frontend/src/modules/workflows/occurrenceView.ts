@@ -111,20 +111,22 @@ export function resolveLatestNodeResult(options: {
   sessionResult?: WorkflowEditorNodeResult | null;
   run?: WorkflowRun | null;
   dirty?: boolean;
+  /** Editor dirty reason. `execution_failed` is the step that just ran, not a stale config. */
+  dirtyReason?: string;
 }): WorkflowEditorNodeResult | null {
-  const { nodeId, sessionResult, run, dirty } = options;
+  const { nodeId, sessionResult, run, dirty, dirtyReason } = options;
   const fromRun = nodeResultFromRunSteps(nodeId, run?.steps);
   const fromSession = sessionResult || null;
 
   if (fromRun?.occurrences && fromRun.occurrences.length > 1) {
-    return applyDirtyGate(fromRun, dirty);
+    return applyDirtyGate(fromRun, dirty, dirtyReason);
   }
   if (
     fromSession?.occurrences &&
     fromSession.occurrences.length > 1 &&
     !fromRun
   ) {
-    return applyDirtyGate(fromSession, dirty);
+    return applyDirtyGate(fromSession, dirty, dirtyReason);
   }
 
   const sessionTs = timestampMs(fromSession?.updatedAt);
@@ -138,15 +140,21 @@ export function resolveLatestNodeResult(options: {
     chosen = fromSession || fromRun || null;
   }
 
-  return applyDirtyGate(chosen, dirty);
+  return applyDirtyGate(chosen, dirty, dirtyReason);
 }
 
 function applyDirtyGate(
   result: WorkflowEditorNodeResult | null,
-  dirty?: boolean
+  dirty?: boolean,
+  dirtyReason?: string
 ): WorkflowEditorNodeResult | null {
   if (!result) return null;
   if (!dirty) return result;
+  // A failed step is the current output. Config edits use a different dirty reason
+  // and still hide the previous result.
+  if (dirtyReason === "execution_failed" && result.status === "failed") {
+    return result;
+  }
   return {
     ...result,
     cacheState: "dirty",
@@ -210,13 +218,15 @@ export function buildResolvedStepMaps(options: {
   for (const n of definitionNodes || []) nodeIds.add(n.id);
 
   for (const nodeId of nodeIds) {
-    const dirty = Boolean(session?.dirtyNodes?.[nodeId]?.dirty);
+    const dirtyEntry = session?.dirtyNodes?.[nodeId];
+    const dirty = Boolean(dirtyEntry?.dirty);
     const sessionResult = session?.nodeResults?.[nodeId] || null;
     const resolved = resolveLatestNodeResult({
       nodeId,
       sessionResult,
       run,
       dirty,
+      dirtyReason: dirtyEntry?.reason,
     });
 
     const pinnedNode = definitionNodes?.find((n) => n.id === nodeId);

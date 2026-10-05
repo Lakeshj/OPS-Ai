@@ -1,0 +1,26 @@
+{
+  "name": "@opsai/plugin-google-ads-mcp",
+  "version": "0.1.0",
+  "description": "OpsAi Google Ads MCP plugin — read-only account, metadata, and GAQL search tools",
+  "main": "src/index.js",
+  "type": "commonjs",
+  "scripts": {
+    "test": "node src/testing/smoke-tools.js",
+    "smoke": "npm test"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "files": [
+    "src",
+    "manifest.json",
+    "config.default.json",
+    "README.md"
+  ],
+  "keywords": [
+    "opsai",
+    "mcp",
+    "google-ads"
+  ],
+  "license": "UNLICENSED"
+}

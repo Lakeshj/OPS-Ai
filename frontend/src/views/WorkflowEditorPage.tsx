@@ -287,7 +287,10 @@ export default function WorkflowEditorPage({
     resuming,
   ]);
 
-  const handleSave = async (definition: WorkflowDefinition) => {
+  const handleSave = async (
+    definition: WorkflowDefinition,
+    options?: { quiet?: boolean }
+  ) => {
     if (!workflow || workflow.isDeleted) return;
     setSaving(true);
     try {
@@ -296,10 +299,10 @@ export default function WorkflowEditorPage({
         definition,
       });
       setWorkflow(updated);
-      toast.success("Saved");
+      if (!options?.quiet) toast.success("Saved");
     } catch (error) {
       console.error(error);
-      toast.error("Failed to save");
+      if (!options?.quiet) toast.error("Failed to save");
       throw error;
     } finally {
       setSaving(false);

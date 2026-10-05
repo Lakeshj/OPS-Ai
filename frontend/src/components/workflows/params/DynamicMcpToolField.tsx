@@ -5,11 +5,17 @@ import { Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
+  SelectLabel,
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
 import { workflowsApi } from "@/modules/workflows/api";
+import {
+  googleAdsSourceFieldState,
+  type GoogleAdsSourceNodeRef,
+} from "@/modules/workflows/googleAdsMcpSource";
 import {
   fieldsFromInputSchema,
   type McpDynamicProvider,
@@ -26,7 +32,52 @@ type Props = {
   workspaceId?: string;
   workflowId?: string;
   previewContext?: ExpressionFieldContext;
+  /** When set, the provider dropdown is omitted and tools load for this provider. */
+  lockedProvider?: string;
+  workflowNodes?: GoogleAdsSourceNodeRef[];
 };
+
+const ACCOUNT_PARAM_NAMES = new Set(["credentialId", "customerId", "loginCustomerId"]);
+
+function toolOptionLabel(tool: McpDynamicTool) {
+  return tool.implemented ? tool.displayName : `${tool.displayName} (not available yet)`;
+}
+
+function ToolOptions({ tools, grouped }: { tools: McpDynamicTool[]; grouped: boolean }) {
+  const item = (tool: McpDynamicTool) => (
+    <SelectItem key={tool.id} value={tool.id}>
+      {toolOptionLabel(tool)}
+    </SelectItem>
+  );
+  if (!grouped) return <>{tools.map(item)}</>;
+  const common = tools.filter((tool) => (tool.uiGroup || "common") === "common");
+  const performance = tools.filter((tool) => tool.uiGroup === "performance");
+  const advanced = tools.filter((tool) => tool.uiGroup === "advanced");
+  const held = tools.filter((tool) => tool.uiGroup === "internal");
+  return (
+    <>
+      {held.map(item)}
+      {common.length > 0 ? (
+        <SelectGroup>
+          <SelectLabel>Common</SelectLabel>
+          {common.map(item)}
+        </SelectGroup>
+      ) : null}
+      {performance.length > 0 ? (
+        <SelectGroup>
+          <SelectLabel>Performance</SelectLabel>
+          {performance.map(item)}
+        </SelectGroup>
+      ) : null}
+      {advanced.length > 0 ? (
+        <SelectGroup>
+          <SelectLabel>Advanced</SelectLabel>
+          {advanced.map(item)}
+        </SelectGroup>
+      ) : null}
+    </>
+  );
+}
 
 function asParams(value: unknown): Record<string, unknown> {
   if (value && typeof value === "object" && !Array.isArray(value)) {
@@ -97,9 +148,9 @@ function ParamControl({
             <SelectValue placeholder="Select" />
           </SelectTrigger>
           <SelectContent>
-            {(field.enumValues || []).map((option) => (
+            {(field.enumValues || []).map((option, index) => (
               <SelectItem key={option} value={option}>
-                {option}
+                {field.enumLabels?.[index] || option}
               </SelectItem>
             ))}
           </SelectContent>
@@ -201,13 +252,15 @@ export function DynamicMcpToolField({
   workspaceId,
   workflowId,
   previewContext,
+  lockedProvider,
+  workflowNodes,
 }: Props) {
   const [providers, setProviders] = useState<McpDynamicProvider[]>([]);
   const [tools, setTools] = useState<McpDynamicTool[]>([]);
   const [detail, setDetail] = useState<McpDynamicTool | null>(null);
   const [error, setError] = useState("");
 
-  const provider = String(values.provider || "");
+  const provider = lockedProvider || String(values.provider || "");
   const toolId = String(values.toolId || "");
   const params = asParams(values.params);
 
@@ -272,71 +325,135 @@ export function DynamicMcpToolField({
     };
   }, [provider, toolId]);
 
-  const fields = fieldsFromInputSchema(detail?.inputSchema);
+  const fields = fieldsFromInputSchema(detail?.inputSchema).filter((field) =>
+    lockedProvider ? !ACCOUNT_PARAM_NAMES.has(field.name) : true
+  );
   const authType = (detail?.authType || "") as WorkflowCredentialType;
+  const showCredential = Boolean(!lockedProvider && detail && authType);
+  const sourceState = lockedProvider
+    ? googleAdsSourceFieldState(workflowNodes, String(values.googleAdsSourceNodeId || ""))
+    : null;
+  const selectableTools =
+    detail && !tools.some((tool) => tool.id === detail.id) ? [...tools, detail] : tools;
+  const groupTools = Boolean(lockedProvider);
+
+  const emit = (patch: WorkflowNodeData) => {
+    if (!lockedProvider) {
+      onChange(patch);
+      return;
+    }
+    const next = { ...patch };
+    delete next.provider;
+    delete next.credentialId;
+    delete next.customerId;
+    delete next.loginCustomerId;
+    if (next.params && typeof next.params === "object" && !Array.isArray(next.params)) {
+      const nextParams = { ...next.params };
+      delete nextParams.customerId;
+      delete nextParams.loginCustomerId;
+      delete nextParams.credentialId;
+      next.params = nextParams;
+    }
+    onChange(next);
+  };
 
   const setParam = (name: string, next: unknown) => {
-    onChange({
+    emit({
       ...values,
       params: { ...params, [name]: next },
     });
   };
 
+  const credentialPicker = showCredential ? (
+    <CredentialPicker
+      workspaceId={workspaceId}
+      workflowId={workflowId}
+      value={String(values.credentialId || "")}
+      onChange={(credentialId) => emit({ ...values, credentialId })}
+      label="Account"
+      allowedTypes={[authType]}
+    />
+  ) : null;
+
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex flex-col gap-1.5">
-        <Label className="text-xs">Provider</Label>
-        <Select
-          value={provider || undefined}
-          onValueChange={(next) =>
-            onChange({
-              ...values,
-              provider: next,
-              toolId: "",
-              params: {},
-              credentialId: "",
-            })
-          }
-        >
-          <SelectTrigger className="text-xs">
-            <SelectValue placeholder="Select a provider" />
-          </SelectTrigger>
-          <SelectContent>
-            {providers.map((row) => (
-              <SelectItem key={row.id} value={row.id}>
-                {row.displayName}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
+      {sourceState?.message ? (
+        <p className="text-[11px] text-destructive">{sourceState.message}</p>
+      ) : null}
+      {sourceState?.showSelector ? (
+        <div className="flex flex-col gap-1.5">
+          <Label className="text-xs">Google Ads Source</Label>
+          <Select
+            value={String(values.googleAdsSourceNodeId || "") || undefined}
+            onValueChange={(googleAdsSourceNodeId) =>
+              emit({ ...values, googleAdsSourceNodeId })
+            }
+          >
+            <SelectTrigger className="text-xs">
+              <SelectValue placeholder="Select a Google Ads node" />
+            </SelectTrigger>
+            <SelectContent>
+              {sourceState.sources.map((source) => (
+                <SelectItem key={source.id} value={source.id}>
+                  {source.label} ({source.id})
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      ) : null}
+      {lockedProvider ? null : (
+        <div className="flex flex-col gap-1.5">
+          <Label className="text-xs">Provider</Label>
+          <Select
+            value={provider || undefined}
+            onValueChange={(next) =>
+              onChange({
+                ...values,
+                provider: next,
+                toolId: "",
+                params: {},
+                credentialId: "",
+              })
+            }
+          >
+            <SelectTrigger className="text-xs">
+              <SelectValue placeholder="Select a provider" />
+            </SelectTrigger>
+            <SelectContent>
+              {providers.map((row) => (
+                <SelectItem key={row.id} value={row.id}>
+                  {row.displayName}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      )}
 
       <div className="flex flex-col gap-1.5">
         <Label className="text-xs">Tool</Label>
         <Select
           value={toolId || undefined}
-          onValueChange={(next) =>
-            onChange({
+          onValueChange={(next) => {
+            const nextAuth = selectableTools.find((tool) => tool.id === next)?.authType;
+            const keepCredential = !lockedProvider && nextAuth === detail?.authType;
+            emit({
               ...values,
               toolId: next,
               params: {},
-              credentialId:
-                tools.find((tool) => tool.id === next)?.authType === detail?.authType
-                  ? values.credentialId
-                  : "",
-            })
-          }
+              ...(lockedProvider
+                ? {}
+                : { credentialId: keepCredential ? values.credentialId : "" }),
+            });
+          }}
           disabled={!provider}
         >
           <SelectTrigger className="text-xs">
             <SelectValue placeholder={provider ? "Select a tool" : "Choose a provider first"} />
           </SelectTrigger>
           <SelectContent>
-            {tools.map((tool) => (
-              <SelectItem key={tool.id} value={tool.id}>
-                {tool.implemented ? tool.displayName : `${tool.displayName} (not available yet)`}
-              </SelectItem>
-            ))}
+            <ToolOptions tools={selectableTools} grouped={groupTools} />
           </SelectContent>
         </Select>
         {detail?.description ? (
@@ -350,16 +467,7 @@ export function DynamicMcpToolField({
         </p>
       ) : null}
 
-      {detail && authType ? (
-        <CredentialPicker
-          workspaceId={workspaceId}
-          workflowId={workflowId}
-          value={String(values.credentialId || "")}
-          onChange={(credentialId) => onChange({ ...values, credentialId })}
-          label="Account"
-          allowedTypes={[authType]}
-        />
-      ) : null}
+      {credentialPicker}
 
       {fields.map((field) => (
         <ParamControl

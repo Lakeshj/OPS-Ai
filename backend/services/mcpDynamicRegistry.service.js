@@ -3,10 +3,11 @@
  * Describes provider tools and delegates execution to an existing provider
  * executor. Does not store OAuth tokens or implement Google OAuth itself.
  *
- * Google Ads is a known provider with no tools yet.
+ * Google Ads tools are registered from plugins/google-ads-mcp.
  * GA4 candidates without a real executor stay implemented: false.
  */
 const AppError = require("../utils/AppError");
+const googleAdsPlugin = require("../../plugins/google-ads-mcp/src/index.js");
 
 const PROVIDERS = Object.freeze({
   google_analytics: {
@@ -19,10 +20,10 @@ const PROVIDERS = Object.freeze({
     authType: "google_gsc",
     credentialType: "google_gsc",
   },
-  google_ads: {
-    displayName: "Google Ads",
-    authType: "google_ads",
-    credentialType: "google_ads",
+  [googleAdsPlugin.provider.id]: {
+    displayName: googleAdsPlugin.provider.displayName,
+    authType: googleAdsPlugin.provider.authType,
+    credentialType: googleAdsPlugin.provider.credentialType,
   },
 });
 
@@ -337,6 +338,7 @@ const TOOLS = [
       indexStatus: { type: "string", description: "Index status when the executor returns one." },
     }),
   },
+  ...googleAdsPlugin.tools,
 ];
 
 const byKey = new Map();
@@ -354,6 +356,9 @@ for (const tool of TOOLS) {
   if (!["low", "medium", "high"].includes(tool.risk)) {
     throw new Error(`Bad risk for ${tool.id}`);
   }
+  if (tool.uiGroup != null && !["common", "performance", "advanced", "internal"].includes(tool.uiGroup)) {
+    throw new Error(`Bad uiGroup for ${tool.id}`);
+  }
   const key = `${tool.provider}/${tool.id}`;
   if (byKey.has(key)) throw new Error(`Duplicate dynamic MCP tool ${key}`);
   for (const field of describeInputFields(tool.inputSchema)) {
@@ -366,6 +371,10 @@ for (const tool of TOOLS) {
 
 function isDropdownVisible(tool) {
   return tool.access === "read" && tool.risk === "low";
+}
+
+function isUserListed(tool) {
+  return isDropdownVisible(tool) && tool.uiGroup !== "internal";
 }
 
 function describeInputFields(schema) {
@@ -387,6 +396,7 @@ function describeInputFields(schema) {
       itemType: spec?.items?.type,
       minimum: spec?.minimum,
       maximum: spec?.maximum,
+      ...(spec?.accountContext === true ? { accountContext: true } : {}),
     };
   });
 }
@@ -403,6 +413,7 @@ function publicTool(tool) {
     authType: tool.authType,
     access: tool.access,
     risk: tool.risk,
+    uiGroup: tool.uiGroup || "common",
     implemented: Boolean(tool.implemented),
   };
 }
@@ -425,7 +436,7 @@ function listProviders() {
     displayName: meta.displayName,
     authType: meta.authType,
     toolCount: TOOLS.filter(
-      (tool) => tool.provider === id && isDropdownVisible(tool)
+      (tool) => tool.provider === id && isUserListed(tool)
     ).length,
   }));
 }
@@ -433,7 +444,7 @@ function listProviders() {
 function listTools({ provider, exposure = "dropdown" } = {}) {
   const id = assertKnownProvider(provider);
   return TOOLS.filter((tool) => tool.provider === id)
-    .filter((tool) => (exposure === "all" ? true : isDropdownVisible(tool)))
+    .filter((tool) => (exposure === "all" ? true : isUserListed(tool)))
     .map(publicTool);
 }
 
@@ -600,9 +611,21 @@ function rowsToWorkflowItems(data) {
   }));
 }
 
+function credentialRequiredMessage(authType) {
+  if (authType === "google_ads") return "A Google Ads credential is required.";
+  if (authType === "google_ga4") return "A Google Analytics credential is required.";
+  if (authType === "google_gsc") return "A Google Search Console credential is required.";
+  return "A credential is required.";
+}
+
 async function defaultExecuteGsc(args) {
   const host = require("./mcpPluginHost.service");
   return host.executeGscMcpTool(args);
+}
+
+async function defaultExecuteAds(args, deps) {
+  const ads = require("./workflowGoogleAdsMcp.service");
+  return ads.executeGoogleAdsMcpTool(args, deps);
 }
 
 async function executeTool(input = {}, deps = {}) {
@@ -622,19 +645,42 @@ async function executeTool(input = {}, deps = {}) {
       "MCP_TOOL_UNAVAILABLE"
     );
   }
+  const credentialId = String(input.credentialId || "").trim();
+  if (!credentialId) {
+    throw new AppError(
+      credentialRequiredMessage(tool.authType),
+      400,
+      "MCP_CREDENTIAL_REQUIRED"
+    );
+  }
+  if (tool.executor === "google_ads_mcp") {
+    const run = deps.executeGoogleAdsMcp || defaultExecuteAds;
+    try {
+      const rows = await run(
+        {
+          toolId: tool.id,
+          params,
+          credentialId,
+          workspaceId: input.workspaceId,
+          account: input.account,
+        },
+        deps
+      );
+      return { items: rowsToWorkflowItems(rows) };
+    } catch (err) {
+      if (err instanceof AppError) throw err;
+      throw new AppError(
+        sanitizeMessage(err?.message),
+        400,
+        err?.code || "MCP_EXECUTION_FAILED"
+      );
+    }
+  }
   if (tool.executor !== "gsc_mcp_host") {
     throw new AppError(
       `${tool.displayName} has no executor.`,
       400,
       "MCP_TOOL_UNAVAILABLE"
-    );
-  }
-  const credentialId = String(input.credentialId || "").trim();
-  if (!credentialId) {
-    throw new AppError(
-      "A Google Search Console credential is required.",
-      400,
-      "MCP_CREDENTIAL_REQUIRED"
     );
   }
   const run = deps.executeGscMcpTool || defaultExecuteGsc;
@@ -705,7 +751,63 @@ function resolveParamTree(value, context, resolveExpression) {
   return value;
 }
 
-async function executeDynamicMcpNode(node, context = {}) {
+const ADS_ACCOUNT_PARAM_KEYS = ["credentialId", "customerId", "loginCustomerId"];
+
+function sanitizeGoogleAdsMcpNodeData(data) {
+  const next = sanitizeDynamicMcpNodeData(data);
+  if (!next || typeof next !== "object" || Array.isArray(next)) return next;
+  delete next.provider;
+  for (const key of ADS_ACCOUNT_PARAM_KEYS) delete next[key];
+  if (next.params && typeof next.params === "object" && !Array.isArray(next.params)) {
+    const params = { ...next.params };
+    for (const key of ADS_ACCOUNT_PARAM_KEYS) delete params[key];
+    next.params = params;
+  }
+  const sourceId = String(next.googleAdsSourceNodeId || "").trim();
+  if (sourceId) next.googleAdsSourceNodeId = sourceId;
+  else delete next.googleAdsSourceNodeId;
+  return next;
+}
+
+async function executeGoogleAdsMcpNode(node, context = {}, deps = {}) {
+  const { resolveExpression } = require("./workflowNodes.service");
+  const ads = require("./workflowGoogleAdsMcp.service");
+  const account = ads.resolveGoogleAdsAccountContext(node, context, {
+    resolveExpression: deps.resolveExpression || resolveExpression,
+  });
+  const data = sanitizeGoogleAdsMcpNodeData(node?.data || {});
+  const tool = getTool("google_ads", data.toolId);
+  const fieldNames = new Set(
+    describeInputFields(tool.inputSchema).map((field) => field.name)
+  );
+  const params = { ...(data.params || {}) };
+  if (fieldNames.has("customerId")) params.customerId = account.customerId;
+  if (fieldNames.has("loginCustomerId")) {
+    if (account.loginCustomerId) params.loginCustomerId = account.loginCustomerId;
+    else delete params.loginCustomerId;
+  }
+  return executeDynamicMcpNode(
+    {
+      ...node,
+      data: {
+        ...data,
+        provider: "google_ads",
+        credentialId: account.credentialId,
+        params,
+      },
+    },
+    context,
+    {
+      ...deps,
+      account: {
+        customerId: account.customerId,
+        loginCustomerId: account.loginCustomerId,
+      },
+    }
+  );
+}
+
+async function executeDynamicMcpNode(node, context = {}, deps = {}) {
   const { resolveExpression } = require("./workflowNodes.service");
   const data = sanitizeDynamicMcpNodeData(node?.data || {});
   const params = resolveParamTree(data.params || {}, context, resolveExpression);
@@ -714,10 +816,11 @@ async function executeDynamicMcpNode(node, context = {}) {
     toolId: data.toolId,
     params,
     credentialId: data.credentialId,
+    account: deps.account,
     inputItems: Array.isArray(context.inputItems) ? context.inputItems : [],
     workspaceId: context.workspaceId,
     authUser: context.authUser,
-  });
+  }, deps);
   return {
     output: {
       provider: data.provider || "",
@@ -737,8 +840,10 @@ module.exports = {
   getToolDefinition,
   executeTool,
   executeDynamicMcpNode,
+  executeGoogleAdsMcpNode,
   resolveParamTree,
   sanitizeDynamicMcpNodeData,
+  sanitizeGoogleAdsMcpNodeData,
   stripSecrets,
   isDropdownVisible,
 };

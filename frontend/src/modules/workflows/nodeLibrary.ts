@@ -20,6 +20,18 @@ export interface LibraryNode {
   provider: string | null;
   available: boolean;
   engineType: WorkflowNodeType | null;
+  /** Extra search phrases. The card still uses engineType at runtime. */
+  aliases?: string[];
+  keywords?: string[];
+  /** Omit from the user-facing library. The engine type can still load. */
+  hidden?: boolean;
+  /**
+   * Data copied onto the existing engine node when the card is added.
+   * A preset does not create a node type or executor.
+   */
+  preset?: {
+    provider?: string;
+  };
 }
 
 export interface NodeLibraryCatalog {
@@ -40,8 +52,11 @@ export function searchLibraryNodes(
 ): LibraryNode[] {
   const q = query.trim().toLowerCase();
   return nodeLibraryCatalog.nodes.filter((n) => {
+    if (n.hidden) return false;
     if (category !== "all" && n.category !== category) return false;
     if (!q) return true;
+    const aliases = (n.aliases || []).join(" ").toLowerCase();
+    const keywords = (n.keywords || []).join(" ").toLowerCase();
     return (
       n.name.toLowerCase().includes(q) ||
       n.category.toLowerCase().includes(q) ||
@@ -49,7 +64,9 @@ export function searchLibraryNodes(
       String(n.provider || "")
         .toLowerCase()
         .includes(q) ||
-      n.type.toLowerCase().includes(q)
+      n.type.toLowerCase().includes(q) ||
+      aliases.includes(q) ||
+      keywords.includes(q)
     );
   });
 }
@@ -58,6 +75,24 @@ export function resolveEngineType(node: LibraryNode): WorkflowNodeType {
   if (node.engineType) return node.engineType;
   if (node.available) return "noop";
   return "integration";
+}
+
+/** Provider shortcut from a library card. Ignores anything that would change the node type. */
+export function libraryNodePreset(node: LibraryNode): { provider?: string } {
+  const provider = String(node.preset?.provider || "").trim();
+  return provider ? { provider } : {};
+}
+
+export function applyLibraryNodePreset<T extends { nodeType?: unknown; label?: unknown }>(
+  data: T,
+  node: LibraryNode
+): T {
+  return {
+    ...data,
+    ...libraryNodePreset(node),
+    nodeType: data.nodeType,
+    label: data.label,
+  };
 }
 
 function downloadBlob(filename: string, blob: Blob) {

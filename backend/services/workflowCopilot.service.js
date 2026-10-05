@@ -319,6 +319,7 @@ const PARAM_ALLOWLIST = Object.freeze({
     "credentialId",
     "params",
   ],
+  googleAdsMcpTool: ["label", "notes", "toolId", "googleAdsSourceNodeId", "params"],
   aiModelProviderTest: ["label", "notes", "model"],
   aiToolProviderTest: ["label", "notes", "toolName"],
   aiMemoryProviderTest: ["label", "notes"],
@@ -338,6 +339,7 @@ const REQUIRED_PARAMS = Object.freeze({
   googleSheets: ["credentialId", "spreadsheetId"],
   aiGenerate: ["prompt"],
   mcpDynamicTool: ["provider", "toolId"],
+  googleAdsMcpTool: ["toolId"],
 });
 
 let _libraryCache = null;

@@ -3117,6 +3117,10 @@ const handlers = {
     const { executeDynamicMcpNode } = require("./mcpDynamicRegistry.service");
     return executeDynamicMcpNode(node, context);
   },
+  googleAdsMcpTool: async (node, context) => {
+    const { executeGoogleAdsMcpNode } = require("./mcpDynamicRegistry.service");
+    return executeGoogleAdsMcpNode(node, context);
+  },
   gscMcp: async (node, context) => {
     const { executeGscMcpNode } = require("./mcpPluginHost.service");
     return executeGscMcpNode(node, context);

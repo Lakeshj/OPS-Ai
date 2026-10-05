@@ -188,12 +188,14 @@ export function WorkflowNodeDialog({
 
   const nodeResult: WorkflowEditorNodeResult | null = useMemo(() => {
     if (!selectedId) return null;
-    const dirty = Boolean(editorSession?.dirtyNodes?.[selectedId]?.dirty);
+    const dirtyEntry = editorSession?.dirtyNodes?.[selectedId];
+    const dirty = Boolean(dirtyEntry?.dirty);
     return resolveLatestNodeResult({
       nodeId: selectedId,
       sessionResult: editorSession?.nodeResults?.[selectedId] || null,
       run: latestRun,
       dirty,
+      dirtyReason: dirtyEntry?.reason,
     });
   }, [selectedId, editorSession, latestRun]);
 
@@ -667,6 +669,7 @@ export function WorkflowNodeDialog({
                           workflowStatus={workflowStatus}
                           configTab="parameters"
                           previewContext={previewContext}
+                          workflowNodes={definition?.nodes}
                           runInput={runInput}
                           onRunInputChange={onRunInputChange}
                           onTestTrigger={

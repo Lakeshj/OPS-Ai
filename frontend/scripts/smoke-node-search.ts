@@ -4,8 +4,14 @@
  */
 import assert from "node:assert/strict";
 import {
+  applyLibraryNodePreset,
+  nodeLibraryCatalog,
+  resolveEngineType,
+} from "../src/modules/workflows/nodeLibrary";
+import {
   searchNodes,
 } from "../src/modules/workflows/nodeSearch";
+import { googleAdsSourceFieldState } from "../src/modules/workflows/googleAdsMcpSource";
 
 let passed = 0;
 const check = (name: string, fn: () => void) => {
@@ -104,6 +110,99 @@ check("unknown query returns empty", () => {
     availability: "all",
   });
   assert.equal(r.length, 0);
+});
+
+const adsMcp = () =>
+  nodeLibraryCatalog.nodes.find((node) => node.id === "google-ads-mcp-tools");
+
+check("ADS-MCP-NODE-1/2 Google Ads MCP Tools appears in the library", () => {
+  const r = searchNodes({ query: "Google Ads MCP Tools", availability: "available" });
+  assert.ok(r.some((node) => node.id === "google-ads-mcp-tools"));
+  const node = adsMcp();
+  assert.equal(node?.name, "Google Ads MCP Tools");
+  assert.equal(node?.provider, "Google");
+  assert.equal(node?.category, "SEO");
+  assert.match(node?.description || "", /Read-only Google Ads tools/);
+});
+
+check("ADS-MCP-NODE-3 search GAQL finds Google Ads MCP Tools", () => {
+  for (const query of ["GAQL", "Ads MCP", "Google Ads tools", "MCP Google Ads", "Google Ads search"]) {
+    const r = searchNodes({ query, availability: "available" });
+    assert.ok(r.some((node) => node.id === "google-ads-mcp-tools"), query);
+  }
+});
+
+check("ADS-MCP-NODE-4/5 adding the card creates googleAdsMcpTool without a provider", () => {
+  const node = adsMcp();
+  assert.ok(node);
+  assert.equal(resolveEngineType(node), "googleAdsMcpTool");
+  assert.equal(node.preset, undefined);
+  const data = applyLibraryNodePreset(
+    {
+      label: node.name,
+      nodeType: resolveEngineType(node),
+      toolId: "",
+      params: {},
+    },
+    node
+  );
+  assert.equal(data.nodeType, "googleAdsMcpTool");
+  assert.equal(data.toolId, "");
+  assert.equal("provider" in data, false);
+  assert.equal("credentialId" in data, false);
+  assert.equal("googleAdsSourceNodeId" in data, false);
+});
+
+check("ADS-MCP-V2A-2/3 Google Ads Source appears only when several Google Ads nodes exist", () => {
+  const one = googleAdsSourceFieldState(
+    [{ id: "ads-1", type: "googleAds", data: { label: "Main" } }],
+    ""
+  );
+  assert.equal(one.showSelector, false);
+  assert.equal(one.message, null);
+  const many = googleAdsSourceFieldState(
+    [
+      { id: "ads-a", type: "googleAds", data: { label: "Brand" } },
+      { id: "ads-b", type: "googleAds", data: { label: "Retail" } },
+    ],
+    ""
+  );
+  assert.equal(many.showSelector, true);
+  assert.deepEqual(
+    many.sources.map((row) => `${row.label} (${row.id})`),
+    ["Brand (ads-a)", "Retail (ads-b)"]
+  );
+  const none = googleAdsSourceFieldState([], "");
+  assert.equal(none.message, "Add and configure a Google Ads node first.");
+  const gone = googleAdsSourceFieldState(
+    [{ id: "ads-1", type: "googleAds", data: { label: "Main" } }],
+    "deleted"
+  );
+  assert.equal(gone.message, "The selected Google Ads source is no longer in this workflow.");
+});
+
+check("ADS-MCP-NODE-17 generic Dynamic MCP card is hidden", () => {
+  const generic = nodeLibraryCatalog.nodes.find((node) => node.id === "mcp-dynamic-tool");
+  assert.equal(generic?.hidden, true);
+  assert.equal(generic?.engineType, "mcpDynamicTool");
+  for (const availability of ["available", "all"] as const) {
+    const r = searchNodes({ query: "Dynamic MCP Tool", availability });
+    assert.equal(r.some((node) => node.id === "mcp-dynamic-tool"), false);
+    const listed = searchNodes({ query: "", availability });
+    assert.equal(listed.some((node) => node.id === "mcp-dynamic-tool"), false);
+  }
+});
+
+check("ADS-MCP-NODE-14/18/19 native Ads, GA4 MCP, and GSC MCP cards stay", () => {
+  const native = nodeLibraryCatalog.nodes.find((node) => node.id === "google-ads");
+  assert.equal(native?.engineType, "googleAds");
+  assert.equal(native?.name, "Google Ads");
+  const ga4 = nodeLibraryCatalog.nodes.find((node) => node.id === "ga4-mcp-tools");
+  assert.equal(ga4?.engineType, "ga4McpTool");
+  assert.equal(ga4?.name, "GA4 MCP Tools");
+  const gsc = nodeLibraryCatalog.nodes.find((node) => node.id === "gsc-mcp-tools");
+  assert.equal(gsc?.engineType, "gscMcpTool");
+  assert.equal(gsc?.name, "GSC MCP Tools");
 });
 
 check('typo "spredsheet" → Spreadsheet', () => {

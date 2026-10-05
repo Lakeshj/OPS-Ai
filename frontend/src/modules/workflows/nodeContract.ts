@@ -154,7 +154,9 @@ export type ParamCustomRenderer =
   /** GA4 order-by limited to selected metrics/dimensions */
   | "ga4OrderBy"
   /** Provider, tool, and schema-driven parameters for the dynamic MCP node */
-  | "mcpDynamicTool";
+  | "mcpDynamicTool"
+  /** Google Ads MCP tools. Provider is fixed by the node type. */
+  | "googleAdsMcpTool";
 
 export interface DisplayOptions {
   show?: Record<string, Array<string | number | boolean>>;
@@ -2004,10 +2006,35 @@ export const NODE_CONTRACTS: Record<WorkflowNodeType, NodeContract> = {
     params: [],
     dirtyTriggers: ["params", "edges", "pin", "disabled"],
     edgeCases: [
+      "Kept for existing workflows. New Google Ads MCP nodes use googleAdsMcpTool",
       "Tool list and parameter fields come from the shared MCP registry",
       "Dropdown lists read-only, low-risk tools",
-      "Uses the provider credential already stored for GA4 or Search Console",
+      "Uses the provider credential already stored for GA4, Search Console, or Google Ads",
       "Unavailable tools can be saved but do not call Google",
+    ],
+  },
+
+  googleAdsMcpTool: {
+    type: "googleAdsMcpTool",
+    version: 1,
+    category: "SEO",
+    label: "Google Ads MCP Tools",
+    inputs: [mainIn()],
+    outputs: [mainOut, errorOut],
+    cardinality: "1-to-N",
+    pairedItemPolicy: "fanOut",
+    settings: SETTINGS_ACTION,
+    capabilities: CAP_ACTION,
+    isSideEffecting: true,
+    params: [],
+    dirtyTriggers: ["params", "edges", "pin", "disabled"],
+    edgeCases: [
+      "Provider is google_ads by node type. The saved node does not store a provider field",
+      "Account context comes from a Google Ads node. One node is used automatically",
+      "Several Google Ads nodes require a Google Ads Source selection",
+      "The saved node does not store a credential, customer ID, or login customer ID",
+      "Tool list and parameter fields come from the shared Google Ads MCP registry",
+      "Read-only. Search accepts GAQL SELECT only",
     ],
   },
 

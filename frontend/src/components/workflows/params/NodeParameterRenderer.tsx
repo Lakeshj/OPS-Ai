@@ -35,6 +35,7 @@ import { Ga4FilterField } from "./Ga4FilterField";
 import { Ga4OrderByField } from "./Ga4OrderByField";
 import { DynamicMcpToolField } from "./DynamicMcpToolField";
 import type { KeywordAssistant, WorkspaceDocument } from "@/modules/shared/types";
+import type { GoogleAdsSourceNodeRef } from "@/modules/workflows/googleAdsMcpSource";
 
 export type ParameterRenderContext = {
   workspaceId?: string;
@@ -44,6 +45,7 @@ export type ParameterRenderContext = {
   documents?: WorkspaceDocument[];
   spreadsheetDocs?: WorkspaceDocument[];
   assistants?: KeywordAssistant[];
+  workflowNodes?: GoogleAdsSourceNodeRef[];
   uploadingSpreadsheet?: boolean;
   onUploadSpreadsheet?: (file: File | null) => Promise<void>;
 };
@@ -124,6 +126,19 @@ function renderSpecial(
           workspaceId={context.workspaceId}
           workflowId={context.workflowId}
           previewContext={context.previewContext}
+        />
+      );
+    case "googleAdsMcpTool":
+      return (
+        <DynamicMcpToolField
+          key={param.name}
+          lockedProvider="google_ads"
+          values={values}
+          onChange={onChange}
+          workspaceId={context.workspaceId}
+          workflowId={context.workflowId}
+          previewContext={context.previewContext}
+          workflowNodes={context.workflowNodes}
         />
       );
     case "googleGscSites":

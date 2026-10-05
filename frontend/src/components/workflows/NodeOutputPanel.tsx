@@ -374,7 +374,8 @@ export function NodeOutputPanel({
         </div>
       )}
 
-      {Boolean(
+      {effectiveResult?.status !== "failed" &&
+        Boolean(
         effectiveResult?.cacheState === "dirty" ||
           (effectiveResult?.output &&
             typeof effectiveResult.output === "object" &&

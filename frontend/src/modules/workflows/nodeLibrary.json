@@ -707,6 +707,25 @@
       "engineType": "googleAds"
     },
     {
+      "id": "google-ads-mcp-tools",
+      "name": "Google Ads MCP Tools",
+      "category": "SEO",
+      "type": "Action",
+      "description": "Read-only Google Ads tools. The Google Ads node supplies the account.",
+      "icon": "chart",
+      "provider": "Google",
+      "available": true,
+      "engineType": "googleAdsMcpTool",
+      "aliases": [
+        "google ads mcp",
+        "google ads tools",
+        "ads mcp",
+        "mcp google ads",
+        "gaql",
+        "google ads search"
+      ]
+    },
+    {
       "id": "ga4-mcp-tools",
       "name": "GA4 MCP Tools",
       "category": "SEO",
@@ -726,6 +745,7 @@
       "icon": "search",
       "provider": "OpsAi",
       "available": true,
+      "hidden": true,
       "engineType": "mcpDynamicTool"
     },
     {

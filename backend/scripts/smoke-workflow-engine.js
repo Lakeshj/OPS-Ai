@@ -9574,6 +9574,11 @@ require("./smoke-workflow-google-ads-v1").registerGoogleAdsV1Tests({
   section,
   assert,
 });
+require("./smoke-workflow-google-ads-mcp").registerGoogleAdsMcpTests({
+  check,
+  section,
+  assert,
+});
 
 (async () => {
   for (const task of queue) await task();

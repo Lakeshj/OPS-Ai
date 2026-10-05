@@ -1,6 +1,7 @@
 /**
  * Google Ads V1 — read-only reporting.
- * GAQL is built only from this module. The node never sends mutate requests.
+ * GAQL definitions live in googleAdsReportCatalog.js. This module runs them.
+ * The node never sends mutate requests.
  *
  * API: Google Ads API v25 (v25.2 is served on the /v25/ REST prefix).
  * https://googleads.googleapis.com/v25/customers/{customerId}/googleAds:search
@@ -16,209 +17,15 @@ const {
 } = require("./googleOAuth.service");
 
 const ADS_API_VERSION = GOOGLE_ADS_API_VERSION;
-const ADS_ROW_MAX = 10000;
+const {
+  ADS_ROW_MAX,
+  REPORTS,
+  FILTER_DEFS,
+  buildReportQuery,
+} = require("./googleAdsReportCatalog");
+
 const ADS_PAGE_MAX = 40;
 const CUSTOMER_ID_RE = /^\d{10}$/;
-
-const STATUS_ENUM = ["ENABLED", "PAUSED", "REMOVED"];
-const DEVICE_ENUM = ["MOBILE", "TABLET", "DESKTOP", "CONNECTED_TV", "OTHER"];
-
-const TRAFFIC_METRICS = [
-  "metrics.impressions",
-  "metrics.clicks",
-  "metrics.ctr",
-  "metrics.cost_micros",
-  "metrics.average_cpc",
-  "metrics.conversions",
-  "metrics.conversions_value",
-];
-
-const CONVERSION_METRICS = [
-  "metrics.conversions",
-  "metrics.conversions_value",
-  "metrics.all_conversions",
-  "metrics.all_conversions_value",
-];
-
-const CUSTOMER_FIELDS = ["customer.id", "customer.currency_code"];
-
-const REPORTS = Object.freeze({
-  campaign_performance: {
-    label: "Campaign Performance",
-    from: "campaign",
-    select: [
-      ...CUSTOMER_FIELDS,
-      "campaign.id",
-      "campaign.name",
-      "campaign.status",
-      "campaign.advertising_channel_type",
-      "segments.date",
-      ...TRAFFIC_METRICS,
-    ],
-    orderBy: "metrics.impressions DESC",
-    traffic: true,
-  },
-  ad_group_performance: {
-    label: "Ad Group Performance",
-    from: "ad_group",
-    select: [
-      ...CUSTOMER_FIELDS,
-      "campaign.id",
-      "campaign.name",
-      "ad_group.id",
-      "ad_group.name",
-      "ad_group.status",
-      "segments.date",
-      ...TRAFFIC_METRICS,
-    ],
-    orderBy: "metrics.impressions DESC",
-    traffic: true,
-  },
-  keyword_performance: {
-    label: "Keyword Performance",
-    from: "keyword_view",
-    select: [
-      ...CUSTOMER_FIELDS,
-      "campaign.id",
-      "campaign.name",
-      "ad_group.id",
-      "ad_group.name",
-      "ad_group_criterion.keyword.text",
-      "ad_group_criterion.keyword.match_type",
-      "ad_group_criterion.status",
-      "segments.date",
-      ...TRAFFIC_METRICS,
-    ],
-    orderBy: "metrics.impressions DESC",
-    traffic: true,
-  },
-  search_terms: {
-    label: "Search Terms",
-    from: "search_term_view",
-    select: [
-      ...CUSTOMER_FIELDS,
-      "search_term_view.search_term",
-      "campaign.id",
-      "campaign.name",
-      "ad_group.id",
-      "ad_group.name",
-      "segments.date",
-      ...TRAFFIC_METRICS,
-    ],
-    orderBy: "metrics.impressions DESC",
-    traffic: true,
-  },
-  device_performance: {
-    label: "Device Performance",
-    from: "campaign",
-    select: [
-      ...CUSTOMER_FIELDS,
-      "campaign.id",
-      "campaign.name",
-      "segments.device",
-      "segments.date",
-      ...TRAFFIC_METRICS,
-    ],
-    orderBy: "metrics.impressions DESC",
-    traffic: true,
-  },
-  geographic_performance: {
-    label: "Geographic Performance",
-    from: "geographic_view",
-    select: [
-      ...CUSTOMER_FIELDS,
-      "campaign.id",
-      "campaign.name",
-      "geographic_view.country_criterion_id",
-      "geographic_view.location_type",
-      "segments.date",
-      ...TRAFFIC_METRICS,
-    ],
-    orderBy: "metrics.impressions DESC",
-    traffic: true,
-  },
-  conversion_performance: {
-    label: "Conversion Performance",
-    from: "campaign",
-    select: [
-      ...CUSTOMER_FIELDS,
-      "campaign.id",
-      "campaign.name",
-      "segments.conversion_action_name",
-      "segments.conversion_action_category",
-      "segments.date",
-      ...CONVERSION_METRICS,
-    ],
-    orderBy: "metrics.conversions DESC",
-    traffic: false,
-  },
-});
-
-const FILTER_DEFS = Object.freeze({
-  campaignStatus: {
-    reports: [
-      "campaign_performance",
-      "ad_group_performance",
-      "device_performance",
-      "geographic_performance",
-      "conversion_performance",
-    ],
-    field: "campaign.status",
-    kind: "enum",
-    values: STATUS_ENUM,
-  },
-  campaignId: {
-    reports: [
-      "campaign_performance",
-      "ad_group_performance",
-      "keyword_performance",
-      "search_terms",
-      "device_performance",
-      "geographic_performance",
-      "conversion_performance",
-    ],
-    field: "campaign.id",
-    kind: "id",
-  },
-  campaignName: {
-    reports: ["campaign_performance", "ad_group_performance", "device_performance"],
-    field: "campaign.name",
-    kind: "contains",
-  },
-  adGroupStatus: {
-    reports: ["ad_group_performance", "keyword_performance"],
-    field: "ad_group.status",
-    kind: "enum",
-    values: STATUS_ENUM,
-  },
-  adGroupId: {
-    reports: ["ad_group_performance", "keyword_performance", "search_terms"],
-    field: "ad_group.id",
-    kind: "id",
-  },
-  keywordStatus: {
-    reports: ["keyword_performance"],
-    field: "ad_group_criterion.status",
-    kind: "enum",
-    values: STATUS_ENUM,
-  },
-  keywordText: {
-    reports: ["keyword_performance"],
-    field: "ad_group_criterion.keyword.text",
-    kind: "contains",
-  },
-  searchTerm: {
-    reports: ["search_terms"],
-    field: "search_term_view.search_term",
-    kind: "contains",
-  },
-  device: {
-    reports: ["device_performance"],
-    field: "segments.device",
-    kind: "enum",
-    values: DEVICE_ENUM,
-  },
-});
 
 const SECRET_KEY_RE =
   /(access[_-]?token|refresh[_-]?token|client[_-]?secret|developer[_-]?token|api[_-]?key|^password$|^authorization$|^secret$|^token$)/i;
@@ -239,78 +46,6 @@ const normalizeCustomerId = (value, label) => {
     );
   }
   return digits;
-};
-
-const escapeLike = (value) =>
-  String(value)
-    .replace(/\\/g, "\\\\")
-    .replace(/'/g, "\\'")
-    .replace(/%/g, "\\%")
-    .replace(/_/g, "\\_");
-
-const filterClause = (reportType, key, raw) => {
-  const spec = FILTER_DEFS[key];
-  if (!spec || !spec.reports.includes(reportType)) {
-    throw adsError(`Filter ${key} is not valid for this report.`, "GOOGLE_ADS_FILTER");
-  }
-  const value = String(raw || "").trim();
-  if (!value || value.toLowerCase() === "any") return "";
-  if (spec.kind === "enum") {
-    const picked = value.toUpperCase();
-    if (!spec.values.includes(picked)) {
-      throw adsError(
-        `${key} must be one of ${spec.values.join(", ")}.`,
-        "GOOGLE_ADS_FILTER"
-      );
-    }
-    return `${spec.field} = ${picked}`;
-  }
-  if (spec.kind === "id") {
-    if (!/^\d+$/.test(value)) {
-      throw adsError(`${key} must be numeric.`, "GOOGLE_ADS_FILTER");
-    }
-    return `${spec.field} = ${value}`;
-  }
-  return `${spec.field} LIKE '%${escapeLike(value)}%'`;
-};
-
-const buildReportQuery = ({
-  reportType,
-  startDate,
-  endDate,
-  filters = {},
-  limit,
-}) => {
-  const report = REPORTS[reportType];
-  if (!report) {
-    throw adsError("Unknown Google Ads report.", "GOOGLE_ADS_REPORT");
-  }
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(startDate) || !/^\d{4}-\d{2}-\d{2}$/.test(endDate)) {
-    throw adsError("Date range must be YYYY-MM-DD.", "GOOGLE_ADS_DATE");
-  }
-  const cap = Math.min(Math.max(Number(limit) || 1, 1), ADS_ROW_MAX);
-  const where = [`segments.date BETWEEN '${startDate}' AND '${endDate}'`];
-  for (const [key, raw] of Object.entries(filters || {})) {
-    if (raw == null || String(raw).trim() === "") continue;
-    const spec = FILTER_DEFS[key];
-    if (!spec) {
-      throw adsError(`Unknown filter ${key}.`, "GOOGLE_ADS_FILTER");
-    }
-    if (!spec.reports.includes(reportType)) continue;
-    const clause = filterClause(reportType, key, raw);
-    if (clause) where.push(clause);
-  }
-  return {
-    gaql: [
-      `SELECT ${report.select.join(", ")}`,
-      `FROM ${report.from}`,
-      `WHERE ${where.join(" AND ")}`,
-      `ORDER BY ${report.orderBy}`,
-      `LIMIT ${cap}`,
-    ].join("\n"),
-    limit: cap,
-    report,
-  };
 };
 
 const asNumber = (value) => {

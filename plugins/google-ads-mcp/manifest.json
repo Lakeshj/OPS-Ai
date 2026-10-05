@@ -1,0 +1,19 @@
+{
+  "id": "google-ads-mcp",
+  "name": "Google Ads MCP Tools",
+  "version": "0.1.0",
+  "phase": 1,
+  "capabilities": [
+    "tool.registry",
+    "tool.execution",
+    "workflow.node"
+  ],
+  "transports": [],
+  "credentialTypes": ["google_ads"],
+  "engineNodeType": "googleAdsMcpTool",
+  "libraryId": "google-ads-mcp-tools",
+  "userFacingWorkflowNode": true,
+  "authOnNode": true,
+  "consumers": ["workflow.mcp.dynamic", "workflow.googleAdsMcpTool"],
+  "notes": "Read-only Google Ads MCP tools. OAuth and the Google Ads API client stay in shared backend services. This plugin does not call mutate endpoints."
+}

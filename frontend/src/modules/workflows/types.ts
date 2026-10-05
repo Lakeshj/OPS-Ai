@@ -50,6 +50,7 @@ export type WorkflowNodeType =
   | "gscMcpTool"
   | "ga4McpTool"
   | "mcpDynamicTool"
+  | "googleAdsMcpTool"
   | "respondToWebhook"
   | "googleSearchConsole"
   | "gscMcp"
@@ -387,6 +388,8 @@ export interface WorkflowNodeData {
   /** Dynamic MCP tool */
   toolId?: string;
   params?: Record<string, unknown>;
+  /** Google Ads MCP Tools — existing googleAds node that supplies account context */
+  googleAdsSourceNodeId?: string;
   /** HTTP */
   url?: string;
   method?: string;

@@ -1167,6 +1167,19 @@ export const NODE_PARAMETER_SCHEMAS: Record<WorkflowNodeType, ParamDescriptor[]>
       },
     ],
 
+    googleAdsMcpTool: [
+      {
+        name: "toolId",
+        displayName: "Tool",
+        type: "string",
+        default: "",
+        required: true,
+        customRenderer: "googleAdsMcpTool",
+        description:
+          "Google Ads tool and its parameters. Account context comes from a Google Ads node in this workflow.",
+      },
+    ],
+
     ga4McpTool: [
       {
         name: "_upstreamNotice",

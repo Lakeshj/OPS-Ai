@@ -1,6 +1,7 @@
 /**
  * Phase 3B — shared dynamic MCP registry, API surface, and node persistence.
- * Does not execute GA4 realtime/funnel (no executor) and does not call Google Ads.
+ * Does not execute GA4 realtime/funnel (no executor).
+ * Google Ads MCP tools are covered in smoke-workflow-google-ads-mcp.js.
  */
 const assert = require("node:assert");
 const fs = require("fs");
@@ -44,8 +45,12 @@ const registerMcpDynamicTests = ({ check, section, assert: a }) => {
     assertX.deepEqual(gscIds, ["inspect_url_enhanced"]);
     assertX.equal(ga4Ids.includes("inspect_url_enhanced"), false);
     assertX.equal(gscIds.includes("run_realtime_report"), false);
-    const ads = registry().listTools({ provider: "google_ads" });
-    assertX.deepEqual(ads, []);
+    const adsIds = registry()
+      .listTools({ provider: "google_ads" })
+      .map((tool) => tool.id);
+    assertX.equal(ga4Ids.some((id) => adsIds.includes(id)), false);
+    assertX.equal(adsIds.includes("inspect_url_enhanced"), false);
+    assertX.equal(gscIds.includes("search"), false);
     const providers = registry().listProviders();
     assertX.ok(providers.some((row) => row.id === "google_ads" && row.authType === "google_ads"));
   });
