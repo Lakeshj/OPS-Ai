@@ -7,6 +7,7 @@
 
 const { buildCommonToolQuery, COMMON_TOOL_IDS } = require("./contracts/catalog");
 const { buildPerformanceToolQuery, PERFORMANCE_TOOL_IDS } = require("./contracts/performance");
+const { buildAssetPerformanceQuery, buildChangeHistoryQuery } = require("./contracts/v2d");
 
 const ADS_ROW_MAX = 10000;
 const ADS_PAGE_MAX = 40;
@@ -428,6 +429,18 @@ const createExecutor = (runtime = {}) => {
         deps
       );
     }
+    if (toolId === "asset_performance" || toolId === "change_history") {
+      const build = toolId === "asset_performance" ? buildAssetPerformanceQuery : buildChangeHistoryQuery;
+      return runAccountQuery(
+        {
+          ...args,
+          toolId,
+          account: input.account,
+        },
+        deps,
+        build
+      );
+    }
     if (PERFORMANCE_TOOL_IDS.includes(toolId)) {
       return runPerformanceTool(
         {
@@ -441,6 +454,35 @@ const createExecutor = (runtime = {}) => {
     throw adsError(`Unknown Google Ads MCP tool "${toolId}".`, "MCP_UNKNOWN_TOOL");
   }
 
+  async function runAccountQuery(input, deps, build) {
+    const account = accountFromInput(input);
+    let built;
+    try {
+      built = build(input.params || {}, { customerId: account.customerId });
+    } catch (err) {
+      if (err instanceof AppError) throw err;
+      throw adsError(
+        err.message || "Google Ads query could not be built.",
+        err.code || "GOOGLE_ADS_FILTER"
+      );
+    }
+    assertSelectQuery(built.query);
+    return runCustomerSearch(
+      {
+        credentialId: input.credentialId,
+        workspaceId: input.workspaceId,
+        customerId: account.customerId,
+        loginCustomerId: account.loginCustomerId,
+        query: built.query,
+        limit: built.limit,
+        tool: String(input.toolId || ""),
+        resource: built.resource,
+        dateRange: built.dateRange,
+      },
+      deps
+    );
+  }
+
   return {
     ADS_API_VERSION,
     SEARCH_URL_SUFFIX,
@@ -448,6 +490,8 @@ const createExecutor = (runtime = {}) => {
     fieldServiceQuery,
     buildCommonToolQuery,
     buildPerformanceToolQuery,
+    buildAssetPerformanceQuery,
+    buildChangeHistoryQuery,
     executeGoogleAdsMcpTool,
   };
 };

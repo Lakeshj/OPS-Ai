@@ -137,6 +137,11 @@ const MCP_PERFORMANCE_LABELS = Object.freeze({
     entity: "conversion",
     resource: "campaign",
   },
+  asset_performance: {
+    title: "Google Ads Asset Performance",
+    entity: "asset",
+    resource: "asset",
+  },
 });
 
 const isMcpSearchRow = (row) =>
@@ -149,6 +154,9 @@ const isMcpEntityRow = (row) =>
 const isMcpPerformanceRow = (row) =>
   row?._meta?.provider === "google_ads" &&
   Object.prototype.hasOwnProperty.call(MCP_PERFORMANCE_LABELS, String(row?._meta?.tool || ""));
+
+const isMcpChangeRow = (row) =>
+  row?._meta?.provider === "google_ads" && row?._meta?.tool === "change_history";
 
 const mcpSearchMeta = (row) => {
   const resource = String(row?._meta?.resource || "").trim();
@@ -191,7 +199,21 @@ const valueAtPath = (row, fieldPath) =>
 const reportMeta = (row) => {
   if (isMcpSearchRow(row)) return mcpSearchMeta(row);
   if (isMcpEntityRow(row)) return MCP_ENTITY_LABELS[row._meta.tool];
-  if (isMcpPerformanceRow(row)) return MCP_PERFORMANCE_LABELS[row._meta.tool];
+  if (isMcpChangeRow(row)) {
+    return {
+      title: "Google Ads Change History",
+      entity: "change",
+      resource: "change_event",
+    };
+  }
+  if (isMcpPerformanceRow(row)) {
+    const label = MCP_PERFORMANCE_LABELS[row._meta.tool];
+    if (row._meta.tool === "asset_performance") {
+      const resource = String(row._meta.resource || "").trim();
+      return { ...label, resource: resource || label.resource };
+    }
+    return label;
+  }
   const known = ADS_REPORT_TYPES[String(row?._meta?.report || row?.reportType || "")];
   if (known) return known;
   const resource = String(row?._meta?.resource || "");
@@ -287,7 +309,12 @@ const formatActualFieldReport = (list) => {
 const formatGoogleAdsReport = (rows) => {
   const list = collectRows(rows);
   if (!looksLikeGoogleAdsRows(list)) return null;
-  if (isMcpSearchRow(list[0]) || isMcpEntityRow(list[0]) || isMcpPerformanceRow(list[0])) {
+  if (
+    isMcpSearchRow(list[0]) ||
+    isMcpEntityRow(list[0]) ||
+    isMcpChangeRow(list[0]) ||
+    isMcpPerformanceRow(list[0])
+  ) {
     return formatActualFieldReport(list);
   }
   const meta = reportMeta(list[0]);
@@ -341,13 +368,20 @@ const applyGoogleAdsAiGrounding = ({
     };
   }
   const meta = reportMeta(rows[0]);
-  if (isMcpSearchRow(rows[0]) || isMcpEntityRow(rows[0]) || isMcpPerformanceRow(rows[0])) {
+  if (
+    isMcpSearchRow(rows[0]) ||
+    isMcpEntityRow(rows[0]) ||
+    isMcpChangeRow(rows[0]) ||
+    isMcpPerformanceRow(rows[0])
+  ) {
     const fields = [...new Set(rows.flatMap((row) => listActualFieldPaths(row)))];
     const kind = isMcpSearchRow(rows[0])
       ? "search results"
-      : isMcpPerformanceRow(rows[0])
-        ? "performance records"
-        : "entity records";
+      : isMcpChangeRow(rows[0])
+        ? "account change records"
+        : isMcpPerformanceRow(rows[0])
+          ? "performance records"
+          : "entity records";
     const rules = [
       "Google Ads evidence rules:",
       "source: google_ads",
@@ -365,12 +399,26 @@ const applyGoogleAdsAiGrounding = ({
       "If a field is absent, omit it.",
       "Do not invent fields.",
       "Do not recalculate values that are present. Copy them from the rows.",
-      ...(isMcpPerformanceRow(rows[0])
+      ...(isMcpChangeRow(rows[0])
         ? [
-            "Do not rename a search term to a keyword.",
-            "Do not describe geographic fields as page paths.",
+            "These rows are account change history.",
+            "Do not interpret a change event as performance data.",
+            "When old and new resource values are present, keep them distinct.",
+            "Do not invent a field-by-field diff when old or new resource data is absent.",
+            "Do not claim a change caused a later metric movement.",
           ]
         : []),
+      ...(isMcpPerformanceRow(rows[0]) && rows[0]._meta.tool === "asset_performance"
+        ? [
+            "Use the asset resource and fields on the rows.",
+            "Do not invent creative text.",
+          ]
+        : isMcpPerformanceRow(rows[0])
+          ? [
+              "Do not rename a search term to a keyword.",
+              "Do not describe geographic fields as page paths.",
+            ]
+          : []),
       "",
       `Available fields: ${fields.join(", ")}`,
     ].join("\n");

@@ -13,6 +13,8 @@ Read-only Google Ads tools for the dynamic MCP registry and the `googleAdsMcpToo
 
 OAuth, the `google_ads` credential, and `googleApiRequest` stay in backend services. The backend host injects them. This plugin does not open a second Google Ads client and does not call mutate endpoints.
 
+Keyword Planner is a separate future capability. It uses KeywordPlanIdeaService rather than GoogleAdsService.Search, so it stays out of this reporting catalog until that design is reviewed.
+
 ```bash
 cd plugins/google-ads-mcp && npm test
 ```

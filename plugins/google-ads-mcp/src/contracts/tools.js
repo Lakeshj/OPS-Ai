@@ -5,6 +5,7 @@
 
 const { commonToolDefinitions } = require("./catalog");
 const { performanceToolDefinitions } = require("./performance");
+const { assetPerformanceTool, changeHistoryTool } = require("./v2d");
 
 const objectSchema = (properties, required = []) => ({
   type: "object",
@@ -22,6 +23,7 @@ const provider = Object.freeze({
 const tools = Object.freeze([
   ...commonToolDefinitions(provider),
   ...performanceToolDefinitions(provider),
+  assetPerformanceTool(provider),
   {
     provider: provider.id,
     id: "list_accessible_customers",
@@ -41,6 +43,7 @@ const tools = Object.freeze([
       customerId: { type: "string", description: "Customer id when the resource name includes one." },
     }),
   },
+  changeHistoryTool(provider),
   {
     provider: provider.id,
     id: "get_resource_metadata",

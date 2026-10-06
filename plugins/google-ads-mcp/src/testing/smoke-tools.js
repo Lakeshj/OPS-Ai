@@ -36,13 +36,17 @@ assert.deepEqual(
     "geographic_performance",
     "placement_performance",
     "conversion_performance",
+    "asset_performance",
     "list_accessible_customers",
+    "change_history",
     "get_resource_metadata",
     "search",
   ]
 );
 assert.equal(tools.find((tool) => tool.id === "campaign_performance").uiGroup, "performance");
-assert.equal(tools.filter((tool) => tool.uiGroup === "performance").length, 9);
+assert.equal(tools.find((tool) => tool.id === "asset_performance").uiGroup, "performance");
+assert.equal(tools.find((tool) => tool.id === "change_history").uiGroup, "advanced");
+assert.equal(tools.filter((tool) => tool.uiGroup === "performance").length, 10);
 assert.equal(tools.find((tool) => tool.id === "get_resource_metadata").uiGroup, "advanced");
 assert.equal(tools.find((tool) => tool.id === "search").uiGroup, "advanced");
 for (const tool of tools) {

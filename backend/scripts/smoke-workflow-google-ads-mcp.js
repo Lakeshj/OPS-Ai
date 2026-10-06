@@ -30,7 +30,7 @@ const registerGoogleAdsMcpTests = ({ check, section, assert: a }) => {
     const providers = registry().listProviders();
     const ads = providers.find((row) => row.id === "google_ads");
     assertX.equal(ads.authType, "google_ads");
-    assertX.equal(ads.toolCount, 19);
+    assertX.equal(ads.toolCount, 21);
     const tools = registry().listTools({ provider: "google_ads" });
     assertX.deepEqual(
       tools.map((tool) => tool.id),
@@ -52,6 +52,8 @@ const registerGoogleAdsMcpTests = ({ check, section, assert: a }) => {
         "geographic_performance",
         "placement_performance",
         "conversion_performance",
+        "asset_performance",
+        "change_history",
         "get_resource_metadata",
         "search",
       ]
@@ -77,7 +79,9 @@ const registerGoogleAdsMcpTests = ({ check, section, assert: a }) => {
       "geographic_performance",
       "placement_performance",
       "conversion_performance",
+      "asset_performance",
       "list_accessible_customers",
+      "change_history",
       "get_resource_metadata",
       "search",
     ]);
@@ -934,7 +938,7 @@ const registerGoogleAdsMcpTests = ({ check, section, assert: a }) => {
     const advanced = tools.filter((tool) => tool.uiGroup === "advanced");
     assertX.deepEqual(
       advanced.map((tool) => tool.id),
-      ["get_resource_metadata", "search"]
+      ["change_history", "get_resource_metadata", "search"]
     );
     for (const tool of advanced) {
       assertX.equal(tool.authType, "google_ads");
@@ -2049,16 +2053,16 @@ const registerGoogleAdsMcpTests = ({ check, section, assert: a }) => {
     assertX.strictEqual(built.report, nativeAds().REPORTS[toolId], toolId);
   };
 
-  check("ADS-MCP-V2C-1 Performance group contains exactly 9 tools", () => {
+  check("ADS-MCP-V2C-1 Performance group keeps the V2C tools", () => {
     const performance = registry()
       .listTools({ provider: "google_ads" })
       .filter((tool) => tool.uiGroup === "performance");
     assertX.deepEqual(
-      performance.map((tool) => tool.id),
+      performance.map((tool) => tool.id).slice(0, PERFORMANCE_IDS.length),
       PERFORMANCE_IDS
     );
     assertX.deepEqual(
-      performance.map((tool) => tool.displayName),
+      performance.map((tool) => tool.displayName).slice(0, PERFORMANCE_IDS.length),
       [
         "Campaign Performance",
         "Ad Group Performance",
@@ -2455,7 +2459,10 @@ const registerGoogleAdsMcpTests = ({ check, section, assert: a }) => {
       .listTools({ provider: "google_ads" })
       .filter((tool) => tool.uiGroup === "advanced")
       .map((tool) => tool.id);
-    assertX.deepEqual(advanced, ["get_resource_metadata", "search"]);
+    assertX.deepEqual(
+      advanced.filter((id) => id === "get_resource_metadata" || id === "search"),
+      ["get_resource_metadata", "search"]
+    );
     const search = registry().describeInputFields(
       registry().getToolDefinition("google_ads", "search").inputSchema
     );
@@ -2495,6 +2502,535 @@ const registerGoogleAdsMcpTests = ({ check, section, assert: a }) => {
   });
 
   check("ADS-MCP-V2C-25 legacy Dynamic MCP Ads still works", async () => {
+    const calls = [];
+    const result = await registry().executeDynamicMcpNode(
+      {
+        id: "legacy-ads",
+        type: "mcpDynamicTool",
+        data: {
+          provider: "google_ads",
+          toolId: "search",
+          credentialId: "cred-legacy",
+          params: {
+            customerId: "1234567890",
+            query: "SELECT campaign.id FROM campaign",
+          },
+        },
+      },
+      {},
+      {
+        googleApiRequest: async (spec) => {
+          calls.push(spec);
+          return { body: { results: [{ campaign: { id: "11" } }] } };
+        },
+      }
+    );
+    assertX.equal(calls[0].credentialId, "cred-legacy");
+    assertX.match(calls[0].url, /customers\/1234567890\/googleAds:search$/);
+    assertX.equal(result.items[0].json._meta.tool, "search");
+    assertX.equal(result.items[0].json._meta.dateRange, undefined);
+  });
+
+  const assetRange = {
+    scope: "campaign",
+    dateRange: "custom",
+    startDate: "2026-03-01",
+    endDate: "2026-03-07",
+    limit: 25,
+  };
+  const historyNow = Date.parse("2026-03-10T12:00:00Z");
+
+  check("ADS-MCP-V2D-1 Asset Performance appears in Performance", () => {
+    const performance = registry()
+      .listTools({ provider: "google_ads" })
+      .filter((tool) => tool.uiGroup === "performance");
+    assertX.deepEqual(
+      performance.map((tool) => tool.id),
+      [...PERFORMANCE_IDS, "asset_performance"]
+    );
+    assertX.equal(
+      performance.find((tool) => tool.id === "asset_performance").displayName,
+      "Asset Performance"
+    );
+  });
+
+  check("ADS-MCP-V2D-2 Change History appears in Advanced", () => {
+    const advanced = registry()
+      .listTools({ provider: "google_ads" })
+      .filter((tool) => tool.uiGroup === "advanced")
+      .map((tool) => tool.id);
+    assertX.deepEqual(advanced, ["change_history", "get_resource_metadata", "search"]);
+    assertX.equal(
+      registry().getToolDefinition("google_ads", "change_history").displayName,
+      "Change History"
+    );
+  });
+
+  check("ADS-MCP-V2D-3 Asset Performance scope maps to a valid resource", () => {
+    const resources = ["campaign", "ad_group", "ad"].map(
+      (scope) => adsMcp().buildAssetPerformanceQuery({ ...assetRange, scope }).resource
+    );
+    assertX.deepEqual(resources, ["campaign_asset", "ad_group_asset", "ad_group_ad_asset_view"]);
+  });
+
+  check("ADS-MCP-V2D-4 campaign scope uses campaign_asset", () => {
+    const built = adsMcp().buildAssetPerformanceQuery(assetRange);
+    assertX.match(built.query, /FROM campaign_asset/);
+    assertX.equal(built.query.includes("ad_group_asset"), false);
+    assertX.equal(built.query.includes("ad_group_ad_asset_view"), false);
+  });
+
+  check("ADS-MCP-V2D-5 ad group scope uses ad_group_asset", () => {
+    const built = adsMcp().buildAssetPerformanceQuery({ ...assetRange, scope: "ad_group" });
+    assertX.match(built.query, /FROM ad_group_asset/);
+    assertX.equal(built.query.includes("ad_group_ad_asset_view"), false);
+    assertX.equal(built.query.includes("campaign_asset."), false);
+  });
+
+  check("ADS-MCP-V2D-6 ad scope uses ad_group_ad_asset_view", () => {
+    const built = adsMcp().buildAssetPerformanceQuery({ ...assetRange, scope: "ad" });
+    assertX.match(built.query, /FROM ad_group_ad_asset_view/);
+    assertX.match(built.query, /ad_group_ad_asset_view\.performance_label/);
+    assertX.equal(built.query.includes("campaign_asset."), false);
+  });
+
+  check("ADS-MCP-V2D-7 unsupported metric and resource combinations are not generated", () => {
+    assertX.throws(
+      () => adsMcp().buildAssetPerformanceQuery({ ...assetRange, adGroupId: "7" }),
+      (error) => error.code === "GOOGLE_ADS_FILTER"
+    );
+    assertX.throws(
+      () => adsMcp().buildAssetPerformanceQuery({ ...assetRange, conversionActionName: "Purchase" }),
+      (error) => error.code === "GOOGLE_ADS_FILTER"
+    );
+    const campaign = adsMcp().buildAssetPerformanceQuery(assetRange);
+    assertX.equal(campaign.query.includes("segments.conversion_action"), false);
+    assertX.equal(campaign.query.includes("performance_label"), false);
+    assertX.equal(campaign.query.includes("metrics.all_conversions"), false);
+    assertX.equal(campaign.query.includes("ad_group."), false);
+    const ad = adsMcp().buildAssetPerformanceQuery({ ...assetRange, scope: "ad" });
+    assertX.equal(ad.query.includes("segments.conversion_action"), false);
+    assertX.equal(ad.query.includes("campaign_asset.status"), false);
+    for (const metric of [
+      "metrics.impressions",
+      "metrics.clicks",
+      "metrics.ctr",
+      "metrics.cost_micros",
+      "metrics.average_cpc",
+      "metrics.conversions",
+      "metrics.conversions_value",
+    ]) {
+      assertX.match(campaign.query, new RegExp(metric.replace(".", "\\.")));
+      assertX.match(ad.query, new RegExp(metric.replace(".", "\\.")));
+    }
+  });
+
+  check("ADS-MCP-V2D-8 Asset Performance uses an independent date range", async () => {
+    const calls = [];
+    await registry().executeGoogleAdsMcpNode(
+      adsNode("asset_performance", assetRange),
+      sourceContext([
+        sourceNode("ads-source", {
+          dateRange: "last30days",
+          startDate: "2020-01-01",
+          endDate: "2020-01-31",
+          reportType: "campaign_performance",
+        }),
+      ]),
+      {
+        googleApiRequest: async (spec) => {
+          calls.push(spec);
+          return { body: { results: [{ asset: { id: "9" } }] } };
+        },
+      }
+    );
+    assertX.match(calls[0].body.query, /segments\.date BETWEEN '2026-03-01' AND '2026-03-07'/);
+    assertX.equal(calls[0].body.query.includes("2020-01-01"), false);
+    const last7 = adsMcp().buildAssetPerformanceQuery(
+      { scope: "campaign", dateRange: "last7days" },
+      { nowMs: historyNow }
+    );
+    assertX.deepEqual(last7.dateRange, { startDate: "2026-03-04", endDate: "2026-03-10" });
+  });
+
+  check("ADS-MCP-V2D-9 Change History uses change_event", () => {
+    const built = adsMcp().buildChangeHistoryQuery(
+      { dateRange: "last7days" },
+      { nowMs: historyNow, customerId: "1234567890" }
+    );
+    assertX.equal(built.resource, "change_event");
+    assertX.match(built.query, /FROM change_event/);
+    assertX.match(built.query, /change_event\.change_date_time/);
+    assertX.match(built.query, /change_event\.old_resource/);
+    assertX.match(built.query, /change_event\.new_resource/);
+    assertX.equal(built.query.includes("segments.date"), false);
+    const filtered = adsMcp().buildChangeHistoryQuery(
+      {
+        dateRange: "last7days",
+        campaignId: "55",
+        adGroupId: "7",
+        userEmail: "a@example.com",
+        changeResourceType: "CAMPAIGN",
+        clientType: "GOOGLE_ADS_WEB_CLIENT",
+      },
+      { nowMs: historyNow, customerId: "1234567890" }
+    );
+    assertX.match(filtered.query, /change_event\.campaign = 'customers\/1234567890\/campaigns\/55'/);
+    assertX.match(filtered.query, /change_event\.ad_group = 'customers\/1234567890\/adGroups\/7'/);
+    assertX.match(filtered.query, /change_event\.user_email = 'a@example.com'/);
+    assertX.match(filtered.query, /change_event\.change_resource_type = CAMPAIGN/);
+    assertX.match(filtered.query, /change_event\.client_type = GOOGLE_ADS_WEB_CLIENT/);
+  });
+
+  check("ADS-MCP-V2D-10 Change History respects the history window", async () => {
+    assertX.throws(
+      () =>
+        adsMcp().buildChangeHistoryQuery(
+          { dateRange: "custom", startDate: "2026-01-01", endDate: "2026-01-15" },
+          { nowMs: historyNow }
+        ),
+      (error) =>
+        error.code === "GOOGLE_ADS_CHANGE_WINDOW" &&
+        /past 30 days/.test(error.message) &&
+        /2026-02-08/.test(error.message) &&
+        /was not shortened/.test(error.message)
+    );
+    assertX.throws(
+      () =>
+        adsMcp().buildChangeHistoryQuery(
+          { dateRange: "custom", startDate: "2026-02-08", endDate: "2026-03-20" },
+          { nowMs: historyNow }
+        ),
+      (error) => error.code === "GOOGLE_ADS_CHANGE_WINDOW" && /at most 30 days/.test(error.message)
+    );
+    const kept = adsMcp().buildChangeHistoryQuery(
+      { dateRange: "custom", startDate: "2026-03-01", endDate: "2026-03-07" },
+      { nowMs: historyNow }
+    );
+    assertX.match(kept.query, /change_event\.change_date_time >= '2026-03-01'/);
+    assertX.match(kept.query, /change_event\.change_date_time < '2026-03-08'/);
+    let called = false;
+    await assertX.rejects(
+      () =>
+        registry().executeGoogleAdsMcpNode(
+          adsNode("change_history", {
+            dateRange: "custom",
+            startDate: "2020-01-01",
+            endDate: "2020-01-10",
+          }),
+          sourceContext([sourceNode("ads-source")]),
+          {
+            googleApiRequest: async () => {
+              called = true;
+              return { body: { results: [] } };
+            },
+          }
+        ),
+      (error) => error.code === "GOOGLE_ADS_CHANGE_WINDOW"
+    );
+    assertX.equal(called, false);
+  });
+
+  check("ADS-MCP-V2D-11 Change History is read-only", () => {
+    const built = adsMcp().buildChangeHistoryQuery(
+      { dateRange: "last7days", changeResourceType: "CAMPAIGN", clientType: "GOOGLE_ADS_API" },
+      { nowMs: historyNow }
+    );
+    assertX.match(built.query, /^SELECT\b/);
+    assertX.equal(/\b(UPDATE|DELETE|INSERT|mutate)\b/i.test(built.query), false);
+    const files = [
+      "../../plugins/google-ads-mcp/src/executor.js",
+      "../../plugins/google-ads-mcp/src/contracts/v2d.js",
+      "../../plugins/google-ads-mcp/src/contracts/performance.js",
+      "../../plugins/google-ads-mcp/src/contracts/catalog.js",
+    ];
+    for (const rel of files) {
+      const src = read(rel);
+      assertX.equal(src.includes("googleAds:mutate"), false, rel);
+      assertX.equal(src.includes("KeywordPlanIdeaService"), false, rel);
+    }
+  });
+
+  check("ADS-MCP-V2D-12 old and new resource data is preserved", async () => {
+    const oldResource = { campaign: { name: "Old" } };
+    const newResource = { campaign: { name: "New" } };
+    const result = await registry().executeGoogleAdsMcpNode(
+      adsNode("change_history", { dateRange: "last7days" }),
+      sourceContext([sourceNode("ads-source")]),
+      {
+        googleApiRequest: async () => ({
+          body: {
+            results: [
+              {
+                changeEvent: {
+                  changeDateTime: "2026-10-04 09:00:00",
+                  resourceChangeOperation: "UPDATE",
+                  oldResource,
+                  newResource,
+                },
+              },
+            ],
+          },
+        }),
+      }
+    );
+    const row = result.items[0].json;
+    assertX.deepEqual(row.changeEvent.oldResource, oldResource);
+    assertX.deepEqual(row.changeEvent.newResource, newResource);
+    assertX.equal(row.diff, undefined);
+    assertX.equal(row.summary, undefined);
+  });
+
+  check("ADS-MCP-V2D-13 account context is inherited", async () => {
+    const calls = [];
+    const result = await registry().executeGoogleAdsMcpNode(
+      adsNode("asset_performance", { ...assetRange, campaignId: "55" }),
+      sourceContext([
+        sourceNode("ads-source", {
+          credentialId: "cred-source",
+          customerId: "1234567890",
+          loginCustomerId: "1098765432",
+        }),
+      ]),
+      {
+        googleApiRequest: async (spec) => {
+          calls.push(spec);
+          return { body: { results: [{ asset: { id: "9" } }] } };
+        },
+      }
+    );
+    assertX.equal(calls[0].credentialId, "cred-source");
+    assertX.match(calls[0].url, /customers\/1234567890\/googleAds:search$/);
+    assertX.equal(calls[0].headers["login-customer-id"], "1098765432");
+    assertX.equal(result.items[0].json._meta.customerId, "1234567890");
+    assertX.equal(adsNode("asset_performance", assetRange).data.customerId, undefined);
+  });
+
+  check("ADS-MCP-V2D-14 no duplicate credential or customer fields", () => {
+    for (const toolId of ["asset_performance", "change_history"]) {
+      const names = registry()
+        .describeInputFields(registry().getToolDefinition("google_ads", toolId).inputSchema)
+        .map((field) => field.name);
+      assertX.equal(names.includes("credentialId"), false, toolId);
+      assertX.equal(names.includes("customerId"), false, toolId);
+      assertX.equal(names.includes("loginCustomerId"), false, toolId);
+      assertX.equal(names.includes("query"), false, toolId);
+    }
+  });
+
+  check("ADS-MCP-V2D-15 asset provenance is correct", async () => {
+    const result = await registry().executeGoogleAdsMcpNode(
+      adsNode("asset_performance", { ...assetRange, scope: "ad" }),
+      sourceContext([sourceNode("ads-source")]),
+      {
+        googleApiRequest: async () => ({
+          body: { results: [{ adGroupAdAssetView: { fieldType: "HEADLINE" } }] },
+        }),
+      }
+    );
+    assertX.deepEqual(result.items[0].json._meta, {
+      provider: "google_ads",
+      tool: "asset_performance",
+      resource: "ad_group_ad_asset_view",
+      customerId: "1234567890",
+      apiVersion: "v25",
+      dateRange: { startDate: "2026-03-01", endDate: "2026-03-07" },
+    });
+  });
+
+  check("ADS-MCP-V2D-16 change provenance is correct", async () => {
+    const result = await registry().executeGoogleAdsMcpNode(
+      adsNode("change_history", { dateRange: "last7days" }),
+      sourceContext([sourceNode("ads-source")]),
+      {
+        googleApiRequest: async () => ({
+          body: { results: [{ changeEvent: { changeDateTime: "2026-10-04 09:00:00" } }] },
+        }),
+      }
+    );
+    const meta = result.items[0].json._meta;
+    assertX.equal(meta.provider, "google_ads");
+    assertX.equal(meta.tool, "change_history");
+    assertX.equal(meta.resource, "change_event");
+    assertX.equal(meta.customerId, "1234567890");
+    assertX.equal(meta.apiVersion, "v25");
+    assertX.equal(typeof meta.dateRange.startDate, "string");
+    assertX.equal(typeof meta.dateRange.endDate, "string");
+  });
+
+  check("ADS-MCP-V2D-17 asset grounding is correct", () => {
+    const grounding = require("../services/workflowGoogleAdsAiGrounding");
+    const row = {
+      campaignAsset: { fieldType: "HEADLINE", asset: "customers/1/assets/9" },
+      asset: { id: "9", type: "TEXT" },
+      metrics: { impressions: "3", clicks: "1" },
+      _meta: {
+        provider: "google_ads",
+        tool: "asset_performance",
+        resource: "campaign_asset",
+        customerId: "1234567890",
+        apiVersion: "v25",
+        dateRange: { startDate: "2026-03-01", endDate: "2026-03-07" },
+      },
+    };
+    const grounded = grounding.applyGoogleAdsAiGrounding({
+      systemPrompt: "",
+      userPrompt: "",
+      input: [{ json: row }],
+    });
+    assertX.match(grounded.systemPrompt, /report: Google Ads Asset Performance/);
+    assertX.match(grounded.systemPrompt, /resource: campaign_asset/);
+    assertX.match(grounded.systemPrompt, /campaignAsset\.fieldType/);
+    assertX.equal(grounded.systemPrompt.includes("Campaign Performance"), false);
+    assertX.match(grounded.systemPrompt, /Do not invent creative text/);
+    const adRow = {
+      ...row,
+      _meta: { ...row._meta, resource: "ad_group_ad_asset_view" },
+    };
+    const adGrounded = grounding.applyGoogleAdsAiGrounding({
+      systemPrompt: "",
+      userPrompt: "",
+      input: [{ json: adRow }],
+    });
+    assertX.match(adGrounded.systemPrompt, /resource: ad_group_ad_asset_view/);
+  });
+
+  check("ADS-MCP-V2D-18 change-history grounding is correct", () => {
+    const grounding = require("../services/workflowGoogleAdsAiGrounding");
+    const row = {
+      changeEvent: {
+        changeDateTime: "2026-10-04 09:00:00",
+        changeResourceType: "CAMPAIGN",
+        resourceChangeOperation: "UPDATE",
+        clientType: "GOOGLE_ADS_WEB_CLIENT",
+        userEmail: "a@example.com",
+        oldResource: { campaign: { name: "Old" } },
+        newResource: { campaign: { name: "New" } },
+      },
+      _meta: {
+        provider: "google_ads",
+        tool: "change_history",
+        resource: "change_event",
+        customerId: "1234567890",
+        apiVersion: "v25",
+      },
+    };
+    const grounded = grounding.applyGoogleAdsAiGrounding({
+      systemPrompt: "",
+      userPrompt: "",
+      input: [{ json: row }],
+    });
+    assertX.match(grounded.systemPrompt, /report: Google Ads Change History/);
+    assertX.match(grounded.systemPrompt, /resource: change_event/);
+    assertX.match(grounded.systemPrompt, /account change records/);
+    assertX.match(grounded.systemPrompt, /old and new resource/);
+    assertX.equal(grounded.systemPrompt.includes("performance records"), false);
+    assertX.match(grounded.systemPrompt, /changeEvent\.oldResource\.campaign\.name/);
+    assertX.match(grounded.systemPrompt, /changeEvent\.newResource\.campaign\.name/);
+    assertX.match(grounded.systemPrompt, /Do not claim a change caused a later metric movement/);
+  });
+
+  check("ADS-MCP-V2D-19 no GA4 or GSC contamination", () => {
+    const grounding = require("../services/workflowGoogleAdsAiGrounding");
+    const banned = /GA4|GSC|Search Console|landing page|engagement rate/i;
+    for (const tool of ["asset_performance", "change_history"]) {
+      const grounded = grounding.applyGoogleAdsAiGrounding({
+        systemPrompt: "",
+        userPrompt: "",
+        input: [
+          {
+            json: {
+              metrics: tool === "asset_performance" ? { impressions: "1" } : undefined,
+              changeEvent: tool === "change_history" ? { changeDateTime: "2026-10-04 09:00:00" } : undefined,
+              _meta: {
+                provider: "google_ads",
+                tool,
+                resource: tool === "asset_performance" ? "campaign_asset" : "change_event",
+                customerId: "1234567890",
+                apiVersion: "v25",
+              },
+            },
+          },
+        ],
+      });
+      assertX.equal(banned.test(grounded.systemPrompt), false, tool);
+    }
+  });
+
+  check("ADS-MCP-V2D-20 no mutation endpoint is reachable", () => {
+    const executor = read("../../plugins/google-ads-mcp/src/executor.js");
+    assertX.match(executor, /googleAds:search/);
+    assertX.equal(executor.includes("googleAds:mutate"), false);
+    assertX.equal(executor.includes("mutateOperations"), false);
+    assertX.equal(executor.includes("KeywordPlanIdeaService"), false);
+    const catalog = read("../services/googleAdsReportCatalog.js");
+    assertX.equal(catalog.includes("googleAds:mutate"), false);
+  });
+
+  check("ADS-MCP-V2D-21 V2B Common tools are unchanged", () => {
+    const common = registry()
+      .listTools({ provider: "google_ads" })
+      .filter((tool) => tool.uiGroup === "common")
+      .map((tool) => tool.id);
+    assertX.deepEqual(common, COMMON_IDS);
+    const campaigns = adsMcp().buildCommonToolQuery("campaigns", { status: "ENABLED" });
+    assertX.equal(campaigns.query.includes("metrics."), false);
+    assertX.match(campaigns.query, /FROM campaign/);
+  });
+
+  check("ADS-MCP-V2D-22 V2C Performance tools are unchanged", () => {
+    const nativeIds = PERFORMANCE_IDS.filter(
+      (toolId) => toolId !== "ad_performance" && toolId !== "placement_performance"
+    );
+    for (const toolId of nativeIds) {
+      assertReusesNative(toolId, {}, {});
+    }
+    const ad = adsMcp().buildPerformanceToolQuery("ad_performance", customRange);
+    const placement = adsMcp().buildPerformanceToolQuery("placement_performance", customRange);
+    assertX.match(ad.query, /FROM ad_group_ad/);
+    assertX.match(placement.query, /FROM group_placement_view/);
+    assertX.equal(nativeAds().REPORTS.asset_performance, undefined);
+    assertX.equal(nativeAds().REPORTS.ad_performance, undefined);
+  });
+
+  check("ADS-MCP-V2D-23 Search and metadata are unchanged", () => {
+    const search = registry().describeInputFields(
+      registry().getToolDefinition("google_ads", "search").inputSchema
+    );
+    assertX.deepEqual(
+      search.map((field) => field.name),
+      ["customerId", "loginCustomerId", "query", "limit", "returnAll"]
+    );
+    const metadata = registry().getToolDefinition("google_ads", "get_resource_metadata");
+    assertX.equal(metadata.uiGroup, "advanced");
+    assertX.deepEqual(
+      registry().describeInputFields(metadata.inputSchema).map((field) => field.name),
+      ["resourceOrField", "query", "limit"]
+    );
+    assertX.equal(
+      registry().getToolDefinition("google_ads", "list_accessible_customers").uiGroup,
+      "internal"
+    );
+  });
+
+  check("ADS-MCP-V2D-24 native Ads node is unchanged", () => {
+    assertX.deepEqual(Object.keys(nativeAds().REPORTS), [
+      "campaign_performance",
+      "ad_group_performance",
+      "keyword_performance",
+      "search_terms",
+      "device_performance",
+      "geographic_performance",
+      "conversion_performance",
+    ]);
+    const nativeSrc = read("../services/workflowGoogleAds.service.js");
+    assertX.equal(nativeSrc.includes("asset_performance"), false);
+    assertX.equal(nativeSrc.includes("change_event"), false);
+    assertX.equal(nativeSrc.includes("googleAdsMcpTool"), false);
+    assertX.match(nativeSrc, /googleAds:search/);
+  });
+
+  check("ADS-MCP-V2D-25 legacy Google Ads Dynamic MCP is unchanged", async () => {
     const calls = [];
     const result = await registry().executeDynamicMcpNode(
       {
