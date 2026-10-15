@@ -23,6 +23,27 @@ const main = async () => {
   assert.equal(analytics.ok, true);
   assert.ok(Array.isArray(analytics.data?.rows));
 
+  const { resultToWorkflowItems } = require("../adapters/workflowNode");
+  const ranked = resultToWorkflowItems({
+    ok: true,
+    toolId: "get_search_analytics",
+    data: {
+      rows: [
+        { keys: ["aerospace seo consultants"], clicks: 0, impressions: 1, ctr: 0, position: 54 },
+        { keys: ["ai google penalty recovery agent"], clicks: 0, impressions: 30, ctr: 0, position: 48.1 },
+      ],
+    },
+  });
+  assert.equal(ranked.items[0].json.query, "ai google penalty recovery agent");
+  assert.equal(ranked.items[1].json.query, "aerospace seo consultants");
+
+  const inspection = resultToWorkflowItems({
+    ok: true,
+    toolId: "inspect_url_enhanced",
+    data: { inspectionUrl: "https://example.com/x", indexStatus: "Submitted and indexed" },
+  });
+  assert.equal(inspection.items[0].json.inspectionUrl, "https://example.com/x");
+
   const rows = analytics.data.rows.map((r) => ({
     query: r.keys?.[0],
     clicks: r.clicks,

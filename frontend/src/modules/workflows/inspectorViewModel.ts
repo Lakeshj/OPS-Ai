@@ -313,6 +313,15 @@ export function formatCompactCell(
   return { kind, text: clipped.text, truncated: clipped.truncated };
 }
 
+export {
+  EMPTY_TABLE_SORT,
+  applyTableSort,
+  ariaSortValue,
+  cycleTableSort,
+  tableSortDatasetKey,
+  type TableSortState,
+} from "./inspectorTableSort";
+
 export function inspectItems(items: WorkflowItem[]): InspectorView {
   const canonical = toCanonicalItems(items);
   const jsonValue = canonicalJsonForView(canonical);

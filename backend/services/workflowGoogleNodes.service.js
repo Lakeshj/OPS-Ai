@@ -13,6 +13,7 @@ const {
   GA4_METRICS,
   GA4_DIMENSIONS,
 } = require("./ga4Catalog");
+const { sortGscPerformanceRows } = require("./gscPerformanceSort");
 
 const GSC_ROW_MAX = 5000;
 const GSC_RETURN_ALL_MAX = 10000;
@@ -161,7 +162,7 @@ const gscQuery = async (node, context, item) => {
       startRow += batch.length;
       if (batch.length < body.rowLimit) break;
     }
-    return rows;
+    return sortGscPerformanceRows(rows, { dimensionKey: dim, limit: rowLimit });
   };
 
   let rows;

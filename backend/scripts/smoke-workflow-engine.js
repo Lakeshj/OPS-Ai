@@ -9499,6 +9499,11 @@ require("./smoke-workflow-14d5").registerPart14D5Tests({
   section,
   assert,
 });
+require("./smoke-workflow-gsc-sort").registerGscSortTests({
+  check,
+  section,
+  assert,
+});
 require("./smoke-workflow-14d51").registerPart14D51Tests({
   check,
   section,

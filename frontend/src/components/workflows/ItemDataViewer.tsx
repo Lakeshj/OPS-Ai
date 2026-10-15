@@ -17,7 +17,25 @@ import {
   type SchemaKind,
   toCanonicalItems,
 } from "@/modules/workflows/inspectorViewModel";
-import { Check, ChevronDown, ChevronRight, Copy, Search } from "lucide-react";
+import {
+  ArrowDown,
+  ArrowUp,
+  ArrowUpDown,
+  Check,
+  ChevronDown,
+  ChevronRight,
+  Copy,
+  Search,
+} from "lucide-react";
+import {
+  EMPTY_TABLE_SORT,
+  applyTableSort,
+  ariaSortValue,
+  cycleTableSort,
+  nextTableSortForDataset,
+  tableSortDatasetKey,
+  type TableSortState,
+} from "@/modules/workflows/inspectorTableSort";
 import { toast } from "sonner";
 import {
   looksLikeMarkdownProse,
@@ -610,14 +628,54 @@ function TableCellValue({ value }: { value: unknown }) {
   );
 }
 
+function SortHeaderButton({
+  columnKey,
+  sort,
+  onSort,
+}: {
+  columnKey: string;
+  sort: TableSortState;
+  onSort: (columnKey: string) => void;
+}) {
+  const active = sort.columnKey === columnKey && sort.direction != null;
+  const Icon =
+    !active ? ArrowUpDown : sort.direction === "desc" ? ArrowDown : ArrowUp;
+  return (
+    <button
+      type="button"
+      className={cn(
+        "inline-flex max-w-full items-center gap-1 rounded-sm text-left font-medium",
+        "cursor-pointer hover:bg-muted/80 hover:text-foreground",
+        "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring",
+        active ? "text-foreground" : "text-foreground/90"
+      )}
+      aria-label={`Sort by ${tableColumnLabel(columnKey)}`}
+      onClick={() => onSort(columnKey)}
+    >
+      <span className="truncate">{tableColumnLabel(columnKey)}</span>
+      <Icon
+        className={cn(
+          "h-3 w-3 shrink-0",
+          active ? "text-foreground" : "text-muted-foreground/70"
+        )}
+        aria-hidden
+      />
+    </button>
+  );
+}
+
 function TableView({
   rows,
   keys,
   query,
+  sort,
+  onSort,
 }: {
   rows: Record<string, unknown>[];
   keys: string[];
   query: string;
+  sort: TableSortState;
+  onSort: (columnKey: string) => void;
 }) {
   const q = query.trim().toLowerCase();
   const filteredKeys = q
@@ -645,9 +703,10 @@ function TableView({
             {filteredKeys.map((k) => (
               <th
                 key={k}
-                className="min-w-[4.5rem] max-w-[16rem] truncate px-3 py-2 text-left font-medium text-foreground"
+                aria-sort={ariaSortValue(k, sort)}
+                className="min-w-[4.5rem] max-w-[16rem] px-3 py-2 text-left font-medium text-foreground"
               >
-                {tableColumnLabel(k)}
+                <SortHeaderButton columnKey={k} sort={sort} onSort={onSort} />
               </th>
             ))}
           </tr>
@@ -685,6 +744,8 @@ export function ItemDataViewer({
 }: Props) {
   const [mode, setMode] = useState<ViewMode>("table");
   const [query, setQuery] = useState("");
+  const [sort, setSort] = useState<TableSortState>(EMPTY_TABLE_SORT);
+  const [datasetKey, setDatasetKey] = useState<string | null>(null);
   const canonical = useMemo(
     () => normalizeItems(items, data, { canonicalItemsOnly }),
     [items, data, canonicalItemsOnly]
@@ -706,6 +767,20 @@ export function ItemDataViewer({
     ).map(withReadableReport);
     return buildDisplayTable(source);
   }, [canonical, onSelectedItemIndexChange, selectedItemIndex]);
+
+  const nextDatasetKey = tableSortDatasetKey(displayTable);
+  if (datasetKey !== nextDatasetKey) {
+    setDatasetKey(nextDatasetKey);
+    const nextSort = nextTableSortForDataset(datasetKey, nextDatasetKey, sort);
+    if (nextSort.columnKey !== sort.columnKey || nextSort.direction !== sort.direction) {
+      setSort(nextSort);
+    }
+  }
+
+  const sortedTable = useMemo(
+    () => applyTableSort(displayTable, sort),
+    [displayTable, sort]
+  );
 
   if (canonical.length === 0) {
     return (
@@ -820,9 +895,11 @@ export function ItemDataViewer({
 
         {mode === "table" && (
           <TableView
-            rows={displayTable.rows}
+            rows={sortedTable.rows}
             keys={displayTable.columns}
             query={query}
+            sort={sort}
+            onSort={(columnKey) => setSort((current) => cycleTableSort(current, columnKey))}
           />
         )}
       </div>

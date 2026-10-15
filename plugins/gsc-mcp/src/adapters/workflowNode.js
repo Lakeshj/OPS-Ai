@@ -1,6 +1,10 @@
 const { INTELLIGENCE_IDS, ACTION_IDS } = require("../registry/categories");
 const { runIntelligence } = require("../intelligence");
 const { runAction } = require("../actions");
+const {
+  sortGscPerformanceRows,
+  shouldSortGscMcpResult,
+} = require("../../../../backend/services/gscPerformanceSort");
 
 const workflowToolOptions = (catalog = []) =>
   catalog.map((t) => ({
@@ -100,6 +104,10 @@ const resultToWorkflowItems = (result) => {
     rows = [data];
   } else {
     rows = [{ value: data }];
+  }
+
+  if (shouldSortGscMcpResult(result, rows)) {
+    rows = sortGscPerformanceRows(rows);
   }
 
   return {
