@@ -33,6 +33,9 @@ const {
   updateCredential,
   removeCredential,
   startGoogleOAuth,
+  startMetaOAuth,
+  listMetaAdAccounts,
+  selectMetaAdAccount,
   listConnectionTypes,
   getCredentialEditor,
   startOAuth2,
@@ -77,6 +80,9 @@ router.get("/credentials/:credentialId/editor", getCredentialEditor);
 router.post("/credentials/:credentialId/test", testCredential);
 router.get("/connection-types", listConnectionTypes);
 router.post("/google-oauth/start", startGoogleOAuth);
+router.post("/meta-oauth/start", startMetaOAuth);
+router.get("/meta-oauth/ad-accounts", listMetaAdAccounts);
+router.post("/credentials/:credentialId/meta-ad-account", selectMetaAdAccount);
 router.post("/oauth2/start", startOAuth2);
 router.get("/google-oauth/gsc-sites", listGscSites);
 router.get("/google-oauth/ga4-properties", listGa4Properties);

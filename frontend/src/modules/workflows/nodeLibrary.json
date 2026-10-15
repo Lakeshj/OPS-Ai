@@ -707,6 +707,43 @@
       "engineType": "googleAds"
     },
     {
+      "id": "meta-ads",
+      "name": "Meta Ads",
+      "category": "Marketing",
+      "type": "Action",
+      "description": "Run a read-only Meta Ads Insights report for an ad account, campaigns, ad sets, or ads.",
+      "icon": "chart",
+      "provider": "Meta",
+      "available": true,
+      "engineType": "metaAds",
+      "aliases": [
+        "facebook ads",
+        "meta ads",
+        "instagram ads",
+        "ad account",
+        "campaign performance"
+      ]
+    },
+    {
+      "id": "meta-ads-mcp-tools",
+      "name": "Meta Ads MCP Tools",
+      "category": "Marketing",
+      "type": "Action",
+      "description": "Read-only Meta Ads tools. The Meta Ads node supplies the account.",
+      "icon": "chart",
+      "provider": "Meta",
+      "available": true,
+      "engineType": "metaAdsMcpTool",
+      "aliases": [
+        "meta ads mcp",
+        "facebook ads mcp",
+        "meta tools",
+        "facebook ads tools",
+        "ads mcp meta",
+        "meta marketing api"
+      ]
+    },
+    {
       "id": "google-ads-mcp-tools",
       "name": "Google Ads MCP Tools",
       "category": "SEO",

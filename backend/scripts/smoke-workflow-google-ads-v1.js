@@ -334,10 +334,14 @@ const registerGoogleAdsV1Tests = ({ check, section, assert: a }) => {
           ],
         },
       },
-      { product: "google_ads" }
+      { product: "google_ads", customerId: "7455074842" }
     );
-    assertX.equal(unauth.code, "GOOGLE_ADS_CUSTOMER_UNAUTHORIZED");
+    assertX.equal(unauth.code, "USER_PERMISSION_DENIED");
+    assertX.equal(unauth.title, "Google Ads access denied");
+    assertX.equal(unauth.googleAds.code, "USER_PERMISSION_DENIED");
     assertX.equal(String(unauth.message).includes("SHOULD_NOT_LEAK"), false);
+    assertX.equal(String(unauth.message).includes("UNKNOWN"), false);
+    assertX.match(unauth.message, /7455074842/);
     const badQuery = oauth().sanitizeGoogleError(
       400,
       { error: { details: [{ errors: [{ errorCode: { queryError: "BAD_FIELD" } }] }] } },
@@ -403,11 +407,14 @@ const registerGoogleAdsV1Tests = ({ check, section, assert: a }) => {
       }
     );
     assertX.equal(production.code, "GOOGLE_ADS_API_ERROR");
-    assertX.equal(production.message.includes("CLOUD_PROJECT_NOT_APPROVED_FOR_PRODUCTION"), true);
-    assertX.equal(production.message.includes("httpStatus: 403"), true);
-    assertX.equal(production.message.includes("customerId: 7887133215"), true);
-    assertX.equal(production.message.includes("loginCustomerId: 6753059302"), true);
-    assertX.equal(production.message.includes("developerHeaderSent: no"), true);
+    assertX.equal(production.googleAds.code, "CLOUD_PROJECT_NOT_APPROVED_FOR_PRODUCTION");
+    assertX.match(production.message, /not approved for production/i);
+    assertX.equal(production.message.includes("httpStatus"), false);
+    assertX.equal(production.message.includes("developerHeaderSent"), false);
+    assertX.equal(production.message.includes("apiVersion"), false);
+    assertX.equal(production.details.customerId, "7887133215");
+    assertX.equal(production.details.loginCustomerId, "6753059302");
+    assertX.equal(production.googleAds.developerHeaderSent, false);
     assertX.equal(production.message.includes("SHOULD_NOT_LEAK"), false);
     assertX.equal(/oauth/i.test(production.message), false);
     const missingVersion = oauth().sanitizeGoogleError(
@@ -416,9 +423,118 @@ const registerGoogleAdsV1Tests = ({ check, section, assert: a }) => {
       { product: "google_ads", apiVersion: "v21" }
     );
     assertX.equal(missingVersion.message.includes("Google Ads request failed."), false);
-    assertX.equal(missingVersion.message.includes("code: NOT_FOUND"), true);
-    assertX.equal(missingVersion.message.includes("httpStatus: 404"), true);
+    assertX.equal(missingVersion.googleAds.code, "NOT_FOUND");
+    assertX.equal(missingVersion.details.httpStatus, 404);
     assertX.equal(missingVersion.message.includes("<html"), false);
+  });
+
+  check("ADS-ERR 403 + loginCustomerId is USER_PERMISSION_DENIED with MCC copy", () => {
+    const err = oauth().sanitizeGoogleError(
+      403,
+      { error: { status: "PERMISSION_DENIED", message: "token SHOULD_NOT_LEAK" } },
+      {
+        product: "google_ads",
+        customerId: "7455074842",
+        loginCustomerId: "6753059302",
+        reportType: "ad_group_performance",
+        apiVersion: "v25",
+        developerHeaderSent: false,
+      }
+    );
+    assertX.equal(err.code, "USER_PERMISSION_DENIED");
+    assertX.equal(err.title, "Google Ads access denied");
+    assertX.equal(err.googleAds.code, "USER_PERMISSION_DENIED");
+    assertX.match(err.message, /Login Customer ID/);
+    assertX.match(err.message, /leave Login Customer ID blank/i);
+    assertX.equal(err.message.includes("UNKNOWN"), false);
+    assertX.equal(err.message.includes("apiVersion"), false);
+    assertX.equal(err.message.includes("developerHeaderSent"), false);
+    assertX.equal(err.message.includes("ad_group_performance"), false);
+    assertX.equal(err.details.httpStatus, 403);
+    assertX.equal(err.details.customerId, "7455074842");
+    assertX.equal(err.details.loginCustomerId, "6753059302");
+    assertX.equal(err.details.reportType, "ad_group_performance");
+    assertX.equal(Object.prototype.hasOwnProperty.call(err.details, "developerHeaderSent"), false);
+    assertX.equal(String(JSON.stringify(err.details)).includes("SHOULD_NOT_LEAK"), false);
+  });
+
+  check("ADS-ERR 403 without loginCustomerId is direct-account copy", () => {
+    const err = oauth().sanitizeGoogleError(
+      403,
+      { error: { status: "PERMISSION_DENIED" } },
+      { product: "google_ads", customerId: "7455074842", loginCustomerId: "" }
+    );
+    assertX.equal(err.code, "USER_PERMISSION_DENIED");
+    assertX.match(err.message, /customer 7455074842/);
+    assertX.equal(/Login Customer ID/i.test(err.message), false);
+    assertX.equal(/manager account/i.test(err.message), false);
+    assertX.equal(err.details.loginCustomerId, null);
+  });
+
+  check("ADS-ERR CUSTOMER_NOT_ENABLED stays CUSTOMER_NOT_ENABLED", () => {
+    const err = oauth().sanitizeGoogleError(
+      403,
+      { error: { details: [{ errors: [{ errorCode: { authorizationError: "CUSTOMER_NOT_ENABLED" } }] }] } },
+      { product: "google_ads" }
+    );
+    assertX.equal(err.code, "CUSTOMER_NOT_ENABLED");
+    assertX.match(err.message, /not enabled/i);
+  });
+
+  check("ADS-LOGIN blank loginCustomerId omits login-customer-id header", async () => {
+    const calls = [];
+    await ads().runGoogleAdsReport(
+      baseNode({ customerId: "7455074842", loginCustomerId: "   " }),
+      {},
+      null,
+      {
+        googleApiRequest: async (req) => {
+          calls.push(req);
+          return { body: { results: [sampleRow] } };
+        },
+      }
+    );
+    assertX.equal(calls[0].headers?.["login-customer-id"], undefined);
+    assertX.equal(JSON.stringify(calls[0].headers || {}).includes("7455074842"), false);
+  });
+
+  check("ADS-LOGIN customerId is never copied into loginCustomerId", async () => {
+    const calls = [];
+    await ads().runGoogleAdsReport(
+      baseNode({ customerId: "7455074842", loginCustomerId: "" }),
+      {},
+      null,
+      {
+        googleApiRequest: async (req) => {
+          calls.push(req);
+          return { body: { results: [sampleRow] } };
+        },
+      }
+    );
+    assertX.equal(calls[0].headers?.["login-customer-id"], undefined);
+    const sanitized = ads().sanitizeGoogleAdsNodeData({
+      customerId: "7455074842",
+      loginCustomerId: "  ",
+    });
+    assertX.equal(sanitized.loginCustomerId, "");
+    assertX.equal(sanitized.customerId, "7455074842");
+  });
+
+  check("ADS-LOGIN nonblank loginCustomerId is sent", async () => {
+    const calls = [];
+    await ads().runGoogleAdsReport(
+      baseNode({ customerId: "7455074842", loginCustomerId: "675-305-9302" }),
+      {},
+      null,
+      {
+        googleApiRequest: async (req) => {
+          calls.push(req);
+          return { body: { results: [sampleRow] } };
+        },
+      }
+    );
+    assertX.equal(calls[0].headers["login-customer-id"], "6753059302");
+    assertX.equal(calls[0].headers["login-customer-id"] === "7455074842", false);
   });
 
   const actor = { id: "user-a", userId: "user-a", role: "Admin" };

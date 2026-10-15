@@ -1,0 +1,6 @@
+{
+  "mode": "read_only_api",
+  "providerId": "meta_ads",
+  "allowMutations": false,
+  "notes": "API version and Graph HTTP client are supplied by the backend host from the shared Meta Ads client. This plugin does not store OAuth tokens or compute appsecret_proof."
+}

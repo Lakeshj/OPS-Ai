@@ -13,6 +13,7 @@ const executor = createExecutor({
   apiVersion: googleOAuth.GOOGLE_ADS_API_VERSION,
   normalizeCustomerId,
   googleApiRequest: (spec) => googleOAuth.googleApiRequest(spec),
+  presentGoogleAdsPermissionError: googleOAuth.presentGoogleAdsPermissionError,
 });
 
 const SOURCE_MESSAGES = Object.freeze({

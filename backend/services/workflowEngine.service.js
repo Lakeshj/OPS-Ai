@@ -2,6 +2,21 @@ const { v4: uuidv4 } = require("uuid");
 const { pool } = require("../config/database");
 const { executeNode, deriveItems, getItemPayload, isEmptyWorkflowInput } = require("./workflowNodes.service");
 const { compactValue } = require("../utils/workflowDebug");
+const { presentNodeFailure } = require("../utils/nodeFailure");
+
+const failPayload = (failure) => {
+  const presented = presentNodeFailure(failure);
+  return {
+    presented,
+    message: presented.message,
+    output: {
+      ok: false,
+      error: presented,
+      items: [],
+      count: 0,
+    },
+  };
+};
 const {
   normalizeNodeOutput,
   cloneItem,
@@ -1573,8 +1588,8 @@ const executeRun = async (runId, options = {}) => {
           continue;
         }
 
-        const message =
-          failure instanceof Error ? failure.message : String(failure);
+        const failed = failPayload(failure);
+        const message = failed.message;
         await updateStep(stepId, {
           status: "failed",
           attempts,
@@ -1962,33 +1977,15 @@ const executePartial = async ({
 
     if (failure) {
       // Replace prior successful output — never retain stale items after a failed step.
+      const failed = failPayload(failure);
       const failOutput =
         failure?.meta && typeof failure.meta === "object"
-          ? {
-              ok: false,
-              error: {
-                code: failure.code || "NODE_FAILED",
-                message:
-                  failure instanceof Error ? failure.message : String(failure),
-              },
-              items: [],
-              count: 0,
-              ...failure.meta,
-            }
-          : {
-              ok: false,
-              error: {
-                code: failure.code || "NODE_FAILED",
-                message:
-                  failure instanceof Error ? failure.message : String(failure),
-              },
-              items: [],
-              count: 0,
-            };
+          ? { ...failed.output, ...failure.meta }
+          : failed.output;
       results[node.id] = {
         nodeId: node.id,
         status: "failed",
-        error: failure instanceof Error ? failure.message : String(failure),
+        error: failed.message,
         output: failOutput,
         items: [],
         executionTimeMs: Date.now() - nodeStart,
@@ -2463,7 +2460,8 @@ const executeGraphInMemory = async (definition, options = {}) => {
       continue;
     }
 
-    const message = failure instanceof Error ? failure.message : String(failure);
+    const failed = failPayload(failure);
+    const message = failed.message;
     recordOccurrence(context.runData, {
       nodeId: node.id,
       runIndex: executionIndex,

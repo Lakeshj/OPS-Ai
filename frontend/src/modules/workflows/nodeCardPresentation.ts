@@ -184,6 +184,7 @@ const ICON_BY_TYPE: Record<string, LucideIcon> = {
   googleSearchConsole: Search,
   googleAnalytics: LineChart,
   googleAds: BarChart3,
+  metaAds: BarChart3,
   googleSheets: Sheet,
   gmail: Mail,
   email: Mail,
@@ -199,6 +200,7 @@ const ICON_BY_TYPE: Record<string, LucideIcon> = {
   ga4McpTool: BarChart3,
   mcpDynamicTool: Layers,
   googleAdsMcpTool: BarChart3,
+  metaAdsMcpTool: BarChart3,
   integration: Circle,
   migrationUnsupported: AlertCircle,
 };
@@ -234,6 +236,7 @@ const FALLBACK_BLURBS: Record<string, string> = {
   googleSearchConsole: "Pull Search Console data",
   googleAnalytics: "Pull Analytics reports",
   googleAds: "Run a read-only Ads report",
+  metaAds: "Run a read-only Meta Ads report",
   googleSheets: "Read or write Sheets",
   gmail: "Send or read Gmail",
   email: "Send an email",
@@ -248,6 +251,7 @@ const FALLBACK_BLURBS: Record<string, string> = {
   ga4McpTool: "Process GA4 rows with intelligence",
   mcpDynamicTool: "Run a read-only registry tool",
   googleAdsMcpTool: "Read-only Google Ads MCP tools",
+  metaAdsMcpTool: "Read-only Meta Ads MCP tools",
 };
 
 const libraryByEngine = (() => {

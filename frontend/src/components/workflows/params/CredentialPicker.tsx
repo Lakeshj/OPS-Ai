@@ -30,6 +30,7 @@ import {
   GoogleCredentialModal,
   type GoogleCredentialSetupMode,
 } from "./GoogleCredentialModal";
+import { MetaCredentialPanel } from "./MetaCredentialPanel";
 
 type Props = {
   workspaceId?: string;
@@ -89,6 +90,10 @@ export function CredentialPicker({
 
   const googleOnly =
     Boolean(allowedTypes?.length) && allowedTypes!.every(isGoogleType);
+  const metaOnly =
+    Boolean(allowedTypes?.length) &&
+    allowedTypes!.length === 1 &&
+    allowedTypes![0] === "meta_ads";
   const googleProduct =
     googleOnly && allowedTypes!.length === 1 ? allowedTypes![0] : null;
   const nativeAuthPolicy = getGoogleNativeAuthPolicy(googleProduct);
@@ -313,11 +318,13 @@ export function CredentialPicker({
     googleMeta?.connectAnotherAction || "Connect another account";
   const fieldLabel =
     label ||
-    (googleMeta?.accountLabel
-      ? googleMeta.accountLabel
-      : googleOnly
-        ? "Google Account"
-        : "Authentication");
+    (metaOnly
+      ? "Meta Ads Account"
+      : googleMeta?.accountLabel
+        ? googleMeta.accountLabel
+        : googleOnly
+          ? "Google Account"
+          : "Authentication");
   const addHttpLabel =
     visibleTypes.length > 0 &&
     visibleTypes.every((t) => t === "api_key_header" || t === "query_param")
@@ -473,7 +480,7 @@ export function CredentialPicker({
         </div>
       ) : null}
 
-      {!googleOnly && !adding ? (
+      {!googleOnly && !metaOnly && !adding ? (
         <Button
           type="button"
           size="sm"
@@ -484,7 +491,7 @@ export function CredentialPicker({
         </Button>
       ) : null}
 
-      {!googleOnly && adding ? (
+      {!googleOnly && !metaOnly && adding ? (
         <div className="space-y-2 rounded border bg-muted/30 p-2">
           <div>
             <Label className="text-[11px]">Name</Label>
@@ -514,7 +521,17 @@ export function CredentialPicker({
               </Select>
             </div>
           ) : null}
-          {CREDENTIAL_TYPE_FIELDS[type].fields.map((field) => (
+          {type === "meta_ads" ? (
+            <MetaCredentialPanel
+              workspaceId={workspaceId}
+              onConnected={(id) => {
+                reload();
+                onChange(id);
+                setAdding(false);
+              }}
+            />
+          ) : (
+            CREDENTIAL_TYPE_FIELDS[type].fields.map((field) => (
             <div key={field.key}>
               <Label className="text-[11px]">{field.label}</Label>
               <Input
@@ -528,7 +545,18 @@ export function CredentialPicker({
                 }
               />
             </div>
-          ))}
+            ))
+          )}
+          {type === "meta_ads" ? (
+            <Button
+              type="button"
+              size="sm"
+              variant="ghost"
+              onClick={() => setAdding(false)}
+            >
+              Cancel
+            </Button>
+          ) : (
           <div className="flex gap-2">
             <Button
               type="button"
@@ -547,7 +575,19 @@ export function CredentialPicker({
               Cancel
             </Button>
           </div>
+          )}
         </div>
+      ) : null}
+
+      {metaOnly ? (
+        <MetaCredentialPanel
+          workspaceId={workspaceId}
+          credential={selected}
+          onConnected={(id) => {
+            reload();
+            onChange(id);
+          }}
+        />
       ) : null}
 
       {googleProduct ? (

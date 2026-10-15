@@ -1,0 +1,26 @@
+{
+  "name": "@opsai/plugin-meta-ads-mcp",
+  "version": "0.1.0",
+  "description": "OpsAi Meta Ads MCP plugin — read-only Common entity tools",
+  "main": "src/index.js",
+  "type": "commonjs",
+  "scripts": {
+    "test": "node src/testing/smoke-tools.js",
+    "smoke": "npm test"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "files": [
+    "src",
+    "manifest.json",
+    "config.default.json",
+    "README.md"
+  ],
+  "keywords": [
+    "opsai",
+    "mcp",
+    "meta-ads"
+  ],
+  "license": "UNLICENSED"
+}

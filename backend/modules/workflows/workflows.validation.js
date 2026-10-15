@@ -42,6 +42,11 @@ const validateCredential = (req) => {
     "google_sheets",
     "google_ads",
   ]);
+  if (type === "meta_ads") {
+    errors.push("Use Connect with Meta. Do not paste a Meta access token.");
+    return errors;
+  }
+
   if (googleTypes.has(type)) {
     if (!secret || typeof secret !== "object") {
       errors.push("secret is required");

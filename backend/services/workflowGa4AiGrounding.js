@@ -129,6 +129,9 @@ const isGa4McpStructuredRow = (row) => {
 const looksLikeGa4Rows = (rows) => {
   if (!rows.length) return false;
   if (rows.some(isGa4McpStructuredRow)) return false;
+  if (rows.some((row) => isPlainObject(row?._meta) && row._meta.provider === "meta_ads")) {
+    return false;
+  }
   try {
     const { looksLikeGoogleAdsRow } = require("./workflowGoogleAdsAiGrounding");
     if (rows.some(looksLikeGoogleAdsRow)) return false;

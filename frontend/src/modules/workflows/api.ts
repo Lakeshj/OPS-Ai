@@ -408,9 +408,45 @@ export const workflowCredentialsApi = {
     }>("/workflows/google-oauth/start", payload),
 
   test: (credentialId: string) =>
-    apiClient.post<{ ok: boolean; type: string }>(
+    apiClient.post<{ ok: boolean; type: string; metaDisplayName?: string; reconnectSoon?: boolean }>(
       `/workflows/credentials/${credentialId}/test`,
       {}
+    ),
+
+  startMetaOAuth: (payload: {
+    workspaceId: string;
+    name?: string;
+    credentialId?: string;
+  }) =>
+    apiClient.post<{
+      url: string;
+      callbackOrigin: string;
+      redirectUri?: string;
+      scopes?: string[];
+      apiVersion?: string;
+    }>("/workflows/meta-oauth/start", payload),
+
+  listMetaAdAccounts: (credentialId: string) =>
+    apiClient.get<{
+      metaDisplayName?: string;
+      selectedAdAccountId?: string;
+      adAccounts: Array<{
+        adAccountId: string;
+        apiId: string;
+        name: string;
+        currency: string;
+        timezoneName: string;
+        accountStatus: number | null;
+        accountStatusLabel: string | null;
+      }>;
+    }>(
+      `/workflows/meta-oauth/ad-accounts?credentialId=${encodeURIComponent(credentialId)}`
+    ),
+
+  selectMetaAdAccount: (credentialId: string, adAccountId: string) =>
+    apiClient.post<{ adAccountId: string; apiId: string }>(
+      `/workflows/credentials/${credentialId}/meta-ad-account`,
+      { adAccountId }
     ),
 
   listGscSites: (workspaceId: string, credentialId: string) =>

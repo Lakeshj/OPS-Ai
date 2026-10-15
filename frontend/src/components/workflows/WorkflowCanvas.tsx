@@ -61,6 +61,7 @@ import { redactOrchestrationOutput } from "@/modules/workflows/subworkflowUx";
 import {
   formatStepOutput as formatStepOutputRaw,
 } from "@/modules/workflows/runStepDisplay";
+import { nodeFailureDisplay } from "@/modules/workflows/nodeFailureUx";
 import type {
   EditorInvalidationEvent,
   WorkflowDefinition,
@@ -231,11 +232,13 @@ const nodeTypes = {
   ga4McpTool: WorkflowNode,
   mcpDynamicTool: WorkflowNode,
   googleAdsMcpTool: WorkflowNode,
+  metaAdsMcpTool: WorkflowNode,
   respondToWebhook: WorkflowNode,
   googleSearchConsole: WorkflowNode,
   gscMcp: WorkflowNode,
   googleAnalytics: WorkflowNode,
   googleAds: WorkflowNode,
+  metaAds: WorkflowNode,
   gmail: WorkflowNode,
   gmailTrigger: WorkflowNode,
   googleSheets: WorkflowNode,
@@ -662,6 +665,22 @@ const defaultDataForType = (type: WorkflowNodeType): WorkflowNodeData => {
         returnAll: false,
         limit: 100,
       };
+    case "metaAds":
+      return {
+        label: "Meta Ads",
+        nodeType: "metaAds",
+        credentialId: "",
+        adAccountId: "",
+        resource: "report",
+        operation: "runReport",
+        reportType: "campaign_performance",
+        dateRange: "last7days",
+        customStartDate: "",
+        customEndDate: "",
+        filters: {},
+        returnAll: false,
+        limit: 100,
+      };
     case "mcpDynamicTool":
       return {
         label: "Dynamic MCP Tool",
@@ -675,6 +694,13 @@ const defaultDataForType = (type: WorkflowNodeType): WorkflowNodeData => {
       return {
         label: "Google Ads MCP Tools",
         nodeType: "googleAdsMcpTool",
+        toolId: "",
+        params: {},
+      };
+    case "metaAdsMcpTool":
+      return {
+        label: "Meta Ads MCP Tools",
+        nodeType: "metaAdsMcpTool",
         toolId: "",
         params: {},
       };
@@ -813,11 +839,16 @@ const toFlowNodes = (
     latestRun?.status === "waiting";
   return (definition.nodes || []).map((n, index) => {
     const step = stepByNode.get(n.id);
-    const preview = step?.output != null ? formatStepOutput(step.output) : "";
+    const stepStatus = step?.status ? String(step.status) : "";
+    const preview =
+      stepStatus === "failed"
+        ? nodeFailureDisplay({ error: step?.error, output: step?.output }).preview
+        : step?.output != null
+          ? formatStepOutput(step.output)
+          : "";
     const rawData = (n.data || {}) as WorkflowNodeData;
     const normalizedData =
       n.type === "switch" ? normalizeSwitchRules(rawData, n.id) : rawData;
-    const stepStatus = step?.status ? String(step.status) : "";
     // While the workflow is executing, nodes not yet started show as pending
     // so the canvas doesn't look frozen with only the top-right "Running" pill.
     const runStatus =
@@ -1198,7 +1229,12 @@ function WorkflowCanvasInner({
             },
           };
         }
-        const preview = step.output != null ? formatStepOutput(step.output) : "";
+        const preview =
+          String(step.status) === "failed"
+            ? nodeFailureDisplay({ error: step.error, output: step.output }).preview
+            : step.output != null
+              ? formatStepOutput(step.output)
+              : "";
         return {
           ...n,
           data: {
@@ -1578,7 +1614,11 @@ function WorkflowCanvasInner({
             const r = res.results[n.id];
             if (!r) return n;
             const preview =
-              r.output != null ? formatStepOutput(r.output).slice(0, 120) : "";
+              r.status === "failed"
+                ? nodeFailureDisplay(r).preview.slice(0, 160)
+                : r.output != null
+                  ? formatStepOutput(r.output).slice(0, 120)
+                  : "";
             return {
               ...n,
               data: {
@@ -1590,7 +1630,7 @@ function WorkflowCanvasInner({
           })
         );
         if (result?.status === "failed") {
-          toast.error(result.error || "Execution failed");
+          toast.error(nodeFailureDisplay(result).toast);
         } else {
           toast.success("Node executed");
         }

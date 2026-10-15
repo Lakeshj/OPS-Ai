@@ -1,0 +1,19 @@
+{
+  "id": "meta-ads-mcp",
+  "name": "Meta Ads MCP Tools",
+  "version": "0.1.0",
+  "phase": 6,
+  "capabilities": [
+    "tool.registry",
+    "tool.execution",
+    "workflow.node"
+  ],
+  "transports": [],
+  "credentialTypes": ["meta_ads"],
+  "engineNodeType": "metaAdsMcpTool",
+  "libraryId": "meta-ads-mcp-tools",
+  "userFacingWorkflowNode": true,
+  "authOnNode": false,
+  "consumers": ["workflow.mcp.dynamic", "workflow.metaAdsMcpTool"],
+  "notes": "Read-only Meta Ads MCP tools. OAuth, Graph HTTP, and appsecret_proof stay in shared backend services. This plugin stays read-only and does not call write endpoints."
+}

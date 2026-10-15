@@ -22,6 +22,7 @@ import {
 import { Zap } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { parseAiErrorFromUnknown } from "@/modules/workflows/aiAgentUx";
+import { nodeFailureDisplay } from "@/modules/workflows/nodeFailureUx";
 
 type PortOutputPreview = Record<string, WorkflowItem[]>;
 
@@ -365,12 +366,48 @@ export function NodeOutputPanel({
       )}
 
       {effectiveResult?.status === "failed" && (
-        <div className={cn(workflowAlertCompact("error"), "text-[10px]")}>
-          {
-            parseAiErrorFromUnknown(effectiveResult.error).message ||
-            effectiveResult.error ||
-            "Execution failed"
-          }
+        <div className={cn(workflowAlertCompact("error"), "space-y-1.5 text-[10px]")}>
+          {(() => {
+            const failure = nodeFailureDisplay(effectiveResult);
+            const aiMapped = parseAiErrorFromUnknown(effectiveResult.error);
+            const title = failure.title;
+            const message =
+              failure.message ||
+              aiMapped.message ||
+              (typeof effectiveResult.error === "string"
+                ? effectiveResult.error
+                : "") ||
+              "Execution failed";
+            const details = failure.details;
+            const rows = details
+              ? Object.entries(details).filter(
+                  ([, value]) => value != null && String(value).trim() !== ""
+                )
+              : [];
+            return (
+              <>
+                {title ? (
+                  <p className="font-medium text-foreground">{title}</p>
+                ) : null}
+                <p className="whitespace-pre-wrap">{message}</p>
+                {rows.length > 0 ? (
+                  <details className="rounded border border-border/60 bg-background/40 px-2 py-1">
+                    <summary className="cursor-pointer select-none text-[10px] text-muted-foreground">
+                      Technical details
+                    </summary>
+                    <dl className="mt-1 space-y-0.5 font-mono text-[10px] text-muted-foreground">
+                      {rows.map(([key, value]) => (
+                        <div key={key} className="flex gap-2">
+                          <dt className="shrink-0">{key}</dt>
+                          <dd className="min-w-0 break-all text-foreground">{String(value)}</dd>
+                        </div>
+                      ))}
+                    </dl>
+                  </details>
+                ) : null}
+              </>
+            );
+          })()}
         </div>
       )}
 
@@ -494,6 +531,7 @@ export function NodeOutputPanel({
             items={displayItems}
             emptyMessage={emptyMessage}
             canonicalItemsOnly
+            className="min-h-0 flex-1"
           />
           {promptsUsed && (
             <details className="rounded border border-dashed bg-muted/15 px-2 py-1.5 text-[10px]">

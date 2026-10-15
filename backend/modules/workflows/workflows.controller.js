@@ -164,6 +164,60 @@ const startGoogleOAuth = asyncHandler(async (req, res) => {
   );
 });
 
+const startMetaOAuth = asyncHandler(async (req, res) => {
+  const metaOAuth = require("../../services/metaOAuth.service");
+  res.json(
+    await metaOAuth.startMetaOAuth(
+      {
+        workspaceId: req.body?.workspaceId,
+        name: req.body?.name,
+        credentialId: req.body?.credentialId,
+      },
+      req.user
+    )
+  );
+});
+
+const metaOAuthCallback = asyncHandler(async (req, res) => {
+  const metaOAuth = require("../../services/metaOAuth.service");
+  try {
+    const result = await metaOAuth.finishMetaOAuth(req.query.code, req.query.state);
+    metaOAuth.applyOAuthPopupResponseHeaders(res);
+    res.send(
+      metaOAuth.oauthCallbackHtml({
+        ok: true,
+        credentialId: result.credentialId,
+      })
+    );
+  } catch (err) {
+    metaOAuth.applyOAuthPopupResponseHeaders(res);
+    res.status(400).send(
+      metaOAuth.oauthCallbackHtml({
+        ok: false,
+        error: metaOAuth.sanitizeCallbackError(err),
+      })
+    );
+  }
+});
+
+const listMetaAdAccounts = asyncHandler(async (req, res) => {
+  const metaOAuth = require("../../services/metaOAuth.service");
+  res.json(
+    await metaOAuth.listMetaAdAccounts(req.query.credentialId, req.user)
+  );
+});
+
+const selectMetaAdAccount = asyncHandler(async (req, res) => {
+  const metaOAuth = require("../../services/metaOAuth.service");
+  res.json(
+    await metaOAuth.selectMetaAdAccount(
+      req.params.credentialId,
+      req.body?.adAccountId,
+      req.user
+    )
+  );
+});
+
 const listConnectionTypes = asyncHandler(async (_req, res) => {
   const registry = require("../../services/connectionRegistry.service");
   const googleOAuth = require("../../services/googleOAuth.service");
@@ -234,6 +288,11 @@ const testCredential = asyncHandler(async (req, res) => {
     throw new AppError("Credential not found", 404, "NOT_FOUND");
   }
   await assertWorkspaceAccess(req.user, rows[0].workspace_id);
+  if (rows[0].type === "meta_ads") {
+    const metaOAuth = require("../../services/metaOAuth.service");
+    res.json(await metaOAuth.testMetaCredential(req.params.credentialId, req.user));
+    return;
+  }
   if (googleOAuth.GOOGLE_TYPES.has(rows[0].type)) {
     res.json(await googleOAuth.testGoogleCredential(req.params.credentialId, req.user));
     return;
@@ -881,6 +940,10 @@ module.exports = {
   updateCredential,
   removeCredential,
   startGoogleOAuth,
+  startMetaOAuth,
+  metaOAuthCallback,
+  listMetaAdAccounts,
+  selectMetaAdAccount,
   listConnectionTypes,
   getCredentialEditor,
   startOAuth2,

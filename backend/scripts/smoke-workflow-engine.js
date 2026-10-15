@@ -9574,7 +9574,37 @@ require("./smoke-workflow-google-ads-v1").registerGoogleAdsV1Tests({
   section,
   assert,
 });
+require("./smoke-workflow-google-ads-stabilize").registerGoogleAdsStabilizeTests({
+  check,
+  section,
+  assert,
+});
 require("./smoke-workflow-google-ads-mcp").registerGoogleAdsMcpTests({
+  check,
+  section,
+  assert,
+});
+require("./smoke-workflow-meta-ads-m2").registerMetaAdsM2Tests({
+  check,
+  section,
+  assert,
+});
+require("./smoke-workflow-meta-ads-m3").registerMetaAdsM3Tests({
+  check,
+  section,
+  assert,
+});
+require("./smoke-workflow-meta-ads-m4").registerMetaAdsM4Tests({
+  check,
+  section,
+  assert,
+});
+require("./smoke-workflow-meta-ads-m5").registerMetaAdsM5Tests({
+  check,
+  section,
+  assert,
+});
+require("./smoke-workflow-meta-ads-m6").registerMetaAdsM6Tests({
   check,
   section,
   assert,

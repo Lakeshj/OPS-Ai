@@ -6,11 +6,21 @@ import { Button } from "@/components/ui/button";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { cn } from "@/lib/utils";
 import type { WorkflowItem } from "@/modules/workflows/types";
+import {
+  INSPECTOR_ITEM_SPLIT_CLASS,
+  INSPECTOR_PANE_SCROLL_CLASS,
+  buildDisplayTable,
+  canonicalJsonForView,
+  formatCompactCell,
+  inferSchemaKind,
+  prettyJson,
+  type SchemaKind,
+  toCanonicalItems,
+} from "@/modules/workflows/inspectorViewModel";
 import { Check, ChevronDown, ChevronRight, Copy, Search } from "lucide-react";
 import { toast } from "sonner";
 import {
   looksLikeMarkdownProse,
-  plainPreview,
   WorkflowProseContent,
 } from "./WorkflowProseContent";
 
@@ -32,12 +42,10 @@ type SpreadsheetPayload = {
   rows: unknown[];
 };
 
-type FieldType = "string" | "number" | "boolean" | "object" | "array" | "null";
-
 type SchemaField = {
   key: string;
   value: unknown;
-  type: FieldType;
+  type: SchemaKind;
   depth: number;
 };
 
@@ -68,37 +76,6 @@ function ProseCopyButton({ text }: { text: string }) {
     </Button>
   );
 }
-
-const COLUMN_PRIORITY = [
-  "result",
-  "text",
-  "query",
-  "page",
-  "clicks",
-  "impressions",
-  "ctr",
-  "position",
-  "message",
-  "timestamp",
-  "Readable date",
-  "Readable time",
-  "Day of week",
-  "Year",
-  "Month",
-  "Day of month",
-  "Hour",
-  "Minute",
-  "Second",
-  "Timezone",
-  "triggered",
-  "kind",
-  "cron",
-  "timezone",
-  "documentId",
-  "name",
-  "rowCount",
-  "sheet",
-];
 
 const COLUMN_LABELS: Record<string, string> = {
   query: "Top Queries",
@@ -139,44 +116,17 @@ function spreadsheetToItems(payload: SpreadsheetPayload): WorkflowItem[] {
   });
 }
 
-function inferType(value: unknown): FieldType {
-  if (value == null) return "null";
-  if (Array.isArray(value)) return "array";
-  if (typeof value === "object") return "object";
-  if (typeof value === "number") return "number";
-  if (typeof value === "boolean") return "boolean";
-  return "string";
-}
-
-function flattenItemJson(json: Record<string, unknown>): Record<string, unknown> {
-  const out = { ...json };
-  const input = out.input;
-  if (input && typeof input === "object" && !Array.isArray(input)) {
-    for (const [key, value] of Object.entries(input as Record<string, unknown>)) {
-      if (!(key in out)) out[key] = value;
-    }
-  }
-  // Result node wraps the mapped payload as `{ result: <value> }`. Promote a
-  // plain object payload into columns so Table view isn't empty.
-  const result = out.result;
-  if (result && typeof result === "object" && !Array.isArray(result)) {
-    for (const [key, value] of Object.entries(result as Record<string, unknown>)) {
-      if (!(key in out)) out[key] = value;
-    }
-  }
-  return out;
-}
-
 function toWorkflowItem(item: unknown): WorkflowItem {
   if (item && typeof item === "object" && "json" in (item as object)) {
     const row = item as WorkflowItem;
     return {
-      ...row,
-      json: flattenItemJson((row.json || {}) as Record<string, unknown>),
+      json: { ...((row.json || {}) as Record<string, unknown>) },
+      ...(row.binary ? { binary: row.binary } : {}),
+      ...(row.pairedItem != null ? { pairedItem: row.pairedItem } : {}),
     };
   }
   if (item && typeof item === "object" && !Array.isArray(item)) {
-    return { json: flattenItemJson(item as Record<string, unknown>) };
+    return { json: { ...(item as Record<string, unknown>) } };
   }
   return { json: { value: item } };
 }
@@ -186,12 +136,10 @@ function mergeEnvelope(
   envelope?: Record<string, unknown>
 ): WorkflowItem {
   if (!envelope) return item;
-  const flat = flattenItemJson(envelope);
-  const merged = { ...flat, ...(item.json || {}) };
-  for (const [key, value] of Object.entries(item.json || {})) {
-    if (value !== undefined) merged[key] = value;
-  }
-  return { json: flattenItemJson(merged) };
+  return {
+    ...item,
+    json: { ...envelope, ...(item.json || {}) },
+  };
 }
 
 function looksLikeNodeIdKey(key: string): boolean {
@@ -239,8 +187,7 @@ function normalizeItems(
   options?: { canonicalItemsOnly?: boolean }
 ): WorkflowItem[] {
   if (options?.canonicalItemsOnly) {
-    if (!Array.isArray(items)) return [];
-    return items.map((item) => toWorkflowItem(item));
+    return toCanonicalItems(Array.isArray(items) ? items : []);
   }
 
   if (isSpreadsheetPayload(data)) {
@@ -255,7 +202,7 @@ function normalizeItems(
       typeof data === "object" &&
       !Array.isArray(data) &&
       !isIncomingSnapshot(data)
-        ? flattenItemJson(data as Record<string, unknown>)
+        ? (data as Record<string, unknown>)
         : undefined;
     return items.map((item) => mergeEnvelope(toWorkflowItem(item), envelope));
   }
@@ -263,14 +210,7 @@ function normalizeItems(
   const fromIncoming = incomingSnapshotToItems(data);
   if (fromIncoming) return fromIncoming;
 
-  if (data == null) return [];
-  if (Array.isArray(data)) {
-    return data.map((row) => toWorkflowItem(row));
-  }
-  if (typeof data === "object") {
-    return [toWorkflowItem(data)];
-  }
-  return [{ json: { value: data } }];
+  return toCanonicalItems(undefined, data);
 }
 
 function shouldHideNestedObjectColumn(
@@ -295,61 +235,9 @@ function shouldHideResultColumn(rows: WorkflowItem[]): boolean {
   return shouldHideNestedObjectColumn(rows, "result");
 }
 
-function sortTableKeys(keys: string[]): string[] {
-  const priority = new Map(COLUMN_PRIORITY.map((k, i) => [k, i]));
-  return [...keys].sort((a, b) => {
-    const pa = priority.get(a) ?? 999;
-    const pb = priority.get(b) ?? 999;
-    if (pa !== pb) return pa - pb;
-    return a.localeCompare(b);
-  });
-}
-
-function collectTableKeys(rows: WorkflowItem[]): string[] {
-  const keys = new Set<string>();
-  const hideInput = shouldHideInputColumn(rows);
-  const hideResult = shouldHideResultColumn(rows);
-  const hideStructured = rows.some((row) =>
-    Boolean(readableReport(row.json as Record<string, unknown> | undefined))
-  );
-  for (const row of rows) {
-    for (const key of Object.keys(row.json || {})) {
-      if (key === "input" && hideInput) continue;
-      if (key === "result" && hideResult) continue;
-      if (hideStructured && (key === "text" || STRUCTURED_AI_KEYS.has(key))) continue;
-      if (looksLikeNodeIdKey(key)) continue;
-      const val = (row.json || {})[key];
-      if (val != null && typeof val === "object" && !Array.isArray(val)) continue;
-      if (key === "rows" || key === "headers" || key === "text") continue;
-      keys.add(key);
-    }
-  }
-  return sortTableKeys([...keys]).slice(0, 32);
-}
-
 function formatCellValue(value: unknown, maxLen = 200): string {
-  if (value == null) return "";
-  if (typeof value === "string") {
-    const plain = looksLikeMarkdownProse(value) ? plainPreview(value) : value;
-    return plain.length > maxLen ? `${plain.slice(0, maxLen)}…` : plain;
-  }
-  if (typeof value === "number" || typeof value === "boolean") {
-    return String(value);
-  }
-  try {
-    const text = JSON.stringify(value);
-    return text.length > maxLen ? `${text.slice(0, maxLen)}…` : text;
-  } catch {
-    return String(value);
-  }
+  return formatCompactCell(value, { maxLen }).text;
 }
-
-const STRUCTURED_AI_KEYS = new Set([
-  "opportunities",
-  "enrichedOpportunities",
-  "mcpOpportunityDetails",
-  "compactAiPayload",
-]);
 
 function formatRatePercent(value: unknown): string | null {
   if (value == null || value === "") return null;
@@ -514,30 +402,17 @@ function flattenSchemaFields(
       {
         key: prefix || "value",
         value: obj,
-        type: inferType(obj),
+        type: inferSchemaKind(obj),
         depth,
       },
     ];
   }
   if (Array.isArray(obj)) {
-    if (obj.length === 0) {
-      return [{ key: prefix || "items", value: [], type: "array", depth }];
-    }
-    if (obj.length === 1 && typeof obj[0] !== "object") {
-      return [
-        {
-          key: prefix || "items",
-          value: obj[0],
-          type: inferType(obj[0]),
-          depth,
-        },
-      ];
-    }
     return [
       {
         key: prefix || "items",
-        value: `${obj.length} items`,
-        type: "array",
+        value: obj,
+        type: inferSchemaKind(obj),
         depth,
       },
     ];
@@ -546,7 +421,7 @@ function flattenSchemaFields(
   const fields: SchemaField[] = [];
   for (const [key, val] of Object.entries(obj as Record<string, unknown>)) {
     const fullKey = prefix ? `${prefix}.${key}` : key;
-    const type = inferType(val);
+    const type = inferSchemaKind(val);
     if (type === "object" && val && !Array.isArray(val)) {
       const childKeys = Object.keys(val as object);
       const flatChildren = childKeys.every(
@@ -564,7 +439,7 @@ function flattenSchemaFields(
   return fields;
 }
 
-function typeBadge(type: FieldType): string {
+function typeBadge(type: SchemaKind): string {
   switch (type) {
     case "string":
       return "T";
@@ -575,13 +450,22 @@ function typeBadge(type: FieldType): string {
     case "object":
       return "{}";
     case "array":
+    case "array<string>":
+    case "array<number>":
+    case "array<boolean>":
+    case "array<object>":
+    case "mixed":
       return "[]";
     default:
       return "·";
   }
 }
 
-function TypeBadge({ type }: { type: FieldType }) {
+function schemaKindLabel(type: SchemaKind): string {
+  return type;
+}
+
+function TypeBadge({ type }: { type: SchemaKind }) {
   return (
     <span
       className={cn(
@@ -590,7 +474,13 @@ function TypeBadge({ type }: { type: FieldType }) {
         type === "number" && "bg-violet-500/15 text-violet-700 dark:text-violet-300",
         type === "boolean" && "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300",
         type === "object" && "bg-amber-500/15 text-amber-700 dark:text-amber-300",
-        type === "array" && "bg-orange-500/15 text-orange-700 dark:text-orange-300",
+        (type === "array" ||
+          type === "array<string>" ||
+          type === "array<number>" ||
+          type === "array<boolean>" ||
+          type === "array<object>" ||
+          type === "mixed") &&
+          "bg-orange-500/15 text-orange-700 dark:text-orange-300",
         type === "null" && "bg-muted text-muted-foreground"
       )}
     >
@@ -623,7 +513,9 @@ function SchemaFieldRow({ field }: { field: SchemaField }) {
           )}
           <TypeBadge type="object" />
           <span className="text-[11px] font-medium text-foreground">{field.key}</span>
-          <span className="ml-auto text-[10px] text-muted-foreground">object</span>
+          <span className="ml-auto text-[10px] text-muted-foreground">
+            {schemaKindLabel(field.type)}
+          </span>
         </button>
         {open && (
           <div className="border-t border-border/40 bg-muted/20 pl-4">
@@ -642,6 +534,9 @@ function SchemaFieldRow({ field }: { field: SchemaField }) {
       <div className="min-w-0 flex-1">
         <div className="text-[11px] font-medium text-foreground">{field.key}</div>
         <div className="mt-0.5 break-words text-[11px] text-muted-foreground">
+          <span className="mr-2 font-mono text-[10px] text-muted-foreground/80">
+            {schemaKindLabel(field.type)}
+          </span>
           {formatCellValue(field.value, 500) || "—"}
         </div>
       </div>
@@ -655,7 +550,7 @@ function SchemaView({ rows, query }: { rows: WorkflowItem[]; query: string }) {
   const hideResult = shouldHideResultColumn(rows);
 
   return (
-    <div className="max-h-[min(42vh,360px)] overflow-auto rounded-lg border bg-card">
+    <div className="h-full min-h-0 overflow-auto rounded-lg border bg-card">
       {rows.map((row, itemIndex) => {
         const fields = flattenSchemaFields(row.json).filter((f) => {
           if (hideInput && f.key === "input") return false;
@@ -687,18 +582,42 @@ function SchemaView({ rows, query }: { rows: WorkflowItem[]; query: string }) {
   );
 }
 
+function TableCellValue({ value }: { value: unknown }) {
+  const compact = formatCompactCell(value, { maxLen: 120 });
+  if (
+    compact.kind === "array<string>" &&
+    Array.isArray(value) &&
+    value.length > 0 &&
+    value.length <= 8
+  ) {
+    return (
+      <span className="flex flex-wrap gap-1">
+        {value.map((entry, index) => (
+          <span
+            key={`${index}-${String(entry)}`}
+            className="rounded bg-muted px-1.5 py-0.5 text-[10px] text-foreground"
+          >
+            {String(entry)}
+          </span>
+        ))}
+      </span>
+    );
+  }
+  return (
+    <span className="line-clamp-3 break-words" title={formatCompactCell(value, { maxLen: 4000 }).text}>
+      {compact.text}
+    </span>
+  );
+}
+
 function TableView({
   rows,
   keys,
   query,
-  selectedItemIndex,
-  onSelectedItemIndexChange,
 }: {
-  rows: WorkflowItem[];
+  rows: Record<string, unknown>[];
   keys: string[];
   query: string;
-  selectedItemIndex?: number;
-  onSelectedItemIndexChange?: (index: number) => void;
 }) {
   const q = query.trim().toLowerCase();
   const filteredKeys = q
@@ -716,17 +635,17 @@ function TableView({
   }
 
   return (
-    <div className="max-h-[min(42vh,360px)] overflow-auto rounded-lg border bg-card">
-      <table className="w-full min-w-max text-[11px]">
+    <div className="h-full min-h-0 overflow-auto rounded-lg border bg-card">
+      <table className="w-full text-[11px]">
         <thead className="sticky top-0 z-10 border-b bg-muted/90 backdrop-blur-sm">
           <tr>
-            <th className="whitespace-nowrap px-3 py-2 text-left font-medium text-muted-foreground">
+            <th className="w-10 whitespace-nowrap px-3 py-2 text-left font-medium text-muted-foreground">
               #
             </th>
             {filteredKeys.map((k) => (
               <th
                 key={k}
-                className="whitespace-nowrap px-3 py-2 text-left font-medium text-foreground"
+                className="min-w-[4.5rem] max-w-[16rem] truncate px-3 py-2 text-left font-medium text-foreground"
               >
                 {tableColumnLabel(k)}
               </th>
@@ -735,31 +654,18 @@ function TableView({
         </thead>
         <tbody>
           {rows.slice(0, 100).map((row, i) => (
-            <tr
-              key={i}
-              className={cn(
-                "border-t border-border/50 transition-colors",
-                onSelectedItemIndexChange && "cursor-pointer hover:bg-muted/25",
-                selectedItemIndex === i && "bg-primary/5"
-              )}
-              onClick={() => onSelectedItemIndexChange?.(i)}
-            >
+            <tr key={i} className="border-t border-border/50 transition-colors">
               <td className="whitespace-nowrap px-3 py-2 text-muted-foreground">
                 {i}
               </td>
-              {filteredKeys.map((k) => {
-                const val = (row.json || {})[k];
-                const text = formatCellValue(val, 120);
-                return (
-                  <td
-                    key={k}
-                    className="max-w-[240px] px-3 py-2 align-top text-foreground"
-                    title={formatCellValue(val, 4000)}
-                  >
-                    <span className="line-clamp-3 break-words">{text}</span>
-                  </td>
-                );
-              })}
+              {filteredKeys.map((k) => (
+                <td
+                  key={k}
+                  className="min-w-[4.5rem] max-w-[16rem] px-3 py-2 align-top text-foreground"
+                >
+                  <TableCellValue value={row[k]} />
+                </td>
+              ))}
             </tr>
           ))}
         </tbody>
@@ -779,13 +685,29 @@ export function ItemDataViewer({
 }: Props) {
   const [mode, setMode] = useState<ViewMode>("table");
   const [query, setQuery] = useState("");
-  const rows = useMemo(
-    () =>
-      normalizeItems(items, data, { canonicalItemsOnly }).map(withReadableReport),
+  const canonical = useMemo(
+    () => normalizeItems(items, data, { canonicalItemsOnly }),
     [items, data, canonicalItemsOnly]
   );
 
-  if (rows.length === 0) {
+  const splitItems = Boolean(
+    canonical.length > 1 && onSelectedItemIndexChange
+  );
+  const selectedIndex = Math.min(
+    Math.max(0, selectedItemIndex),
+    Math.max(0, canonical.length - 1)
+  );
+  const viewItems = splitItems ? [canonical[selectedIndex]] : canonical;
+  const displayTable = useMemo(() => {
+    const source = (
+      canonical.length > 1 && onSelectedItemIndexChange
+        ? [canonical[Math.min(Math.max(0, selectedItemIndex), canonical.length - 1)]]
+        : canonical
+    ).map(withReadableReport);
+    return buildDisplayTable(source);
+  }, [canonical, onSelectedItemIndexChange, selectedItemIndex]);
+
+  if (canonical.length === 0) {
     return (
       <p className={cn("text-xs text-muted-foreground", className)}>
         {emptyMessage}
@@ -793,40 +715,20 @@ export function ItemDataViewer({
     );
   }
 
-  const jsonText = JSON.stringify(
-    rows.length === 1 ? rows[0].json : rows.map((r) => r.json),
-    null,
-    2
-  );
-
-  const tableKeys = collectTableKeys(rows);
-  const selectedRow = rows[Math.min(selectedItemIndex, rows.length - 1)];
+  const jsonText = prettyJson(canonicalJsonForView(viewItems));
+  const selectedRow = canonical[selectedIndex];
   const prosePreview = extractProseField(
     selectedRow?.json as Record<string, unknown> | undefined
   );
 
-  return (
-    <div className={cn("flex min-h-0 flex-col gap-2", className)}>
-      {rows.length > 1 && onSelectedItemIndexChange && (
-        <div className="flex flex-wrap gap-1">
-          {rows.map((_, i) => (
-            <button
-              key={i}
-              type="button"
-              className={cn(
-                "rounded border px-2 py-0.5 text-[10px] font-medium transition-colors",
-                selectedItemIndex === i
-                  ? "border-primary bg-primary/10 text-foreground"
-                  : "border-border bg-muted/30 text-muted-foreground hover:bg-muted/50"
-              )}
-              onClick={() => onSelectedItemIndexChange(i)}
-            >
-              Item {i + 1}
-            </button>
-          ))}
-        </div>
+  const dataViewer = (
+    <div
+      className={cn(
+        "flex min-h-0 flex-col gap-2 overflow-hidden",
+        splitItems ? "min-h-[10rem]" : "flex-1"
       )}
-      <div className="flex flex-wrap items-center gap-2">
+    >
+      <div className="flex shrink-0 flex-wrap items-center gap-2">
         <div className="relative min-w-[120px] flex-1">
           <Search className="pointer-events-none absolute left-2 top-1/2 h-3 w-3 -translate-y-1/2 text-muted-foreground" />
           <Input
@@ -865,62 +767,104 @@ export function ItemDataViewer({
           ))}
         </ToggleGroup>
         <span className="shrink-0 text-[10px] tabular-nums text-muted-foreground">
-          {rows.length} item{rows.length === 1 ? "" : "s"}
+          {canonical.length} item{canonical.length === 1 ? "" : "s"}
         </span>
       </div>
 
-      {prosePreview && (mode === "table" || mode === "schema") && (
-        <div className="rounded-lg border border-dashed border-border bg-muted/20 px-3 py-2">
-          <div className="mb-1 flex items-center justify-between gap-2">
-            <div className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-              Preview
+      <div
+        data-inspector-region="item-data"
+        className={cn(INSPECTOR_PANE_SCROLL_CLASS, "flex min-h-0 flex-1 flex-col gap-2")}
+      >
+        {prosePreview && (mode === "table" || mode === "schema") && (
+          <div className="shrink-0 rounded-lg border border-dashed border-border bg-muted/20 px-3 py-2">
+            <div className="mb-1 flex items-center justify-between gap-2">
+              <div className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                Preview
+              </div>
+              <ProseCopyButton text={prosePreview} />
             </div>
-            <ProseCopyButton text={prosePreview} />
+            <WorkflowProseContent text={prosePreview} compact />
           </div>
-          <WorkflowProseContent text={prosePreview} compact />
-        </div>
-      )}
+        )}
 
-      {mode === "json" && (
-        <pre className="max-h-[min(42vh,360px)] overflow-auto rounded-lg border bg-muted/20 p-3 font-mono text-[11px] leading-relaxed text-foreground">
-          {jsonText}
-        </pre>
-      )}
+        {mode === "json" && (
+          <pre className="min-h-0 flex-1 overflow-auto rounded-lg border bg-muted/20 p-3 font-mono text-[11px] leading-relaxed text-foreground">
+            {jsonText}
+          </pre>
+        )}
 
-      {mode === "schema" && <SchemaView rows={rows} query={query} />}
+        {mode === "schema" && <SchemaView rows={viewItems} query={query} />}
 
-      {mode === "binary" && (
-        <div className="max-h-[min(42vh,360px)] overflow-auto rounded-lg border bg-muted/20 p-3 text-[11px]">
-          {rows.some((r) => r.binary && Object.keys(r.binary).length > 0) ? (
-            <ul className="space-y-1">
-              {rows.map((row, i) =>
-                row.binary
-                  ? Object.entries(row.binary).map(([key, val]) => (
-                      <li key={`${i}-${key}`} className="font-mono">
-                        item {i}.{key}:{" "}
-                        {typeof val === "object"
-                          ? JSON.stringify(val).slice(0, 120)
-                          : String(val)}
-                      </li>
-                    ))
-                  : null
-              )}
-            </ul>
-          ) : (
-            <p className="text-muted-foreground">No binary data on these items</p>
-          )}
-        </div>
-      )}
+        {mode === "binary" && (
+          <div className="min-h-0 flex-1 overflow-auto rounded-lg border bg-muted/20 p-3 text-[11px]">
+            {viewItems.some((r) => r.binary && Object.keys(r.binary).length > 0) ? (
+              <ul className="space-y-1">
+                {viewItems.map((row, i) =>
+                  row.binary
+                    ? Object.entries(row.binary).map(([key, val]) => (
+                        <li key={`${i}-${key}`} className="font-mono">
+                          item {splitItems ? selectedIndex : i}.{key}:{" "}
+                          {typeof val === "object"
+                            ? JSON.stringify(val).slice(0, 120)
+                            : String(val)}
+                        </li>
+                      ))
+                    : null
+                )}
+              </ul>
+            ) : (
+              <p className="text-muted-foreground">No binary data on these items</p>
+            )}
+          </div>
+        )}
 
-      {mode === "table" && (
-        <TableView
-          rows={rows}
-          keys={tableKeys}
-          query={query}
-          selectedItemIndex={selectedItemIndex}
-          onSelectedItemIndexChange={onSelectedItemIndexChange}
-        />
+        {mode === "table" && (
+          <TableView
+            rows={displayTable.rows}
+            keys={displayTable.columns}
+            query={query}
+          />
+        )}
+      </div>
+    </div>
+  );
+
+  const itemSelector = splitItems ? (
+    <div
+      data-inspector-region="item-selector"
+      className={cn(INSPECTOR_PANE_SCROLL_CLASS, "min-h-[6rem]")}
+    >
+      <div className="flex flex-wrap gap-1">
+        {canonical.map((_, i) => (
+          <button
+            key={i}
+            type="button"
+            className={cn(
+              "rounded border px-2 py-0.5 text-[10px] font-medium transition-colors",
+              selectedIndex === i
+                ? "border-primary bg-primary/10 text-foreground"
+                : "border-border bg-muted/30 text-muted-foreground hover:bg-muted/50"
+            )}
+            onClick={() => onSelectedItemIndexChange?.(i)}
+          >
+            Item {i + 1}
+          </button>
+        ))}
+      </div>
+    </div>
+  ) : null;
+
+  return (
+    <div
+      className={cn(
+        splitItems
+          ? cn(INSPECTOR_ITEM_SPLIT_CLASS, "gap-2")
+          : "flex min-h-0 flex-col gap-2",
+        className
       )}
+    >
+      {itemSelector}
+      {dataViewer}
     </div>
   );
 }

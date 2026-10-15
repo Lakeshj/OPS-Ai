@@ -34,6 +34,8 @@ import { CapabilitySettingsField } from "./CapabilitySettingsField";
 import { Ga4FilterField } from "./Ga4FilterField";
 import { Ga4OrderByField } from "./Ga4OrderByField";
 import { DynamicMcpToolField } from "./DynamicMcpToolField";
+import { MetaAdAccountField } from "./MetaAdAccountField";
+import { MetaAdsFiltersField } from "./MetaAdsFiltersField";
 import type { KeywordAssistant, WorkspaceDocument } from "@/modules/shared/types";
 import type { GoogleAdsSourceNodeRef } from "@/modules/workflows/googleAdsMcpSource";
 
@@ -139,6 +141,37 @@ function renderSpecial(
           workflowId={context.workflowId}
           previewContext={context.previewContext}
           workflowNodes={context.workflowNodes}
+        />
+      );
+    case "metaAdsMcpTool":
+      return (
+        <DynamicMcpToolField
+          key={param.name}
+          lockedProvider="meta_ads"
+          values={values}
+          onChange={onChange}
+          workspaceId={context.workspaceId}
+          workflowId={context.workflowId}
+          previewContext={context.previewContext}
+          workflowNodes={context.workflowNodes}
+        />
+      );
+    case "metaAdAccount":
+      return (
+        <MetaAdAccountField
+          key={param.name}
+          param={param}
+          values={values}
+          onChange={onChange}
+        />
+      );
+    case "metaAdsFilters":
+      return (
+        <MetaAdsFiltersField
+          key={param.name}
+          param={param}
+          values={values}
+          onChange={onChange}
         />
       );
     case "googleGscSites":

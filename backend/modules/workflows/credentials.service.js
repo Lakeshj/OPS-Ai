@@ -31,9 +31,12 @@ const GOOGLE_CREDENTIAL_TYPES = new Set([
   "google_ads",
 ]);
 
+const META_CREDENTIAL_TYPES = new Set(["meta_ads"]);
+
 const CREDENTIAL_TYPES = new Set([
   ...HTTP_CREDENTIAL_TYPES,
   ...GOOGLE_CREDENTIAL_TYPES,
+  ...META_CREDENTIAL_TYPES,
 ]);
 
 const parseConfig = (raw) => oauth2.parseConfig(raw);
@@ -86,6 +89,25 @@ const formatCredential = (row) => {
       isGoogle && cfg.accountEmail ? String(cfg.accountEmail) : undefined,
     workflowId:
       isGoogle && cfg.workflowId ? String(cfg.workflowId) : undefined,
+    metaDisplayName:
+      row.type === "meta_ads" && cfg.metaDisplayName
+        ? String(cfg.metaDisplayName)
+        : undefined,
+    metaUserId:
+      row.type === "meta_ads" && cfg.metaUserId
+        ? String(cfg.metaUserId)
+        : undefined,
+    expiresAt:
+      row.type === "meta_ads" && cfg.expiresAt ? String(cfg.expiresAt) : undefined,
+    reconnectRequired:
+      row.type === "meta_ads"
+        ? Boolean(cfg.reconnectRequired) ||
+          (cfg.expiresAt ? Date.parse(cfg.expiresAt) <= Date.now() : false)
+        : undefined,
+    selectedAdAccountId:
+      row.type === "meta_ads" && cfg.selectedAdAccountId
+        ? String(cfg.selectedAdAccountId)
+        : undefined,
   };
 };
 
@@ -148,6 +170,14 @@ const validateGoogleCreate = ({ type, secret, config }) => {
 
 const create = async ({ workspaceId, name, type, secret, config }, authUser) => {
   await assertWorkspaceAccess(authUser, workspaceId);
+
+  if (type === "meta_ads") {
+    throw new AppError(
+      "Use Connect with Meta. Do not paste a Meta access token.",
+      400,
+      "VALIDATION_ERROR"
+    );
+  }
 
   if (!secret || typeof secret !== "object") {
     throw new AppError("secret object is required", 400, "VALIDATION_ERROR");
@@ -382,6 +412,28 @@ const getEditorView = async (id, authUser) => {
   const cfg = parseConfig(row.config_json);
   const secret = decryptSecret(row.secret_json) || {};
 
+  if (row.type === "meta_ads") {
+    const expiresAt = cfg.expiresAt ? Date.parse(cfg.expiresAt) : NaN;
+    return {
+      ...formatted,
+      editor: {
+        hasAccessToken: Boolean(secret.accessToken),
+        metaUserId: cfg.metaUserId || "",
+        metaDisplayName: cfg.metaDisplayName || "",
+        tokenKind: cfg.tokenKind || "",
+        expiresAt: cfg.expiresAt || null,
+        grantedPermissions: Array.isArray(cfg.grantedPermissions)
+          ? cfg.grantedPermissions
+          : [],
+        reconnectRequired:
+          Boolean(cfg.reconnectRequired) ||
+          (Number.isFinite(expiresAt) && expiresAt <= Date.now()),
+        selectedAdAccountId: cfg.selectedAdAccountId || "",
+        sharingScope: normalizeSharingScope(cfg.sharingScope),
+      },
+    };
+  }
+
   if (GOOGLE_CREDENTIAL_TYPES.has(row.type)) {
     const entry = registry.getSupportedPredefined(row.type);
     return {
@@ -499,6 +551,7 @@ module.exports = {
   CREDENTIAL_TYPES,
   HTTP_CREDENTIAL_TYPES,
   GOOGLE_CREDENTIAL_TYPES,
+  META_CREDENTIAL_TYPES,
   formatCredential,
   OAUTH_APP_MODE,
   validateGoogleCreate,

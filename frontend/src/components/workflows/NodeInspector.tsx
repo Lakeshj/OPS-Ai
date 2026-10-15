@@ -36,7 +36,11 @@ type Props = {
   onExecuteWorkflow?: () => void;
   executing?: boolean;
   previewContext?: import("./ExpressionField").ExpressionFieldContext;
-  workflowNodes?: import("@/modules/workflows/googleAdsMcpSource").GoogleAdsSourceNodeRef[];
+  workflowNodes?: Array<{
+    id: string;
+    type?: string;
+    data?: { nodeType?: string; label?: string };
+  }>;
 };
 
 export function NodeInspector({

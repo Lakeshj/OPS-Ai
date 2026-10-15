@@ -51,11 +51,13 @@ export type WorkflowNodeType =
   | "ga4McpTool"
   | "mcpDynamicTool"
   | "googleAdsMcpTool"
+  | "metaAdsMcpTool"
   | "respondToWebhook"
   | "googleSearchConsole"
   | "gscMcp"
   | "googleAnalytics"
   | "googleAds"
+  | "metaAds"
   | "gmail"
   | "gmailTrigger"
   | "googleSheets"
@@ -223,7 +225,8 @@ export type WorkflowCredentialType =
   | "google_gmail"
   | "google_sheets"
   | "google_ads"
-  | "oauth2";
+  | "oauth2"
+  | "meta_ads";
 
 export interface WorkflowCredential {
   id: string;
@@ -240,6 +243,11 @@ export interface WorkflowCredential {
   accountEmail?: string;
   /** When set, this Google connection is limited to one workflow. */
   workflowId?: string;
+  metaDisplayName?: string;
+  metaUserId?: string;
+  expiresAt?: string;
+  reconnectRequired?: boolean;
+  selectedAdAccountId?: string;
 }
 
 export type WorkflowCredentialSecret = Record<string, string>;
@@ -327,6 +335,12 @@ export const CREDENTIAL_TYPE_FIELDS: Record<
     label: "OAuth2",
     fields: [{ key: "clientSecret", label: "Client Secret", secret: true }],
   },
+  meta_ads: {
+    label: "Meta Ads",
+    accountLabel: "Meta Ads Account",
+    connectAction: "Connect with Meta",
+    fields: [],
+  },
 };
 
 export type WorkflowOperator =
@@ -390,6 +404,8 @@ export interface WorkflowNodeData {
   params?: Record<string, unknown>;
   /** Google Ads MCP Tools — existing googleAds node that supplies account context */
   googleAdsSourceNodeId?: string;
+  /** Meta Ads MCP Tools — existing metaAds node that supplies account context */
+  metaAdsSourceNodeId?: string;
   /** HTTP */
   url?: string;
   method?: string;
@@ -443,14 +459,18 @@ export interface WorkflowNodeData {
     | "concat"
     | "list"
     | "runReport";
-  /** Google Ads report */
+  /** Google Ads / Meta Ads report */
   resource?: string;
   reportType?: string;
   customerId?: string;
   loginCustomerId?: string;
+  adAccountId?: string;
   dateRange?: string;
   startDate?: string;
   endDate?: string;
+  customStartDate?: string;
+  customEndDate?: string;
+  filters?: Record<string, unknown>;
   returnAll?: boolean;
   limit?: number;
   campaignStatus?: string;

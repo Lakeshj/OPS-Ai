@@ -444,6 +444,27 @@ const runLlmNode = async (node, context, options = {}) => {
   // Native GA4 runReport rows only (not MCP IntelligenceContext, not Google Ads).
   if (!intelligenceContext) {
     try {
+      const { applyMetaAdsAiGrounding } = require("./workflowMetaAdsAiGrounding");
+      const { resolveGa4GroundingInput } = require("./workflowGa4AiGrounding");
+      const groundingInput = resolveGa4GroundingInput(context, expressionInput);
+      const metaGround = applyMetaAdsAiGrounding({
+        systemPrompt,
+        userPrompt: String(userPrompt || ""),
+        input: groundingInput,
+      });
+      if (metaGround.grounded) {
+        systemPrompt = metaGround.systemPrompt;
+        userPrompt = metaGround.userPrompt;
+        userInstructions = metaGround.userInstructions || userInstructions;
+        mcpGroundingSource = "meta_ads";
+      }
+    } catch {
+      // Meta Ads grounding is best-effort.
+    }
+  }
+
+  if (!intelligenceContext && mcpGroundingSource !== "meta_ads") {
+    try {
       const { applyGoogleAdsAiGrounding } = require("./workflowGoogleAdsAiGrounding");
       const { resolveGa4GroundingInput } = require("./workflowGa4AiGrounding");
       const groundingInput = resolveGa4GroundingInput(context, expressionInput);
@@ -463,7 +484,7 @@ const runLlmNode = async (node, context, options = {}) => {
     }
   }
 
-  if (!intelligenceContext && mcpGroundingSource !== "google_ads") {
+  if (!intelligenceContext && mcpGroundingSource !== "google_ads" && mcpGroundingSource !== "meta_ads") {
     try {
       const {
         applyGa4NativeAiGrounding,
@@ -490,7 +511,7 @@ const runLlmNode = async (node, context, options = {}) => {
 
   // Non-MCP / non-native-GA4: still inject runtime evidence when needed.
   // Raw GSC rows (comparison on) get the same period rules as GA4 native rows.
-  if (!intelligenceContext && !ga4Grounded) {
+  if (!intelligenceContext && !ga4Grounded && mcpGroundingSource !== "meta_ads") {
     try {
       const { comparisonRulesForInput } = require("./workflowComparisonPeriods");
       const comparisonRules = comparisonRulesForInput(
@@ -3121,6 +3142,10 @@ const handlers = {
     const { executeGoogleAdsMcpNode } = require("./mcpDynamicRegistry.service");
     return executeGoogleAdsMcpNode(node, context);
   },
+  metaAdsMcpTool: async (node, context) => {
+    const { executeMetaAdsMcpNode } = require("./mcpDynamicRegistry.service");
+    return executeMetaAdsMcpNode(node, context);
+  },
   gscMcp: async (node, context) => {
     const { executeGscMcpNode } = require("./mcpPluginHost.service");
     return executeGscMcpNode(node, context);
@@ -3132,6 +3157,10 @@ const handlers = {
   googleAds: async (node, context) => {
     const { executeGoogleNode } = require("./workflowGoogleNodes.service");
     return executeGoogleNode(node, context);
+  },
+  metaAds: async (node, context) => {
+    const { executeMetaAdsNode } = require("./workflowMetaAds.service");
+    return executeMetaAdsNode(node, context);
   },
   gmail: async (node, context) => {
     const { executeGoogleNode } = require("./workflowGoogleNodes.service");

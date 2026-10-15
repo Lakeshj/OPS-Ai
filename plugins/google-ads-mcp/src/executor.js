@@ -38,36 +38,71 @@ const createExecutor = (runtime = {}) => {
     return new AppError(message, statusCode, code);
   }
 
-  function mapAdsError(err) {
+  function mapAdsError(err, context = {}) {
     if (err instanceof AppError) return err;
-    const googleCode = String(err?.googleAds?.code || "");
+    const googleCode = String(err?.googleAds?.code || err?.details?.errorCode || "");
     const blob = `${googleCode} ${err?.code || ""} ${err?.message || ""}`;
-    if (/USER_PERMISSION_DENIED/.test(blob)) {
-      return adsError(
-        "This Google account cannot access that customer. Check the customer ID and login customer ID.",
-        "USER_PERMISSION_DENIED"
-      );
+    const customerId =
+      context.customerId || err?.googleAds?.customerId || err?.details?.customerId || "";
+    const loginCustomerId =
+      context.loginCustomerId ||
+      err?.googleAds?.loginCustomerId ||
+      err?.details?.loginCustomerId ||
+      "";
+    const attach = (mapped) => {
+      if (err?.title) mapped.title = err.title;
+      mapped.provider = "google_ads";
+      mapped.details = err?.details || err?.googleAds || mapped.details;
+      mapped.googleAds = err?.googleAds || mapped.details;
+      mapped.retryable = err?.retryable === true;
+      return mapped;
+    };
+    if (/CUSTOMER_NOT_ENABLED/.test(blob) || err?.code === "CUSTOMER_NOT_ENABLED") {
+      return attach(adsError("That Google Ads customer is not enabled.", "CUSTOMER_NOT_ENABLED"));
     }
-    if (/CUSTOMER_NOT_ENABLED/.test(blob)) {
-      return adsError("That Google Ads customer is not enabled.", "CUSTOMER_NOT_ENABLED");
+    if (
+      err?.code === "USER_PERMISSION_DENIED" ||
+      err?.code === "GOOGLE_ADS_CUSTOMER_UNAUTHORIZED" ||
+      /USER_PERMISSION_DENIED|NOT_ADS_USER|CUSTOMER_NOT_FOUND|PERMISSION_DENIED/i.test(blob)
+    ) {
+      const copy =
+        typeof runtime.presentGoogleAdsPermissionError === "function"
+          ? runtime.presentGoogleAdsPermissionError({ customerId, loginCustomerId })
+          : {
+              title: "Google Ads access denied",
+              message: loginCustomerId
+                ? "The selected Login Customer ID does not appear to have access to this Google Ads account.\n\nIf you access the customer account directly, leave Login Customer ID blank and try again.\n\nIf you use a manager account, verify that the selected manager account manages this customer and that your Google user has access to it."
+                : customerId
+                  ? `The connected Google account does not have permission to access customer ${customerId}.\n\nVerify that this Google user has access to the selected Google Ads account.`
+                  : "The connected Google account does not have permission to access the selected Google Ads account.",
+            };
+      const mapped = adsError(copy.message, "USER_PERMISSION_DENIED", 403);
+      mapped.title = copy.title;
+      return attach(mapped);
     }
     if (err?.code === "GOOGLE_ADS_CUSTOMER_INVALID") {
-      return adsError(
-        err.message || "Customer ID must be a 10-digit Google Ads customer ID.",
-        "GOOGLE_ADS_CUSTOMER_INVALID"
+      return attach(
+        adsError(
+          err.message || "Customer ID must be a 10-digit Google Ads customer ID.",
+          "GOOGLE_ADS_CUSTOMER_INVALID"
+        )
       );
     }
     if (
       err?.code === "GOOGLE_ADS_QUERY" ||
       /QUERY_ERROR|UNRECOGNIZED_FIELD|BAD_ENUM|queryError/i.test(blob)
     ) {
-      return adsError(
-        "Google Ads rejected the query. Check the GAQL and field names.",
-        "GOOGLE_ADS_QUERY"
+      return attach(
+        adsError(
+          "Google Ads rejected the query. Check the GAQL and field names.",
+          "GOOGLE_ADS_QUERY"
+        )
       );
     }
     if (err?.code === "GOOGLE_ADS_QUOTA" || /RESOURCE_EXHAUSTED|quotaError/i.test(blob)) {
-      return adsError("Google Ads API quota exceeded. Try again later.", "GOOGLE_ADS_QUOTA", 429);
+      return attach(
+        adsError("Google Ads API quota exceeded. Try again later.", "GOOGLE_ADS_QUOTA", 429)
+      );
     }
     if (err?.code === "GOOGLE_CREDENTIAL_REQUIRED") {
       return adsError("A Google Ads credential is required.", "MCP_CREDENTIAL_REQUIRED");
@@ -77,18 +112,25 @@ const createExecutor = (runtime = {}) => {
       err?.code === "GOOGLE_CREDENTIAL_TYPE" ||
       /invalid_grant|UNAUTHENTICATED/i.test(blob)
     ) {
-      return adsError(
-        "Google Ads credential is missing or not authorized.",
-        "MCP_CREDENTIAL_UNAUTHORIZED"
+      return attach(
+        adsError(
+          "Google Ads credential is missing or not authorized.",
+          "MCP_CREDENTIAL_UNAUTHORIZED"
+        )
       );
     }
     if (err?.code === "GOOGLE_ADS_DEVELOPER_TOKEN") {
-      return adsError(
-        "Google Ads developer token was rejected. Update it on the Google Ads credential.",
-        "GOOGLE_ADS_DEVELOPER_TOKEN"
+      return attach(
+        adsError(
+          "Google Ads developer token was rejected. Update it on the Google Ads credential.",
+          "GOOGLE_ADS_DEVELOPER_TOKEN"
+        )
       );
     }
-    return adsError("Google Ads request failed.", "MCP_EXECUTION_FAILED");
+    if (err?.code && err.code !== "GOOGLE_ADS_API_ERROR" && err.code !== "MCP_EXECUTION_FAILED") {
+      return attach(adsError(err.message || "Google Ads request failed.", err.code));
+    }
+    return attach(adsError(err?.message || "Google Ads request failed.", "MCP_EXECUTION_FAILED"));
   }
 
   function assertSelectQuery(query) {
@@ -148,7 +190,13 @@ const createExecutor = (runtime = {}) => {
           err?.retryable === true ||
           err?.code === "GOOGLE_QUOTA" ||
           err?.code === "GOOGLE_ADS_QUOTA";
-        if (!retryable || attempt >= 2) throw mapAdsError(err);
+        if (!retryable || attempt >= 2) {
+          const customerMatch = String(spec.url || "").match(/\/customers\/(\d{10})/);
+          throw mapAdsError(err, {
+            customerId: customerMatch ? customerMatch[1] : "",
+            loginCustomerId: spec.headers ? spec.headers["login-customer-id"] : "",
+          });
+        }
         attempt += 1;
         if (retryDelayMs > 0) {
           await new Promise((resolve) => setTimeout(resolve, retryDelayMs * attempt));

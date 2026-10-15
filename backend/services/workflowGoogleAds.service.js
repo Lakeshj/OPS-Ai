@@ -145,12 +145,28 @@ const normalizeAdsRow = (row, reportType, provenance = {}) => {
   return json;
 };
 
+const blankLoginCustomerId = (value) => {
+  const raw = String(value == null ? "" : value).trim();
+  if (!raw || raw === "-" || /^null|undefined$/i.test(raw)) return true;
+  return !/\d/.test(raw);
+};
+
+const normalizeOptionalLoginCustomerId = (value) => {
+  if (blankLoginCustomerId(value)) return "";
+  return normalizeCustomerId(value, "Login customer ID");
+};
+
 const sanitizeGoogleAdsNodeData = (data) => {
   if (!data || typeof data !== "object" || Array.isArray(data)) return data;
   const next = {};
   for (const [key, value] of Object.entries(data)) {
     if (SECRET_KEY_RE.test(key)) continue;
     next[key] = value;
+  }
+  if (Object.prototype.hasOwnProperty.call(next, "loginCustomerId")) {
+    next.loginCustomerId = blankLoginCustomerId(next.loginCustomerId)
+      ? ""
+      : String(next.loginCustomerId).trim();
   }
   return next;
 };
@@ -190,10 +206,9 @@ const runGoogleAdsReport = async (node, context, item, deps = {}) => {
     exprValue(data.customerId, context, item),
     "Customer ID"
   );
-  const loginRaw = String(exprValue(data.loginCustomerId, context, item) || "").trim();
-  const loginCustomerId = loginRaw
-    ? normalizeCustomerId(loginRaw, "Login customer ID")
-    : "";
+  const loginCustomerId = normalizeOptionalLoginCustomerId(
+    exprValue(data.loginCustomerId, context, item)
+  );
   const reportType = String(data.reportType || "").trim();
   const range = resolveDateRange(data.dateRange || "last7days", {
     startDate: exprValue(data.startDate, context, item),
@@ -217,7 +232,9 @@ const runGoogleAdsReport = async (node, context, item, deps = {}) => {
   });
   const request = deps.googleApiRequest || require("./googleOAuth.service").googleApiRequest;
   const headers = {};
-  if (loginCustomerId) headers["login-customer-id"] = loginCustomerId;
+  if (loginCustomerId) {
+    headers["login-customer-id"] = loginCustomerId;
+  }
   const items = [];
   let pageToken = "";
   let pages = 0;
@@ -303,4 +320,5 @@ module.exports = {
   normalizeCustomerId,
   runGoogleAdsReport,
   sanitizeGoogleAdsNodeData,
+  normalizeOptionalLoginCustomerId,
 };

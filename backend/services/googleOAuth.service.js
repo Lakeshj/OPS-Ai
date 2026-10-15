@@ -314,24 +314,59 @@ const requireClientConfig = () => {
 /** REST prefix for the current Ads API. v25.2 is served on /v25/. */
 const GOOGLE_ADS_API_VERSION = "v25";
 
-const adsFailureDetails = (body) => {
-  const details = body?.error?.details;
-  const pairs = [];
-  let requestId = "";
-  if (!Array.isArray(details)) return { pairs, requestId };
-  for (const detail of details) {
-    if (!requestId && detail?.requestId) requestId = String(detail.requestId);
-    const errors = Array.isArray(detail?.errors) ? detail.errors : [];
-    for (const entry of errors) {
-      const errorCode = entry?.errorCode;
-      if (errorCode && typeof errorCode === "object") {
-        for (const [group, value] of Object.entries(errorCode)) {
-          pairs.push({ type: String(group || ""), code: String(value || "") });
-        }
+const collectAdsErrorPairs = (errors, pairs) => {
+  if (!Array.isArray(errors)) return;
+  for (const entry of errors) {
+    const errorCode = entry?.errorCode;
+    if (errorCode && typeof errorCode === "object") {
+      for (const [group, value] of Object.entries(errorCode)) {
+        pairs.push({ type: String(group || ""), code: String(value || "") });
       }
     }
   }
-  return { pairs, requestId };
+};
+
+const adsFailureDetails = (body) => {
+  const root = body && typeof body === "object" ? body : {};
+  const error = root.error && typeof root.error === "object" ? root.error : root;
+  const pairs = [];
+  let requestId = "";
+  const visit = (detail) => {
+    if (!detail || typeof detail !== "object" || Array.isArray(detail)) return;
+    if (!requestId && detail.requestId) requestId = String(detail.requestId);
+    collectAdsErrorPairs(detail.errors, pairs);
+    if (detail.googleAdsFailure) visit(detail.googleAdsFailure);
+    if (Array.isArray(detail.details)) detail.details.forEach(visit);
+  };
+  visit(error);
+  if (Array.isArray(root.details)) root.details.forEach(visit);
+  return {
+    pairs,
+    requestId,
+    grpcStatus: String(error.status || ""),
+    reason: String(error.reason || ""),
+  };
+};
+
+const presentGoogleAdsPermissionError = ({ customerId, loginCustomerId } = {}) => {
+  const login = safeAdsId(loginCustomerId);
+  const customer = safeAdsId(customerId);
+  if (login) {
+    return {
+      title: "Google Ads access denied",
+      message: [
+        "The selected Login Customer ID does not appear to have access to this Google Ads account.",
+        "If you access the customer account directly, leave Login Customer ID blank and try again.",
+        "If you use a manager account, verify that the selected manager account manages this customer and that your Google user has access to it.",
+      ].join("\n\n"),
+    };
+  }
+  return {
+    title: "Google Ads access denied",
+    message: customer
+      ? `The connected Google account does not have permission to access customer ${customer}.\n\nVerify that this Google user has access to the selected Google Ads account.`
+      : "The connected Google account does not have permission to access the selected Google Ads account.\n\nVerify that this Google user has access to the selected Google Ads account.",
+  };
 };
 
 const safeAdsId = (value) => {
@@ -364,104 +399,130 @@ const adsResponseMeta = ({ url, requestHeaders = {}, responseHeaders = {}, body 
 const describeGoogleAdsError = (status, body, options = {}) => {
   const parsed = adsFailureDetails(body && typeof body === "object" ? body : {});
   const codes = parsed.pairs.map((pair) => `${pair.type}:${pair.code}`);
-  const enumBlob = codes.join(" ");
+  const enumBlob = `${codes.join(" ")} ${parsed.grpcStatus} ${parsed.reason}`;
   const googleCode = parsed.pairs[0]?.code || "";
   const errorType = parsed.pairs[0]?.type || "";
   const htmlBody = typeof body === "string" && /<html/i.test(body);
+  const customerId = safeAdsId(options.customerId);
+  const loginCustomerId = safeAdsId(options.loginCustomerId);
   let code = "GOOGLE_ADS_API_ERROR";
+  let title = "Google Ads request failed";
   let summary = "Google Ads API rejected the report request.";
   let retryable = false;
   if (googleCode === "CLOUD_PROJECT_NOT_APPROVED_FOR_PRODUCTION" || /CLOUD_PROJECT_NOT_APPROVED_FOR_PRODUCTION/.test(enumBlob)) {
+    title = "Google Ads project not approved";
     summary = "Google Ads API project is not approved for production accounts.";
   } else if (status === 429 || /RESOURCE_EXHAUSTED|quotaError/i.test(enumBlob)) {
     code = "GOOGLE_ADS_QUOTA";
+    title = "Google Ads quota exceeded";
     summary = "Google Ads API quota exceeded. Try again later.";
     retryable = true;
   } else if (/DEVELOPER_TOKEN|developerTokenError/i.test(enumBlob)) {
     code = "GOOGLE_ADS_DEVELOPER_TOKEN";
+    title = "Google Ads developer token rejected";
     summary = "Google Ads developer token was rejected. Update it on the Google Ads credential.";
   } else if (status === 401 || /AUTHENTICATION|UNAUTHENTICATED/i.test(enumBlob)) {
     code = "GOOGLE_UNAUTHORIZED";
+    title = "Google Ads credential expired";
     summary = "Google Ads credential expired or was revoked. Reconnect it.";
-  } else if (
-    /USER_PERMISSION_DENIED|CUSTOMER_NOT_ENABLED|NOT_ADS_USER|CUSTOMER_NOT_FOUND/.test(enumBlob)
-  ) {
-    code = "GOOGLE_ADS_CUSTOMER_UNAUTHORIZED";
-    summary =
-      "This Google account cannot access that customer. Check the customer ID and login customer ID.";
+  } else if (/CUSTOMER_NOT_ENABLED/.test(enumBlob)) {
+    code = "CUSTOMER_NOT_ENABLED";
+    title = "Google Ads customer not enabled";
+    summary = "That Google Ads customer is not enabled.";
+  } else if (/USER_PERMISSION_DENIED|NOT_ADS_USER|CUSTOMER_NOT_FOUND/.test(enumBlob)) {
+    const copy = presentGoogleAdsPermissionError({ customerId, loginCustomerId });
+    code = "USER_PERMISSION_DENIED";
+    title = copy.title;
+    summary = copy.message;
   } else if (status === 400 || /QUERY_ERROR|queryError|BAD_ENUM|UNRECOGNIZED_FIELD|REQUEST_ERROR|requestError/i.test(enumBlob)) {
     code = "GOOGLE_ADS_QUERY";
+    title = "Google Ads query rejected";
     summary = "Google Ads rejected the report configuration.";
+  } else if (status === 403 || /PERMISSION_DENIED/i.test(parsed.grpcStatus)) {
+    const copy = presentGoogleAdsPermissionError({ customerId, loginCustomerId });
+    code = "USER_PERMISSION_DENIED";
+    title = copy.title;
+    summary = copy.message;
   } else if (status === 404 || htmlBody) {
+    title = "Google Ads API not found";
     summary = "Google Ads API version was not found.";
-  } else if (status === 403) {
-    code = "GOOGLE_ADS_CUSTOMER_UNAUTHORIZED";
-    summary = "Google Ads denied access to this customer.";
   } else if (status >= 500) {
     code = "GOOGLE_ADS_UNAVAILABLE";
+    title = "Google Ads temporarily unavailable";
     summary = "Google Ads API is temporarily unavailable.";
     retryable = true;
   }
-  const shownCode = googleCode || (status === 404 || htmlBody ? "NOT_FOUND" : "UNKNOWN");
+  const shownCode =
+    googleCode ||
+    (code === "USER_PERMISSION_DENIED"
+      ? "USER_PERMISSION_DENIED"
+      : status === 404 || htmlBody
+        ? "NOT_FOUND"
+        : parsed.grpcStatus || "UNKNOWN");
   const requestId = safeRequestId(options.requestId || parsed.requestId);
-  const lines = [
-    summary,
-    "GOOGLE_ADS_API_ERROR",
-    `code: ${shownCode}`,
-    `httpStatus: ${Number(status) || 0}`,
-  ];
-  if (errorType) lines.push(`errorType: ${errorType}`);
-  if (requestId) lines.push(`requestId: ${requestId}`);
-  if (options.apiVersion) lines.push(`apiVersion: ${options.apiVersion}`);
-  if (safeAdsId(options.customerId)) lines.push(`customerId: ${safeAdsId(options.customerId)}`);
-  if (safeAdsId(options.loginCustomerId)) {
-    lines.push(`loginCustomerId: ${safeAdsId(options.loginCustomerId)}`);
-  }
-  if (options.reportType) lines.push(`reportType: ${String(options.reportType)}`);
-  if (options.developerHeaderSent != null) {
-    lines.push(`developerHeaderSent: ${options.developerHeaderSent ? "yes" : "no"}`);
-  }
-  const err = new Error(lines.join("\n"));
+  const details = {
+    httpStatus: Number(status) || 0,
+    errorCode: shownCode,
+    googleCode: googleCode || shownCode,
+    errorType: errorType || null,
+    googleStatus: parsed.grpcStatus || null,
+    requestId: requestId || null,
+    apiVersion: options.apiVersion || null,
+    customerId: customerId || null,
+    loginCustomerId: loginCustomerId || null,
+    reportType: options.reportType ? String(options.reportType) : null,
+  };
+  const err = new Error(summary);
   err.code = code;
+  err.title = title;
+  err.provider = "google_ads";
   err.statusCode = status === 401 ? 400 : status >= 400 && status < 600 ? status : 502;
   err.providerStatus = status;
   err.retryable = retryable;
+  err.details = details;
   err.googleAds = {
-    httpStatus: Number(status) || 0,
+    ...details,
     code: shownCode,
-    errorType: errorType || null,
-    requestId: requestId || null,
-    apiVersion: options.apiVersion || null,
-    customerId: safeAdsId(options.customerId) || null,
-    loginCustomerId: safeAdsId(options.loginCustomerId) || null,
-    reportType: options.reportType || null,
-    developerHeaderSent: options.developerHeaderSent == null ? null : Boolean(options.developerHeaderSent),
+    developerHeaderSent:
+      options.developerHeaderSent == null ? null : Boolean(options.developerHeaderSent),
   };
   return err;
 };
 
 const annotateGoogleAdsError = (err, context = {}) => {
-  if (!err || typeof err.message !== "string") return err;
-  const extra = [];
-  if (context.reportType && !err.message.includes("reportType:")) {
-    extra.push(`reportType: ${String(context.reportType)}`);
+  if (!err || typeof err !== "object") return err;
+  const googleAds = err.googleAds && typeof err.googleAds === "object" ? { ...err.googleAds } : {};
+  const details = err.details && typeof err.details === "object" ? { ...err.details } : { ...googleAds };
+  if (context.reportType) {
+    details.reportType = String(context.reportType);
+    googleAds.reportType = String(context.reportType);
   }
-  if (context.apiVersion && !err.message.includes("apiVersion:")) {
-    extra.push(`apiVersion: ${String(context.apiVersion)}`);
+  if (context.apiVersion) {
+    details.apiVersion = String(context.apiVersion);
+    googleAds.apiVersion = String(context.apiVersion);
   }
-  if (safeAdsId(context.customerId) && !err.message.includes("customerId:")) {
-    extra.push(`customerId: ${safeAdsId(context.customerId)}`);
+  if (safeAdsId(context.customerId)) {
+    details.customerId = safeAdsId(context.customerId);
+    googleAds.customerId = details.customerId;
   }
-  if (safeAdsId(context.loginCustomerId) && !err.message.includes("loginCustomerId:")) {
-    extra.push(`loginCustomerId: ${safeAdsId(context.loginCustomerId)}`);
+  if (Object.prototype.hasOwnProperty.call(context, "loginCustomerId")) {
+    details.loginCustomerId = safeAdsId(context.loginCustomerId) || null;
+    googleAds.loginCustomerId = details.loginCustomerId;
+  } else if (safeAdsId(context.loginCustomerId)) {
+    details.loginCustomerId = safeAdsId(context.loginCustomerId);
+    googleAds.loginCustomerId = details.loginCustomerId;
   }
-  if (context.developerHeaderSent != null && !err.message.includes("developerHeaderSent:")) {
-    extra.push(`developerHeaderSent: ${context.developerHeaderSent ? "yes" : "no"}`);
-  }
-  if (extra.length) err.message = `${err.message}\n${extra.join("\n")}`;
-  if (err.googleAds && typeof err.googleAds === "object") {
-    if (context.reportType) err.googleAds.reportType = String(context.reportType);
-    if (context.apiVersion) err.googleAds.apiVersion = String(context.apiVersion);
+  err.googleAds = googleAds;
+  err.details = details;
+  if (
+    err.code === "USER_PERMISSION_DENIED" ||
+    err.code === "GOOGLE_ADS_CUSTOMER_UNAUTHORIZED"
+  ) {
+    const copy = presentGoogleAdsPermissionError(details);
+    err.code = "USER_PERMISSION_DENIED";
+    err.title = copy.title;
+    err.message = copy.message;
+    err.provider = "google_ads";
   }
   return err;
 };
@@ -1429,6 +1490,7 @@ module.exports = {
   sanitizeGoogleError,
   describeGoogleAdsError,
   annotateGoogleAdsError,
+  presentGoogleAdsPermissionError,
   redactLog,
   encryptGoogleSecret,
   decryptGoogleSecret,

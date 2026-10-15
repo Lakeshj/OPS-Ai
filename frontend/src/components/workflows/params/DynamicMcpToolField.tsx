@@ -17,6 +17,10 @@ import {
   type GoogleAdsSourceNodeRef,
 } from "@/modules/workflows/googleAdsMcpSource";
 import {
+  metaAdsSourceFieldState,
+  type MetaAdsSourceNodeRef,
+} from "@/modules/workflows/metaAdsMcpSource";
+import {
   fieldsFromInputSchema,
   type McpDynamicProvider,
   type McpDynamicTool,
@@ -34,10 +38,19 @@ type Props = {
   previewContext?: ExpressionFieldContext;
   /** When set, the provider dropdown is omitted and tools load for this provider. */
   lockedProvider?: string;
-  workflowNodes?: GoogleAdsSourceNodeRef[];
+  workflowNodes?: Array<GoogleAdsSourceNodeRef | MetaAdsSourceNodeRef>;
 };
 
-const ACCOUNT_PARAM_NAMES = new Set(["credentialId", "customerId", "loginCustomerId"]);
+const GOOGLE_ACCOUNT_PARAM_NAMES = new Set([
+  "credentialId",
+  "customerId",
+  "loginCustomerId",
+]);
+const META_ACCOUNT_PARAM_NAMES = new Set(["credentialId", "adAccountId"]);
+const ACCOUNT_PARAM_NAMES = new Set([
+  ...GOOGLE_ACCOUNT_PARAM_NAMES,
+  ...META_ACCOUNT_PARAM_NAMES,
+]);
 
 function toolOptionLabel(tool: McpDynamicTool) {
   return tool.implemented ? tool.displayName : `${tool.displayName} (not available yet)`;
@@ -259,10 +272,13 @@ export function DynamicMcpToolField({
   const [tools, setTools] = useState<McpDynamicTool[]>([]);
   const [detail, setDetail] = useState<McpDynamicTool | null>(null);
   const [error, setError] = useState("");
+  const [toolsReady, setToolsReady] = useState(false);
 
   const provider = lockedProvider || String(values.provider || "");
   const toolId = String(values.toolId || "");
   const params = asParams(values.params);
+  const isMetaLocked = lockedProvider === "meta_ads";
+  const isGoogleLocked = lockedProvider === "google_ads";
 
   useEffect(() => {
     let cancelled = false;
@@ -283,18 +299,24 @@ export function DynamicMcpToolField({
     if (!provider) {
       setTools([]);
       setDetail(null);
+      setToolsReady(false);
       return;
     }
     let cancelled = false;
     setError("");
+    setToolsReady(false);
     workflowsApi
       .listMcpTools(provider)
       .then((rows) => {
-        if (!cancelled) setTools(rows);
+        if (!cancelled) {
+          setTools(rows);
+          setToolsReady(true);
+        }
       })
       .catch((err: Error) => {
         if (!cancelled) {
           setTools([]);
+          setToolsReady(true);
           setError(err.message || "Could not load tools.");
         }
       });
@@ -325,17 +347,36 @@ export function DynamicMcpToolField({
     };
   }, [provider, toolId]);
 
+  const hiddenAccountParams = isMetaLocked
+    ? META_ACCOUNT_PARAM_NAMES
+    : isGoogleLocked
+      ? GOOGLE_ACCOUNT_PARAM_NAMES
+      : ACCOUNT_PARAM_NAMES;
   const fields = fieldsFromInputSchema(detail?.inputSchema).filter((field) =>
-    lockedProvider ? !ACCOUNT_PARAM_NAMES.has(field.name) : true
+    lockedProvider ? !hiddenAccountParams.has(field.name) : true
   );
   const authType = (detail?.authType || "") as WorkflowCredentialType;
   const showCredential = Boolean(!lockedProvider && detail && authType);
-  const sourceState = lockedProvider
-    ? googleAdsSourceFieldState(workflowNodes, String(values.googleAdsSourceNodeId || ""))
-    : null;
+  const sourceState = isGoogleLocked
+    ? googleAdsSourceFieldState(
+        workflowNodes,
+        String(values.googleAdsSourceNodeId || "")
+      )
+    : isMetaLocked
+      ? metaAdsSourceFieldState(
+          workflowNodes,
+          String(values.metaAdsSourceNodeId || "")
+        )
+      : null;
+  const sourceLabel = isMetaLocked ? "Meta Ads Source" : "Google Ads Source";
+  const sourcePlaceholder = isMetaLocked
+    ? "Select a Meta Ads node"
+    : "Select a Google Ads node";
   const selectableTools =
     detail && !tools.some((tool) => tool.id === detail.id) ? [...tools, detail] : tools;
   const groupTools = Boolean(lockedProvider);
+  const showEmptyToolList =
+    Boolean(lockedProvider) && toolsReady && selectableTools.length === 0 && !error;
 
   const emit = (patch: WorkflowNodeData) => {
     if (!lockedProvider) {
@@ -347,11 +388,13 @@ export function DynamicMcpToolField({
     delete next.credentialId;
     delete next.customerId;
     delete next.loginCustomerId;
+    delete next.adAccountId;
     if (next.params && typeof next.params === "object" && !Array.isArray(next.params)) {
       const nextParams = { ...next.params };
       delete nextParams.customerId;
       delete nextParams.loginCustomerId;
       delete nextParams.credentialId;
+      delete nextParams.adAccountId;
       next.params = nextParams;
     }
     onChange(next);
@@ -382,15 +425,25 @@ export function DynamicMcpToolField({
       ) : null}
       {sourceState?.showSelector ? (
         <div className="flex flex-col gap-1.5">
-          <Label className="text-xs">Google Ads Source</Label>
+          <Label className="text-xs">{sourceLabel}</Label>
           <Select
-            value={String(values.googleAdsSourceNodeId || "") || undefined}
-            onValueChange={(googleAdsSourceNodeId) =>
-              emit({ ...values, googleAdsSourceNodeId })
+            value={
+              String(
+                isMetaLocked
+                  ? values.metaAdsSourceNodeId || ""
+                  : values.googleAdsSourceNodeId || ""
+              ) || undefined
+            }
+            onValueChange={(sourceNodeId) =>
+              emit(
+                isMetaLocked
+                  ? { ...values, metaAdsSourceNodeId: sourceNodeId }
+                  : { ...values, googleAdsSourceNodeId: sourceNodeId }
+              )
             }
           >
             <SelectTrigger className="text-xs">
-              <SelectValue placeholder="Select a Google Ads node" />
+              <SelectValue placeholder={sourcePlaceholder} />
             </SelectTrigger>
             <SelectContent>
               {sourceState.sources.map((source) => (
@@ -431,35 +484,43 @@ export function DynamicMcpToolField({
         </div>
       )}
 
-      <div className="flex flex-col gap-1.5">
-        <Label className="text-xs">Tool</Label>
-        <Select
-          value={toolId || undefined}
-          onValueChange={(next) => {
-            const nextAuth = selectableTools.find((tool) => tool.id === next)?.authType;
-            const keepCredential = !lockedProvider && nextAuth === detail?.authType;
-            emit({
-              ...values,
-              toolId: next,
-              params: {},
-              ...(lockedProvider
-                ? {}
-                : { credentialId: keepCredential ? values.credentialId : "" }),
-            });
-          }}
-          disabled={!provider}
-        >
-          <SelectTrigger className="text-xs">
-            <SelectValue placeholder={provider ? "Select a tool" : "Choose a provider first"} />
-          </SelectTrigger>
-          <SelectContent>
-            <ToolOptions tools={selectableTools} grouped={groupTools} />
-          </SelectContent>
-        </Select>
-        {detail?.description ? (
-          <p className="text-[11px] text-muted-foreground">{detail.description}</p>
-        ) : null}
-      </div>
+      {showEmptyToolList ? (
+        <p className="text-[11px] text-muted-foreground">
+          {isMetaLocked
+            ? "No Meta Ads MCP tools are available in this phase."
+            : "No tools are available yet."}
+        </p>
+      ) : (
+        <div className="flex flex-col gap-1.5">
+          <Label className="text-xs">Tool</Label>
+          <Select
+            value={toolId || undefined}
+            onValueChange={(next) => {
+              const nextAuth = selectableTools.find((tool) => tool.id === next)?.authType;
+              const keepCredential = !lockedProvider && nextAuth === detail?.authType;
+              emit({
+                ...values,
+                toolId: next,
+                params: {},
+                ...(lockedProvider
+                  ? {}
+                  : { credentialId: keepCredential ? values.credentialId : "" }),
+              });
+            }}
+            disabled={!provider}
+          >
+            <SelectTrigger className="text-xs">
+              <SelectValue placeholder={provider ? "Select a tool" : "Choose a provider first"} />
+            </SelectTrigger>
+            <SelectContent>
+              <ToolOptions tools={selectableTools} grouped={groupTools} />
+            </SelectContent>
+          </Select>
+          {detail?.description ? (
+            <p className="text-[11px] text-muted-foreground">{detail.description}</p>
+          ) : null}
+        </div>
+      )}
 
       {detail && !detail.implemented ? (
         <p className="text-[11px] text-muted-foreground">

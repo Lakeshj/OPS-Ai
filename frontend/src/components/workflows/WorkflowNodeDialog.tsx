@@ -56,6 +56,7 @@ import type { Node as FlowNode, Edge as FlowEdge } from "@xyflow/react";
 import { subworkflowErrorMessage } from "@/modules/workflows/subworkflowUx";
 import { ErrorRoutingSummary } from "./ErrorRoutingSummary";
 import { AiAgentInspectorExtras } from "./AiAgentInspectorExtras";
+import { nodeFailureDisplay } from "@/modules/workflows/nodeFailureUx";
 import {
   getAiAgentReadiness,
   isAiAgentType,
@@ -504,8 +505,7 @@ export function WorkflowNodeDialog({
       if (mode === "upstream") {
         toast.success("Upstream steps executed");
       } else if (result?.status === "failed") {
-        const mapped = parseAiErrorFromUnknown(result.error);
-        toast.error(mapped.message || result.error || "Node execution failed");
+        toast.error(nodeFailureDisplay(result).toast);
       } else {
         toast.success(
           mode === "run-to" ? "Ran chain to this node" : "Node executed"
@@ -570,7 +570,7 @@ export function WorkflowNodeDialog({
               {showInputPanel ? (
                 <>
                   <ResizablePanel defaultSize={26} minSize={18} className="min-w-[200px]">
-                    <div className="flex h-full min-h-0 flex-col overflow-y-auto border-r p-4">
+                    <div className="flex h-full min-h-0 flex-col overflow-hidden border-r p-4">
                       <NodeInputPanel
                         items={occurrenceInputItems || inputPreview.items}
                         incoming={

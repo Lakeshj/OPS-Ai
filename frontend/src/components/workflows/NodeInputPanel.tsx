@@ -103,15 +103,15 @@ export function NodeInputPanel({
     : "No input data";
 
   return (
-    <div className="flex min-h-0 flex-col gap-2">
-      <div className="flex items-center justify-between">
+    <div className="flex h-full min-h-0 flex-col gap-2 overflow-hidden">
+      <div className="flex shrink-0 items-center justify-between">
         <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
           Input
         </span>
       </div>
 
       {hasPortInputs && (
-        <div className="flex flex-wrap gap-1">
+        <div className="flex shrink-0 flex-wrap gap-1">
           {portIds.map((portId) => {
             const port = portInputs![portId];
             const count = port.items?.length ?? 0;
@@ -138,7 +138,7 @@ export function NodeInputPanel({
       )}
 
       {!hasData ? (
-        <div className="space-y-2 rounded border border-dashed p-3 text-center">
+        <div className="space-y-2 rounded border border-dashed p-3 text-center shrink-0">
           <p className="text-xs text-muted-foreground">No input data available</p>
           {onExecutePrevious && (
             <Button
@@ -156,7 +156,7 @@ export function NodeInputPanel({
       ) : (
         <>
           {stale && (
-            <p className="rounded border border-amber-500/30 bg-amber-500/10 px-2 py-1.5 text-[10px] text-amber-900 dark:text-amber-100">
+            <p className="shrink-0 rounded border border-amber-500/30 bg-amber-500/10 px-2 py-1.5 text-[10px] text-amber-900 dark:text-amber-100">
               Previous output may be stale
               {staleNodeIds && staleNodeIds.length > 0
                 ? ` (${staleNodeIds.join(", ")})`
@@ -170,6 +170,7 @@ export function NodeInputPanel({
             emptyMessage={hasPortInputs ? portEmptyMessage : "No input data"}
             selectedItemIndex={selectedItemIndex}
             onSelectedItemIndexChange={onSelectedItemIndexChange}
+            className="min-h-0 flex-1"
           />
         </>
       )}

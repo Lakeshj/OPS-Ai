@@ -156,7 +156,11 @@ export type ParamCustomRenderer =
   /** Provider, tool, and schema-driven parameters for the dynamic MCP node */
   | "mcpDynamicTool"
   /** Google Ads MCP tools. Provider is fixed by the node type. */
-  | "googleAdsMcpTool";
+  | "googleAdsMcpTool"
+  /** Meta Ads MCP tools. Provider is fixed by the node type. */
+  | "metaAdsMcpTool"
+  | "metaAdAccount"
+  | "metaAdsFilters";
 
 export interface DisplayOptions {
   show?: Record<string, Array<string | number | boolean>>;
@@ -2006,7 +2010,7 @@ export const NODE_CONTRACTS: Record<WorkflowNodeType, NodeContract> = {
     params: [],
     dirtyTriggers: ["params", "edges", "pin", "disabled"],
     edgeCases: [
-      "Kept for existing workflows. New Google Ads MCP nodes use googleAdsMcpTool",
+      "Kept for existing workflows. New Google Ads MCP nodes use googleAdsMcpTool. New Meta Ads MCP nodes use metaAdsMcpTool",
       "Tool list and parameter fields come from the shared MCP registry",
       "Dropdown lists read-only, low-risk tools",
       "Uses the provider credential already stored for GA4, Search Console, or Google Ads",
@@ -2038,6 +2042,30 @@ export const NODE_CONTRACTS: Record<WorkflowNodeType, NodeContract> = {
     ],
   },
 
+  metaAdsMcpTool: {
+    type: "metaAdsMcpTool",
+    version: 1,
+    category: "Marketing",
+    label: "Meta Ads MCP Tools",
+    inputs: [mainIn()],
+    outputs: [mainOut, errorOut],
+    cardinality: "1-to-N",
+    pairedItemPolicy: "fanOut",
+    settings: SETTINGS_ACTION,
+    capabilities: CAP_ACTION,
+    isSideEffecting: true,
+    params: [],
+    dirtyTriggers: ["params", "edges", "pin", "disabled"],
+    edgeCases: [
+      "Provider is meta_ads by node type. The saved node does not store a provider field",
+      "Account context comes from a Meta Ads node. One node is used automatically",
+      "Several Meta Ads nodes require a Meta Ads Source selection",
+      "The saved node does not store a credential or ad account id",
+      "Tool list and parameter fields come from the shared Meta Ads MCP registry",
+      "Read-only. No ads_management and no Graph write calls",
+    ],
+  },
+
   googleAds: {
     type: "googleAds",
     version: 1,
@@ -2056,6 +2084,27 @@ export const NODE_CONTRACTS: Record<WorkflowNodeType, NodeContract> = {
       "Read-only Google Ads reports",
       "GAQL is chosen on the server from the report type",
       "Credential stores the developer token; the node stores credentialId only",
+    ],
+  },
+
+  metaAds: {
+    type: "metaAds",
+    version: 1,
+    category: "Marketing",
+    label: "Meta Ads",
+    inputs: [mainIn()],
+    outputs: [mainOut, errorOut],
+    cardinality: "1-to-N",
+    pairedItemPolicy: "fanOut",
+    settings: SETTINGS_ACTION,
+    capabilities: CAP_ACTION,
+    isSideEffecting: true,
+    params: [],
+    dirtyTriggers: ["params", "edges", "pin", "disabled"],
+    edgeCases: [
+      "Read-only Meta Ads Insights reports",
+      "Dates resolve in the ad account timezone",
+      "The node stores credentialId and numeric adAccountId only",
     ],
   },
 };

@@ -41,6 +41,9 @@ const collectRows = (input) => {
 
 const looksLikeGoogleAdsRow = (row) => {
   if (!isPlainObject(row)) return false;
+  if (row._meta && row._meta.provider && row._meta.provider !== "google_ads") {
+    return false;
+  }
   if (row._meta && row._meta.provider === "google_ads") return true;
   if (row.source === "google_ads" || row.provider === "google_ads") return true;
   if (Object.prototype.hasOwnProperty.call(ADS_REPORT_TYPES, String(row.reportType || ""))) {

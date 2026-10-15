@@ -213,6 +213,21 @@ export function formatStepOutput(output: unknown): string {
   if (typeof output !== "object") return String(output);
 
   const obj = output as Record<string, unknown>;
+  if (obj.ok === false && obj.error) {
+    const err =
+      obj.error && typeof obj.error === "object" && !Array.isArray(obj.error)
+        ? (obj.error as Record<string, unknown>)
+        : { message: String(obj.error) };
+    const title = err.title ? String(err.title).trim() : "";
+    const message = err.message ? String(err.message).trim() : "";
+    const firstLine =
+      message
+        .split(/\r?\n/)
+        .map((line) => line.trim())
+        .find(Boolean) || "";
+    if (title && firstLine && firstLine !== title) return `${title} — ${firstLine}`;
+    return title || firstLine || "Execution failed";
+  }
   const gscDirect = summarizeGscIntelligenceContext(obj);
   if (gscDirect) return gscDirect;
   if (obj.gscIntelligenceContext === true || obj.gscIntelligenceContext) {

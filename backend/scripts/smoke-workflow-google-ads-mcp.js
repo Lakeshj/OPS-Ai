@@ -465,8 +465,41 @@ const registerGoogleAdsMcpTests = ({ check, section, assert: a }) => {
         ),
       (error) => {
         assertX.equal(error.code, "USER_PERMISSION_DENIED");
-        assertX.match(error.message, /customer ID/i);
+        assertX.equal(error.title, "Google Ads access denied");
+        assertX.match(error.message, /permission|Google Ads account/i);
         assertX.equal(/authorization|bearer|ya29|developer-token:/i.test(error.message), false);
+        return true;
+      }
+    );
+  });
+
+  check("ADS-MCP-15b permission with loginCustomerId uses MCC copy", async () => {
+    const err = new Error("denied");
+    err.code = "USER_PERMISSION_DENIED";
+    err.googleAds = { code: "USER_PERMISSION_DENIED" };
+    await assertX.rejects(
+      () =>
+        registry().executeTool(
+          {
+            provider: "google_ads",
+            toolId: "search",
+            credentialId: "cred-ads",
+            params: {
+              customerId: "7455074842",
+              loginCustomerId: "6753059302",
+              query: "SELECT campaign.id FROM campaign",
+            },
+          },
+          {
+            googleApiRequest: async () => {
+              throw err;
+            },
+          }
+        ),
+      (error) => {
+        assertX.equal(error.code, "USER_PERMISSION_DENIED");
+        assertX.match(error.message, /Login Customer ID/);
+        assertX.equal(error.message.includes("UNKNOWN"), false);
         return true;
       }
     );

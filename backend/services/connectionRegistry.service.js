@@ -87,6 +87,7 @@ const {
   getGoogleNativeAuthPolicy,
   defaultAppModeForProduct,
 } = require("../config/googleNativeAuthPolicy");
+const metaGraph = require("../config/metaGraph");
 
 const googleOAuthDef = (product, scopes) => ({
   product,
@@ -189,6 +190,28 @@ const PREDEFINED = Object.freeze([
     ]),
     testConnection: { kind: "google" },
     search: ["google", "ads", "adwords", "oauth2"],
+  },
+  {
+    id: "meta_ads",
+    displayName: "Meta Ads",
+    provider: "Meta",
+    category: "Meta",
+    authScheme: "oauth2_bearer",
+    kind: KIND.PREDEFINED,
+    status: STATUS.SUPPORTED,
+    dbType: "meta_ads",
+    allowedDomains: ["graph.facebook.com", "www.facebook.com"],
+    requestApplication: { type: "bearer" },
+    oauth: {
+      product: "meta_ads",
+      nativeAuthPolicy: "PLATFORM_MANAGED_ONLY",
+      authorizationUrl: metaGraph.dialogUrl(),
+      tokenUrl: metaGraph.tokenUrl(),
+      defaultScopes: [...metaGraph.OAUTH_SCOPES],
+      refresh: "reconnect",
+    },
+    testConnection: { kind: "meta" },
+    search: ["meta", "facebook", "ads", "oauth"],
   },
 ]);
 
