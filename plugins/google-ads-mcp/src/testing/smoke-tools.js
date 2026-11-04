@@ -74,4 +74,16 @@ const bound = createExecutor({
 assert.throws(() => bound.assertSelectQuery("UPDATE campaign SET campaign.status = 'PAUSED'"), (err) => err.code === "GOOGLE_ADS_QUERY");
 assert.match(bound.fieldServiceQuery({ resourceOrField: "metrics.clicks" }), /WHERE name = "metrics\.clicks"/);
 
+const { buildCommonToolQuery } = require("../contracts/catalog");
+const campaignsGaql = buildCommonToolQuery("campaigns", {}).query;
+assert.match(campaignsGaql, /campaign\.start_date_time/);
+assert.match(campaignsGaql, /campaign\.end_date_time/);
+assert.equal(/\bcampaign\.start_date\b/.test(campaignsGaql), false);
+assert.equal(/\bcampaign\.end_date\b/.test(campaignsGaql), false);
+const recommendationsGaql = buildCommonToolQuery("recommendations", {}).query;
+assert.match(recommendationsGaql, /recommendation\.impact/);
+assert.match(recommendationsGaql, /recommendation\.dismissed = FALSE/);
+assert.equal(recommendationsGaql.includes("recommendation.impact.base_metrics"), false);
+assert.equal(recommendationsGaql.includes("recommendation.impact.potential_metrics"), false);
+
 console.log("google-ads-mcp smoke-tools: OK");

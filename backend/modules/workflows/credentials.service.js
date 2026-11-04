@@ -41,8 +41,10 @@ const CREDENTIAL_TYPES = new Set([
 
 const parseConfig = (raw) => oauth2.parseConfig(raw);
 
-const googleConnected = (secret, cfg) =>
-  Boolean(cfg?.connected) || Boolean(secret?.accessToken);
+const googleConnected = (secret, cfg) => {
+  if (cfg?.reconnectRequired || secret?.revoked) return false;
+  return Boolean(cfg?.connected) || Boolean(secret?.accessToken);
+};
 
 const normalizeSharingScope = (raw) => {
   const value = String(raw || "all").trim();
@@ -73,10 +75,18 @@ const formatCredential = (row) => {
     connected: isOauth2
       ? Boolean(cfg.connected)
       : isGoogle
-        ? cfg.connected === undefined
-          ? true
-          : Boolean(cfg.connected)
+        ? cfg.reconnectRequired
+          ? false
+          : cfg.connected === undefined
+            ? true
+            : Boolean(cfg.connected)
         : true,
+    reconnectRequired: isGoogle
+      ? Boolean(cfg.reconnectRequired)
+      : row.type === "meta_ads"
+        ? Boolean(cfg.reconnectRequired) ||
+          (cfg.expiresAt ? Date.parse(cfg.expiresAt) <= Date.now() : false)
+        : undefined,
     sharing: sharingScope,
     sharingLabel: sharingLabel(sharingScope),
     oauthAppMode: isGoogle
@@ -99,11 +109,6 @@ const formatCredential = (row) => {
         : undefined,
     expiresAt:
       row.type === "meta_ads" && cfg.expiresAt ? String(cfg.expiresAt) : undefined,
-    reconnectRequired:
-      row.type === "meta_ads"
-        ? Boolean(cfg.reconnectRequired) ||
-          (cfg.expiresAt ? Date.parse(cfg.expiresAt) <= Date.now() : false)
-        : undefined,
     selectedAdAccountId:
       row.type === "meta_ads" && cfg.selectedAdAccountId
         ? String(cfg.selectedAdAccountId)
@@ -450,6 +455,7 @@ const getEditorView = async (id, authUser) => {
         hasAccessToken: Boolean(secret.accessToken),
         hasRefreshToken: Boolean(secret.refreshToken),
         connected: googleConnected(secret, cfg),
+        reconnectRequired: Boolean(cfg.reconnectRequired) || Boolean(secret.revoked),
         redirectUri: googleRedirectUri(),
         platformManagedAvailable: platformClientConfigured(),
         allowedDomains:

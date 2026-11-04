@@ -660,6 +660,205 @@ const registerGoogleAdsV1Tests = ({ check, section, assert: a }) => {
         assertX.equal(saved.secret.clientSecret, "sec-keep");
         assertX.equal(saved.secret.developerToken, undefined);
         assertX.equal(saved.config.connected, true);
+        assertX.equal(saved.config.reconnectRequired, false);
+        assertX.equal(store.size, 1);
+      }
+    );
+  });
+
+  check("ADS-RECONNECT-1 refresh auth failure marks same credential reconnectRequired", async () => {
+    const credId = "cred-ads-reconnect";
+    const store = new Map([
+      [
+        credId,
+        {
+          id: credId,
+          type: "google_ads",
+          workspaceId: "ws",
+          name: "Ads",
+          secret: {
+            accessToken: "expired",
+            refreshToken: "dead-rt",
+            clientSecret: "sec",
+            oauthAppMode: "CUSTOM_APP",
+            expiryMs: 1,
+          },
+          config: {
+            oauthAppMode: "CUSTOM_APP",
+            clientId: "cid",
+            connected: true,
+          },
+        },
+      ],
+    ]);
+    await oauth().withGoogleOAuthTestHooks(
+      {
+        credentialResolver: async (id) => store.get(id),
+        credentialSaver: async (id, secret, configObj) => {
+          const cur = store.get(id);
+          store.set(id, {
+            ...cur,
+            secret,
+            config: configObj !== undefined ? configObj : cur.config,
+          });
+        },
+        transport: async (url) => {
+          if (String(url).includes("oauth2.googleapis.com/token")) {
+            return {
+              status: 401,
+              ok: false,
+              body: { error: "invalid_grant", error_description: "Token has been expired or revoked." },
+              headers: {},
+            };
+          }
+          return { status: 200, ok: true, body: {}, headers: {} };
+        },
+      },
+      async () => {
+        await assertX.rejects(
+          () =>
+            oauth().googleApiRequest({
+              credentialId: credId,
+              workspaceId: "ws",
+              requiredType: "google_ads",
+              url: "https://googleads.googleapis.com/v25/customers:listAccessibleCustomers",
+              method: "GET",
+            }),
+          (err) => err.code === "GOOGLE_UNAUTHORIZED" || err.statusCode === 401
+        );
+        assertX.equal(store.size, 1);
+        const saved = store.get(credId);
+        assertX.equal(saved.config.reconnectRequired, true);
+        assertX.equal(saved.config.connected, false);
+        assertX.equal(saved.secret.revoked, true);
+        assertX.equal(saved.secret.clientSecret, "sec");
+        assertX.equal(saved.config.clientId, "cid");
+      }
+    );
+  });
+
+  check("ADS-RECONNECT-2 reconnect OAuth updates same row and clears reconnectRequired", async () => {
+    const credId = "cred-ads-reconnect-2";
+    const store = new Map([
+      [
+        credId,
+        {
+          id: credId,
+          type: "google_ads",
+          workspaceId: "ws",
+          name: "Ads",
+          secret: {
+            accessToken: "old",
+            refreshToken: "dead-rt",
+            clientSecret: "sec-keep",
+            oauthAppMode: "CUSTOM_APP",
+            revoked: true,
+          },
+          config: {
+            oauthAppMode: "CUSTOM_APP",
+            clientId: "cid-keep",
+            connected: false,
+            reconnectRequired: true,
+          },
+        },
+      ],
+    ]);
+    await oauth().withGoogleOAuthTestHooks(
+      {
+        credentialResolver: async (id) => store.get(id),
+        credentialSaver: async (id, secret, configObj) => {
+          const cur = store.get(id);
+          store.set(id, { ...cur, secret, config: configObj });
+        },
+        transport: async () => ({
+          status: 200,
+          ok: true,
+          body: {
+            access_token: "at-new",
+            refresh_token: "rt-new",
+            expires_in: 3600,
+            token_type: "Bearer",
+            scope: adsScope,
+          },
+          headers: {},
+        }),
+      },
+      async () => {
+        const started = await oauth().startGoogleOAuth(
+          { workspaceId: "ws", product: "google_ads", credentialId: credId },
+          actor
+        );
+        const result = await oauth().finishGoogleOAuth("code-ads", started.state);
+        assertX.equal(result.credentialId, credId);
+        assertX.equal(store.size, 1);
+        const saved = store.get(credId);
+        assertX.equal(saved.secret.accessToken, "at-new");
+        assertX.equal(saved.secret.refreshToken, "rt-new");
+        assertX.equal(saved.secret.clientSecret, "sec-keep");
+        assertX.equal(saved.secret.revoked, false);
+        assertX.equal(saved.config.connected, true);
+        assertX.equal(saved.config.reconnectRequired, false);
+        assertX.equal(saved.config.clientId, "cid-keep");
+      }
+    );
+  });
+
+  check("ADS-RECONNECT-3 reconnect without Google refresh_token is rejected", async () => {
+    const credId = "cred-ads-reconnect-3";
+    const store = new Map([
+      [
+        credId,
+        {
+          id: credId,
+          type: "google_ads",
+          workspaceId: "ws",
+          name: "Ads",
+          secret: {
+            refreshToken: "dead-rt",
+            clientSecret: "sec",
+            oauthAppMode: "CUSTOM_APP",
+            revoked: true,
+          },
+          config: {
+            oauthAppMode: "CUSTOM_APP",
+            clientId: "cid",
+            reconnectRequired: true,
+            connected: false,
+          },
+        },
+      ],
+    ]);
+    await oauth().withGoogleOAuthTestHooks(
+      {
+        credentialResolver: async (id) => store.get(id),
+        credentialSaver: async (id, secret, configObj) => {
+          const cur = store.get(id);
+          store.set(id, { ...cur, secret, config: configObj });
+        },
+        transport: async () => ({
+          status: 200,
+          ok: true,
+          body: {
+            access_token: "at-only",
+            expires_in: 3600,
+            token_type: "Bearer",
+            scope: adsScope,
+          },
+          headers: {},
+        }),
+      },
+      async () => {
+        const started = await oauth().startGoogleOAuth(
+          { workspaceId: "ws", product: "google_ads", credentialId: credId },
+          actor
+        );
+        await assertX.rejects(
+          () => oauth().finishGoogleOAuth("code-ads", started.state),
+          (err) => err.code === "GOOGLE_OAUTH_REFRESH_MISSING"
+        );
+        assertX.equal(store.size, 1);
+        assertX.equal(store.get(credId).secret.refreshToken, "dead-rt");
+        assertX.equal(store.get(credId).config.reconnectRequired, true);
       }
     );
   });

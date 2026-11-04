@@ -287,6 +287,10 @@ export function CredentialPicker({
   const selectedIsCustomApp =
     selectedAppMode === "CUSTOM_APP" ||
     (!selectedAppMode && nativeAuthPolicy === "HYBRID_CUSTOM_PRIMARY");
+  const selectedNeedsReconnect = Boolean(
+    selected &&
+      (selected.connected === false || selected.reconnectRequired === true)
+  );
 
   const removeSelected = async () => {
     if (!selected) return;
@@ -371,10 +375,10 @@ export function CredentialPicker({
 
       {googleOnly && googleProduct && showGoogleNativeConnect ? (
         <div className="space-y-2">
-          {selected && selected.connected === false ? (
+          {selectedNeedsReconnect ? (
             <p className="rounded-md border border-amber-500/40 bg-amber-500/10 px-2 py-1.5 text-[11px] text-amber-900 dark:text-amber-100">
-              This account is not connected yet. Reconnect to authorize Google,
-              or delete it if you no longer need it.
+              This Google account needs reconnect. Sign in again to refresh
+              tokens, or delete it if you no longer need it.
             </p>
           ) : selected ? (
             <p className="text-[11px] text-muted-foreground">
@@ -414,7 +418,7 @@ export function CredentialPicker({
                     variant="outline"
                     onClick={() =>
                       openGoogleModal(selected.id, {
-                        autoConnect: selected.connected === false,
+                        autoConnect: selectedNeedsReconnect,
                         setupMode:
                           selectedAppMode === "PLATFORM_MANAGED"
                             ? "managed"
@@ -424,7 +428,7 @@ export function CredentialPicker({
                       })
                     }
                   >
-                    {selected.connected === false ? "Reconnect" : "Manage"}
+                    {selectedNeedsReconnect ? "Reconnect" : "Manage"}
                   </Button>
                 ) : null}
                 <Button

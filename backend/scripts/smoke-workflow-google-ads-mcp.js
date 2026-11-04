@@ -1756,6 +1756,16 @@ const registerGoogleAdsMcpTests = ({ check, section, assert: a }) => {
     );
   });
 
+  check("ADS-MCP-P0-1 campaigns GAQL uses v25 start/end date_time fields", () => {
+    const built = adsMcp().buildCommonToolQuery("campaigns", {});
+    assertX.match(built.query, /campaign\.start_date_time/);
+    assertX.match(built.query, /campaign\.end_date_time/);
+    assertX.equal(built.query.includes("campaign.start_date,"), false);
+    assertX.equal(built.query.includes("campaign.end_date,"), false);
+    assertX.equal(/\bcampaign\.start_date\b/.test(built.query), false);
+    assertX.equal(/\bcampaign\.end_date\b/.test(built.query), false);
+  });
+
   check("ADS-MCP-V2B-7 ad_groups filters compile safely", () => {
     const built = adsMcp().buildCommonToolQuery("ad_groups", {
       campaignId: "7",
@@ -1818,6 +1828,15 @@ const registerGoogleAdsMcpTests = ({ check, section, assert: a }) => {
     assertX.match(built.query, /recommendation\.dismissed = FALSE/);
     assertX.match(built.query, /recommendation\.type = KEYWORD/);
     assertX.match(built.query, /campaign\.id = 15/);
+    assertX.equal(/apply|mutate/i.test(built.query), false);
+  });
+
+  check("ADS-MCP-P0-2 recommendations GAQL selects impact MESSAGE only", () => {
+    const built = adsMcp().buildCommonToolQuery("recommendations", {});
+    assertX.match(built.query, /recommendation\.impact/);
+    assertX.match(built.query, /recommendation\.dismissed = FALSE/);
+    assertX.equal(built.query.includes("recommendation.impact.base_metrics"), false);
+    assertX.equal(built.query.includes("recommendation.impact.potential_metrics"), false);
     assertX.equal(/apply|mutate/i.test(built.query), false);
   });
 

@@ -223,7 +223,11 @@ export function GoogleCredentialModal({
               ? "custom"
               : "managed";
         setSetupMode(nextSetup);
-        setConnected(Boolean(view.connected || ed.connected));
+        setConnected(
+          Boolean(view.connected) &&
+            !Boolean(view.reconnectRequired) &&
+            !Boolean(ed.reconnectRequired)
+        );
         setHasClientSecret(Boolean(ed.hasClientSecret));
         setHasDeveloperToken(Boolean(ed.hasDeveloperToken));
         setSharingScope(

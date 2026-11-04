@@ -693,6 +693,50 @@ const saveCredentialSecret = async (credentialId, secret, configObj) => {
   );
 };
 
+const isGoogleAuthFailure = (err) => {
+  const code = String(err?.code || "");
+  const status = Number(err?.statusCode || err?.status || 0);
+  return (
+    code === "GOOGLE_UNAUTHORIZED" ||
+    code === "MCP_CREDENTIAL_UNAUTHORIZED" ||
+    status === 401
+  );
+};
+
+/**
+ * Persist reconnect-required on the SAME credential row after refresh/auth failure.
+ * Does not create a new credential. Never logs tokens.
+ */
+const markGoogleCredentialReconnectRequired = async (
+  credentialId,
+  secret = {},
+  configObj = {}
+) => {
+  if (!credentialId) return;
+  const nextSecret = {
+    ...(secret && typeof secret === "object" ? secret : {}),
+    revoked: true,
+  };
+  const nextConfig = {
+    ...(configObj && typeof configObj === "object" ? configObj : {}),
+    connected: false,
+    reconnectRequired: true,
+  };
+  try {
+    await saveCredentialSecret(credentialId, nextSecret, nextConfig);
+    hooks.logger({
+      event: "google_credential_reconnect_required",
+      credentialId: String(credentialId),
+    });
+  } catch (err) {
+    hooks.logger({
+      event: "google_credential_reconnect_mark_failed",
+      credentialId: String(credentialId),
+      code: err?.code || null,
+    });
+  }
+};
+
 const expiryMs = (secret) => {
   if (!secret) return 0;
   if (Number.isFinite(Number(secret.expiryMs))) return Number(secret.expiryMs);
@@ -878,18 +922,29 @@ const googleApiRequest = async ({
     err.code = "GOOGLE_CREDENTIAL_REQUIRED";
     throw err;
   }
-  const result = await googleAuthorizedFetch({
-    secret: cred.secret,
-    config: cred.config || {},
-    url,
-    method,
-    headers,
-    body,
-    timeoutMs,
-    credentialId: cred.id,
-    product: requiredType || cred.type,
-  });
-  return result;
+  try {
+    const result = await googleAuthorizedFetch({
+      secret: cred.secret,
+      config: cred.config || {},
+      url,
+      method,
+      headers,
+      body,
+      timeoutMs,
+      credentialId: cred.id,
+      product: requiredType || cred.type,
+    });
+    return result;
+  } catch (err) {
+    if (isGoogleAuthFailure(err)) {
+      await markGoogleCredentialReconnectRequired(
+        cred.id,
+        cred.secret,
+        cred.config || {}
+      );
+    }
+    throw err;
+  }
 };
 
 const normalizeSelectedGmailPermissions = (raw) => {
@@ -1159,6 +1214,17 @@ const finishGoogleOAuth = async (code, state) => {
       );
     }
   }
+  const mustReplaceRefresh =
+    Boolean(existing?.secret?.revoked) ||
+    Boolean(existing?.config?.reconnectRequired) ||
+    !String(existing?.secret?.refreshToken || "").trim();
+  if (mustReplaceRefresh && !String(json.refresh_token || "").trim()) {
+    throw new AppError(
+      "Google did not return a refresh token. Click Sign in with Google again and approve access (do not skip consent).",
+      400,
+      "GOOGLE_OAUTH_REFRESH_MISSING"
+    );
+  }
   const tokenSecret = {
     accessToken: json.access_token,
     refreshToken: json.refresh_token || existing?.secret?.refreshToken || "",
@@ -1181,6 +1247,13 @@ const finishGoogleOAuth = async (code, state) => {
   }
   if (!tokenSecret.accessToken) {
     throw new AppError("Google did not return an access token", 502, "GOOGLE_OAUTH_FAILED");
+  }
+  if (!tokenSecret.refreshToken) {
+    throw new AppError(
+      "Google did not return a refresh token. Click Sign in with Google again and approve access.",
+      400,
+      "GOOGLE_OAUTH_REFRESH_MISSING"
+    );
   }
 
   let accountEmail = existing?.config?.accountEmail || "";
@@ -1239,6 +1312,7 @@ const finishGoogleOAuth = async (code, state) => {
       ...(existing.config || {}),
       oauthAppMode: app.mode,
       connected: true,
+      reconnectRequired: false,
       ...(accountEmail ? { accountEmail } : {}),
       ...(gmailPermissions ? { gmailPermissions } : {}),
       ...(boundWorkflowId
@@ -1513,6 +1587,8 @@ module.exports = {
   applyOAuthPopupResponseHeaders,
   loadCredential,
   saveCredentialSecret,
+  markGoogleCredentialReconnectRequired,
+  isGoogleAuthFailure,
   resolveOAuthApp,
   redirectUri,
   platformClientConfigured,
