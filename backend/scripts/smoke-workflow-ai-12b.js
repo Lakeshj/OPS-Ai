@@ -833,9 +833,10 @@ const registerPart12BTests = ({ check, section, assert: a }) => {
   });
 
   check("AGENT-CONTEXT-4 dataset-level analysis still works when explicitly configured", async () => {
+    assertX.equal(resolveAgentContextScope({ contextScope: "dataset" }), "dataset");
     assertX.equal(
-      resolveAgentContextScope({ contextScope: "dataset" }, "{{item}}"),
-      "dataset"
+      resolveAgentContextScope({ prompt: "use {{items}} please" }),
+      "item"
     );
     const attached = buildAgentUserPrompt({
       promptTemplate: "Summarize campaign performance",

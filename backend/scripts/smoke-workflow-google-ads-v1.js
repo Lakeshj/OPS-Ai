@@ -1498,9 +1498,12 @@ const registerGoogleAdsV1Tests = ({ check, section, assert: a }) => {
         _meta: { provider: "google_ads", tool: "campaign_performance", resource: "campaign" },
       },
     ]);
-    assertX.match(mcpReport, /metrics\.costMicros \(micros, not currency\): 2500000/);
-    assertX.match(mcpReport, /cost \(currency = costMicros\/1000000\): 2\.5/);
-    assertX.match(mcpReport, /averageCpc \(currency/);
+    // Dated MCP performance is period-aggregated for AI evidence (canonical rows stay nested).
+    assertX.match(mcpReport, /period totals/);
+    assertX.match(mcpReport, /Cost \(currency \/ Spend\): 2\.5/);
+    assertX.match(mcpReport, /Average CPC \(currency\): 0\.625/);
+    assertX.match(mcpReport, /Cost micros \(not currency; Spend = costMicros\/1000000\): 2500000/);
+    assertX.match(mcpReport, /Leads: N\/A/);
   });
 };
 

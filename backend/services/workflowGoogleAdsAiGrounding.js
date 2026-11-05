@@ -423,8 +423,141 @@ const MONEY_RULES = [
   "averageCpcMicros / metrics.averageCpc are micros; Average CPC currency = that value / 1000000.",
   "CTR on rows is Google's ratio (0.0396 means 3.96% when shown as a percent). Do not treat 0.0396 as 0.0396%.",
   "Reach is N/A unless a real reach field is present.",
-  "Do not label conversions or allConversions as Leads unless a lead field is present.",
+  "campaign_performance.conversions means Conversions, not Leads.",
+  "Never map conversions → leads for campaign_performance.",
+  "Leads and CPL are N/A unless conversion-action data explicitly identifies a Lead action.",
+  "If the user asks for Leads, say campaign performance contains Conversions but does not identify all conversions as Leads.",
 ].join("\n");
+
+const PERIOD_RULES = [
+  "Native/MCP campaign_performance GAQL includes segments.date, so runtime rows are one campaign per day.",
+  "For period / monthly / last-month analysis, use the period-total evidence block only:",
+  "group by campaignId; SUM cost, impressions, clicks, conversions, conversionsValue;",
+  "CTR = total clicks / total impressions; CPC = total spend / total clicks.",
+  "Do not sum CTR. Do not average daily CTR. Do not average daily CPC.",
+  "Preserve currencyCode. Do not invent Reach.",
+].join("\n");
+
+/** Display-only flatten of nested MCP performance rows for period aggregation. */
+const flattenMcpPerformanceRowForAggregation = (row) => {
+  const campaign = isPlainObject(row.campaign) ? row.campaign : {};
+  const adGroup = isPlainObject(row.adGroup)
+    ? row.adGroup
+    : isPlainObject(row.ad_group)
+      ? row.ad_group
+      : {};
+  const metrics = isPlainObject(row.metrics) ? row.metrics : {};
+  const segments = isPlainObject(row.segments) ? row.segments : {};
+  const customer = isPlainObject(row.customer) ? row.customer : {};
+  const tool = String(row._meta?.tool || "campaign_performance");
+  const costMicros = asNumber(metrics.costMicros ?? metrics.cost_micros);
+  const averageCpcMicros = asNumber(metrics.averageCpc ?? metrics.average_cpc);
+  return {
+    source: "google_ads",
+    provider: "google_ads",
+    reportType: tool,
+    campaignId: campaign.id ?? null,
+    campaignName: campaign.name ?? null,
+    campaignStatus: campaign.status ?? null,
+    adGroupId: adGroup.id ?? null,
+    adGroupName: adGroup.name ?? null,
+    keywordText: row.adGroupCriterion?.keyword?.text ?? row.keywordText ?? null,
+    searchTerm: row.searchTermView?.searchTerm ?? row.searchTerm ?? null,
+    device: segments.device ?? null,
+    date: segments.date ?? null,
+    impressions: asNumber(metrics.impressions),
+    clicks: asNumber(metrics.clicks),
+    ctr: asNumber(metrics.ctr),
+    costMicros,
+    cost: majorUnits(costMicros),
+    averageCpc: majorUnits(averageCpcMicros),
+    averageCpcMicros,
+    conversions: asNumber(metrics.conversions),
+    conversionsValue: asNumber(
+      metrics.conversionsValue ?? metrics.conversions_value
+    ),
+    currencyCode: customer.currencyCode ?? customer.currency_code ?? null,
+    _meta: row._meta ? { ...row._meta } : undefined,
+  };
+};
+
+const mcpPerformanceHasDateSegments = (rows) =>
+  rows.some((row) => {
+    const date = row?.segments?.date ?? row?.date;
+    return date != null && String(date).trim() !== "";
+  });
+
+const formatPeriodAggregatedReport = (list) => {
+  const meta = reportMeta(list[0] || {});
+  const lines = ["Google Ads Report", "", meta.title || "Campaign Performance", ""];
+  lines.push(
+    "Rows below are period totals (daily segments.date rows grouped by campaignId/entity).",
+    "Spend = SUM(cost). Impressions = SUM. Clicks = SUM. Conversions = SUM.",
+    "CTR = total clicks / total impressions. CPC = total spend / total clicks.",
+    "Daily CTR/CPC were not averaged.",
+    "Conversions are Conversions — not Leads. Leads/CPL = N/A without lead conversion-action data.",
+    ""
+  );
+  list.forEach((row, index) => {
+    const entity = reportMeta(row).entity;
+    const label =
+      entity === "campaign"
+        ? "Campaign"
+        : entity === "ad group"
+          ? "Ad group"
+          : entity === "keyword"
+            ? "Keyword"
+            : entity === "search term"
+              ? "Search term"
+              : entity === "device"
+                ? "Device"
+                : entity === "geography"
+                  ? "Geography"
+                  : "Conversion";
+    lines.push(`${index + 1}. ${label}: ${headingFor(row, entity)}`);
+    for (const [key, name] of FIELD_LINES) {
+      if (key === "campaignName" && entity === "campaign") continue;
+      if (key === "keywordText" && entity === "keyword") continue;
+      if (key === "searchTerm" && entity === "search term") continue;
+      if (key === "adGroupName" && entity === "ad group") continue;
+      if (key === "device" && entity === "device") continue;
+      if (key === "reach") {
+        lines.push(`   - ${name}: N/A`);
+        continue;
+      }
+      if (key === "leads") {
+        lines.push(`   - ${name}: N/A (do not infer from conversions)`);
+        continue;
+      }
+      if (key === "ctr") {
+        const formatted = formatCtrRatio(row.ctr);
+        if (formatted) lines.push(`   - ${name}: ${formatted}`);
+        continue;
+      }
+      if (key === "cost") {
+        const cost = rowCurrencyCost(row);
+        if (cost != null) lines.push(`   - ${name}: ${cost}`);
+        continue;
+      }
+      if (key === "averageCpc") {
+        const cpc = rowCurrencyCpc(row);
+        if (cpc != null) lines.push(`   - ${name}: ${cpc}`);
+        continue;
+      }
+      if (key === "date" && row._aiAggregation === "period") continue;
+      const value = show(row[key]);
+      if (value == null) continue;
+      lines.push(`   - ${name}: ${value}`);
+    }
+    if (asNumber(row.costMicros) != null) {
+      lines.push(
+        `   - Cost micros (not currency; Spend = costMicros/1000000): ${row.costMicros}`
+      );
+    }
+    lines.push("");
+  });
+  return lines.join("\n").trimEnd();
+};
 
 const FIELD_LINES = [
   ["campaignId", "Campaign ID"],
@@ -510,6 +643,20 @@ const formatActualFieldReport = (list) => {
 const formatGoogleAdsReport = (rows) => {
   const collected = collectRows(rows);
   if (!looksLikeGoogleAdsRows(collected)) return null;
+
+  // MCP performance with segments.date → period-aggregate for AI evidence only.
+  if (
+    isMcpPerformanceRow(collected[0]) &&
+    mcpPerformanceHasDateSegments(collected) &&
+    PERIOD_AGGREGATE_REPORTS.has(String(collected[0]._meta?.tool || ""))
+  ) {
+    const flat = collected.map(flattenMcpPerformanceRowForAggregation);
+    const list = aggregateGoogleAdsPerformanceForAi(flat);
+    if (list[0]?._aiAggregation === "period") {
+      return formatPeriodAggregatedReport(list);
+    }
+  }
+
   if (
     isMcpSearchRow(collected[0]) ||
     isMcpEntityRow(collected[0]) ||
@@ -519,39 +666,16 @@ const formatGoogleAdsReport = (rows) => {
     return formatActualFieldReport(collected);
   }
   const list = aggregateGoogleAdsPerformanceForAi(collected);
+  if (list[0]?._aiAggregation === "period") {
+    return formatPeriodAggregatedReport(list);
+  }
+  // Non-daily / already entity-level rows — still use shared field labels.
   const meta = reportMeta(list[0] || collected[0]);
   const lines = ["Google Ads Report", "", meta.title, ""];
-  if (list[0]?._aiAggregation === "period") {
-    lines.push(
-      "Rows below are period totals (daily segments.date rows grouped by entity).",
-      "Spend = SUM(cost). CTR = total clicks / total impressions. CPC = total spend / total clicks.",
-      "Daily CTR/CPC were not averaged.",
-      ""
-    );
-  }
-  list.forEach((row, index) => {
+  (list.length ? list : collected).forEach((row, index) => {
     const entity = reportMeta(row).entity;
-    const label =
-      entity === "campaign"
-        ? "Campaign"
-        : entity === "ad group"
-          ? "Ad group"
-          : entity === "keyword"
-            ? "Keyword"
-            : entity === "search term"
-              ? "Search term"
-              : entity === "device"
-                ? "Device"
-                : entity === "geography"
-                  ? "Geography"
-                  : "Conversion";
-    lines.push(`${index + 1}. ${label}: ${headingFor(row, entity)}`);
+    lines.push(`${index + 1}. ${headingFor(row, entity)}`);
     for (const [key, name] of FIELD_LINES) {
-      if (key === "campaignName" && entity === "campaign") continue;
-      if (key === "keywordText" && entity === "keyword") continue;
-      if (key === "searchTerm" && entity === "search term") continue;
-      if (key === "adGroupName" && entity === "ad group") continue;
-      if (key === "device" && entity === "device") continue;
       if (key === "reach") {
         lines.push(`   - ${name}: N/A`);
         continue;
@@ -575,15 +699,9 @@ const formatGoogleAdsReport = (rows) => {
         if (cpc != null) lines.push(`   - ${name}: ${cpc}`);
         continue;
       }
-      if (key === "date" && row._aiAggregation === "period") continue;
       const value = show(row[key]);
       if (value == null) continue;
       lines.push(`   - ${name}: ${value}`);
-    }
-    if (asNumber(row.costMicros) != null) {
-      lines.push(
-        `   - Cost micros (not currency; Spend = costMicros/1000000): ${row.costMicros}`
-      );
     }
     lines.push("");
   });
@@ -657,6 +775,7 @@ const applyGoogleAdsAiGrounding = ({
           ? [
               "Do not rename a search term to a keyword.",
               "Do not describe geographic fields as page paths.",
+              PERIOD_RULES,
             ]
           : []),
       "",
@@ -701,11 +820,7 @@ const applyGoogleAdsAiGrounding = ({
     "Never invent bounceRate.",
     "Campaign rows use campaign vocabulary.",
     MONEY_RULES,
-    "Native performance GAQL includes segments.date, so runtime rows are one campaign (entity) per day.",
-    "For period questions such as last month's campaign performance, use the period-total evidence block:",
-    "one row per campaign/entity with SUM spend, SUM clicks, SUM impressions,",
-    "CTR = total clicks / total impressions, CPC = total spend / total clicks.",
-    "Do not average daily CTR or daily CPC.",
+    PERIOD_RULES,
     "Do not recalculate away from the evidence block totals.",
     "Copy Spend from Cost (currency / Spend), not from Cost micros.",
     "",
@@ -737,6 +852,7 @@ module.exports = {
   formatGoogleAdsReport,
   applyGoogleAdsAiGrounding,
   aggregateGoogleAdsPerformanceForAi,
+  flattenMcpPerformanceRowForAggregation,
   rowCurrencyCost,
   majorUnits,
   formatCtrRatio,

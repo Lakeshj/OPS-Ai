@@ -65,7 +65,7 @@ Inspector Table header sort is **display-only** and does not change these canoni
 - Exactly one model binding. Memory runtime not supported (`AI_MEMORY_NOT_SUPPORTED`).
 - Per input item: independent Agent turn; `pairedItem` 1:1; max 8 tool rounds.
 - Provider grounding: Meta/Google Ads/GA4/GSC rules apply only when `_meta.provider` matches. Do not cross-label.
-- Agent prompts are item-scoped by default: `{{item.*}}` resolves per item and does **not** append a full workflow runtime JSON blob. Use `contextScope: "dataset"` (or `{{items}}`) for one dataset-level Agent turn.
+- AI + Basic AI Agent `contextScope` is explicit UI/config only (`item` default | `dataset`), shared via `workflowAiContextScope.js`. Never infer from prompt wording. Dataset = one model turn over all input items; Google Ads daily `campaign_performance` evidence is period-aggregated by campaign for that turn (no raw-row duplicate attach). `conversions` ≠ Leads.
 
 ## H. Inspector
 

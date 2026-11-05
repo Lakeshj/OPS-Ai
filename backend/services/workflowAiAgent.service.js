@@ -37,34 +37,11 @@ const promptTemplateReferencesItem = (template) =>
   /\{\{\s*(item|input)\b/i.test(String(template || "")) ||
   /\$item\b/.test(String(template || ""));
 
-/** True when the prompt intentionally references the multi-item collection. */
-const promptTemplateReferencesDataset = (template) =>
-  /\{\{\s*(items|inputItems)\b/i.test(String(template || "")) ||
-  /\$all\b/.test(String(template || ""));
-
-/**
- * item = per-item Agent turns (default).
- * dataset = one Agent turn with the full input set as evidence.
- */
-const resolveAgentContextScope = (data = {}, promptTemplate = "") => {
-  const raw = String(data.contextScope || data.agentContextScope || "")
-    .trim()
-    .toLowerCase();
-  if (
-    raw === "dataset" ||
-    raw === "all" ||
-    raw === "all_items" ||
-    raw === "all-items"
-  ) {
-    return "dataset";
-  }
-  if (raw === "item" || raw === "per_item" || raw === "per-item") {
-    return "item";
-  }
-  if (data.includeAllInputItems === true) return "dataset";
-  if (promptTemplateReferencesDataset(promptTemplate)) return "dataset";
-  return "item";
-};
+const {
+  resolveAiContextScope,
+  resolveAgentContextScope,
+  CONTEXT_SCOPE,
+} = require("./workflowAiContextScope");
 
 /**
  * Assemble the Agent user prompt for one turn.
@@ -76,11 +53,13 @@ const buildAgentUserPrompt = ({
   itemPayload,
   datasetPayload = null,
   contextScope = "item",
+  skipRuntimeAttach = false,
 }) => {
   let userPrompt = String(interpolatedPrompt || "").trim();
+  if (skipRuntimeAttach) return userPrompt;
   const { attachRuntimeDataToPrompt } = require("./workflowNodes.service");
 
-  if (contextScope === "dataset") {
+  if (contextScope === CONTEXT_SCOPE.DATASET || contextScope === "dataset") {
     const evidence =
       datasetPayload != null
         ? datasetPayload
@@ -133,15 +112,35 @@ const runAgentForItem = async ({
   const promptTemplate = data.prompt || data.userPrompt || "{{item}}";
   const systemInstruction =
     data.systemInstruction || data.systemPrompt || "";
-  const scope =
-    contextScope || resolveAgentContextScope(data, promptTemplate);
+  const scope = contextScope || resolveAiContextScope(data);
 
   let userPrompt = String(
     interpolate(promptTemplate, exprCtx) ?? ""
   ).trim();
-  const systemText = systemInstruction
+  let systemText = systemInstruction
     ? String(resolveExpression(systemInstruction, exprCtx) ?? "").trim()
     : "";
+
+  let adsGrounded = false;
+  if (scope === CONTEXT_SCOPE.DATASET) {
+    try {
+      const {
+        applyGoogleAdsAiGrounding,
+      } = require("./workflowGoogleAdsAiGrounding");
+      const grounded = applyGoogleAdsAiGrounding({
+        systemPrompt: systemText,
+        userPrompt,
+        input: datasetPayload != null ? datasetPayload : payload,
+      });
+      if (grounded.grounded) {
+        systemText = grounded.systemPrompt || systemText;
+        userPrompt = grounded.userPrompt || userPrompt;
+        adsGrounded = true;
+      }
+    } catch {
+      // best-effort; fall through to generic dataset attach
+    }
+  }
 
   try {
     userPrompt = buildAgentUserPrompt({
@@ -150,6 +149,8 @@ const runAgentForItem = async ({
       itemPayload: payload,
       datasetPayload,
       contextScope: scope,
+      // Ads evidence already carries period totals — do not also dump raw daily rows.
+      skipRuntimeAttach: adsGrounded,
     });
   } catch {
     // keep interpolated prompt
@@ -351,14 +352,13 @@ const executeAiAgent = async (node, context, helpers) => {
       ? inputItems
       : [{ json: { triggered: true, input: context.input || {} } }];
 
-  const promptTemplate = node.data?.prompt || node.data?.userPrompt || "{{item}}";
-  const contextScope = resolveAgentContextScope(node.data || {}, promptTemplate);
+  const contextScope = resolveAiContextScope(node.data || {});
 
   const outItems = [];
   const perItemMeta = [];
 
   // Dataset scope: one Agent turn with the full input set — never N copies of the blob.
-  if (contextScope === "dataset") {
+  if (contextScope === CONTEXT_SCOPE.DATASET) {
     const datasetPayload = items.map((entry) => getItemPayload(entry));
     const { json, metadata } = await runAgentForItem({
       node,
@@ -369,7 +369,7 @@ const executeAiAgent = async (node, context, helpers) => {
       interpolate: helpers.interpolate,
       resolveExpression: helpers.resolveExpression,
       datasetPayload,
-      contextScope: "dataset",
+      contextScope: CONTEXT_SCOPE.DATASET,
     });
     outItems.push({
       json,
@@ -388,7 +388,7 @@ const executeAiAgent = async (node, context, helpers) => {
         runtime,
         interpolate: helpers.interpolate,
         resolveExpression: helpers.resolveExpression,
-        contextScope: "item",
+        contextScope: CONTEXT_SCOPE.ITEM,
       });
       outItems.push({
         json,
@@ -427,6 +427,8 @@ module.exports = {
   getItemPayload,
   buildAgentUserPrompt,
   resolveAgentContextScope,
+  resolveAiContextScope,
   promptTemplateReferencesItem,
   RUNTIME_DATA_MARKER,
+  CONTEXT_SCOPE,
 };

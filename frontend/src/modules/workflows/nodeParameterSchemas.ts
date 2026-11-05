@@ -137,6 +137,18 @@ export const NODE_PARAMETER_SCHEMAS: Record<WorkflowNodeType, ParamDescriptor[]>
 
     ai: [
       {
+        name: "contextScope",
+        displayName: "Context Scope",
+        type: "options",
+        default: "item",
+        options: [
+          { name: "Per Item", value: "item" },
+          { name: "Entire Dataset", value: "dataset" },
+        ],
+        description:
+          "Per Item: run once for each incoming item. Entire Dataset: analyze all incoming items together in one AI turn.",
+      },
+      {
         name: "provider",
         displayName: "Provider",
         type: "options",
@@ -790,13 +802,31 @@ export const NODE_PARAMETER_SCHEMAS: Record<WorkflowNodeType, ParamDescriptor[]>
 
     aiAgent: [
       {
+        name: "contextScope",
+        displayName: "Context Scope",
+        type: "options",
+        default: "item",
+        options: [
+          {
+            name: "Per Item",
+            value: "item",
+          },
+          {
+            name: "Entire Dataset",
+            value: "dataset",
+          },
+        ],
+        description:
+          "Per Item: run once for each incoming item. Entire Dataset: analyze all incoming items together in one AI turn.",
+      },
+      {
         name: "prompt",
         displayName: "Prompt",
         type: "string",
         expression: true,
         multiline: true,
         default: "{{item}}",
-        description: "Resolved per input item via OpsAi expressions.",
+        description: "Resolved per input item via OpsAi expressions (item scope), or once against the dataset (dataset scope).",
       },
       {
         name: "systemInstruction",

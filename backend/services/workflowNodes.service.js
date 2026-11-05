@@ -509,9 +509,15 @@ const runLlmNode = async (node, context, options = {}) => {
     }
   }
 
-  // Non-MCP / non-native-GA4: still inject runtime evidence when needed.
-  // Raw GSC rows (comparison on) get the same period rules as GA4 native rows.
-  if (!intelligenceContext && !ga4Grounded && mcpGroundingSource !== "meta_ads") {
+  // Non-MCP / non-native-GA4 / non-Ads: still inject runtime evidence when needed.
+  // Google Ads grounding already embeds period-aggregated evidence — do not also
+  // dump raw daily rows into the user prompt (duplication).
+  if (
+    !intelligenceContext &&
+    !ga4Grounded &&
+    mcpGroundingSource !== "meta_ads" &&
+    mcpGroundingSource !== "google_ads"
+  ) {
     try {
       const { comparisonRulesForInput } = require("./workflowComparisonPeriods");
       const comparisonRules = comparisonRulesForInput(
@@ -716,7 +722,10 @@ const runLlmNode = async (node, context, options = {}) => {
         ga4GroundingMode: ga4GroundingMode || null,
         mcpGroundingSource: mcpGroundingSource || null,
         groundingApplied:
-          Boolean(intelligenceContext) || Boolean(ga4Grounded),
+          Boolean(intelligenceContext) ||
+          Boolean(ga4Grounded) ||
+          mcpGroundingSource === "google_ads" ||
+          mcpGroundingSource === "meta_ads",
         runtimeDataAttached: Boolean(runtimeDataAttached),
         ...(ga4CompactStats || {}),
       },
@@ -1741,7 +1750,96 @@ const handlers = {
     },
   }),
 
-  ai: async (node, context) => runLlmNode(node, context, { requireBot: false }),
+  ai: async (node, context) => {
+    const {
+      resolveAiContextScope,
+      CONTEXT_SCOPE,
+    } = require("./workflowAiContextScope");
+    const scope = resolveAiContextScope(node.data || {});
+    const incoming =
+      Array.isArray(context.inputItems) && context.inputItems.length
+        ? context.inputItems
+        : [{ json: context.input ?? {} }];
+
+    // Entire Dataset: one model turn with the full incoming set.
+    if (scope === CONTEXT_SCOPE.DATASET) {
+      const result = await runLlmNode(node, context, { requireBot: false });
+      const text = String(result.output?.text || "");
+      const trimmed = text.trim();
+      const readable =
+        Boolean(trimmed) &&
+        !trimmed.startsWith("{") &&
+        !trimmed.startsWith("[");
+      return {
+        ...result,
+        items: [
+          {
+            json: {
+              ...(result.output && typeof result.output === "object"
+                ? result.output
+                : { text }),
+              ...(readable && !result.output?.result ? { result: text } : {}),
+            },
+            pairedItem: { item: 0 },
+          },
+        ],
+        resolved: {
+          ...(result.resolved || {}),
+          contextScope: CONTEXT_SCOPE.DATASET,
+          itemCount: 1,
+          inputItemCount: incoming.length,
+        },
+      };
+    }
+
+    // Per Item (default): one model turn per incoming WorkflowItem.
+    const items = [];
+    let lastResolved = null;
+    for (let i = 0; i < incoming.length; i += 1) {
+      const src = incoming[i];
+      const itemContext = {
+        ...context,
+        input: getItemPayload(src) ?? context.input,
+        item: src,
+        inputItems: [src],
+      };
+      const result = await runLlmNode(node, itemContext, { requireBot: false });
+      lastResolved = result.resolved;
+      const text = String(result.output?.text || "");
+      const trimmed = text.trim();
+      const readable =
+        Boolean(trimmed) &&
+        !trimmed.startsWith("{") &&
+        !trimmed.startsWith("[");
+      items.push({
+        json: {
+          ...(result.output && typeof result.output === "object"
+            ? result.output
+            : { text }),
+          ...(readable && !result.output?.result ? { result: text } : {}),
+        },
+        pairedItem: { item: i },
+      });
+    }
+    return {
+      output:
+        items.length === 1
+          ? items[0].json
+          : {
+              text: items.map((row) => row.json?.text || "").join("\n"),
+              items: items.map((row) => row.json),
+              isLlm: true,
+              contextScope: CONTEXT_SCOPE.ITEM,
+            },
+      items,
+      resolved: {
+        ...(lastResolved || {}),
+        contextScope: CONTEXT_SCOPE.ITEM,
+        itemCount: items.length,
+        inputItemCount: incoming.length,
+      },
+    };
+  },
 
   bot: async (node, context) => runLlmNode(node, context, { requireBot: true }),
 
