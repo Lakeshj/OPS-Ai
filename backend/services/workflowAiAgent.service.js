@@ -30,6 +30,81 @@ const getItemPayload = (item) => {
   return item;
 };
 
+const RUNTIME_DATA_MARKER = "## Workflow runtime data";
+
+/** True when the prompt template already pulls current-item / input evidence. */
+const promptTemplateReferencesItem = (template) =>
+  /\{\{\s*(item|input)\b/i.test(String(template || "")) ||
+  /\$item\b/.test(String(template || ""));
+
+/** True when the prompt intentionally references the multi-item collection. */
+const promptTemplateReferencesDataset = (template) =>
+  /\{\{\s*(items|inputItems)\b/i.test(String(template || "")) ||
+  /\$all\b/.test(String(template || ""));
+
+/**
+ * item = per-item Agent turns (default).
+ * dataset = one Agent turn with the full input set as evidence.
+ */
+const resolveAgentContextScope = (data = {}, promptTemplate = "") => {
+  const raw = String(data.contextScope || data.agentContextScope || "")
+    .trim()
+    .toLowerCase();
+  if (
+    raw === "dataset" ||
+    raw === "all" ||
+    raw === "all_items" ||
+    raw === "all-items"
+  ) {
+    return "dataset";
+  }
+  if (raw === "item" || raw === "per_item" || raw === "per-item") {
+    return "item";
+  }
+  if (data.includeAllInputItems === true) return "dataset";
+  if (promptTemplateReferencesDataset(promptTemplate)) return "dataset";
+  return "item";
+};
+
+/**
+ * Assemble the Agent user prompt for one turn.
+ * Do not blindly append runtime JSON when {{item.*}} already resolved the evidence.
+ */
+const buildAgentUserPrompt = ({
+  promptTemplate,
+  interpolatedPrompt,
+  itemPayload,
+  datasetPayload = null,
+  contextScope = "item",
+}) => {
+  let userPrompt = String(interpolatedPrompt || "").trim();
+  const { attachRuntimeDataToPrompt } = require("./workflowNodes.service");
+
+  if (contextScope === "dataset") {
+    const evidence =
+      datasetPayload != null
+        ? datasetPayload
+        : itemPayload != null
+          ? itemPayload
+          : null;
+    if (evidence != null) {
+      userPrompt = attachRuntimeDataToPrompt(userPrompt, evidence).prompt;
+    }
+    return userPrompt;
+  }
+
+  // Item-scoped: expression templates already inject the current item.
+  if (promptTemplateReferencesItem(promptTemplate)) {
+    return userPrompt;
+  }
+
+  // Static prompt with no {{item}}/{{input}} — attach current item only.
+  if (itemPayload != null) {
+    userPrompt = attachRuntimeDataToPrompt(userPrompt, itemPayload).prompt;
+  }
+  return userPrompt;
+};
+
 /**
  * Run Agent for one WorkflowItem. Returns output json + safe metadata.
  */
@@ -41,6 +116,8 @@ const runAgentForItem = async ({
   runtime,
   interpolate,
   resolveExpression,
+  datasetPayload = null,
+  contextScope = null,
 }) => {
   const data = node.data || {};
   const payload = getItemPayload(item) || {};
@@ -56,6 +133,8 @@ const runAgentForItem = async ({
   const promptTemplate = data.prompt || data.userPrompt || "{{item}}";
   const systemInstruction =
     data.systemInstruction || data.systemPrompt || "";
+  const scope =
+    contextScope || resolveAgentContextScope(data, promptTemplate);
 
   let userPrompt = String(
     interpolate(promptTemplate, exprCtx) ?? ""
@@ -64,14 +143,14 @@ const runAgentForItem = async ({
     ? String(resolveExpression(systemInstruction, exprCtx) ?? "").trim()
     : "";
 
-  // Ensure Agent sees upstream item evidence even when the prompt omitted {{item}}.
   try {
-    const {
-      attachRuntimeDataToPrompt,
-    } = require("./workflowNodes.service");
-    if (payload && typeof payload === "object" && Object.keys(payload).length) {
-      userPrompt = attachRuntimeDataToPrompt(userPrompt, payload).prompt;
-    }
+    userPrompt = buildAgentUserPrompt({
+      promptTemplate,
+      interpolatedPrompt: userPrompt,
+      itemPayload: payload,
+      datasetPayload,
+      contextScope: scope,
+    });
   } catch {
     // keep interpolated prompt
   }
@@ -177,6 +256,8 @@ const runAgentForItem = async ({
             runId: context.runId,
             nodeId: node.id,
             itemIndex,
+            graph: context.graph,
+            authUser: context.authUser,
           }),
           toolTimeout,
           AI_ERROR.TOOL_TIMEOUT,
@@ -270,26 +351,51 @@ const executeAiAgent = async (node, context, helpers) => {
       ? inputItems
       : [{ json: { triggered: true, input: context.input || {} } }];
 
+  const promptTemplate = node.data?.prompt || node.data?.userPrompt || "{{item}}";
+  const contextScope = resolveAgentContextScope(node.data || {}, promptTemplate);
+
   const outItems = [];
   const perItemMeta = [];
 
-  for (let i = 0; i < items.length; i += 1) {
-    // Isolation: each item gets a fresh conversation (runtime model may keep
-    // internal maps keyed by messages — we pass fresh message arrays per item).
+  // Dataset scope: one Agent turn with the full input set — never N copies of the blob.
+  if (contextScope === "dataset") {
+    const datasetPayload = items.map((entry) => getItemPayload(entry));
     const { json, metadata } = await runAgentForItem({
       node,
       context,
-      item: items[i],
-      itemIndex: i,
+      item: items[0],
+      itemIndex: 0,
       runtime,
       interpolate: helpers.interpolate,
       resolveExpression: helpers.resolveExpression,
+      datasetPayload,
+      contextScope: "dataset",
     });
     outItems.push({
       json,
-      pairedItem: { item: i },
+      pairedItem: { item: 0 },
     });
     perItemMeta.push(metadata);
+  } else {
+    for (let i = 0; i < items.length; i += 1) {
+      // Isolation: each item gets a fresh conversation (runtime model may keep
+      // internal maps keyed by messages — we pass fresh message arrays per item).
+      const { json, metadata } = await runAgentForItem({
+        node,
+        context,
+        item: items[i],
+        itemIndex: i,
+        runtime,
+        interpolate: helpers.interpolate,
+        resolveExpression: helpers.resolveExpression,
+        contextScope: "item",
+      });
+      outItems.push({
+        json,
+        pairedItem: { item: i },
+      });
+      perItemMeta.push(metadata);
+    }
   }
 
   return {
@@ -319,4 +425,8 @@ module.exports = {
   executeAiAgent,
   runAgentForItem,
   getItemPayload,
+  buildAgentUserPrompt,
+  resolveAgentContextScope,
+  promptTemplateReferencesItem,
+  RUNTIME_DATA_MARKER,
 };

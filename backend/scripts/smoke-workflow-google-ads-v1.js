@@ -1189,7 +1189,7 @@ const registerGoogleAdsV1Tests = ({ check, section, assert: a }) => {
     assertX.match(report, /Google Ads Report/);
     assertX.match(report, /Campaign: Brand/);
     assertX.match(report, /Impressions: 100/);
-    assertX.match(report, /Cost: 2\.5/);
+    assertX.match(report, /Cost \(currency \/ Spend\): 2\.5/);
     assertX.equal(report.includes("GA4 Intelligence Report"), false);
     assertX.equal(report.includes("Landing Underperformance"), false);
     assertX.equal(report.includes("Landing Page"), false);
@@ -1398,6 +1398,109 @@ const registerGoogleAdsV1Tests = ({ check, section, assert: a }) => {
       assertX.equal(row.provider, "google_ads", reportType);
       assertX.equal(row.source, "google_ads", reportType);
     }
+  });
+
+  check("ADS-DATA-1..10 micros conversion, CTR ratio, period aggregation", () => {
+    const grounding = require("../services/workflowGoogleAdsAiGrounding");
+    const micros = 3087002980;
+    const normalized = ads().normalizeAdsRow(
+      {
+        customer: { id: "1", currencyCode: "INR" },
+        campaign: { id: "99", name: "Brand" },
+        metrics: {
+          impressions: "1000",
+          clicks: "57",
+          ctr: "0.0396",
+          costMicros: String(micros),
+          averageCpc: "54157900",
+          conversions: "3",
+          conversionsValue: "10",
+        },
+        segments: { date: "2026-10-01" },
+      },
+      "campaign_performance",
+      { customerId: "1", startDate: "2026-10-01", endDate: "2026-10-31" }
+    );
+    assertX.equal(normalized.costMicros, micros);
+    assertX.equal(normalized.cost, micros / 1_000_000);
+    assertX.ok(Math.abs(normalized.cost - 3087.00298) < 1e-9);
+    assertX.equal(normalized.averageCpcMicros, 54157900);
+    assertX.equal(normalized.averageCpc, 54.1579);
+    assertX.equal(normalized.ctr, 0.0396);
+    assertX.match(grounding.formatCtrRatio(0.0396), /0\.0396 \(ratio; 3\.96% when shown as percent\)/);
+
+    const daily = [
+      {
+        source: "google_ads",
+        provider: "google_ads",
+        reportType: "campaign_performance",
+        campaignId: "99",
+        campaignName: "Brand",
+        date: "2026-10-01",
+        impressions: 500,
+        clicks: 30,
+        ctr: 0.06,
+        costMicros: 1500000000,
+        cost: 1500,
+        averageCpc: 50,
+        conversions: 1,
+      },
+      {
+        source: "google_ads",
+        provider: "google_ads",
+        reportType: "campaign_performance",
+        campaignId: "99",
+        campaignName: "Brand",
+        date: "2026-10-02",
+        impressions: 500,
+        clicks: 27,
+        ctr: 0.054,
+        costMicros: 1587002980,
+        cost: 1587.00298,
+        averageCpc: 58.777888,
+        conversions: 2,
+      },
+    ];
+    const aggregated = grounding.aggregateGoogleAdsPerformanceForAi(daily);
+    assertX.equal(aggregated.length, 1);
+    assertX.equal(aggregated[0].campaignName, "Brand");
+    assertX.equal(aggregated[0].impressions, 1000);
+    assertX.equal(aggregated[0].clicks, 57);
+    assertX.ok(Math.abs(aggregated[0].cost - 3087.00298) < 1e-6);
+    assertX.equal(aggregated[0].ctr, 57 / 1000);
+    assertX.ok(Math.abs(aggregated[0].averageCpc - 3087.00298 / 57) < 1e-9);
+    assertX.equal(aggregated[0].ctr === (0.06 + 0.054) / 2, false);
+    assertX.equal(aggregated[0].reach, null);
+    assertX.equal(aggregated[0].leads, null);
+
+    const report = grounding.formatGoogleAdsReport(daily);
+    assertX.match(report, /Cost \(currency \/ Spend\): 3087/);
+    assertX.match(report, /CTR: 0\.057 \(ratio; 5\.7% when shown as percent\)/);
+    assertX.match(report, /Reach: N\/A/);
+    assertX.match(report, /Leads: N\/A/);
+    assertX.match(report, /period totals/);
+
+    const grounded = grounding.applyGoogleAdsAiGrounding({
+      systemPrompt: "Show last month campaign performance",
+      input: daily.map((row) => ({ json: row })),
+    });
+    assertX.equal(grounded.grounded, true);
+    assertX.match(grounded.systemPrompt, /costMicros \/ 1000000/);
+    assertX.match(grounded.systemPrompt, /Never use costMicros as Spend/);
+    assertX.match(grounded.systemPrompt, /Cost \(currency \/ Spend\): 3087/);
+    assertX.match(grounded.systemPrompt, /Do not average daily CTR/);
+
+    const mcpReport = grounding.formatGoogleAdsReport([
+      {
+        campaign: { id: "99", name: "Brand" },
+        metrics: { impressions: 100, clicks: 4, ctr: 0.04, costMicros: 2500000, averageCpc: 625000 },
+        segments: { date: "2026-10-01" },
+        _meta: { provider: "google_ads", tool: "campaign_performance", resource: "campaign" },
+      },
+    ]);
+    assertX.match(mcpReport, /metrics\.costMicros \(micros, not currency\): 2500000/);
+    assertX.match(mcpReport, /cost \(currency = costMicros\/1000000\): 2\.5/);
+    assertX.match(mcpReport, /averageCpc \(currency/);
   });
 };
 

@@ -19,7 +19,17 @@ const registerPart12BTests = ({ check, section, assert: a }) => {
     stripSecrets,
     assertNotProviderRunStep,
   } = require("../services/workflowAiResources.service");
-  const { executeAiAgent } = require("../services/workflowAiAgent.service");
+  const {
+    executeAiAgent,
+    buildAgentUserPrompt,
+    resolveAgentContextScope,
+    RUNTIME_DATA_MARKER,
+  } = require("../services/workflowAiAgent.service");
+  const {
+    resolveAuxiliaryBindings,
+    getExecutionEdges,
+    getAuxiliaryEdges,
+  } = require("../services/workflowConnection.service");
   const {
     buildGraph,
     findStartNodes,
@@ -32,9 +42,6 @@ const registerPart12BTests = ({ check, section, assert: a }) => {
   const {
     invalidateConfigChange,
   } = require("../services/workflowGraphInvalidation.service");
-  const { getExecutionEdges, getAuxiliaryEdges } = require(
-    "../services/workflowConnection.service"
-  );
 
   const agentFixture = (opts = {}) => {
     const modelScript = opts.modelScript || "calculator-demo";
@@ -767,6 +774,198 @@ const registerPart12BTests = ({ check, section, assert: a }) => {
     assertX.equal(MAX_AGENT_TOOL_ROUNDS, 8);
   });
 
+  check("AGENT-CONTEXT-1 2 input items produce 2 independent item contexts", async () => {
+    const def = multiItemFixture();
+    def.nodes.find((n) => n.id === "set").data.code = `return [
+  { question: "alpha-only" },
+  { question: "beta-only" }
+];`;
+    const mem = await executeGraphInMemory(def);
+    const outs = mem.context.items.agent.map(
+      (i) => i.json?.ai?.output || i.json?.text
+    );
+    assertX.deepEqual(outs, ["alpha-only", "beta-only"]);
+    assertX.equal(String(outs[0]).includes("beta-only"), false);
+    assertX.equal(String(outs[1]).includes("alpha-only"), false);
+    assertX.equal(String(outs[0]).includes(RUNTIME_DATA_MARKER), false);
+    assertX.equal(String(outs[1]).includes(RUNTIME_DATA_MARKER), false);
+  });
+
+  check("AGENT-CONTEXT-2 full workflow runtime data is not duplicated into every item prompt", () => {
+    const prompt = buildAgentUserPrompt({
+      promptTemplate: "{{item.question}}",
+      interpolatedPrompt: "q1",
+      itemPayload: { question: "q1", clicks: 10 },
+      contextScope: "item",
+    });
+    assertX.equal(prompt, "q1");
+    assertX.equal(prompt.includes(RUNTIME_DATA_MARKER), false);
+
+    const other = buildAgentUserPrompt({
+      promptTemplate: "{{item.question}}",
+      interpolatedPrompt: "q2",
+      itemPayload: { question: "q2", clicks: 20 },
+      datasetPayload: [
+        { question: "q1", clicks: 10 },
+        { question: "q2", clicks: 20 },
+        { question: "q3", clicks: 30 },
+      ],
+      contextScope: "item",
+    });
+    assertX.equal(other, "q2");
+    assertX.equal(other.includes("q1"), false);
+    assertX.equal(other.includes("q3"), false);
+    assertX.equal(other.includes(RUNTIME_DATA_MARKER), false);
+  });
+
+  check("AGENT-CONTEXT-3 no-tool Agent does not receive unnecessary runtime blob", async () => {
+    const def = multiItemFixture();
+    def.nodes.find((n) => n.id === "set").data.code = `return [{ question: "hello" }];`;
+    const mem = await executeGraphInMemory(def);
+    const text = String(
+      mem.context.items.agent[0].json?.ai?.output ||
+        mem.context.items.agent[0].json?.text ||
+        ""
+    );
+    assertX.equal(text, "hello");
+    assertX.equal(text.includes(RUNTIME_DATA_MARKER), false);
+    assertX.equal(text.includes("```json"), false);
+  });
+
+  check("AGENT-CONTEXT-4 dataset-level analysis still works when explicitly configured", async () => {
+    assertX.equal(
+      resolveAgentContextScope({ contextScope: "dataset" }, "{{item}}"),
+      "dataset"
+    );
+    const attached = buildAgentUserPrompt({
+      promptTemplate: "Summarize campaign performance",
+      interpolatedPrompt: "Summarize campaign performance",
+      itemPayload: { campaignName: "A" },
+      datasetPayload: [
+        { campaignName: "A", spend: 10 },
+        { campaignName: "B", spend: 20 },
+      ],
+      contextScope: "dataset",
+    });
+    assertX.match(attached, /Summarize campaign performance/);
+    assertX.match(attached, new RegExp(RUNTIME_DATA_MARKER));
+    assertX.match(attached, /"campaignName": "A"/);
+    assertX.match(attached, /"campaignName": "B"/);
+
+    const def = multiItemFixture();
+    def.nodes.find((n) => n.id === "agent").data = {
+      prompt: "Summarize all rows",
+      contextScope: "dataset",
+    };
+    const mem = await executeGraphInMemory(def);
+    assertX.equal(mem.context.items.agent.length, 1);
+    const text = String(
+      mem.context.items.agent[0].json?.ai?.output ||
+        mem.context.items.agent[0].json?.text ||
+        ""
+    );
+    assertX.match(text, /Summarize all rows/);
+    assertX.match(text, new RegExp(RUNTIME_DATA_MARKER));
+    assertX.match(text, /q1/);
+    assertX.match(text, /q2/);
+    assertX.match(text, /q3/);
+  });
+
+  check("AGENT-CONTEXT-5 MCP auxiliary tool registration remains intact", () => {
+    const def = {
+      version: 1,
+      nodes: [
+        {
+          id: "ads",
+          type: "googleAds",
+          data: {
+            credentialId: "cred-1",
+            customerId: "1234567890",
+          },
+        },
+        {
+          id: "mcp",
+          type: "googleAdsMcpTool",
+          data: {
+            toolId: "account_summary",
+            googleAdsSourceNodeId: "ads",
+          },
+        },
+        { id: "agent", type: "aiAgent", data: { prompt: "{{item}}" } },
+        {
+          id: "model",
+          type: "aiModelProviderTest",
+          data: { script: "echo" },
+        },
+        {
+          id: "campaigns",
+          type: "code",
+          data: {
+            mode: "all",
+            code: `return [{ campaignName: "A" }, { campaignName: "B" }];`,
+          },
+        },
+      ],
+      edges: [
+        { id: "e-main", source: "campaigns", target: "agent" },
+        {
+          id: "eaux-m",
+          source: "model",
+          target: "agent",
+          sourceHandle: "model",
+          targetHandle: "model",
+        },
+        {
+          id: "eaux-t",
+          source: "mcp",
+          target: "agent",
+          sourceHandle: "tool",
+          targetHandle: "tools",
+        },
+      ],
+    };
+    assertX.equal(
+      getExecutionEdges(def).some((e) => e.source === "mcp" && e.target === "agent"),
+      false
+    );
+    const bindings = resolveAuxiliaryBindings({ nodeId: "agent", definition: def });
+    assertX.equal(bindings.tools.length, 1);
+    assertX.equal(bindings.tools[0].sourceNodeId, "mcp");
+    const resources = resolveAgentResources({ nodeId: "agent", definition: def });
+    assertX.equal(resources.toolDescriptors.length, 1);
+    assertX.equal(resources.toolDescriptors[0].toolKind, "google_ads_mcp");
+    assertX.equal(resources.toolDescriptors[0].adsToolId, "account_summary");
+  });
+
+  check("AGENT-CONTEXT-6 Google Ads 42 campaign rows are not duplicated by context injection", async () => {
+    const rows = Array.from({ length: 42 }, (_, i) => ({
+      campaignName: `Campaign_${i + 1}`,
+      spend: i + 1,
+    }));
+    const def = multiItemFixture();
+    def.nodes.find((n) => n.id === "set").data.code = `return ${JSON.stringify(rows)};`;
+    def.nodes.find((n) => n.id === "agent").data.prompt = "{{item.campaignName}}";
+    const mem = await executeGraphInMemory(def);
+    assertX.equal(mem.context.items.agent.length, 42);
+    for (let i = 0; i < 42; i += 1) {
+      const text = String(
+        mem.context.items.agent[i].json?.ai?.output ||
+          mem.context.items.agent[i].json?.text ||
+          ""
+      );
+      assertX.equal(text, `Campaign_${i + 1}`);
+      assertX.equal(text.includes(RUNTIME_DATA_MARKER), false);
+      if (i !== 41) {
+        assertX.equal(text.includes("Campaign_42"), false);
+      }
+    }
+    // No single prompt contains the full 42-row dump
+    const joined = mem.context.items.agent
+      .map((i) => i.json?.ai?.output || i.json?.text)
+      .join("\n");
+    assertX.equal(joined.includes(RUNTIME_DATA_MARKER), false);
+  });
+
   // silence unused
   void executeAiAgent;
   void interpolate;
@@ -775,6 +974,41 @@ const registerPart12BTests = ({ check, section, assert: a }) => {
   void assertNotProviderRunStep;
   void AiRuntimeError;
   void buildToolDescriptor;
+  void buildModelDescriptor;
+  void executeCalculator;
+  void getExecutionEdges;
 };
 
 module.exports = { registerPart12BTests };
+
+if (require.main === module) {
+  const assertStrict = require("node:assert/strict");
+  let passed = 0;
+  const queue = [];
+  const check = (name, fn) => {
+    queue.push(async () => {
+      try {
+        await fn();
+        passed += 1;
+        console.log(`  ok  ${name}`);
+      } catch (err) {
+        console.error(`  FAIL  ${name}`);
+        console.error(err);
+        process.exitCode = 1;
+      }
+    });
+  };
+  const section = (title) =>
+    queue.push(async () => {
+      console.log(`\n${title}`);
+    });
+  registerPart12BTests({ check, section, assert: assertStrict });
+  (async () => {
+    for (const job of queue) await job();
+    console.log(`\n${passed} AI Agent checks passed`);
+    process.exit(process.exitCode || 0);
+  })().catch((err) => {
+    console.error(err);
+    process.exit(1);
+  });
+}

@@ -161,11 +161,83 @@ const buildToolDescriptor = (node) => {
       }),
     };
   }
+  if (type === "googleAdsMcpTool") {
+    const registry = require("./mcpDynamicRegistry.service");
+    const toolId = String(data.toolId || "").trim();
+    if (!toolId) {
+      throw new AiRuntimeError(
+        "Google Ads MCP tool node requires a toolId.",
+        AI_ERROR.TOOL_SCHEMA_INVALID,
+        { nodeId: node.id }
+      );
+    }
+    let catalog;
+    try {
+      catalog = registry.getToolDefinition("google_ads", toolId);
+    } catch (err) {
+      throw new AiRuntimeError(
+        err instanceof Error ? err.message : `Unknown Google Ads MCP tool: ${toolId}`,
+        AI_ERROR.TOOL_SCHEMA_INVALID,
+        { nodeId: node.id, toolId }
+      );
+    }
+    const name = String(data.toolName || toolId)
+      .trim()
+      .replace(/[^a-zA-Z0-9_-]/g, "_")
+      .slice(0, 64);
+    const fixedParams =
+      data.params && typeof data.params === "object" && !Array.isArray(data.params)
+        ? stripSecrets({ ...data.params })
+        : {};
+    for (const key of ["credentialId", "customerId", "loginCustomerId"]) {
+      delete fixedParams[key];
+    }
+    return {
+      kind: DATA_TYPE.AI_TOOL,
+      nodeId: node.id,
+      name: name || toolId,
+      description:
+        data.description ||
+        catalog.description ||
+        catalog.displayName ||
+        `Google Ads MCP tool: ${toolId}`,
+      inputSchema: stripGoogleAdsAccountFieldsFromSchema(catalog.inputSchema),
+      toolKind: "google_ads_mcp",
+      adsToolId: toolId,
+      googleAdsSourceNodeId: String(data.googleAdsSourceNodeId || "").trim() || null,
+      fixedParams,
+    };
+  }
   throw new AiRuntimeError(
     `Unsupported tool provider node type: ${type}`,
     AI_ERROR.PROVIDER_UNSUPPORTED,
     { nodeId: node.id, type }
   );
+};
+
+/** Account fields are inherited server-side — never expose to the model schema. */
+const stripGoogleAdsAccountFieldsFromSchema = (schema) => {
+  if (!schema || typeof schema !== "object" || Array.isArray(schema)) {
+    return { type: "object", properties: {} };
+  }
+  const properties = { ...(schema.properties || {}) };
+  delete properties.credentialId;
+  delete properties.customerId;
+  delete properties.loginCustomerId;
+  const required = Array.isArray(schema.required)
+    ? schema.required.filter(
+        (key) =>
+          key !== "credentialId" &&
+          key !== "customerId" &&
+          key !== "loginCustomerId"
+      )
+    : [];
+  return {
+    ...schema,
+    type: "object",
+    properties,
+    required,
+  };
 };
 
 const validateToolSchema = (schema, toolName) => {
@@ -718,6 +790,61 @@ const attachToolExecutor = (descriptor) => {
             ? { ok: true, toolId: result.toolId, data: result.data }
             : { ok: false, error: result.error }
         );
+        return text.length > MAX_TOOL_RESULT_CHARS
+          ? `${text.slice(0, MAX_TOOL_RESULT_CHARS)}\n…[truncated]`
+          : text;
+      },
+    };
+  }
+  if (descriptor.toolKind === "google_ads_mcp") {
+    const registry = require("./mcpDynamicRegistry.service");
+    return {
+      ...descriptor,
+      async execute(args, ctx) {
+        const safeArgs =
+          args && typeof args === "object" && !Array.isArray(args)
+            ? { ...args }
+            : {};
+        delete safeArgs.credentialId;
+        delete safeArgs.customerId;
+        delete safeArgs.loginCustomerId;
+        delete safeArgs.developerToken;
+        delete safeArgs.accessToken;
+        delete safeArgs.refreshToken;
+        const result = await registry.executeGoogleAdsMcpNode(
+          {
+            id: descriptor.nodeId,
+            type: "googleAdsMcpTool",
+            data: {
+              toolId: descriptor.adsToolId,
+              ...(descriptor.googleAdsSourceNodeId
+                ? { googleAdsSourceNodeId: descriptor.googleAdsSourceNodeId }
+                : {}),
+              params: {
+                ...(descriptor.fixedParams || {}),
+                ...safeArgs,
+              },
+            },
+          },
+          {
+            graph: ctx?.graph || null,
+            workspaceId: ctx?.workspaceId,
+            authUser: ctx?.authUser,
+            inputItems: [],
+          }
+        );
+        const items = Array.isArray(result?.items) ? result.items : [];
+        const payload = stripSecrets({
+          ok: true,
+          toolId: descriptor.adsToolId,
+          itemCount: items.length,
+          items: items.map((item) =>
+            item && typeof item === "object" && item.json != null
+              ? item.json
+              : item
+          ),
+        });
+        const text = JSON.stringify(payload);
         return text.length > MAX_TOOL_RESULT_CHARS
           ? `${text.slice(0, MAX_TOOL_RESULT_CHARS)}\n…[truncated]`
           : text;

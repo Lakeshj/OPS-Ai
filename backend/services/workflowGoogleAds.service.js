@@ -317,6 +317,8 @@ module.exports = {
   FILTER_DEFS,
   buildReportQuery,
   normalizeAdsRow,
+  majorUnits,
+  asNumber,
   normalizeCustomerId,
   runGoogleAdsReport,
   sanitizeGoogleAdsNodeData,

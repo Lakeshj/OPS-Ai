@@ -198,9 +198,9 @@ async function main() {
     };
     const view = inspectItems([{ json }]);
     assert.equal(view.table.rows.length, 1);
-    const preview = formatCompactCell(view.table.rows[0].campaign);
-    assert.match(preview.text, /123/);
-    assert.match(preview.text, /Brand/);
+    assert.equal(view.table.rows[0]["Campaign Name"], "Brand");
+    assert.equal(view.table.rows[0]["campaign.id"], "123");
+    assert.equal(view.table.rows[0].impressions, 40);
     assert.equal(view.schema.campaign, "object");
     assert.deepEqual((view.jsonValue as { campaign: unknown }).campaign, json.campaign);
   });
@@ -585,9 +585,12 @@ async function main() {
       { json: { campaign: { id: "2", name: "Beta" } } },
       { json: { campaign: { id: "1", name: "Alpha" } } },
     ]);
-    const sorted = applyTableSort(table, { columnKey: "campaign", direction: "asc" });
-    assert.equal(typeof sorted.rows[0].campaign, "object");
-    assert.equal(Array.isArray(sorted.rows[0].campaign), false);
+    const sorted = applyTableSort(table, {
+      columnKey: "Campaign Name",
+      direction: "asc",
+    });
+    assert.equal(sorted.rows[0]["Campaign Name"], "Alpha");
+    assert.equal(sorted.rows[1]["Campaign Name"], "Beta");
   });
 
   await check("TABLE-SORT-21 mixed-type column deterministic", () => {
@@ -807,6 +810,100 @@ async function main() {
       { columnKey: "impressions", direction: "desc" }
     );
     assert.equal(kept.direction, "desc");
+  });
+
+  const adsMcpPerformanceRow = {
+    campaign: { resourceName: "customers/1/campaigns/123", id: "123", name: "Brand Search" },
+    metrics: {
+      impressions: "1000",
+      clicks: "57",
+      costMicros: "3087002980",
+      ctr: 0.0396,
+      averageCpc: "54157945",
+      conversions: 2,
+      conversionsValue: 150,
+    },
+    segments: { date: "2026-10-01" },
+    customer: { id: "7887133215" },
+    _meta: {
+      provider: "google_ads",
+      tool: "campaign_performance",
+      resource: "campaign",
+      apiVersion: "v25",
+    },
+  };
+
+  await check("ADS-TABLE-1 MCP performance promotes readable scalar columns", () => {
+    const view = inspectItems([{ json: adsMcpPerformanceRow }]);
+    const row = view.table.rows[0];
+    for (const col of [
+      "Campaign Name",
+      "Date",
+      "Spend",
+      "Impressions",
+      "Clicks",
+      "CTR",
+      "CPC",
+      "Conversions",
+      "Conversion Value",
+    ]) {
+      assert.ok(view.table.columns.includes(col), `missing ${col}`);
+    }
+    assert.equal(row["Campaign Name"], "Brand Search");
+    assert.equal(row.Date, "2026-10-01");
+    assert.equal(row.Spend, 3087.00298);
+    assert.equal(row.CPC, 54.157945);
+    assert.equal(row.CTR, 0.0396);
+    assert.equal(row.Impressions, "1000");
+    assert.equal(row.Clicks, "57");
+    assert.equal(row.Conversions, 2);
+    assert.equal(row["Conversion Value"], 150);
+    assert.equal(view.table.columns.includes("metrics"), false);
+    assert.equal(view.table.columns.includes("campaign"), false);
+    assert.equal(view.table.columns.includes("_meta"), false);
+  });
+
+  await check("ADS-TABLE-2 JSON keeps exact nested MCP object", () => {
+    const view = inspectItems([{ json: adsMcpPerformanceRow }]);
+    assert.deepEqual(view.jsonValue, adsMcpPerformanceRow);
+    assert.equal(view.schema.metrics, "object");
+    assert.equal(view.schema.campaign, "object");
+    assert.equal(view.schema._meta, "object");
+    assert.equal(
+      (view.jsonValue as { metrics: { costMicros: string } }).metrics.costMicros,
+      "3087002980"
+    );
+  });
+
+  await check("ADS-TABLE-3 Gmail structured array regression", () => {
+    const view = inspectItems([{ json: gmailJson }]);
+    assert.equal(formatCompactCell(view.table.rows[0].labelIds).text, "UNREAD · SENT · INBOX");
+    assert.deepEqual((view.jsonValue as { labelIds: unknown }).labelIds, gmailJson.labelIds);
+    assert.equal(view.schema.labelIds, "array<string>");
+  });
+
+  await check("ADS-TABLE-4 Meta action-array regression", () => {
+    const view = inspectItems([{ json: metaActions }]);
+    assert.equal(formatCompactCell(view.table.rows[0].actions).text, "2 objects");
+    assert.equal(view.schema.actions, "array<object>");
+    assert.deepEqual(
+      (view.jsonValue as { actions: unknown }).actions,
+      metaActions.actions
+    );
+  });
+
+  await check("ADS-TABLE-5 unsafe nested object stays compact preview", () => {
+    const nested = {
+      campaign: {
+        id: "1",
+        name: "X",
+        networkSettings: { targetGoogleSearch: true },
+      },
+    };
+    const view = inspectItems([{ json: nested }]);
+    assert.equal(typeof view.table.rows[0].campaign, "object");
+    assert.match(formatCompactCell(view.table.rows[0].campaign).text, /networkSettings/);
+    assert.deepEqual((view.jsonValue as { campaign: unknown }).campaign, nested.campaign);
   });
 
   console.log(`\n${passed} inspector checks passed`);

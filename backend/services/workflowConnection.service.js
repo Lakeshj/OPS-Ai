@@ -186,7 +186,13 @@ const NODE_PORT_CONTRACTS = {
   gscMcpTool: { inputs: [mainIn()], outputs: [mainOut()] },
   ga4McpTool: { inputs: [mainIn()], outputs: [mainOut()] },
   mcpDynamicTool: { inputs: [mainIn()], outputs: [mainOut()] },
-  googleAdsMcpTool: { inputs: [mainIn()], outputs: [mainOut()] },
+  googleAdsMcpTool: {
+    inputs: [mainIn()],
+    outputs: [
+      mainOut(),
+      auxOut("tool", DATA_TYPE.AI_TOOL, "Tool"),
+    ],
+  },
   metaAdsMcpTool: { inputs: [mainIn()], outputs: [mainOut()] },
   gscMcp: { inputs: [mainIn()], outputs: [mainOut()] },
   googleAnalytics: { inputs: [mainIn()], outputs: [mainOut()] },

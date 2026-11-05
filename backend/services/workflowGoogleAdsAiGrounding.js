@@ -1,7 +1,14 @@
 /**
  * Google Ads → AI grounding.
  * Applies only to Google Ads report rows. GA4 and GSC grounding stay on their own paths.
+ *
+ * Native campaign_performance (and other traffic reports) are daily because GAQL
+ * selects segments.date. Canonical WorkflowItems stay daily. AI evidence may
+ * period-aggregate to one row per entity with SUM spend/clicks/impressions and
+ * recomputed CTR/CPC — never averages of daily ratios.
  */
+
+const { majorUnits, asNumber } = require("./workflowGoogleAds.service");
 
 const ADS_REPORT_TYPES = Object.freeze({
   campaign_performance: { title: "Campaign Performance", entity: "campaign" },
@@ -12,6 +19,20 @@ const ADS_REPORT_TYPES = Object.freeze({
   geographic_performance: { title: "Geographic Performance", entity: "geography" },
   conversion_performance: { title: "Conversion Performance", entity: "conversion" },
 });
+
+const PERIOD_AGGREGATE_REPORTS = Object.freeze(
+  new Set([
+    "campaign_performance",
+    "ad_group_performance",
+    "keyword_performance",
+    "search_terms",
+    "device_performance",
+    "geographic_performance",
+    "ad_performance",
+    "placement_performance",
+    "asset_performance",
+  ])
+);
 
 const itemPayload = (item) => {
   if (item && typeof item === "object" && !Array.isArray(item) && "json" in item) {
@@ -258,6 +279,153 @@ const headingFor = (row, entity) => {
   return show(row.campaignName) || "Campaign";
 };
 
+/** Currency cost from flattened native row (prefers cost, else costMicros/1e6). */
+const rowCurrencyCost = (row) => {
+  const direct = asNumber(row?.cost);
+  if (direct != null) return direct;
+  return majorUnits(asNumber(row?.costMicros));
+};
+
+const rowCurrencyCpc = (row) => {
+  const direct = asNumber(row?.averageCpc);
+  if (direct != null) return direct;
+  return majorUnits(asNumber(row?.averageCpcMicros ?? row?.averageCpc));
+};
+
+const formatCtrRatio = (ctr) => {
+  const ratio = asNumber(ctr);
+  if (ratio == null) return null;
+  const pct = Number((ratio * 100).toFixed(6)).toString();
+  return `${ratio} (ratio; ${pct}% when shown as percent)`;
+};
+
+const aggregationKey = (row, entity) => {
+  if (entity === "keyword") {
+    return [
+      row.campaignId || "",
+      row.adGroupId || "",
+      row.keywordText || "",
+      row.keywordMatchType || "",
+    ].join("|");
+  }
+  if (entity === "search term") {
+    return [row.campaignId || "", row.adGroupId || "", row.searchTerm || ""].join("|");
+  }
+  if (entity === "ad group") {
+    return [row.campaignId || "", row.adGroupId || row.adGroupName || ""].join("|");
+  }
+  if (entity === "device") {
+    return [row.campaignId || "", row.device || ""].join("|");
+  }
+  if (entity === "geography") {
+    return [row.campaignId || "", row.countryCriterionId || "", row.locationType || ""].join("|");
+  }
+  if (entity === "ad") {
+    return [row.campaignId || "", row.adGroupId || "", row.adId || ""].join("|");
+  }
+  return String(row.campaignId || row.campaignName || "");
+};
+
+/**
+ * Period-aggregate daily native performance rows for AI evidence.
+ * Does not mutate the input array/objects.
+ */
+const aggregateGoogleAdsPerformanceForAi = (rows) => {
+  const list = Array.isArray(rows) ? rows.filter(isPlainObject) : [];
+  if (!list.length) return [];
+  const reportType = String(list[0].reportType || list[0]._meta?.report || "");
+  const entity = reportMeta(list[0]).entity;
+  const hasDates = list.some((row) => row.date != null && String(row.date).trim() !== "");
+  const shouldAggregate =
+    hasDates &&
+    (PERIOD_AGGREGATE_REPORTS.has(reportType) ||
+      (list[0].source === "google_ads" && list[0].impressions != null));
+  if (!shouldAggregate) return list.map((row) => ({ ...row }));
+
+  const groups = new Map();
+  for (const row of list) {
+    const key = aggregationKey(row, entity) || `row-${groups.size}`;
+    let bucket = groups.get(key);
+    if (!bucket) {
+      bucket = {
+        source: row.source || "google_ads",
+        provider: row.provider || "google_ads",
+        reportType: row.reportType || reportType || null,
+        campaignId: row.campaignId ?? null,
+        campaignName: row.campaignName ?? null,
+        campaignStatus: row.campaignStatus ?? null,
+        adGroupId: row.adGroupId ?? null,
+        adGroupName: row.adGroupName ?? null,
+        keywordText: row.keywordText ?? null,
+        keywordMatchType: row.keywordMatchType ?? null,
+        searchTerm: row.searchTerm ?? null,
+        device: row.device ?? null,
+        countryCriterionId: row.countryCriterionId ?? null,
+        locationType: row.locationType ?? null,
+        currencyCode: row.currencyCode ?? null,
+        impressions: 0,
+        clicks: 0,
+        costMicros: 0,
+        cost: 0,
+        conversions: 0,
+        conversionsValue: 0,
+        dayCount: 0,
+        _meta: row._meta ? { ...row._meta } : undefined,
+        _aiAggregation: "period",
+        reach: null,
+      };
+      groups.set(key, bucket);
+    }
+    const impressions = asNumber(row.impressions) || 0;
+    const clicks = asNumber(row.clicks) || 0;
+    const cost = rowCurrencyCost(row) || 0;
+    const costMicros =
+      asNumber(row.costMicros) != null
+        ? asNumber(row.costMicros)
+        : cost != null
+          ? Math.round(cost * 1_000_000)
+          : 0;
+    bucket.impressions += impressions;
+    bucket.clicks += clicks;
+    bucket.cost += cost;
+    bucket.costMicros += costMicros || 0;
+    bucket.conversions += asNumber(row.conversions) || 0;
+    bucket.conversionsValue += asNumber(row.conversionsValue) || 0;
+    bucket.dayCount += 1;
+    if (!bucket.campaignName && row.campaignName) bucket.campaignName = row.campaignName;
+    if (!bucket.currencyCode && row.currencyCode) bucket.currencyCode = row.currencyCode;
+  }
+
+  return [...groups.values()].map((bucket) => {
+    const impressions = bucket.impressions;
+    const clicks = bucket.clicks;
+    const cost = bucket.cost;
+    const ctr = impressions > 0 ? clicks / impressions : null;
+    const averageCpc = clicks > 0 ? cost / clicks : null;
+    return {
+      ...bucket,
+      ctr,
+      averageCpc,
+      averageCpcMicros:
+        averageCpc == null ? null : Math.round(averageCpc * 1_000_000),
+      // Explicit: do not invent Leads from conversions.
+      leads: null,
+      reach: null,
+    };
+  });
+};
+
+const MONEY_RULES = [
+  "Money fields:",
+  "costMicros / metrics.costMicros are Google Ads micros.",
+  "currency cost = costMicros / 1000000.",
+  "Use Cost / cost (currency) for Spend. Never use costMicros as Spend.",
+  "averageCpcMicros / metrics.averageCpc are micros; Average CPC currency = that value / 1000000.",
+  "CTR on rows is Google's ratio (0.0396 means 3.96% when shown as a percent). Do not treat 0.0396 as 0.0396%.",
+  "Reach is N/A unless a real reach field is present.",
+  "Do not label conversions or allConversions as Leads unless a lead field is present.",
+].join("\n");
+
 const FIELD_LINES = [
   ["campaignId", "Campaign ID"],
   ["campaignName", "Campaign"],
@@ -277,17 +445,46 @@ const FIELD_LINES = [
   ["impressions", "Impressions"],
   ["clicks", "Clicks"],
   ["ctr", "CTR"],
-  ["costMicros", "Cost micros"],
-  ["cost", "Cost"],
-  ["averageCpcMicros", "Average CPC micros"],
-  ["averageCpc", "Average CPC"],
+  ["cost", "Cost (currency / Spend)"],
+  ["averageCpc", "Average CPC (currency)"],
   ["conversions", "Conversions"],
   ["conversionsValue", "Conversion value"],
   ["allConversions", "All conversions"],
   ["allConversionsValue", "All conversions value"],
+  ["reach", "Reach"],
+  ["leads", "Leads"],
+  ["dayCount", "Days in period"],
   ["date", "Date"],
   ["currencyCode", "Currency"],
 ];
+
+const pushMoneyAwareLines = (lines, fieldPath, raw) => {
+  // Nested MCP metrics.averageCpc / costMicros are API micros.
+  if (/(^|\.)costMicros$/i.test(fieldPath)) {
+    const cost = majorUnits(asNumber(raw));
+    lines.push(`   - ${fieldPath} (micros, not currency): ${show(raw)}`);
+    if (cost != null) {
+      lines.push(`   - cost (currency = costMicros/1000000): ${cost}`);
+    }
+    return true;
+  }
+  if (/(^|\.)averageCpcMicros$/i.test(fieldPath) || /(^|\.)metrics\.averageCpc$/i.test(fieldPath)) {
+    const cpc = majorUnits(asNumber(raw));
+    lines.push(`   - ${fieldPath} (micros, not currency): ${show(raw)}`);
+    if (cpc != null) {
+      lines.push(`   - averageCpc (currency = ${fieldPath}/1000000): ${cpc}`);
+    }
+    return true;
+  }
+  if (/(^|\.)metrics\.ctr$/i.test(fieldPath) || fieldPath === "ctr") {
+    const formatted = formatCtrRatio(raw);
+    if (formatted) {
+      lines.push(`   - ${fieldPath}: ${formatted}`);
+      return true;
+    }
+  }
+  return false;
+};
 
 const formatActualFieldReport = (list) => {
   const meta = reportMeta(list[0]);
@@ -301,6 +498,7 @@ const formatActualFieldReport = (list) => {
         lines.push(`   - ${fieldPath}: ${JSON.stringify(value)}`);
         continue;
       }
+      if (pushMoneyAwareLines(lines, fieldPath, value)) continue;
       const shown = show(value);
       if (shown != null) lines.push(`   - ${fieldPath}: ${shown}`);
     }
@@ -310,18 +508,27 @@ const formatActualFieldReport = (list) => {
 };
 
 const formatGoogleAdsReport = (rows) => {
-  const list = collectRows(rows);
-  if (!looksLikeGoogleAdsRows(list)) return null;
+  const collected = collectRows(rows);
+  if (!looksLikeGoogleAdsRows(collected)) return null;
   if (
-    isMcpSearchRow(list[0]) ||
-    isMcpEntityRow(list[0]) ||
-    isMcpChangeRow(list[0]) ||
-    isMcpPerformanceRow(list[0])
+    isMcpSearchRow(collected[0]) ||
+    isMcpEntityRow(collected[0]) ||
+    isMcpChangeRow(collected[0]) ||
+    isMcpPerformanceRow(collected[0])
   ) {
-    return formatActualFieldReport(list);
+    return formatActualFieldReport(collected);
   }
-  const meta = reportMeta(list[0]);
+  const list = aggregateGoogleAdsPerformanceForAi(collected);
+  const meta = reportMeta(list[0] || collected[0]);
   const lines = ["Google Ads Report", "", meta.title, ""];
+  if (list[0]?._aiAggregation === "period") {
+    lines.push(
+      "Rows below are period totals (daily segments.date rows grouped by entity).",
+      "Spend = SUM(cost). CTR = total clicks / total impressions. CPC = total spend / total clicks.",
+      "Daily CTR/CPC were not averaged.",
+      ""
+    );
+  }
   list.forEach((row, index) => {
     const entity = reportMeta(row).entity;
     const label =
@@ -345,9 +552,38 @@ const formatGoogleAdsReport = (rows) => {
       if (key === "searchTerm" && entity === "search term") continue;
       if (key === "adGroupName" && entity === "ad group") continue;
       if (key === "device" && entity === "device") continue;
+      if (key === "reach") {
+        lines.push(`   - ${name}: N/A`);
+        continue;
+      }
+      if (key === "leads") {
+        lines.push(`   - ${name}: N/A (do not infer from conversions)`);
+        continue;
+      }
+      if (key === "ctr") {
+        const formatted = formatCtrRatio(row.ctr);
+        if (formatted) lines.push(`   - ${name}: ${formatted}`);
+        continue;
+      }
+      if (key === "cost") {
+        const cost = rowCurrencyCost(row);
+        if (cost != null) lines.push(`   - ${name}: ${cost}`);
+        continue;
+      }
+      if (key === "averageCpc") {
+        const cpc = rowCurrencyCpc(row);
+        if (cpc != null) lines.push(`   - ${name}: ${cpc}`);
+        continue;
+      }
+      if (key === "date" && row._aiAggregation === "period") continue;
       const value = show(row[key]);
       if (value == null) continue;
       lines.push(`   - ${name}: ${value}`);
+    }
+    if (asNumber(row.costMicros) != null) {
+      lines.push(
+        `   - Cost micros (not currency; Spend = costMicros/1000000): ${row.costMicros}`
+      );
     }
     lines.push("");
   });
@@ -371,6 +607,7 @@ const applyGoogleAdsAiGrounding = ({
     };
   }
   const meta = reportMeta(rows[0]);
+  const evidence = formatGoogleAdsReport(rows);
   if (
     isMcpSearchRow(rows[0]) ||
     isMcpEntityRow(rows[0]) ||
@@ -397,11 +634,11 @@ const applyGoogleAdsAiGrounding = ({
       `These rows are Google Ads ${kind}.`,
       `Describe them as ${meta.title}.`,
       "Use only fields present on the rows.",
-      "Nested Google Ads values stay nested.",
-      "Do not flatten these rows into the native Google Ads report schema.",
+      "Nested Google Ads values stay nested in storage, but money in the evidence block is labeled.",
+      MONEY_RULES,
       "If a field is absent, omit it.",
       "Do not invent fields.",
-      "Do not recalculate values that are present. Copy them from the rows.",
+      "For Spend/CPC in answers, copy the currency lines from the evidence block, not micros.",
       ...(isMcpChangeRow(rows[0])
         ? [
             "These rows are account change history.",
@@ -424,6 +661,9 @@ const applyGoogleAdsAiGrounding = ({
           : []),
       "",
       `Available fields: ${fields.join(", ")}`,
+      "",
+      "Evidence:",
+      evidence || "(none)",
     ].join("\n");
     const userInstructions = String(systemPrompt || "").trim() || null;
     const groundedSystem = [userInstructions, rules].filter(Boolean).join("\n\n");
@@ -460,10 +700,19 @@ const applyGoogleAdsAiGrounding = ({
     "Never invent engagementRate.",
     "Never invent bounceRate.",
     "Campaign rows use campaign vocabulary.",
-    "Do not recalculate impressions, clicks, CTR, cost, CPC, conversions, or conversion value.",
-    "Copy those values from the rows.",
+    MONEY_RULES,
+    "Native performance GAQL includes segments.date, so runtime rows are one campaign (entity) per day.",
+    "For period questions such as last month's campaign performance, use the period-total evidence block:",
+    "one row per campaign/entity with SUM spend, SUM clicks, SUM impressions,",
+    "CTR = total clicks / total impressions, CPC = total spend / total clicks.",
+    "Do not average daily CTR or daily CPC.",
+    "Do not recalculate away from the evidence block totals.",
+    "Copy Spend from Cost (currency / Spend), not from Cost micros.",
     "",
     `Available fields: ${fields.join(", ")}`,
+    "",
+    "Evidence:",
+    evidence || "(none)",
   ].join("\n");
   const userInstructions = String(systemPrompt || "").trim() || null;
   const groundedSystem = [userInstructions, rules].filter(Boolean).join("\n\n");
@@ -487,4 +736,8 @@ module.exports = {
   collectRows,
   formatGoogleAdsReport,
   applyGoogleAdsAiGrounding,
+  aggregateGoogleAdsPerformanceForAi,
+  rowCurrencyCost,
+  majorUnits,
+  formatCtrRatio,
 };

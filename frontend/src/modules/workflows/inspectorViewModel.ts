@@ -173,6 +173,186 @@ export function parseResultPayloadForDisplay(value: unknown): {
   }
 }
 
+/** Max scalar leaves promoted from one nested object (avoids column explosion). */
+const MAX_PROMOTED_LEAVES_PER_OBJECT = 12;
+
+/** Preferred Table column order for structured performance-style rows. */
+const PREFERRED_DISPLAY_COLUMNS = [
+  "Campaign Name",
+  "Ad Group Name",
+  "Keyword",
+  "Date",
+  "Spend",
+  "Impressions",
+  "Clicks",
+  "CTR",
+  "CPC",
+  "Conversions",
+  "Conversion Value",
+  "Customer ID",
+] as const;
+
+/**
+ * Well-known nested scalar paths → readable Table column keys.
+ * Generic path map — not a provider-specific table component.
+ */
+const NESTED_LEAF_DISPLAY_KEYS: Record<string, string> = {
+  "campaign.name": "Campaign Name",
+  "adGroup.name": "Ad Group Name",
+  "ad_group.name": "Ad Group Name",
+  "segments.date": "Date",
+  "customer.id": "Customer ID",
+  "metrics.impressions": "Impressions",
+  "metrics.clicks": "Clicks",
+  "metrics.ctr": "CTR",
+  "metrics.conversions": "Conversions",
+  "metrics.conversionsValue": "Conversion Value",
+  "metrics.conversions_value": "Conversion Value",
+  "metrics.cost": "Spend",
+  "metrics.averageCpc": "CPC",
+  "metrics.average_cpc": "CPC",
+  "metrics.costMicros": "Spend",
+  "metrics.cost_micros": "Spend",
+  "adGroupCriterion.keyword.text": "Keyword",
+  "ad_group_criterion.keyword.text": "Keyword",
+};
+
+function isScalarLeaf(value: unknown): boolean {
+  if (value === null) return true;
+  const t = typeof value;
+  return t === "string" || t === "number" || t === "boolean";
+}
+
+function asFiniteNumber(value: unknown): number | null {
+  if (typeof value === "number") return Number.isFinite(value) ? value : null;
+  if (typeof value === "string" && value.trim() !== "") {
+    const n = Number(value);
+    return Number.isFinite(n) ? n : null;
+  }
+  return null;
+}
+
+/** True when object is a shallow bag of scalars (safe to promote into columns). */
+function isPromotableScalarObject(value: unknown): value is Record<string, unknown> {
+  if (!isPlainObject(value)) return false;
+  const entries = Object.entries(value);
+  if (entries.length === 0 || entries.length > MAX_PROMOTED_LEAVES_PER_OBJECT) {
+    return false;
+  }
+  return entries.every(([, child]) => child === undefined || isScalarLeaf(child));
+}
+
+function displayKeyForLeaf(parentKey: string, leafKey: string): string {
+  const path = `${parentKey}.${leafKey}`;
+  return NESTED_LEAF_DISPLAY_KEYS[path] || path;
+}
+
+function microsFieldToMajorUnits(parentKey: string, leafKey: string, value: unknown): unknown {
+  const path = `${parentKey}.${leafKey}`;
+  if (
+    path !== "metrics.costMicros" &&
+    path !== "metrics.cost_micros" &&
+    path !== "metrics.averageCpc" &&
+    path !== "metrics.average_cpc"
+  ) {
+    return value;
+  }
+  const micros = asFiniteNumber(value);
+  if (micros == null) return value;
+  return micros / 1_000_000;
+}
+
+/**
+ * Display-only row shaping: promote useful nested scalars; keep unsafe nests compact.
+ * Does not mutate the input object.
+ */
+export function flattenRowForDisplay(
+  json: Record<string, unknown>
+): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+
+  for (const [key, value] of Object.entries(json)) {
+    if (key === "_meta") {
+      // Provenance stays in JSON/Schema; omit noisy envelope from Table.
+      continue;
+    }
+
+    if (isPromotableScalarObject(value)) {
+      for (const [leafKey, leafValue] of Object.entries(value)) {
+        if (leafValue === undefined) continue;
+        if (!isScalarLeaf(leafValue)) continue;
+        const displayKey = displayKeyForLeaf(key, leafKey);
+        if (Object.prototype.hasOwnProperty.call(out, displayKey)) continue;
+        out[displayKey] = microsFieldToMajorUnits(key, leafKey, leafValue);
+      }
+      continue;
+    }
+
+    if (isPlainObject(value) || Array.isArray(value) || isScalarLeaf(value)) {
+      out[key] = value;
+    } else if (value !== undefined) {
+      out[key] = value;
+    }
+  }
+
+  // Flat native Ads rows: prefer major-unit Spend/CPC labels; hide raw micros in Table.
+  if (
+    Object.prototype.hasOwnProperty.call(out, "costMicros") &&
+    !Object.prototype.hasOwnProperty.call(out, "Spend")
+  ) {
+    if (Object.prototype.hasOwnProperty.call(out, "cost")) {
+      out.Spend = out.cost;
+    } else {
+      const micros = asFiniteNumber(out.costMicros);
+      if (micros != null) out.Spend = micros / 1_000_000;
+    }
+  } else if (
+    Object.prototype.hasOwnProperty.call(out, "cost") &&
+    !Object.prototype.hasOwnProperty.call(out, "Spend")
+  ) {
+    out.Spend = out.cost;
+  }
+  if (Object.prototype.hasOwnProperty.call(out, "Spend")) {
+    delete out.costMicros;
+    if (Object.prototype.hasOwnProperty.call(out, "cost") && out.Spend === out.cost) {
+      delete out.cost;
+    }
+  }
+
+  if (
+    Object.prototype.hasOwnProperty.call(out, "averageCpc") &&
+    !Object.prototype.hasOwnProperty.call(out, "CPC")
+  ) {
+    // Native flat averageCpc is already major currency units.
+    out.CPC = out.averageCpc;
+  }
+  if (
+    Object.prototype.hasOwnProperty.call(out, "CPC") &&
+    Object.prototype.hasOwnProperty.call(out, "averageCpc") &&
+    out.CPC === out.averageCpc
+  ) {
+    delete out.averageCpc;
+  }
+
+  return out;
+}
+
+function orderDisplayColumns(columns: string[]): string[] {
+  const remaining = new Set(columns);
+  const ordered: string[] = [];
+  for (const preferred of PREFERRED_DISPLAY_COLUMNS) {
+    if (!remaining.has(preferred)) continue;
+    ordered.push(preferred);
+    remaining.delete(preferred);
+  }
+  for (const key of columns) {
+    if (!remaining.has(key)) continue;
+    ordered.push(key);
+    remaining.delete(key);
+  }
+  return ordered;
+}
+
 function collectColumns(rows: Record<string, unknown>[]): string[] {
   const seen = new Set<string>();
   const columns: string[] = [];
@@ -184,13 +364,13 @@ function collectColumns(rows: Record<string, unknown>[]): string[] {
       columns.push(key);
     }
   }
-  return columns;
+  return orderDisplayColumns(columns);
 }
 
 function asDisplayRows(values: unknown[]): Record<string, unknown>[] | null {
   if (values.length === 0) return null;
   if (!values.every(isPlainObject)) return null;
-  return values.map((row) => ({ ...row }));
+  return values.map((row) => flattenRowForDisplay(row));
 }
 
 function tryUnwrapResultPayload(
@@ -225,8 +405,9 @@ export function buildDisplayTable(items: WorkflowItem[]): DisplayTable {
   const jsonRows = canonical.map((item) =>
     isPlainObject(item.json) ? item.json : { value: item.json }
   );
-  const columns = collectColumns(jsonRows);
-  const rows = jsonRows.map((json) => {
+  const displayRows = jsonRows.map((json) => flattenRowForDisplay(json));
+  const columns = collectColumns(displayRows);
+  const rows = displayRows.map((json) => {
     const row: Record<string, unknown> = {};
     for (const column of columns) {
       row[column] = json[column];

@@ -65,7 +65,7 @@ Inspector Table header sort is **display-only** and does not change these canoni
 - Exactly one model binding. Memory runtime not supported (`AI_MEMORY_NOT_SUPPORTED`).
 - Per input item: independent Agent turn; `pairedItem` 1:1; max 8 tool rounds.
 - Provider grounding: Meta/Google Ads/GA4/GSC rules apply only when `_meta.provider` matches. Do not cross-label.
-- Parked Agent failures (known, do not “fix” inside unrelated tasks): `TEST 12B-7`, `TEST 12B-8`, `TEST 12B-28` (runtime data JSON appended to Agent text).
+- Agent prompts are item-scoped by default: `{{item.*}}` resolves per item and does **not** append a full workflow runtime JSON blob. Use `contextScope: "dataset"` (or `{{items}}`) for one dataset-level Agent turn.
 
 ## H. Inspector
 
