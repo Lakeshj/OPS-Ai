@@ -319,6 +319,22 @@ const resolveProvenancePolicy = (
     return "identity1to1";
   }
 
+  // Dataset-scoped AI collapses N inputs → 1 output (monthly summary, etc.).
+  if (
+    (nodeType === "ai" || nodeType === "aiAgent") &&
+    outputCount === 1 &&
+    inputCount > 1
+  ) {
+    try {
+      const {
+        isDatasetContextScope,
+      } = require("./workflowAiContextScope");
+      if (isDatasetContextScope(nodeData)) return "fanIn";
+    } catch {
+      // fall through to contract baseline
+    }
+  }
+
   return base;
 };
 

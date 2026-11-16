@@ -1753,17 +1753,17 @@ const handlers = {
   ai: async (node, context) => {
     const {
       resolveAiContextScope,
+      readAiNodeConfig,
       CONTEXT_SCOPE,
     } = require("./workflowAiContextScope");
-    const scope = resolveAiContextScope(node.data || {});
+    // Read from node / node.data / nested params so save/reload shapes still resolve.
+    const scope = resolveAiContextScope(node);
     const incoming =
       Array.isArray(context.inputItems) && context.inputItems.length
         ? context.inputItems
         : [{ json: context.input ?? {} }];
 
-    // Entire Dataset: one model turn with the full incoming set.
-    if (scope === CONTEXT_SCOPE.DATASET) {
-      const result = await runLlmNode(node, context, { requireBot: false });
+    const toAiItem = (result, pairedIndex) => {
       const text = String(result.output?.text || "");
       const trimmed = text.trim();
       const readable =
@@ -1771,23 +1771,47 @@ const handlers = {
         !trimmed.startsWith("{") &&
         !trimmed.startsWith("[");
       return {
-        ...result,
-        items: [
-          {
-            json: {
-              ...(result.output && typeof result.output === "object"
-                ? result.output
-                : { text }),
-              ...(readable && !result.output?.result ? { result: text } : {}),
-            },
-            pairedItem: { item: 0 },
-          },
-        ],
+        json: {
+          ...(result.output && typeof result.output === "object"
+            ? result.output
+            : { text }),
+          ...(readable && !result.output?.result ? { result: text } : {}),
+        },
+        pairedItem: { item: pairedIndex },
+      };
+    };
+
+    // Entire Dataset: do NOT enter the per-item LLM loop.
+    if (scope === CONTEXT_SCOPE.DATASET) {
+      const payloads = incoming.map((entry) => getItemPayload(entry));
+      const datasetContext = {
+        ...context,
+        // Force full-set grounding — never prefer a leftover single context.item.
+        item: undefined,
+        currentItem: undefined,
+        inputItems: incoming,
+        input:
+          payloads.length === 1
+            ? payloads[0]
+            : payloads.length > 1
+              ? payloads
+              : context.input ?? {},
+      };
+      const result = await runLlmNode(node, datasetContext, {
+        requireBot: false,
+      });
+      const only = toAiItem(result, 0);
+      return {
+        output: only.json,
+        items: [only],
         resolved: {
           ...(result.resolved || {}),
           contextScope: CONTEXT_SCOPE.DATASET,
           itemCount: 1,
           inputItemCount: incoming.length,
+          llmCallCount: 1,
+          // Keep explicit config echo for save/reload audits.
+          contextScopeConfig: readAiNodeConfig(node).contextScope ?? "dataset",
         },
       };
     }
@@ -1805,21 +1829,7 @@ const handlers = {
       };
       const result = await runLlmNode(node, itemContext, { requireBot: false });
       lastResolved = result.resolved;
-      const text = String(result.output?.text || "");
-      const trimmed = text.trim();
-      const readable =
-        Boolean(trimmed) &&
-        !trimmed.startsWith("{") &&
-        !trimmed.startsWith("[");
-      items.push({
-        json: {
-          ...(result.output && typeof result.output === "object"
-            ? result.output
-            : { text }),
-          ...(readable && !result.output?.result ? { result: text } : {}),
-        },
-        pairedItem: { item: i },
-      });
+      items.push(toAiItem(result, i));
     }
     return {
       output:
@@ -1837,6 +1847,7 @@ const handlers = {
         contextScope: CONTEXT_SCOPE.ITEM,
         itemCount: items.length,
         inputItemCount: incoming.length,
+        llmCallCount: items.length,
       },
     };
   },

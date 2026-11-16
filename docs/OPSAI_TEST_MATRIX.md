@@ -32,7 +32,7 @@ Run the **affected family**, not everything.
 | Meta Ads | `smoke-workflow-meta-ads-m2.js` … `m6.js`; `plugins/meta-ads-mcp` smoke |
 | Inspector display | inspector smoke + `tsc --noEmit` |
 | Expressions / items / `$first` | engine file that owns the smoke; do not skip if item order changed |
-| AI Agent | `node scripts/smoke-workflow-ai-12b.js`; dataset Ads: `node scripts/smoke-workflow-ai-dataset-ads.js`; AI scope: `node scripts/smoke-workflow-ai-scope.js` |
+| AI Agent | `node scripts/smoke-workflow-ai-12b.js`; dataset Ads: `node scripts/smoke-workflow-ai-dataset-ads.js`; AI scope: `node scripts/smoke-workflow-ai-scope.js`; live AI scope: `node scripts/smoke-workflow-ai-live-scope.js` |
 | Workflow engine core | targeted `smoke-workflow-engine.js` **only if** you changed scheduler/occurrences/edges — else Level 3 at milestone |
 
 If Copilot, connections, Wait, Loop, or credentials changed, include that family’s smoke.

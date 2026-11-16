@@ -1272,7 +1272,24 @@ const executeRun = async (runId, options = {}) => {
           };
         } else if (!pinned) {
           const savedItems = context.inputItems;
-          if (node.data?.executeOnce && savedItems.length > 1) {
+          // Dataset-scoped AI must keep the full incoming set. executeOnce would
+          // incorrectly slice to one row before handlers.ai can aggregate.
+          let datasetScopedAi = false;
+          try {
+            const {
+              isDatasetContextScope,
+            } = require("./workflowAiContextScope");
+            datasetScopedAi =
+              (nodeType === "ai" || nodeType === "aiAgent") &&
+              isDatasetContextScope(node);
+          } catch {
+            datasetScopedAi = false;
+          }
+          if (
+            node.data?.executeOnce &&
+            savedItems.length > 1 &&
+            !datasetScopedAi
+          ) {
             context.inputItems = savedItems.slice(0, 1);
           }
           for (let attempt = 1; attempt <= policy.retries + 1; attempt += 1) {
@@ -1964,7 +1981,22 @@ const executePartial = async ({
       }
     } else {
       const savedItems = context.inputItems;
-      if (node.data?.executeOnce && savedItems.length > 1) {
+      let datasetScopedAi = false;
+      try {
+        const {
+          isDatasetContextScope,
+        } = require("./workflowAiContextScope");
+        datasetScopedAi =
+          (nodeType === "ai" || nodeType === "aiAgent") &&
+          isDatasetContextScope(node);
+      } catch {
+        datasetScopedAi = false;
+      }
+      if (
+        node.data?.executeOnce &&
+        savedItems.length > 1 &&
+        !datasetScopedAi
+      ) {
         context.inputItems = savedItems.slice(0, 1);
       }
       try {

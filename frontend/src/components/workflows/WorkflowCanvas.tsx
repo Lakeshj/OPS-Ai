@@ -426,6 +426,7 @@ const defaultDataForType = (type: WorkflowNodeType): WorkflowNodeData => {
       return {
         label: "AI",
         nodeType: "ai",
+        contextScope: "item",
         provider: "openai",
         systemPrompt:
           "You are a helpful workflow assistant. Use the provided data to answer the user request. Do not dump the entire dataset unless asked.",
@@ -595,6 +596,7 @@ const defaultDataForType = (type: WorkflowNodeType): WorkflowNodeData => {
       return {
         label: "Basic AI Agent",
         nodeType: "aiAgent",
+        contextScope: "item",
         prompt: "{{item}}",
         systemInstruction: "",
         needsNaming: true,

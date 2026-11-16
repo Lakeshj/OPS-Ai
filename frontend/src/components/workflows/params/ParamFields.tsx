@@ -119,10 +119,62 @@ export function OptionsParamField({
     : str
       ? [...options, { name: `${str} (current)`, value: str }]
       : options;
+  const hasOptionDescriptions = shown.some((opt) =>
+    Boolean(opt.description && String(opt.description).trim())
+  );
+
+  // Radio list when options carry descriptions (e.g. Context Scope) so the
+  // chosen value is written explicitly and sub-labels stay visible.
+  if (hasOptionDescriptions) {
+    return (
+      <div className="space-y-1">
+        <Label className="text-xs">{param.displayName}</Label>
+        <div className="space-y-1.5 rounded-md border p-2">
+          {shown.map((opt) => {
+            const optValue = String(opt.value);
+            const selected = str === optValue;
+            return (
+              <label
+                key={optValue}
+                className="flex cursor-pointer items-start gap-2 text-xs"
+              >
+                <input
+                  type="radio"
+                  className="mt-0.5"
+                  name={`param-${param.name}`}
+                  value={optValue}
+                  checked={selected}
+                  onChange={() => onChange(opt.value)}
+                />
+                <span className="flex flex-col gap-0.5">
+                  <span>{opt.name}</span>
+                  {opt.description ? (
+                    <span className="text-[10px] font-normal text-muted-foreground">
+                      {opt.description}
+                    </span>
+                  ) : null}
+                </span>
+              </label>
+            );
+          })}
+        </div>
+        {param.description ? (
+          <p className="text-[11px] text-muted-foreground">{param.description}</p>
+        ) : null}
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-1">
       <Label className="text-xs">{param.displayName}</Label>
-      <Select value={str} onValueChange={onChange}>
+      <Select
+        value={str}
+        onValueChange={(next) => {
+          // Always persist the canonical option value (never the display name).
+          onChange(next);
+        }}
+      >
         <SelectTrigger className="text-xs">
           <SelectValue />
         </SelectTrigger>
@@ -134,6 +186,9 @@ export function OptionsParamField({
           ))}
         </SelectContent>
       </Select>
+      {param.description ? (
+        <p className="text-[11px] text-muted-foreground">{param.description}</p>
+      ) : null}
     </div>
   );
 }

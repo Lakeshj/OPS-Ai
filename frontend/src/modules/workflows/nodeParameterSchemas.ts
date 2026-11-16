@@ -142,11 +142,19 @@ export const NODE_PARAMETER_SCHEMAS: Record<WorkflowNodeType, ParamDescriptor[]>
         type: "options",
         default: "item",
         options: [
-          { name: "Per Item", value: "item" },
-          { name: "Entire Dataset", value: "dataset" },
+          {
+            name: "Per Item",
+            value: "item",
+            description: "Run once for each incoming item",
+          },
+          {
+            name: "Entire Dataset",
+            value: "dataset",
+            description: "Analyze all incoming items together once",
+          },
         ],
         description:
-          "Per Item: run once for each incoming item. Entire Dataset: analyze all incoming items together in one AI turn.",
+          "Per Item: run once for each incoming item. Entire Dataset: analyze all incoming items together once.",
       },
       {
         name: "provider",
@@ -810,14 +818,16 @@ export const NODE_PARAMETER_SCHEMAS: Record<WorkflowNodeType, ParamDescriptor[]>
           {
             name: "Per Item",
             value: "item",
+            description: "Run once for each incoming item",
           },
           {
             name: "Entire Dataset",
             value: "dataset",
+            description: "Analyze all incoming items together once",
           },
         ],
         description:
-          "Per Item: run once for each incoming item. Entire Dataset: analyze all incoming items together in one AI turn.",
+          "Per Item: run once for each incoming item. Entire Dataset: analyze all incoming items together once.",
       },
       {
         name: "prompt",
