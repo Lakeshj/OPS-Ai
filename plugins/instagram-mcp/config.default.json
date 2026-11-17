@@ -1,0 +1,5 @@
+{
+  "mode": "read_only_api",
+  "allowMutations": false,
+  "provider": "instagram"
+}

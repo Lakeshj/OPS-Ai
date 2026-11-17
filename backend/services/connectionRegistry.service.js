@@ -88,6 +88,7 @@ const {
   defaultAppModeForProduct,
 } = require("../config/googleNativeAuthPolicy");
 const metaGraph = require("../config/metaGraph");
+const instagramGraph = require("../config/instagramGraph");
 
 const googleOAuthDef = (product, scopes) => ({
   product,
@@ -212,6 +213,32 @@ const PREDEFINED = Object.freeze([
     },
     testConnection: { kind: "meta" },
     search: ["meta", "facebook", "ads", "oauth"],
+  },
+  {
+    id: "instagram",
+    displayName: "Instagram",
+    provider: "Instagram",
+    category: "Meta",
+    authScheme: "oauth2_bearer",
+    kind: KIND.PREDEFINED,
+    status: STATUS.SUPPORTED,
+    dbType: "instagram",
+    allowedDomains: [
+      "graph.instagram.com",
+      "api.instagram.com",
+      "www.instagram.com",
+    ],
+    requestApplication: { type: "bearer" },
+    oauth: {
+      product: "instagram",
+      nativeAuthPolicy: "PLATFORM_MANAGED_ONLY",
+      authorizationUrl: instagramGraph.authorizeUrl(),
+      tokenUrl: instagramGraph.shortLivedTokenUrl(),
+      defaultScopes: [...instagramGraph.OAUTH_SCOPES],
+      refresh: "reconnect",
+    },
+    testConnection: { kind: "instagram" },
+    search: ["instagram", "ig", "meta", "oauth"],
   },
 ]);
 

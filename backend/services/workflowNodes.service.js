@@ -3255,6 +3255,10 @@ const handlers = {
     const { executeMetaAdsMcpNode } = require("./mcpDynamicRegistry.service");
     return executeMetaAdsMcpNode(node, context);
   },
+  instagramMcpTool: async (node, context) => {
+    const { executeInstagramMcpNode } = require("./mcpDynamicRegistry.service");
+    return executeInstagramMcpNode(node, context);
+  },
   gscMcp: async (node, context) => {
     const { executeGscMcpNode } = require("./mcpPluginHost.service");
     return executeGscMcpNode(node, context);
@@ -3270,6 +3274,10 @@ const handlers = {
   metaAds: async (node, context) => {
     const { executeMetaAdsNode } = require("./workflowMetaAds.service");
     return executeMetaAdsNode(node, context);
+  },
+  instagram: async (node, context) => {
+    const { executeInstagramNode } = require("./workflowInstagram.service");
+    return executeInstagramNode(node, context);
   },
   gmail: async (node, context) => {
     const { executeGoogleNode } = require("./workflowGoogleNodes.service");

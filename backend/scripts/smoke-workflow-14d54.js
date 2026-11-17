@@ -430,9 +430,10 @@ const registerPart14D54Tests = ({ check, section, assert: a }) => {
     assertX.ok(list.every((e) => e.searchText && e.displayName));
     const supported = list.filter((e) => e.status === "SUPPORTED");
     const soon = list.filter((e) => e.status === "COMING_SOON");
-    assertX.equal(supported.length, 6);
+    assertX.equal(supported.length, 7);
     assertX.ok(supported.some((e) => e.id === "meta_ads"));
     assertX.ok(supported.some((e) => e.id === "google_ads"));
+    assertX.ok(supported.some((e) => e.id === "instagram"));
     assertX.ok(soon.length >= 4);
   });
 

@@ -1,0 +1,26 @@
+{
+  "name": "@opsai/plugin-instagram-mcp",
+  "version": "0.1.0",
+  "description": "OpsAi Instagram MCP plugin — read-only Common + Performance tools",
+  "main": "src/index.js",
+  "type": "commonjs",
+  "scripts": {
+    "test": "node src/testing/smoke-tools.js",
+    "smoke": "npm test"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "files": [
+    "src",
+    "manifest.json",
+    "config.default.json",
+    "README.md"
+  ],
+  "keywords": [
+    "opsai",
+    "mcp",
+    "instagram"
+  ],
+  "license": "UNLICENSED"
+}

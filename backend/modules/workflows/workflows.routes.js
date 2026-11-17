@@ -36,6 +36,9 @@ const {
   startMetaOAuth,
   listMetaAdAccounts,
   selectMetaAdAccount,
+  startInstagramOAuth,
+  getInstagramOAuthStatus,
+  listInstagramAccounts,
   listConnectionTypes,
   getCredentialEditor,
   startOAuth2,
@@ -82,6 +85,9 @@ router.get("/connection-types", listConnectionTypes);
 router.post("/google-oauth/start", startGoogleOAuth);
 router.post("/meta-oauth/start", startMetaOAuth);
 router.get("/meta-oauth/ad-accounts", listMetaAdAccounts);
+router.post("/instagram-oauth/start", startInstagramOAuth);
+router.get("/instagram-oauth/status", getInstagramOAuthStatus);
+router.get("/instagram-oauth/accounts", listInstagramAccounts);
 router.post("/credentials/:credentialId/meta-ad-account", selectMetaAdAccount);
 router.post("/oauth2/start", startOAuth2);
 router.get("/google-oauth/gsc-sites", listGscSites);

@@ -58,6 +58,7 @@ const ALLOWED_NODE_TYPES = new Set([
   "mcpDynamicTool",
   "googleAdsMcpTool",
   "metaAdsMcpTool",
+  "instagramMcpTool",
   "respondToWebhook",
   // Part 14D.5 — native Google / SEO / AI Generate / XLSX
   "googleSearchConsole",
@@ -65,6 +66,7 @@ const ALLOWED_NODE_TYPES = new Set([
   "googleAnalytics",
   "googleAds",
   "metaAds",
+  "instagram",
   "gmail",
   "gmailTrigger",
   "googleSheets",
@@ -203,6 +205,12 @@ const validateDefinition = (definition) => {
       } = require("../../services/mcpDynamicRegistry.service");
       node.data = sanitizeMetaAdsMcpNodeData(node.data);
     }
+    if (type === "instagramMcpTool" && node.data) {
+      const {
+        sanitizeInstagramMcpNodeData,
+      } = require("../../services/mcpDynamicRegistry.service");
+      node.data = sanitizeInstagramMcpNodeData(node.data);
+    }
     if (type === "googleAds" && node.data) {
       const {
         sanitizeGoogleAdsNodeData,
@@ -214,6 +222,12 @@ const validateDefinition = (definition) => {
         sanitizeMetaAdsNodeData,
       } = require("../../services/workflowMetaAds.service");
       node.data = sanitizeMetaAdsNodeData(node.data);
+    }
+    if (type === "instagram" && node.data) {
+      const {
+        sanitizeInstagramNodeData,
+      } = require("../../services/workflowInstagram.service");
+      node.data = sanitizeInstagramNodeData(node.data);
     }
   }
   const switchErrors = validateSwitchEdges(definition);

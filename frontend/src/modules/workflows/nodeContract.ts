@@ -159,6 +159,8 @@ export type ParamCustomRenderer =
   | "googleAdsMcpTool"
   /** Meta Ads MCP tools. Provider is fixed by the node type. */
   | "metaAdsMcpTool"
+  /** Instagram MCP tools. Provider is fixed by the node type. */
+  | "instagramMcpTool"
   | "metaAdAccount"
   | "metaAdsFilters";
 
@@ -2081,6 +2083,45 @@ export const NODE_CONTRACTS: Record<WorkflowNodeType, NodeContract> = {
     ],
   },
 
+  instagramMcpTool: {
+    type: "instagramMcpTool",
+    version: 1,
+    category: "Marketing",
+    label: "Instagram MCP Tools",
+    inputs: [mainIn()],
+    outputs: [
+      mainOut,
+      {
+        id: "tool",
+        kind: "ai_tool",
+        direction: "out",
+        label: "Tool",
+        connectionKind: "auxiliary",
+        dataType: "ai-tool",
+        description: "Register this MCP tool with an AI Agent (not WorkflowItem flow)",
+      },
+      errorOut,
+    ],
+    cardinality: "1-to-N",
+    pairedItemPolicy: "fanOut",
+    settings: SETTINGS_ACTION,
+    capabilities: CAP_ACTION,
+    isSideEffecting: true,
+    params: [],
+    dirtyTriggers: ["params", "edges", "pin", "disabled", "typedPorts"],
+    edgeCases: [
+      "Provider is instagram by node type. The saved node does not store a provider field",
+      "Account context comes from an Instagram node. One node is used automatically",
+      "Several Instagram nodes require an Instagram Source selection",
+      "The saved node does not store a credential, Instagram user id, or access token",
+      "Source binding is node config — no Instagram → MCP main edge required",
+      "Connect Tool → AI Agent Tools for auxiliary use; main Output stays for manual runs",
+      "Auxiliary tool edges do not inject MCP rows into AI main WorkflowItems",
+      "Tool list and parameter fields come from the shared Instagram MCP registry",
+      "Read-only. No publish or reply tools in V1",
+    ],
+  },
+
   googleAds: {
     type: "googleAds",
     version: 1,
@@ -2120,6 +2161,28 @@ export const NODE_CONTRACTS: Record<WorkflowNodeType, NodeContract> = {
       "Read-only Meta Ads Insights reports",
       "Dates resolve in the ad account timezone",
       "The node stores credentialId and numeric adAccountId only",
+    ],
+  },
+
+  instagram: {
+    type: "instagram",
+    version: 1,
+    category: "Marketing",
+    label: "Instagram",
+    inputs: [mainIn()],
+    outputs: [mainOut, errorOut],
+    cardinality: "1-to-N",
+    pairedItemPolicy: "fanOut",
+    settings: SETTINGS_ACTION,
+    capabilities: CAP_ACTION,
+    isSideEffecting: true,
+    params: [],
+    dirtyTriggers: ["params", "edges", "pin", "disabled"],
+    edgeCases: [
+      "Instagram Login reads, insights, publishing, and comments",
+      "Uses instagram credential and instagramUserId from OAuth",
+      "Writes use Instagram-only POST path; never Meta Ads client",
+      "Comment webhooks are not implemented in M6",
     ],
   },
 };

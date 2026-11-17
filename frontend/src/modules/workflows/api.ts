@@ -449,6 +449,43 @@ export const workflowCredentialsApi = {
       { adAccountId }
     ),
 
+  startInstagramOAuth: (payload: {
+    workspaceId: string;
+    name?: string;
+    credentialId?: string;
+  }) =>
+    apiClient.post<{
+      url: string;
+      callbackOrigin: string;
+      redirectUri?: string;
+      scopes?: string[];
+      apiVersion?: string;
+    }>("/workflows/instagram-oauth/start", payload),
+
+  getInstagramOAuthStatus: () =>
+    apiClient.get<{
+      instagramIntegrationConfigured: boolean;
+      unifiedLoginConfigured?: boolean;
+      missingConfigKeys: string[];
+      redirectUriConfigured?: boolean;
+      resolvedRedirectUri?: string;
+      authMode?: string;
+      tokenKind?: string;
+    }>("/workflows/instagram-oauth/status"),
+
+  listInstagramAccounts: (credentialId: string) =>
+    apiClient.get<{
+      apiVersion?: string;
+      accounts: Array<{
+        id: string;
+        username: string;
+        accountType: string;
+        profilePictureUrl?: string;
+      }>;
+    }>(
+      `/workflows/instagram-oauth/accounts?credentialId=${encodeURIComponent(credentialId)}`
+    ),
+
   listGscSites: (workspaceId: string, credentialId: string) =>
     apiClient.get<{
       sites: {

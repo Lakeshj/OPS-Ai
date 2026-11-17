@@ -1,0 +1,19 @@
+{
+  "id": "instagram-mcp",
+  "name": "Instagram MCP Tools",
+  "version": "0.1.0",
+  "phase": 7,
+  "capabilities": [
+    "tool.registry",
+    "tool.execution",
+    "workflow.node"
+  ],
+  "transports": [],
+  "credentialTypes": ["instagram"],
+  "engineNodeType": "instagramMcpTool",
+  "libraryId": "instagram-mcp-tools",
+  "userFacingWorkflowNode": true,
+  "authOnNode": false,
+  "consumers": ["workflow.mcp.dynamic", "workflow.instagramMcpTool"],
+  "notes": "Read-only Instagram MCP tools (M7). OAuth, Graph HTTP, insights catalog, comments, and publishing stay in shared backend Instagram services. This plugin exposes READ tools only — no publish or reply."
+}

@@ -1233,6 +1233,19 @@ export const NODE_PARAMETER_SCHEMAS: Record<WorkflowNodeType, ParamDescriptor[]>
       },
     ],
 
+    instagramMcpTool: [
+      {
+        name: "toolId",
+        displayName: "Tool",
+        type: "string",
+        default: "",
+        required: true,
+        customRenderer: "instagramMcpTool",
+        description:
+          "Instagram tool and its parameters. Account context comes from an Instagram node in this workflow.",
+      },
+    ],
+
     ga4McpTool: [
       {
         name: "_upstreamNotice",
@@ -1638,6 +1651,479 @@ export const NODE_PARAMETER_SCHEMAS: Record<WorkflowNodeType, ParamDescriptor[]>
         min: 1,
         max: 10000,
         displayOptions: { hide: { returnAll: [true] } },
+      },
+    ],
+
+    instagram: [
+      {
+        name: "credentialId",
+        displayName: "Instagram Account",
+        type: "credential",
+        customRenderer: "credential",
+        required: true,
+        credentialTypes: ["instagram"],
+      },
+      {
+        name: "resource",
+        displayName: "Resource",
+        type: "options",
+        default: "account",
+        options: [
+          { name: "Account", value: "account" },
+          { name: "Media", value: "media" },
+          { name: "Insights", value: "insights" },
+          { name: "Publishing", value: "publish" },
+          { name: "Comments", value: "comments" },
+        ],
+      },
+      {
+        name: "operation",
+        displayName: "Operation",
+        type: "options",
+        default: "get_profile",
+        options: [
+          {
+            name: "Get Profile",
+            value: "get_profile",
+            displayOptions: { show: { resource: ["account"] } },
+          },
+          {
+            name: "List Media",
+            value: "list_media",
+            displayOptions: { show: { resource: ["media"] } },
+          },
+          {
+            name: "Get Media",
+            value: "get_media",
+            displayOptions: { show: { resource: ["media"] } },
+          },
+          {
+            name: "Account Insights",
+            value: "account_insights",
+            displayOptions: { show: { resource: ["insights"] } },
+          },
+          {
+            name: "Media Insights",
+            value: "media_insights",
+            displayOptions: { show: { resource: ["insights"] } },
+          },
+          {
+            name: "Publish Image",
+            value: "publish_image",
+            displayOptions: { show: { resource: ["publish"] } },
+          },
+          {
+            name: "Publish Carousel",
+            value: "publish_carousel",
+            displayOptions: { show: { resource: ["publish"] } },
+          },
+          {
+            name: "Publish Reel",
+            value: "publish_reel",
+            displayOptions: { show: { resource: ["publish"] } },
+          },
+          {
+            name: "Publish Story",
+            value: "publish_story",
+            displayOptions: { show: { resource: ["publish"] } },
+          },
+          {
+            name: "List Comments",
+            value: "list_comments",
+            displayOptions: { show: { resource: ["comments"] } },
+          },
+          {
+            name: "List Replies",
+            value: "list_replies",
+            displayOptions: { show: { resource: ["comments"] } },
+          },
+          {
+            name: "Reply to Comment",
+            value: "reply_comment",
+            displayOptions: { show: { resource: ["comments"] } },
+          },
+        ],
+      },
+      {
+        name: "returnAll",
+        displayName: "Return all",
+        type: "boolean",
+        default: false,
+        description: "Pages through results up to the safety ceiling.",
+        displayOptions: {
+          show: {
+            resource: ["media", "comments"],
+            operation: ["list_media", "list_comments", "list_replies"],
+          },
+        },
+      },
+      {
+        name: "limit",
+        displayName: "Limit",
+        type: "number",
+        default: 50,
+        min: 1,
+        max: 500,
+        displayOptions: {
+          show: {
+            resource: ["media", "comments"],
+            operation: ["list_media", "list_comments", "list_replies"],
+          },
+          hide: { returnAll: [true] },
+        },
+      },
+      {
+        name: "mediaId",
+        displayName: "Media ID",
+        type: "string",
+        required: true,
+        expression: true,
+        placeholder: "17895695668004550",
+        displayOptions: {
+          show: {
+            resource: ["media", "insights", "comments"],
+            operation: ["get_media", "media_insights", "list_comments"],
+          },
+        },
+      },
+      {
+        name: "commentId",
+        displayName: "Comment ID",
+        type: "string",
+        required: true,
+        expression: true,
+        placeholder: "17850000000000000",
+        displayOptions: {
+          show: {
+            resource: ["comments"],
+            operation: ["list_replies", "reply_comment"],
+          },
+        },
+      },
+      {
+        name: "message",
+        displayName: "Message",
+        type: "string",
+        required: true,
+        expression: true,
+        multiline: true,
+        placeholder: "{{item.reply}}",
+        displayOptions: {
+          show: { resource: ["comments"], operation: ["reply_comment"] },
+        },
+      },
+      {
+        name: "mediaType",
+        displayName: "Media type",
+        type: "options",
+        default: "",
+        description: "Optional. Fetched automatically when blank.",
+        options: [
+          { name: "Auto-detect", value: "" },
+          { name: "Image", value: "IMAGE" },
+          { name: "Video", value: "VIDEO" },
+          { name: "Carousel", value: "CAROUSEL_ALBUM" },
+          { name: "Reels", value: "REELS" },
+          { name: "Story", value: "STORY" },
+        ],
+        displayOptions: {
+          show: { resource: ["insights"], operation: ["media_insights"] },
+        },
+      },
+      {
+        name: "insightsPreset",
+        displayName: "Metric preset",
+        type: "options",
+        default: "overview",
+        options: [
+          { name: "Overview", value: "overview" },
+          { name: "Engagement", value: "engagement" },
+          { name: "Audience", value: "audience" },
+          { name: "Demographics", value: "demographics" },
+          { name: "Custom", value: "custom" },
+        ],
+        displayOptions: {
+          show: { resource: ["insights"], operation: ["account_insights"] },
+        },
+      },
+      {
+        name: "mediaInsightsPreset",
+        displayName: "Metric preset",
+        type: "options",
+        default: "overview",
+        options: [
+          { name: "Overview", value: "overview" },
+          { name: "Engagement", value: "engagement" },
+          { name: "Reels", value: "reels" },
+          { name: "Stories", value: "stories" },
+          { name: "Custom", value: "custom" },
+        ],
+        displayOptions: {
+          show: { resource: ["insights"], operation: ["media_insights"] },
+        },
+      },
+      {
+        name: "metrics",
+        displayName: "Metrics",
+        type: "multiOptions",
+        default: [],
+        options: [
+          { name: "Views", value: "views" },
+          { name: "Reach", value: "reach" },
+          { name: "Follower count", value: "follower_count" },
+          { name: "Profile views", value: "profile_views" },
+          { name: "Accounts engaged", value: "accounts_engaged" },
+          { name: "Total interactions", value: "total_interactions" },
+          { name: "Likes", value: "likes" },
+          { name: "Comments", value: "comments" },
+          { name: "Shares", value: "shares" },
+          { name: "Saves", value: "saves" },
+          { name: "Saved (media)", value: "saved" },
+          { name: "Replies", value: "replies" },
+          { name: "Follows and unfollows", value: "follows_and_unfollows" },
+          { name: "Profile links taps", value: "profile_links_taps" },
+          { name: "Online followers", value: "online_followers" },
+          { name: "Follower demographics", value: "follower_demographics" },
+          {
+            name: "Engaged audience demographics",
+            value: "engaged_audience_demographics",
+          },
+          {
+            name: "Reached audience demographics",
+            value: "reached_audience_demographics",
+          },
+          { name: "Reels avg watch time", value: "ig_reels_avg_watch_time" },
+          {
+            name: "Reels total watch time",
+            value: "ig_reels_video_view_total_time",
+          },
+          { name: "Navigation (story)", value: "navigation" },
+          { name: "Exits (story)", value: "exits" },
+          { name: "Taps forward (story)", value: "taps_forward" },
+          { name: "Taps back (story)", value: "taps_back" },
+        ],
+        displayOptions: {
+          show: { resource: ["insights"] },
+          showAny: [
+            {
+              operation: ["account_insights"],
+              insightsPreset: ["custom"],
+            },
+            {
+              operation: ["media_insights"],
+              mediaInsightsPreset: ["custom"],
+            },
+          ],
+        },
+      },
+      {
+        name: "period",
+        displayName: "Period",
+        type: "options",
+        default: "day",
+        options: [
+          { name: "Day", value: "day" },
+          { name: "Week", value: "week" },
+          { name: "28 days", value: "days_28" },
+          { name: "Lifetime", value: "lifetime" },
+          { name: "Total over range", value: "total_over_range" },
+        ],
+        displayOptions: {
+          show: { resource: ["insights"], operation: ["account_insights"] },
+        },
+      },
+      {
+        name: "breakdown",
+        displayName: "Breakdown",
+        type: "options",
+        default: "age",
+        options: [
+          { name: "Age", value: "age" },
+          { name: "City", value: "city" },
+          { name: "Country", value: "country" },
+          { name: "Gender", value: "gender" },
+          { name: "Follow type", value: "follow_type" },
+        ],
+        displayOptions: {
+          show: {
+            resource: ["insights"],
+            operation: ["account_insights"],
+            insightsPreset: ["demographics", "custom"],
+          },
+        },
+      },
+      {
+        name: "dateRange",
+        displayName: "Date range",
+        type: "options",
+        default: "last7days",
+        options: [
+          { name: "Last 7 days", value: "last7days" },
+          { name: "Last 14 days", value: "last14days" },
+          { name: "Last 28 days", value: "last28days" },
+          { name: "Last 30 days", value: "last30days" },
+          { name: "This month", value: "thisMonth" },
+          { name: "Last month", value: "lastMonth" },
+          { name: "Custom", value: "custom" },
+        ],
+        displayOptions: {
+          show: {
+            resource: ["insights"],
+            operation: ["account_insights"],
+            period: ["day", "week", "days_28", "total_over_range"],
+          },
+        },
+      },
+      {
+        name: "since",
+        displayName: "Since",
+        type: "string",
+        expression: true,
+        placeholder: "YYYY-MM-DD",
+        displayOptions: {
+          show: {
+            resource: ["insights"],
+            operation: ["account_insights"],
+            dateRange: ["custom"],
+          },
+        },
+      },
+      {
+        name: "until",
+        displayName: "Until",
+        type: "string",
+        expression: true,
+        placeholder: "YYYY-MM-DD",
+        displayOptions: {
+          show: {
+            resource: ["insights"],
+            operation: ["account_insights"],
+            dateRange: ["custom"],
+          },
+        },
+      },
+      {
+        name: "imageUrl",
+        displayName: "Image URL",
+        type: "string",
+        required: true,
+        expression: true,
+        placeholder: "https://cdn.example.com/image.jpg",
+        displayOptions: {
+          show: { resource: ["publish"], operation: ["publish_image"] },
+        },
+      },
+      {
+        name: "videoUrl",
+        displayName: "Video URL",
+        type: "string",
+        required: true,
+        expression: true,
+        placeholder: "https://cdn.example.com/video.mp4",
+        displayOptions: {
+          show: {
+            resource: ["publish"],
+            operation: ["publish_reel"],
+          },
+        },
+      },
+      {
+        name: "storyMediaType",
+        displayName: "Story media type",
+        type: "options",
+        default: "IMAGE",
+        options: [
+          { name: "Image", value: "IMAGE" },
+          { name: "Video", value: "VIDEO" },
+        ],
+        displayOptions: {
+          show: { resource: ["publish"], operation: ["publish_story"] },
+        },
+      },
+      {
+        name: "mediaUrl",
+        displayName: "Media URL",
+        type: "string",
+        required: true,
+        expression: true,
+        placeholder: "https://cdn.example.com/story.jpg",
+        displayOptions: {
+          show: { resource: ["publish"], operation: ["publish_story"] },
+        },
+      },
+      {
+        name: "coverUrl",
+        displayName: "Cover URL",
+        type: "string",
+        expression: true,
+        placeholder: "https://cdn.example.com/cover.jpg",
+        displayOptions: {
+          show: { resource: ["publish"], operation: ["publish_reel"] },
+        },
+      },
+      {
+        name: "shareToFeed",
+        displayName: "Share to feed",
+        type: "boolean",
+        default: true,
+        displayOptions: {
+          show: { resource: ["publish"], operation: ["publish_reel"] },
+        },
+      },
+      {
+        name: "carouselItems",
+        displayName: "Carousel items",
+        type: "json",
+        required: true,
+        multiline: true,
+        default:
+          '[{"type":"IMAGE","mediaUrl":"https://cdn.example.com/1.jpg"},{"type":"IMAGE","mediaUrl":"https://cdn.example.com/2.jpg"}]',
+        description:
+          "Array of 2–10 items: { type: IMAGE|VIDEO, mediaUrl: https://... }",
+        displayOptions: {
+          show: { resource: ["publish"], operation: ["publish_carousel"] },
+        },
+      },
+      {
+        name: "caption",
+        displayName: "Caption",
+        type: "string",
+        expression: true,
+        multiline: true,
+        displayOptions: {
+          show: {
+            resource: ["publish"],
+            operation: ["publish_image", "publish_carousel", "publish_reel"],
+          },
+        },
+      },
+      {
+        name: "altText",
+        displayName: "Alt text",
+        type: "string",
+        expression: true,
+        displayOptions: {
+          show: { resource: ["publish"], operation: ["publish_image"] },
+        },
+      },
+      {
+        name: "publishKey",
+        displayName: "Publish key",
+        type: "string",
+        expression: true,
+        description:
+          "Optional idempotency key. Retries with the same key will not create a duplicate post.",
+        displayOptions: {
+          show: {
+            resource: ["publish"],
+            operation: [
+              "publish_image",
+              "publish_carousel",
+              "publish_reel",
+              "publish_story",
+            ],
+          },
+        },
       },
     ],
 

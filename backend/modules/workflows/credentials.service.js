@@ -32,11 +32,13 @@ const GOOGLE_CREDENTIAL_TYPES = new Set([
 ]);
 
 const META_CREDENTIAL_TYPES = new Set(["meta_ads"]);
+const INSTAGRAM_CREDENTIAL_TYPES = new Set(["instagram"]);
 
 const CREDENTIAL_TYPES = new Set([
   ...HTTP_CREDENTIAL_TYPES,
   ...GOOGLE_CREDENTIAL_TYPES,
   ...META_CREDENTIAL_TYPES,
+  ...INSTAGRAM_CREDENTIAL_TYPES,
 ]);
 
 const parseConfig = (raw) => oauth2.parseConfig(raw);
@@ -63,7 +65,15 @@ const formatCredential = (row) => {
   const cfg = parseConfig(row.config_json);
   const isGoogle = GOOGLE_CREDENTIAL_TYPES.has(row.type);
   const isOauth2 = row.type === "oauth2";
+  const isMetaAds = row.type === "meta_ads";
+  const isInstagram = row.type === "instagram";
   const sharingScope = normalizeSharingScope(cfg.sharingScope);
+  const metaExpired =
+    isMetaAds && cfg.expiresAt ? Date.parse(cfg.expiresAt) <= Date.now() : false;
+  const igExpired =
+    isInstagram && cfg.expiresAt ? Date.parse(cfg.expiresAt) <= Date.now() : false;
+  const igReconnect =
+    Boolean(cfg.reconnectRequired) || igExpired;
   return {
     id: row.id,
     workspaceId: row.workspace_id,
@@ -80,12 +90,23 @@ const formatCredential = (row) => {
           : cfg.connected === undefined
             ? true
             : Boolean(cfg.connected)
-        : true,
+        : isInstagram
+          ? igReconnect
+            ? false
+            : cfg.connected === undefined
+              ? true
+              : Boolean(cfg.connected)
+          : true,
     reconnectRequired: isGoogle
       ? Boolean(cfg.reconnectRequired)
-      : row.type === "meta_ads"
-        ? Boolean(cfg.reconnectRequired) ||
-          (cfg.expiresAt ? Date.parse(cfg.expiresAt) <= Date.now() : false)
+      : isMetaAds
+        ? Boolean(cfg.reconnectRequired) || metaExpired
+        : isInstagram
+          ? igReconnect
+          : undefined,
+    reconnectSoon:
+      isInstagram && cfg.expiresAt && !igReconnect
+        ? Date.parse(cfg.expiresAt) - Date.now() <= 7 * 24 * 60 * 60 * 1000
         : undefined,
     sharing: sharingScope,
     sharingLabel: sharingLabel(sharingScope),
@@ -100,18 +121,34 @@ const formatCredential = (row) => {
     workflowId:
       isGoogle && cfg.workflowId ? String(cfg.workflowId) : undefined,
     metaDisplayName:
-      row.type === "meta_ads" && cfg.metaDisplayName
+      isMetaAds && cfg.metaDisplayName
         ? String(cfg.metaDisplayName)
         : undefined,
     metaUserId:
-      row.type === "meta_ads" && cfg.metaUserId
-        ? String(cfg.metaUserId)
-        : undefined,
+      isMetaAds && cfg.metaUserId ? String(cfg.metaUserId) : undefined,
     expiresAt:
-      row.type === "meta_ads" && cfg.expiresAt ? String(cfg.expiresAt) : undefined,
+      (isMetaAds || isInstagram) && cfg.expiresAt
+        ? String(cfg.expiresAt)
+        : undefined,
     selectedAdAccountId:
-      row.type === "meta_ads" && cfg.selectedAdAccountId
+      isMetaAds && cfg.selectedAdAccountId
         ? String(cfg.selectedAdAccountId)
+        : undefined,
+    instagramUserId:
+      isInstagram && cfg.instagramUserId
+        ? String(cfg.instagramUserId)
+        : undefined,
+    username:
+      isInstagram && cfg.username ? String(cfg.username) : undefined,
+    accountType:
+      isInstagram && cfg.accountType ? String(cfg.accountType) : undefined,
+    profilePictureUrl:
+      isInstagram && cfg.profilePictureUrl
+        ? String(cfg.profilePictureUrl)
+        : undefined,
+    missingPermissions:
+      isInstagram && Array.isArray(cfg.missingPermissions)
+        ? cfg.missingPermissions.map(String)
         : undefined,
   };
 };
@@ -179,6 +216,14 @@ const create = async ({ workspaceId, name, type, secret, config }, authUser) => 
   if (type === "meta_ads") {
     throw new AppError(
       "Use Connect with Meta. Do not paste a Meta access token.",
+      400,
+      "VALIDATION_ERROR"
+    );
+  }
+
+  if (type === "instagram") {
+    throw new AppError(
+      "Use Connect Instagram. Do not paste an Instagram access token.",
       400,
       "VALIDATION_ERROR"
     );
@@ -439,6 +484,32 @@ const getEditorView = async (id, authUser) => {
     };
   }
 
+  if (row.type === "instagram") {
+    const expiresAt = cfg.expiresAt ? Date.parse(cfg.expiresAt) : NaN;
+    return {
+      ...formatted,
+      editor: {
+        hasAccessToken: Boolean(secret.accessToken),
+        instagramUserId: cfg.instagramUserId || "",
+        username: cfg.username || "",
+        accountType: cfg.accountType || "",
+        profilePictureUrl: cfg.profilePictureUrl || "",
+        tokenKind: cfg.tokenKind || "",
+        expiresAt: cfg.expiresAt || null,
+        grantedPermissions: Array.isArray(cfg.grantedPermissions)
+          ? cfg.grantedPermissions
+          : [],
+        missingPermissions: Array.isArray(cfg.missingPermissions)
+          ? cfg.missingPermissions
+          : [],
+        reconnectRequired:
+          Boolean(cfg.reconnectRequired) ||
+          (Number.isFinite(expiresAt) && expiresAt <= Date.now()),
+        sharingScope: normalizeSharingScope(cfg.sharingScope),
+      },
+    };
+  }
+
   if (GOOGLE_CREDENTIAL_TYPES.has(row.type)) {
     const entry = registry.getSupportedPredefined(row.type);
     return {
@@ -558,6 +629,7 @@ module.exports = {
   HTTP_CREDENTIAL_TYPES,
   GOOGLE_CREDENTIAL_TYPES,
   META_CREDENTIAL_TYPES,
+  INSTAGRAM_CREDENTIAL_TYPES,
   formatCredential,
   OAUTH_APP_MODE,
   validateGoogleCreate,

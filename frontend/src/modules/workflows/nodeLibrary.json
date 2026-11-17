@@ -725,6 +725,41 @@
       ]
     },
     {
+      "id": "instagram",
+      "name": "Instagram",
+      "category": "Marketing",
+      "type": "Action",
+      "description": "Read Instagram profile, media, and insights; publish content; list and reply to comments.",
+      "icon": "image",
+      "provider": "Instagram",
+      "available": true,
+      "engineType": "instagram",
+      "aliases": [
+        "instagram profile",
+        "instagram media",
+        "ig media",
+        "instagram posts"
+      ]
+    },
+    {
+      "id": "instagram-mcp-tools",
+      "name": "Instagram MCP Tools",
+      "category": "Marketing",
+      "type": "Action",
+      "description": "Read-only Instagram tools for AI Agent. The Instagram node supplies the account.",
+      "icon": "image",
+      "provider": "Instagram",
+      "available": true,
+      "engineType": "instagramMcpTool",
+      "aliases": [
+        "instagram mcp",
+        "instagram tools",
+        "ig mcp",
+        "instagram insights mcp",
+        "instagram media tools"
+      ]
+    },
+    {
       "id": "meta-ads-mcp-tools",
       "name": "Meta Ads MCP Tools",
       "category": "Marketing",

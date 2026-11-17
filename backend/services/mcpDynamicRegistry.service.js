@@ -5,11 +5,13 @@
  *
  * Google Ads tools are registered from plugins/google-ads-mcp.
  * Meta Ads tools are registered from plugins/meta-ads-mcp.
+ * Instagram tools are registered from plugins/instagram-mcp.
  * GA4 candidates without a real executor stay implemented: false.
  */
 const AppError = require("../utils/AppError");
 const googleAdsPlugin = require("../../plugins/google-ads-mcp/src/index.js");
 const metaAdsPlugin = require("../../plugins/meta-ads-mcp/src/index.js");
+const instagramPlugin = require("../../plugins/instagram-mcp/src/index.js");
 
 const PROVIDERS = Object.freeze({
   google_analytics: {
@@ -31,6 +33,11 @@ const PROVIDERS = Object.freeze({
     displayName: metaAdsPlugin.provider.displayName,
     authType: metaAdsPlugin.provider.authType,
     credentialType: metaAdsPlugin.provider.credentialType,
+  },
+  [instagramPlugin.provider.id]: {
+    displayName: instagramPlugin.provider.displayName,
+    authType: instagramPlugin.provider.authType,
+    credentialType: instagramPlugin.provider.credentialType,
   },
 });
 
@@ -347,6 +354,7 @@ const TOOLS = [
   },
   ...googleAdsPlugin.tools,
   ...metaAdsPlugin.tools,
+  ...instagramPlugin.tools,
 ];
 
 const byKey = new Map();
@@ -430,7 +438,7 @@ function assertKnownProvider(provider) {
   const id = String(provider || "").trim();
   if (!PROVIDERS[id]) {
     throw new AppError(
-      "Unknown provider. Use google_analytics, google_search_console, google_ads, or meta_ads.",
+      "Unknown provider. Use google_analytics, google_search_console, google_ads, meta_ads, or instagram.",
       400,
       "MCP_UNKNOWN_PROVIDER"
     );
@@ -595,9 +603,23 @@ function validateParams(tool, rawParams) {
         errors.push(`${field.title} must be a list.`);
         continue;
       }
-      normalized[field.name] = value.map((entry) =>
-        typeof entry === "string" ? entry : stripSecrets(entry)
-      );
+      const itemEnum = Array.isArray(field.enumValues)
+        ? null
+        : tool.inputSchema?.properties?.[field.name]?.items?.enum;
+      const allowed = Array.isArray(itemEnum) ? new Set(itemEnum) : null;
+      const nextItems = [];
+      let badItem = false;
+      for (const entry of value) {
+        const item = typeof entry === "string" ? entry : stripSecrets(entry);
+        if (allowed && typeof item === "string" && !allowed.has(item)) {
+          errors.push(`${field.title} includes unsupported value "${item}".`);
+          badItem = true;
+          break;
+        }
+        nextItems.push(item);
+      }
+      if (badItem) continue;
+      normalized[field.name] = nextItems;
     }
   }
   if (errors.length) {
@@ -624,6 +646,7 @@ function credentialRequiredMessage(authType) {
   if (authType === "google_ga4") return "A Google Analytics credential is required.";
   if (authType === "google_gsc") return "A Google Search Console credential is required.";
   if (authType === "meta_ads") return "A Meta Ads credential is required.";
+  if (authType === "instagram") return "An Instagram credential is required.";
   return "A credential is required.";
 }
 
@@ -640,6 +663,11 @@ async function defaultExecuteAds(args, deps) {
 async function defaultExecuteMetaAds(args, deps) {
   const ads = require("./workflowMetaAdsMcp.service");
   return ads.executeMetaAdsMcpTool(args, deps);
+}
+
+async function defaultExecuteInstagram(args, deps) {
+  const host = require("./workflowInstagramMcp.service");
+  return host.executeInstagramMcpTool(args, deps);
 }
 
 async function executeTool(input = {}, deps = {}) {
@@ -709,6 +737,31 @@ async function executeTool(input = {}, deps = {}) {
       throw new AppError(
         sanitizeMessage(err?.message),
         400,
+        err?.code || "MCP_EXECUTION_FAILED"
+      );
+    }
+  }
+  if (tool.executor === "instagram_mcp") {
+    const run = deps.executeInstagramMcp || defaultExecuteInstagram;
+    try {
+      const rows = await run(
+        {
+          toolId: tool.id,
+          params,
+          credentialId,
+          workspaceId: input.workspaceId,
+          account: input.account,
+          cred: input.cred,
+          instagramUserId: input.account?.instagramUserId,
+        },
+        deps
+      );
+      return { items: rowsToWorkflowItems(rows) };
+    } catch (err) {
+      if (err instanceof AppError) throw err;
+      throw new AppError(
+        sanitizeMessage(err?.message),
+        err?.statusCode || 400,
         err?.code || "MCP_EXECUTION_FAILED"
       );
     }
@@ -789,6 +842,11 @@ function resolveParamTree(value, context, resolveExpression) {
 }
 
 const ADS_ACCOUNT_PARAM_KEYS = ["credentialId", "customerId", "loginCustomerId"];
+const INSTAGRAM_ACCOUNT_PARAM_KEYS = [
+  "credentialId",
+  "instagramUserId",
+  "accessToken",
+];
 const META_ACCOUNT_PARAM_KEYS = [
   "credentialId",
   "adAccountId",
@@ -826,6 +884,22 @@ function sanitizeMetaAdsMcpNodeData(data) {
   const sourceId = String(next.metaAdsSourceNodeId || "").trim();
   if (sourceId) next.metaAdsSourceNodeId = sourceId;
   else delete next.metaAdsSourceNodeId;
+  return next;
+}
+
+function sanitizeInstagramMcpNodeData(data) {
+  const next = sanitizeDynamicMcpNodeData(data);
+  if (!next || typeof next !== "object" || Array.isArray(next)) return next;
+  delete next.provider;
+  for (const key of INSTAGRAM_ACCOUNT_PARAM_KEYS) delete next[key];
+  if (next.params && typeof next.params === "object" && !Array.isArray(next.params)) {
+    const params = { ...next.params };
+    for (const key of INSTAGRAM_ACCOUNT_PARAM_KEYS) delete params[key];
+    next.params = params;
+  }
+  const sourceId = String(next.instagramSourceNodeId || "").trim();
+  if (sourceId) next.instagramSourceNodeId = sourceId;
+  else delete next.instagramSourceNodeId;
   return next;
 }
 
@@ -900,6 +974,35 @@ async function executeMetaAdsMcpNode(node, context = {}, deps = {}) {
   );
 }
 
+async function executeInstagramMcpNode(node, context = {}, deps = {}) {
+  const { resolveExpression } = require("./workflowNodes.service");
+  const host = require("./workflowInstagramMcp.service");
+  const account = await host.resolveInstagramAccountContext(node, context, {
+    resolveExpression: deps.resolveExpression || resolveExpression,
+    resolveCredentialContext: deps.resolveCredentialContext,
+  });
+  const data = sanitizeInstagramMcpNodeData(node?.data || {});
+  return executeDynamicMcpNode(
+    {
+      ...node,
+      data: {
+        ...data,
+        provider: "instagram",
+        credentialId: account.credentialId,
+        params: { ...(data.params || {}) },
+      },
+    },
+    context,
+    {
+      ...deps,
+      account: {
+        instagramUserId: account.instagramUserId,
+      },
+      cred: account.cred,
+    }
+  );
+}
+
 async function executeDynamicMcpNode(node, context = {}, deps = {}) {
   const { resolveExpression } = require("./workflowNodes.service");
   const data = sanitizeDynamicMcpNodeData(node?.data || {});
@@ -910,6 +1013,7 @@ async function executeDynamicMcpNode(node, context = {}, deps = {}) {
     params,
     credentialId: data.credentialId,
     account: deps.account,
+    cred: deps.cred,
     inputItems: Array.isArray(context.inputItems) ? context.inputItems : [],
     workspaceId: context.workspaceId,
     authUser: context.authUser,
@@ -935,10 +1039,12 @@ module.exports = {
   executeDynamicMcpNode,
   executeGoogleAdsMcpNode,
   executeMetaAdsMcpNode,
+  executeInstagramMcpNode,
   resolveParamTree,
   sanitizeDynamicMcpNodeData,
   sanitizeGoogleAdsMcpNodeData,
   sanitizeMetaAdsMcpNodeData,
+  sanitizeInstagramMcpNodeData,
   stripSecrets,
   isDropdownVisible,
 };

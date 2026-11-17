@@ -292,7 +292,8 @@ const resolveProvenancePolicy = (
     nodeType === "ga4McpTool" ||
     nodeType === "mcpDynamicTool" ||
     nodeType === "googleAdsMcpTool" ||
-    nodeType === "metaAdsMcpTool"
+    nodeType === "metaAdsMcpTool" ||
+    nodeType === "instagramMcpTool"
   ) {
     return "fanOut";
   }
@@ -392,6 +393,7 @@ const applyNodeProvenance = (
         nodeType !== "mcpDynamicTool" &&
         nodeType !== "googleAdsMcpTool" &&
         nodeType !== "metaAdsMcpTool" &&
+        nodeType !== "instagramMcpTool" &&
         !field &&
         inputs.length === outputs.length
       ) {

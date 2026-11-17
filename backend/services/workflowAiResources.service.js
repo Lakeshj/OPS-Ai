@@ -208,6 +208,53 @@ const buildToolDescriptor = (node) => {
       fixedParams,
     };
   }
+  if (type === "instagramMcpTool") {
+    const registry = require("./mcpDynamicRegistry.service");
+    const toolId = String(data.toolId || "").trim();
+    if (!toolId) {
+      throw new AiRuntimeError(
+        "Instagram MCP tool node requires a toolId.",
+        AI_ERROR.TOOL_SCHEMA_INVALID,
+        { nodeId: node.id }
+      );
+    }
+    let catalog;
+    try {
+      catalog = registry.getToolDefinition("instagram", toolId);
+    } catch (err) {
+      throw new AiRuntimeError(
+        err instanceof Error ? err.message : `Unknown Instagram MCP tool: ${toolId}`,
+        AI_ERROR.TOOL_SCHEMA_INVALID,
+        { nodeId: node.id, toolId }
+      );
+    }
+    const name = String(data.toolName || toolId)
+      .trim()
+      .replace(/[^a-zA-Z0-9_-]/g, "_")
+      .slice(0, 64);
+    const fixedParams =
+      data.params && typeof data.params === "object" && !Array.isArray(data.params)
+        ? stripSecrets({ ...data.params })
+        : {};
+    for (const key of ["credentialId", "instagramUserId", "accessToken"]) {
+      delete fixedParams[key];
+    }
+    return {
+      kind: DATA_TYPE.AI_TOOL,
+      nodeId: node.id,
+      name: name || toolId,
+      description:
+        data.description ||
+        catalog.description ||
+        catalog.displayName ||
+        `Instagram MCP tool: ${toolId}`,
+      inputSchema: stripInstagramAccountFieldsFromSchema(catalog.inputSchema),
+      toolKind: "instagram_mcp",
+      igToolId: toolId,
+      instagramSourceNodeId: String(data.instagramSourceNodeId || "").trim() || null,
+      fixedParams,
+    };
+  }
   throw new AiRuntimeError(
     `Unsupported tool provider node type: ${type}`,
     AI_ERROR.PROVIDER_UNSUPPORTED,
@@ -230,6 +277,30 @@ const stripGoogleAdsAccountFieldsFromSchema = (schema) => {
           key !== "credentialId" &&
           key !== "customerId" &&
           key !== "loginCustomerId"
+      )
+    : [];
+  return {
+    ...schema,
+    type: "object",
+    properties,
+    required,
+  };
+};
+
+const stripInstagramAccountFieldsFromSchema = (schema) => {
+  if (!schema || typeof schema !== "object" || Array.isArray(schema)) {
+    return { type: "object", properties: {} };
+  }
+  const properties = { ...(schema.properties || {}) };
+  delete properties.credentialId;
+  delete properties.instagramUserId;
+  delete properties.accessToken;
+  const required = Array.isArray(schema.required)
+    ? schema.required.filter(
+        (key) =>
+          key !== "credentialId" &&
+          key !== "instagramUserId" &&
+          key !== "accessToken"
       )
     : [];
   return {
@@ -843,6 +914,61 @@ const attachToolExecutor = (descriptor) => {
               ? item.json
               : item
           ),
+        });
+        const text = JSON.stringify(payload);
+        return text.length > MAX_TOOL_RESULT_CHARS
+          ? `${text.slice(0, MAX_TOOL_RESULT_CHARS)}\n…[truncated]`
+          : text;
+      },
+    };
+  }
+  if (descriptor.toolKind === "instagram_mcp") {
+    const registry = require("./mcpDynamicRegistry.service");
+    return {
+      ...descriptor,
+      async execute(args, ctx) {
+        const safeArgs =
+          args && typeof args === "object" && !Array.isArray(args)
+            ? { ...args }
+            : {};
+        delete safeArgs.credentialId;
+        delete safeArgs.instagramUserId;
+        delete safeArgs.accessToken;
+        delete safeArgs.refreshToken;
+        const result = await registry.executeInstagramMcpNode(
+          {
+            id: descriptor.nodeId,
+            type: "instagramMcpTool",
+            data: {
+              toolId: descriptor.igToolId,
+              ...(descriptor.instagramSourceNodeId
+                ? { instagramSourceNodeId: descriptor.instagramSourceNodeId }
+                : {}),
+              params: {
+                ...(descriptor.fixedParams || {}),
+                ...safeArgs,
+              },
+            },
+          },
+          {
+            graph: ctx?.graph || null,
+            workspaceId: ctx?.workspaceId,
+            authUser: ctx?.authUser,
+            inputItems: [],
+          }
+        );
+        const items = Array.isArray(result?.items) ? result.items : [];
+        const data = items.map((item) =>
+          item && typeof item === "object" && item.json != null ? item.json : item
+        );
+        const payload = stripSecrets({
+          ok: true,
+          provider: "instagram",
+          tool: descriptor.igToolId,
+          instagramUserId:
+            data[0]?.instagramUserId || data[0]?._meta?.instagramUserId || "",
+          itemCount: items.length,
+          data,
         });
         const text = JSON.stringify(payload);
         return text.length > MAX_TOOL_RESULT_CHARS

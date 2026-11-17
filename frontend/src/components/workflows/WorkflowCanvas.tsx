@@ -233,12 +233,14 @@ const nodeTypes = {
   mcpDynamicTool: WorkflowNode,
   googleAdsMcpTool: WorkflowNode,
   metaAdsMcpTool: WorkflowNode,
+  instagramMcpTool: WorkflowNode,
   respondToWebhook: WorkflowNode,
   googleSearchConsole: WorkflowNode,
   gscMcp: WorkflowNode,
   googleAnalytics: WorkflowNode,
   googleAds: WorkflowNode,
   metaAds: WorkflowNode,
+  instagram: WorkflowNode,
   gmail: WorkflowNode,
   gmailTrigger: WorkflowNode,
   googleSheets: WorkflowNode,
@@ -683,6 +685,38 @@ const defaultDataForType = (type: WorkflowNodeType): WorkflowNodeData => {
         returnAll: false,
         limit: 100,
       };
+    case "instagram":
+      return {
+        label: "Instagram",
+        nodeType: "instagram",
+        credentialId: "",
+        resource: "account",
+        operation: "get_profile",
+        returnAll: false,
+        limit: 50,
+        mediaId: "",
+        mediaType: "",
+        insightsPreset: "overview",
+        mediaInsightsPreset: "overview",
+        metrics: [],
+        period: "day",
+        breakdown: "age",
+        dateRange: "last7days",
+        since: "",
+        until: "",
+        imageUrl: "",
+        videoUrl: "",
+        mediaUrl: "",
+        coverUrl: "",
+        caption: "",
+        altText: "",
+        publishKey: "",
+        shareToFeed: true,
+        storyMediaType: "IMAGE",
+        carouselItems: [],
+        commentId: "",
+        message: "",
+      };
     case "mcpDynamicTool":
       return {
         label: "Dynamic MCP Tool",
@@ -703,6 +737,13 @@ const defaultDataForType = (type: WorkflowNodeType): WorkflowNodeData => {
       return {
         label: "Meta Ads MCP Tools",
         nodeType: "metaAdsMcpTool",
+        toolId: "",
+        params: {},
+      };
+    case "instagramMcpTool":
+      return {
+        label: "Instagram MCP Tools",
+        nodeType: "instagramMcpTool",
         toolId: "",
         params: {},
       };

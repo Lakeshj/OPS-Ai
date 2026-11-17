@@ -36,6 +36,8 @@ import {
   Workflow,
   ArrowUpDown,
   LineChart,
+  Camera,
+  Image,
   Table2,
   Wand2,
 } from "lucide-react";
@@ -46,6 +48,8 @@ export type NodeVisualBucket =
   | "triggers_flow"
   | "core_data"
   | "files_google_email"
+  | "social_mcp"
+  | "marketing"
   | "ai";
 
 export type NodeVisualCategory = {
@@ -82,6 +86,15 @@ const FILES_GOOGLE_EMAIL = new Set<string>([
   "gscMcp",
   "googleAdsMcpTool",
 ]);
+
+/**
+ * Instagram MCP Tools — amber MCP family (same tokens as Google Ads MCP),
+ * but not the FILES / GOOGLE / EMAIL taxonomy label.
+ */
+const SOCIAL_MCP = new Set<string>(["instagramMcpTool"]);
+
+/** Native Instagram (and siblings) — strong contrast on dark canvas. */
+const MARKETING = new Set<string>(["instagram"]);
 
 const AI = new Set<string>([
   "ai",
@@ -130,6 +143,20 @@ const BUCKET_STYLES: Record<NodeVisualBucket, Omit<NodeVisualCategory, "bucket" 
     tagClass: "text-amber-400",
     iconWrapClass: "bg-amber-500/15 text-amber-400",
   },
+  social_mcp: {
+    label: "SOCIAL / MCP",
+    borderClass: "border-amber-500/70",
+    glowClass: "shadow-[0_0_18px_rgba(245,158,11,0.28)]",
+    tagClass: "text-amber-400",
+    iconWrapClass: "bg-amber-500/15 text-amber-400",
+  },
+  marketing: {
+    label: "MARKETING",
+    borderClass: "border-rose-500/80",
+    glowClass: "shadow-[0_0_20px_rgba(244,63,94,0.38)]",
+    tagClass: "text-rose-300",
+    iconWrapClass: "bg-rose-500/25 text-rose-200",
+  },
   ai: {
     label: "AI",
     borderClass: "border-violet-500/70",
@@ -142,6 +169,8 @@ const BUCKET_STYLES: Record<NodeVisualBucket, Omit<NodeVisualCategory, "bucket" 
 export function getNodeVisualCategory(engineType: string): NodeVisualCategory {
   let bucket: NodeVisualBucket = "core_data";
   if (TRIGGERS_FLOW.has(engineType)) bucket = "triggers_flow";
+  else if (MARKETING.has(engineType)) bucket = "marketing";
+  else if (SOCIAL_MCP.has(engineType)) bucket = "social_mcp";
   else if (FILES_GOOGLE_EMAIL.has(engineType)) bucket = "files_google_email";
   else if (AI.has(engineType)) bucket = "ai";
 
@@ -185,6 +214,7 @@ const ICON_BY_TYPE: Record<string, LucideIcon> = {
   googleAnalytics: LineChart,
   googleAds: BarChart3,
   metaAds: BarChart3,
+  instagram: Camera,
   googleSheets: Sheet,
   gmail: Mail,
   email: Mail,
@@ -201,6 +231,7 @@ const ICON_BY_TYPE: Record<string, LucideIcon> = {
   mcpDynamicTool: Layers,
   googleAdsMcpTool: BarChart3,
   metaAdsMcpTool: BarChart3,
+  instagramMcpTool: BarChart3,
   integration: Circle,
   migrationUnsupported: AlertCircle,
 };
@@ -237,6 +268,7 @@ const FALLBACK_BLURBS: Record<string, string> = {
   googleAnalytics: "Pull Analytics reports",
   googleAds: "Run a read-only Ads report",
   metaAds: "Run a read-only Meta Ads report",
+  instagram: "Read, publish, and reply to Instagram content",
   googleSheets: "Read or write Sheets",
   gmail: "Send or read Gmail",
   email: "Send an email",
@@ -252,6 +284,7 @@ const FALLBACK_BLURBS: Record<string, string> = {
   mcpDynamicTool: "Run a read-only registry tool",
   googleAdsMcpTool: "Read-only Google Ads MCP tools",
   metaAdsMcpTool: "Read-only Meta Ads MCP tools",
+  instagramMcpTool: "Read-only Instagram MCP tools",
 };
 
 const libraryByEngine = (() => {

@@ -52,12 +52,14 @@ export type WorkflowNodeType =
   | "mcpDynamicTool"
   | "googleAdsMcpTool"
   | "metaAdsMcpTool"
+  | "instagramMcpTool"
   | "respondToWebhook"
   | "googleSearchConsole"
   | "gscMcp"
   | "googleAnalytics"
   | "googleAds"
   | "metaAds"
+  | "instagram"
   | "gmail"
   | "gmailTrigger"
   | "googleSheets"
@@ -226,7 +228,8 @@ export type WorkflowCredentialType =
   | "google_sheets"
   | "google_ads"
   | "oauth2"
-  | "meta_ads";
+  | "meta_ads"
+  | "instagram";
 
 export interface WorkflowCredential {
   id: string;
@@ -247,7 +250,13 @@ export interface WorkflowCredential {
   metaUserId?: string;
   expiresAt?: string;
   reconnectRequired?: boolean;
+  reconnectSoon?: boolean;
   selectedAdAccountId?: string;
+  instagramUserId?: string;
+  username?: string;
+  accountType?: string;
+  profilePictureUrl?: string;
+  missingPermissions?: string[];
 }
 
 export type WorkflowCredentialSecret = Record<string, string>;
@@ -341,6 +350,14 @@ export const CREDENTIAL_TYPE_FIELDS: Record<
     connectAction: "Connect with Meta",
     fields: [],
   },
+  instagram: {
+    label: "Instagram",
+    accountLabel: "Instagram Account",
+    connectAction: "Connect Instagram",
+    connectAnotherAction: "Connect another Instagram account",
+    fields: [],
+    oauth: true,
+  },
 };
 
 export type WorkflowOperator =
@@ -404,8 +421,12 @@ export interface WorkflowNodeData {
   params?: Record<string, unknown>;
   /** Google Ads MCP Tools — existing googleAds node that supplies account context */
   googleAdsSourceNodeId?: string;
+  /** Instagram MCP Tools — existing instagram node that supplies account context */
+  instagramSourceNodeId?: string;
   /** Meta Ads MCP Tools — existing metaAds node that supplies account context */
   metaAdsSourceNodeId?: string;
+  /** Never persisted on MCP nodes — stripped on save/emit */
+  accessToken?: string;
   /** HTTP */
   url?: string;
   method?: string;
@@ -458,9 +479,44 @@ export interface WorkflowNodeData {
     | "max"
     | "concat"
     | "list"
-    | "runReport";
-  /** Google Ads / Meta Ads report */
+    | "runReport"
+    | "get_profile"
+    | "list_media"
+    | "get_media"
+    | "account_insights"
+    | "media_insights"
+    | "publish_image"
+    | "publish_carousel"
+    | "publish_reel"
+    | "publish_story"
+    | "list_comments"
+    | "list_replies"
+    | "reply_comment";
+  /** Google Ads / Meta Ads / Instagram */
   resource?: string;
+  mediaId?: string;
+  commentId?: string;
+  message?: string;
+  replyMessage?: string;
+  mediaType?: string;
+  insightsPreset?: string;
+  mediaInsightsPreset?: string;
+  metrics?: string[];
+  period?: string;
+  breakdown?: string;
+  metricType?: string;
+  since?: string;
+  until?: string;
+  imageUrl?: string;
+  videoUrl?: string;
+  mediaUrl?: string;
+  coverUrl?: string;
+  caption?: string;
+  altText?: string;
+  publishKey?: string;
+  shareToFeed?: boolean;
+  storyMediaType?: string;
+  carouselItems?: unknown;
   reportType?: string;
   customerId?: string;
   loginCustomerId?: string;

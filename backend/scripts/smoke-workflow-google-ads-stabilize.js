@@ -17,6 +17,7 @@ const REQUIRED_TYPES = [
   "oauth2",
   "google_ads",
   "meta_ads",
+  "instagram",
 ];
 
 const parseEnumValues = (sql) => {
@@ -35,9 +36,10 @@ const registerGoogleAdsStabilizeTests = ({ check, section, assert: a }) => {
   const migrationsDir = path.join(root, "migrations");
   const read = (rel) => fs.readFileSync(path.join(root, rel), "utf8");
 
-  check("STAB-1/2 migrations end with google_ads + meta_ads", () => {
+  check("STAB-1/2 migrations end with google_ads + meta_ads + instagram", () => {
     const files = fs.readdirSync(migrationsDir).filter((name) => name.endsWith(".sql")).sort();
     assertX.ok(files.includes("027_workflow_credentials_ads_types.sql"));
+    assertX.ok(files.includes("028_instagram_credential.sql"));
     let current = [];
     for (const file of files) {
       const next = parseEnumValues(fs.readFileSync(path.join(migrationsDir, file), "utf8"));
@@ -46,6 +48,7 @@ const registerGoogleAdsStabilizeTests = ({ check, section, assert: a }) => {
     assertX.deepEqual(current, REQUIRED_TYPES);
     assertX.ok(current.includes("google_ads"));
     assertX.ok(current.includes("meta_ads"));
+    assertX.ok(current.includes("instagram"));
   });
 
   check("STAB-3 existing credential types remain valid", () => {

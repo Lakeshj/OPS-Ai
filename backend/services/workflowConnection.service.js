@@ -194,10 +194,18 @@ const NODE_PORT_CONTRACTS = {
     ],
   },
   metaAdsMcpTool: { inputs: [mainIn()], outputs: [mainOut()] },
+  instagramMcpTool: {
+    inputs: [mainIn()],
+    outputs: [
+      mainOut(),
+      auxOut("tool", DATA_TYPE.AI_TOOL, "Tool"),
+    ],
+  },
   gscMcp: { inputs: [mainIn()], outputs: [mainOut()] },
   googleAnalytics: { inputs: [mainIn()], outputs: [mainOut()] },
   googleAds: { inputs: [mainIn()], outputs: [mainOut()] },
   metaAds: { inputs: [mainIn()], outputs: [mainOut()] },
+  instagram: { inputs: [mainIn()], outputs: [mainOut()] },
   gmail: { inputs: [mainIn()], outputs: [mainOut()] },
   gmailTrigger: { inputs: [], outputs: [mainOut()] },
   googleSheets: { inputs: [mainIn()], outputs: [mainOut()] },

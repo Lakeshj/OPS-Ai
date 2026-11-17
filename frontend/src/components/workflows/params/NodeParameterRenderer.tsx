@@ -156,6 +156,19 @@ function renderSpecial(
           workflowNodes={context.workflowNodes}
         />
       );
+    case "instagramMcpTool":
+      return (
+        <DynamicMcpToolField
+          key={param.name}
+          lockedProvider="instagram"
+          values={values}
+          onChange={onChange}
+          workspaceId={context.workspaceId}
+          workflowId={context.workflowId}
+          previewContext={context.previewContext}
+          workflowNodes={context.workflowNodes}
+        />
+      );
     case "metaAdAccount":
       return (
         <MetaAdAccountField

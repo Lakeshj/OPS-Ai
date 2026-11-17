@@ -56,6 +56,7 @@ Not n8n: `$json`, `$('Node')`. HTTP Tool may use `{{tool.<arg>}}` **inside that 
 | GA4 | `googleAnalytics` | `ga4-mcp` intelligence | Curated metrics/dims; MCP processes upstream rows. |
 | Google Ads | `googleAds` | `googleAdsMcpTool` | Read-only reports/GAQL. **Next audit target.** |
 | Meta Ads | `metaAds` (4 Insights reports) | `metaAdsMcpTool` Common + Performance | Graph v26.0, `ads_read`, GET-only. MCP inherits `credentialId`+`adAccountId` from `metaAds`. Dates in account timezone. Action arrays stay `array<object>`. |
+| Instagram | `instagram` (M3–M6) **V1 code frozen (M8)** | `instagramMcpTool` READ (M7) | Instagram Login `graph.instagram.com` v27.0. One platform app (`INSTAGRAM_APP_ID`/`SECRET`); many workspace OAuth credentials. Native: profile/media/insights/publish/comments. MCP read-only. No DMs/webhooks/moderation/MCP writes/ads. Setup: `docs/instagram-platform-setup.md`. Live OAuth requires server env. Separate from `meta_ads`. |
 
 Inspector Table header sort is **display-only** and does not change these canonical orders.
 

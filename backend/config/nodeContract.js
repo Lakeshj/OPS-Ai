@@ -112,6 +112,12 @@ const NODE_ENGINE_CONTRACTS = {
     mergeInputs: 1,
     isSideEffecting: true,
   },
+  instagramMcpTool: {
+    cardinality: "1-to-N",
+    pairedItemPolicy: "fanOut",
+    mergeInputs: 1,
+    isSideEffecting: true,
+  },
   respondToWebhook: { cardinality: "N-to-N", pairedItemPolicy: "identity1to1", mergeInputs: 1, isSideEffecting: true },
   googleSearchConsole: { cardinality: "1-to-N", pairedItemPolicy: "fanOut", mergeInputs: 1, isSideEffecting: true },
   gscMcp: { cardinality: "1-to-N", pairedItemPolicy: "fanOut", mergeInputs: 1, isSideEffecting: true },

@@ -21,6 +21,10 @@ import {
   type MetaAdsSourceNodeRef,
 } from "@/modules/workflows/metaAdsMcpSource";
 import {
+  instagramSourceFieldState,
+  type InstagramSourceNodeRef,
+} from "@/modules/workflows/instagramMcpSource";
+import {
   fieldsFromInputSchema,
   type McpDynamicProvider,
   type McpDynamicTool,
@@ -38,7 +42,9 @@ type Props = {
   previewContext?: ExpressionFieldContext;
   /** When set, the provider dropdown is omitted and tools load for this provider. */
   lockedProvider?: string;
-  workflowNodes?: Array<GoogleAdsSourceNodeRef | MetaAdsSourceNodeRef>;
+  workflowNodes?: Array<
+    GoogleAdsSourceNodeRef | MetaAdsSourceNodeRef | InstagramSourceNodeRef
+  >;
 };
 
 const GOOGLE_ACCOUNT_PARAM_NAMES = new Set([
@@ -47,9 +53,15 @@ const GOOGLE_ACCOUNT_PARAM_NAMES = new Set([
   "loginCustomerId",
 ]);
 const META_ACCOUNT_PARAM_NAMES = new Set(["credentialId", "adAccountId"]);
+const INSTAGRAM_ACCOUNT_PARAM_NAMES = new Set([
+  "credentialId",
+  "instagramUserId",
+  "accessToken",
+]);
 const ACCOUNT_PARAM_NAMES = new Set([
   ...GOOGLE_ACCOUNT_PARAM_NAMES,
   ...META_ACCOUNT_PARAM_NAMES,
+  ...INSTAGRAM_ACCOUNT_PARAM_NAMES,
 ]);
 
 function toolOptionLabel(tool: McpDynamicTool) {
@@ -279,6 +291,7 @@ export function DynamicMcpToolField({
   const params = asParams(values.params);
   const isMetaLocked = lockedProvider === "meta_ads";
   const isGoogleLocked = lockedProvider === "google_ads";
+  const isInstagramLocked = lockedProvider === "instagram";
 
   useEffect(() => {
     let cancelled = false;
@@ -351,7 +364,9 @@ export function DynamicMcpToolField({
     ? META_ACCOUNT_PARAM_NAMES
     : isGoogleLocked
       ? GOOGLE_ACCOUNT_PARAM_NAMES
-      : ACCOUNT_PARAM_NAMES;
+      : isInstagramLocked
+        ? INSTAGRAM_ACCOUNT_PARAM_NAMES
+        : ACCOUNT_PARAM_NAMES;
   const fields = fieldsFromInputSchema(detail?.inputSchema).filter((field) =>
     lockedProvider ? !hiddenAccountParams.has(field.name) : true
   );
@@ -367,11 +382,22 @@ export function DynamicMcpToolField({
           workflowNodes,
           String(values.metaAdsSourceNodeId || "")
         )
-      : null;
-  const sourceLabel = isMetaLocked ? "Meta Ads Source" : "Google Ads Source";
-  const sourcePlaceholder = isMetaLocked
-    ? "Select a Meta Ads node"
-    : "Select a Google Ads node";
+      : isInstagramLocked
+        ? instagramSourceFieldState(
+            workflowNodes,
+            String(values.instagramSourceNodeId || "")
+          )
+        : null;
+  const sourceLabel = isInstagramLocked
+    ? "Instagram Source"
+    : isMetaLocked
+      ? "Meta Ads Source"
+      : "Google Ads Source";
+  const sourcePlaceholder = isInstagramLocked
+    ? "Select an Instagram node"
+    : isMetaLocked
+      ? "Select a Meta Ads node"
+      : "Select a Google Ads node";
   const selectableTools =
     detail && !tools.some((tool) => tool.id === detail.id) ? [...tools, detail] : tools;
   const groupTools = Boolean(lockedProvider);
@@ -389,12 +415,16 @@ export function DynamicMcpToolField({
     delete next.customerId;
     delete next.loginCustomerId;
     delete next.adAccountId;
+    delete next.instagramUserId;
+    delete next.accessToken;
     if (next.params && typeof next.params === "object" && !Array.isArray(next.params)) {
       const nextParams = { ...next.params };
       delete nextParams.customerId;
       delete nextParams.loginCustomerId;
       delete nextParams.credentialId;
       delete nextParams.adAccountId;
+      delete nextParams.instagramUserId;
+      delete nextParams.accessToken;
       next.params = nextParams;
     }
     onChange(next);
@@ -429,16 +459,20 @@ export function DynamicMcpToolField({
           <Select
             value={
               String(
-                isMetaLocked
-                  ? values.metaAdsSourceNodeId || ""
-                  : values.googleAdsSourceNodeId || ""
+                isInstagramLocked
+                  ? values.instagramSourceNodeId || ""
+                  : isMetaLocked
+                    ? values.metaAdsSourceNodeId || ""
+                    : values.googleAdsSourceNodeId || ""
               ) || undefined
             }
             onValueChange={(sourceNodeId) =>
               emit(
-                isMetaLocked
-                  ? { ...values, metaAdsSourceNodeId: sourceNodeId }
-                  : { ...values, googleAdsSourceNodeId: sourceNodeId }
+                isInstagramLocked
+                  ? { ...values, instagramSourceNodeId: sourceNodeId }
+                  : isMetaLocked
+                    ? { ...values, metaAdsSourceNodeId: sourceNodeId }
+                    : { ...values, googleAdsSourceNodeId: sourceNodeId }
               )
             }
           >

@@ -46,6 +46,10 @@ const validateCredential = (req) => {
     errors.push("Use Connect with Meta. Do not paste a Meta access token.");
     return errors;
   }
+  if (type === "instagram") {
+    errors.push("Use Connect Instagram. Do not paste an Instagram access token.");
+    return errors;
+  }
 
   if (googleTypes.has(type)) {
     if (!secret || typeof secret !== "object") {

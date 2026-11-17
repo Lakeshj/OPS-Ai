@@ -200,6 +200,70 @@ const metaOAuthCallback = asyncHandler(async (req, res) => {
   }
 });
 
+const startInstagramOAuth = asyncHandler(async (req, res) => {
+  const instagramOAuth = require("../../services/instagramOAuth.service");
+  res.json(
+    await instagramOAuth.startInstagramOAuth(
+      {
+        workspaceId: req.body?.workspaceId,
+        name: req.body?.name,
+        credentialId: req.body?.credentialId,
+      },
+      req.user
+    )
+  );
+});
+
+const getInstagramOAuthStatus = asyncHandler(async (_req, res) => {
+  const instagramOAuth = require("../../services/instagramOAuth.service");
+  res.json(instagramOAuth.getInstagramIntegrationStatus());
+});
+
+const instagramOAuthCallback = asyncHandler(async (req, res) => {
+  const instagramOAuth = require("../../services/instagramOAuth.service");
+  try {
+    if (req.query.error) {
+      instagramOAuth.applyOAuthPopupResponseHeaders(res);
+      res.status(400).send(
+        instagramOAuth.oauthCallbackHtml({
+          ok: false,
+          error: "Instagram authorization was denied.",
+        })
+      );
+      return;
+    }
+    const result = await instagramOAuth.finishInstagramOAuth(
+      req.query.code,
+      req.query.state
+    );
+    instagramOAuth.applyOAuthPopupResponseHeaders(res);
+    res.send(
+      instagramOAuth.oauthCallbackHtml({
+        ok: true,
+        credentialId: result.credentialId,
+      })
+    );
+  } catch (err) {
+    instagramOAuth.applyOAuthPopupResponseHeaders(res);
+    res.status(400).send(
+      instagramOAuth.oauthCallbackHtml({
+        ok: false,
+        error: instagramOAuth.sanitizeCallbackError(err),
+      })
+    );
+  }
+});
+
+const listInstagramAccounts = asyncHandler(async (req, res) => {
+  const instagramOAuth = require("../../services/instagramOAuth.service");
+  res.json(
+    await instagramOAuth.listAccessibleInstagramAccounts(
+      req.query.credentialId,
+      req.user
+    )
+  );
+});
+
 const listMetaAdAccounts = asyncHandler(async (req, res) => {
   const metaOAuth = require("../../services/metaOAuth.service");
   res.json(
@@ -291,6 +355,16 @@ const testCredential = asyncHandler(async (req, res) => {
   if (rows[0].type === "meta_ads") {
     const metaOAuth = require("../../services/metaOAuth.service");
     res.json(await metaOAuth.testMetaCredential(req.params.credentialId, req.user));
+    return;
+  }
+  if (rows[0].type === "instagram") {
+    const instagramOAuth = require("../../services/instagramOAuth.service");
+    res.json(
+      await instagramOAuth.testInstagramCredential(
+        req.params.credentialId,
+        req.user
+      )
+    );
     return;
   }
   if (googleOAuth.GOOGLE_TYPES.has(rows[0].type)) {
@@ -942,6 +1016,10 @@ module.exports = {
   startGoogleOAuth,
   startMetaOAuth,
   metaOAuthCallback,
+  startInstagramOAuth,
+  getInstagramOAuthStatus,
+  instagramOAuthCallback,
+  listInstagramAccounts,
   listMetaAdAccounts,
   selectMetaAdAccount,
   listConnectionTypes,

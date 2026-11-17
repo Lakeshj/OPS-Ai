@@ -31,6 +31,15 @@ import {
   type GoogleCredentialSetupMode,
 } from "./GoogleCredentialModal";
 import { MetaCredentialPanel } from "./MetaCredentialPanel";
+import { InstagramCredentialPanel } from "./InstagramCredentialPanel";
+import { startInstagramOAuthPopup } from "@/modules/workflows/instagramOAuthPopup";
+import {
+  formatInstagramPlatformConfigError,
+  isInstagramFirstConnectState,
+  isInstagramPlatformConfigError,
+  shouldShowInstagramCredentialDropdown,
+} from "@/modules/workflows/instagramCredentialUx";
+import { ApiError } from "@/modules/shared/apiClient";
 
 type Props = {
   workspaceId?: string;
@@ -94,6 +103,18 @@ export function CredentialPicker({
     Boolean(allowedTypes?.length) &&
     allowedTypes!.length === 1 &&
     allowedTypes![0] === "meta_ads";
+  const instagramOnly =
+    Boolean(allowedTypes?.length) &&
+    allowedTypes!.length === 1 &&
+    allowedTypes![0] === "instagram";
+
+  /** One Instagram credential → select it automatically (picker pattern). */
+  useEffect(() => {
+    if (!instagramOnly || value) return;
+    const ig = credentials.filter((c) => c.type === "instagram");
+    if (ig.length === 1) onChange(ig[0].id);
+  }, [instagramOnly, value, credentials, onChange]);
+
   const googleProduct =
     googleOnly && allowedTypes!.length === 1 ? allowedTypes![0] : null;
   const nativeAuthPolicy = getGoogleNativeAuthPolicy(googleProduct);
@@ -324,16 +345,79 @@ export function CredentialPicker({
     label ||
     (metaOnly
       ? "Meta Ads Account"
-      : googleMeta?.accountLabel
-        ? googleMeta.accountLabel
-        : googleOnly
-          ? "Google Account"
-          : "Authentication");
+      : instagramOnly
+        ? CREDENTIAL_TYPE_FIELDS.instagram.accountLabel || "Instagram Account"
+        : googleMeta?.accountLabel
+          ? googleMeta.accountLabel
+          : googleOnly
+            ? "Google Account"
+            : "Authentication");
   const addHttpLabel =
     visibleTypes.length > 0 &&
     visibleTypes.every((t) => t === "api_key_header" || t === "query_param")
       ? "Add API key"
       : "Add connection";
+  const instagramConnectAnother =
+    CREDENTIAL_TYPE_FIELDS.instagram.connectAnotherAction ||
+    "Connect another Instagram account";
+  const instagramCredentialCount = listed.filter(
+    (c) => c.type === "instagram"
+  ).length;
+  const showInstagramDropdown =
+    instagramOnly &&
+    shouldShowInstagramCredentialDropdown(instagramCredentialCount);
+  const instagramFirstConnect =
+    instagramOnly && isInstagramFirstConnectState(instagramCredentialCount);
+
+  /**
+   * Connect other account — start a NEW Instagram OAuth transaction immediately.
+   * Must not open the credential dropdown or require selecting an existing account.
+   */
+  const connectOtherInstagramAccount = async () => {
+    if (!workspaceId) {
+      toast.error("Open this workflow in a workspace to connect Instagram.");
+      return;
+    }
+    const previousId = value || "";
+    setConnecting(true);
+    try {
+      const result = await startInstagramOAuthPopup({
+        workspaceId,
+        name: "Instagram",
+        // Never pass credentialId — additive new credential only.
+      });
+      if (!result.ok) {
+        // Preserve the previously selected credential on cancel/error.
+        if (previousId && value !== previousId) onChange(previousId);
+        toast.error(result.error);
+        return;
+      }
+      reload();
+      onChange(result.credentialId);
+      toast.success("Instagram connected");
+    } catch (err) {
+      if (previousId && value !== previousId) onChange(previousId);
+      let missingKeys: string[] = [];
+      try {
+        const status = await workflowCredentialsApi.getInstagramOAuthStatus();
+        missingKeys = Array.isArray(status.missingConfigKeys)
+          ? status.missingConfigKeys.map(String)
+          : [];
+      } catch {
+        // ignore status fetch failure
+      }
+      const msg = isInstagramPlatformConfigError(err)
+        ? formatInstagramPlatformConfigError(missingKeys)
+        : err instanceof ApiError
+          ? err.message
+          : err instanceof Error
+            ? err.message
+            : "Instagram connect failed";
+      toast.error(msg);
+    } finally {
+      setConnecting(false);
+    }
+  };
 
   return (
     <div className="space-y-2 rounded-md border p-2.5">
@@ -348,30 +432,57 @@ export function CredentialPicker({
               ? selected.name
               : "No Gmail connected on this node yet")}
         </div>
-      ) : (
-        <Select
-          value={value || "none"}
-          onValueChange={(v) => {
-            onChange(v === "none" ? "" : v);
-          }}
+      ) : instagramFirstConnect ? (
+        <p
+          className="text-[11px] text-muted-foreground"
+          data-instagram-credential-dropdown="hidden"
         >
-          <SelectTrigger>
-            <SelectValue placeholder={emptySelectLabel} />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="none">{emptySelectLabel}</SelectItem>
-            {listed.map((c) => (
-              <SelectItem key={c.id} value={c.id}>
-                {c.accountEmail
-                  ? `${c.name} (${c.accountEmail})`
-                  : c.connected === false
-                    ? `${c.name} (not connected)`
-                    : c.name}
+          No Instagram account connected yet. Use Connect Instagram to authorize
+          one — the account list appears after the first connection.
+        </p>
+      ) : showInstagramDropdown || !instagramOnly ? (
+        <div
+          data-instagram-credential-dropdown={
+            instagramOnly ? "selection-only" : "generic"
+          }
+        >
+          <Select
+            value={value || "none"}
+            onValueChange={(v) => {
+              // Selection-only: never starts OAuth.
+              onChange(v === "none" ? "" : v);
+            }}
+          >
+            <SelectTrigger>
+              <SelectValue
+                placeholder={
+                  instagramOnly
+                    ? "Select an already-connected Instagram account"
+                    : emptySelectLabel
+                }
+              />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="none">
+                {instagramOnly
+                  ? "Select an already-connected Instagram account"
+                  : emptySelectLabel}
               </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      )}
+              {listed.map((c) => (
+                <SelectItem key={c.id} value={c.id}>
+                  {c.accountEmail
+                    ? `${c.name} (${c.accountEmail})`
+                    : c.username
+                      ? `${c.name} (@${c.username})`
+                      : c.connected === false
+                        ? `${c.name} (not connected)`
+                        : c.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      ) : null}
 
       {googleOnly && googleProduct && showGoogleNativeConnect ? (
         <div className="space-y-2">
@@ -484,7 +595,7 @@ export function CredentialPicker({
         </div>
       ) : null}
 
-      {!googleOnly && !metaOnly && !adding ? (
+      {!googleOnly && !metaOnly && !instagramOnly && !adding ? (
         <Button
           type="button"
           size="sm"
@@ -534,6 +645,18 @@ export function CredentialPicker({
                 setAdding(false);
               }}
             />
+          ) : type === "instagram" ? (
+            <InstagramCredentialPanel
+              workspaceId={workspaceId}
+              connectName={name.trim() || undefined}
+              forceNew
+              onConnected={(id) => {
+                reload();
+                onChange(id);
+                setAdding(false);
+                setName("");
+              }}
+            />
           ) : (
             CREDENTIAL_TYPE_FIELDS[type].fields.map((field) => (
             <div key={field.key}>
@@ -551,7 +674,7 @@ export function CredentialPicker({
             </div>
             ))
           )}
-          {type === "meta_ads" ? (
+          {type === "meta_ads" || type === "instagram" ? (
             <Button
               type="button"
               size="sm"
@@ -592,6 +715,32 @@ export function CredentialPicker({
             onChange(id);
           }}
         />
+      ) : null}
+
+      {!adding && (instagramOnly || selected?.type === "instagram") ? (
+        <div className="space-y-2">
+          <InstagramCredentialPanel
+            workspaceId={workspaceId}
+            credential={selected}
+            forceNew={instagramFirstConnect || !selected}
+            onConnected={(id) => {
+              reload();
+              onChange(id);
+            }}
+          />
+          {instagramOnly && instagramCredentialCount > 0 ? (
+            <Button
+              type="button"
+              size="sm"
+              variant="ghost"
+              disabled={connecting}
+              data-instagram-connect-other="true"
+              onClick={() => void connectOtherInstagramAccount()}
+            >
+              {connecting ? "Connecting…" : instagramConnectAnother}
+            </Button>
+          ) : null}
+        </div>
       ) : null}
 
       {googleProduct ? (
