@@ -449,8 +449,13 @@ async function main() {
     const meta = require("../services/workflowMetaAds.service");
     assert.equal(typeof meta.executeMetaAdsNode, "function");
     const oauthSrc = read("backend/services/instagramOAuth.service.js");
-    assert.equal(oauthSrc.includes("ads_read"), false);
+    // Instagram OAuth must not request Meta Ads scopes; debug_token may report
+    // token_has_ads_read as a Unified Login access-dependency flag only.
+    assert.equal(/\bads_read\b/.test(oauthSrc), false);
     assert.equal(oauthSrc.includes("meta_ads"), false);
+    const scopes = require("../config/instagramGraph").OAUTH_SCOPES || [];
+    assert.equal(scopes.includes("ads_read"), false);
+    assert.equal(scopes.includes("ads_management"), false);
     const panel = read(
       "frontend/src/components/workflows/params/InstagramCredentialPanel.tsx"
     );

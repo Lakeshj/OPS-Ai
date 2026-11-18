@@ -722,6 +722,39 @@ const finishInstagramOAuth = async (code, state) => {
     throw classifyCredentialSaveError(err);
   }
 
+  // Safe live OAuth summary — never includes tokens/secrets.
+  const discoveryTrace =
+    account?.discoveryTrace && typeof account.discoveryTrace === "object"
+      ? account.discoveryTrace
+      : {};
+  console.error(
+    "[instagram-oauth]",
+    JSON.stringify({
+      event: "instagram_oauth_result",
+      oauth_start: "PASS",
+      callback: "PASS",
+      code_exchange: "PASS",
+      token_has_instagram_basic: discoveryTrace.token_has_instagram_basic,
+      token_has_pages_read_engagement:
+        discoveryTrace.token_has_pages_read_engagement,
+      token_has_business_management:
+        discoveryTrace.token_has_business_management,
+      token_has_ads_read: discoveryTrace.token_has_ads_read,
+      token_has_ads_management: discoveryTrace.token_has_ads_management,
+      candidate_business_ids: discoveryTrace.candidate_business_ids,
+      businesses: discoveryTrace.businesses,
+      granular_target_ids: discoveryTrace.granular_target_ids_count,
+      instagram_asset_targets: discoveryTrace.instagram_asset_targets,
+      instagram_business_assets_resolved:
+        discoveryTrace.instagram_business_assets_resolved,
+      instagram_users_resolved: discoveryTrace.instagram_users_resolved,
+      resolved_ig_user_id: discoveryTrace.resolved_ig_user_id,
+      resolved_ig_username: discoveryTrace.resolved_ig_username,
+      discoverySource: discoveryTrace.discoverySource,
+      credential_persist: "PASS",
+    })
+  );
+
   return {
     credentialId,
     workspaceId: parsed.workspaceId,
