@@ -267,8 +267,201 @@ const publicConfigFrom = ({ secret, account, missingScopes }) => ({
   reconnectSoon: false,
 });
 
+/**
+ * Safe schema probe — never logs secrets. Used before INSERT and by status.
+ */
+const inspectInstagramCredentialSchema = async () => {
+  try {
+    const [typeRows] = await pool.query(
+      "SHOW COLUMNS FROM workflow_credentials LIKE 'type'"
+    );
+    const typeCol = String(typeRows?.[0]?.Type || "");
+    const [cfgRows] = await pool.query(
+      `SELECT COUNT(*) AS n
+       FROM information_schema.COLUMNS
+       WHERE TABLE_SCHEMA = DATABASE()
+         AND TABLE_NAME = 'workflow_credentials'
+         AND COLUMN_NAME = 'config_json'`
+    );
+    const configJsonColumnPresent = Number(cfgRows?.[0]?.n || 0) > 0;
+    const instagramTypeSupported = typeCol.includes("'instagram'");
+    return {
+      credentialSchemaReady: instagramTypeSupported && configJsonColumnPresent,
+      instagramTypeSupported,
+      configJsonColumnPresent,
+    };
+  } catch (err) {
+    return {
+      credentialSchemaReady: false,
+      instagramTypeSupported: false,
+      configJsonColumnPresent: false,
+      schemaCheckErrorClass: String(err?.code || "SCHEMA_CHECK_FAILED").slice(0, 40),
+    };
+  }
+};
+
+const logCredentialPersistFailure = (err, meta = {}) => {
+  const message = String(err?.message || "");
+  const constraintMatch = message.match(/CONSTRAINT [`']([^`']+)[`']/i);
+  const keyMatch = message.match(/for key [`']([^`']+)[`']/i);
+  const columnMatch = message.match(/column [`']([^`']+)[`']/i);
+  const payload = {
+    event: "instagram_oauth_stage",
+    stage: "credential_persist_failed",
+    operation: meta.operation || "unknown",
+    errorName: String(err?.name || "Error").slice(0, 60),
+    errorCode: String(err?.code || "").slice(0, 60),
+    sqlState: err?.sqlState ? String(err.sqlState).slice(0, 16) : undefined,
+    errno: Number.isFinite(err?.errno) ? err.errno : undefined,
+    constraintName: constraintMatch
+      ? constraintMatch[1].slice(0, 80)
+      : keyMatch
+        ? keyMatch[1].slice(0, 80)
+        : undefined,
+    columnName: columnMatch ? columnMatch[1].slice(0, 64) : undefined,
+    workspaceIdPresent: Boolean(meta.workspaceId),
+    userIdPresent: Boolean(meta.userId),
+    instagramUserIdPresent: Boolean(meta.instagramUserId),
+    credentialType: "instagram",
+  };
+  if (typeof hooks.logger === "function") hooks.logger(payload);
+  // Always emit sanitized diagnostics to process logs (hooks.logger may be a no-op).
+  console.error("[instagram-oauth]", JSON.stringify(payload));
+};
+
+const classifyCredentialSaveError = (err) => {
+  const code = String(err?.code || "");
+  const message = String(err?.message || "");
+  if (
+    code === "ER_INSTAGRAM_ENUM_MISSING" ||
+    code === "ER_INSTAGRAM_CONFIG_JSON_MISSING" ||
+    code === "WARN_DATA_TRUNCATED" ||
+    code === "ER_TRUNCATED_WRONG_VALUE_FOR_FIELD" ||
+    code === "ER_WRONG_VALUE_FOR_TYPE" ||
+    /Data truncated for column ['`]?type['`]?/i.test(message) ||
+    /unknown.*instagram|invalid.*instagram/i.test(message)
+  ) {
+    return new AppError(
+      "Instagram credential type is not available in the database schema.",
+      500,
+      "INSTAGRAM_CREDENTIAL_SCHEMA"
+    );
+  }
+  if (code === "ER_BAD_FIELD_ERROR" || /Unknown column/i.test(message)) {
+    return new AppError(
+      "Instagram credential could not be saved.",
+      500,
+      "INSTAGRAM_CREDENTIAL_SCHEMA"
+    );
+  }
+  if (
+    code === "ER_NO_REFERENCED_ROW" ||
+    code === "ER_NO_REFERENCED_ROW_2" ||
+    code === "ER_INSTAGRAM_WORKSPACE_MISSING" ||
+    code === "ER_INSTAGRAM_USER_MISSING"
+  ) {
+    return new AppError(
+      "Instagram credential could not be saved.",
+      500,
+      "INSTAGRAM_CREDENTIAL_FK"
+    );
+  }
+  if (code === "ER_DUP_ENTRY") {
+    return new AppError(
+      "Instagram credential could not be saved.",
+      500,
+      "INSTAGRAM_CREDENTIAL_SAVE_FAILED"
+    );
+  }
+  if (
+    code === "INSTAGRAM_CREDENTIAL_ENCRYPT_FAILED" ||
+    /encrypt|WORKFLOW_CREDENTIALS_KEY/i.test(message)
+  ) {
+    return new AppError(
+      "Instagram credential could not be saved.",
+      500,
+      "INSTAGRAM_CREDENTIAL_ENCRYPT_FAILED"
+    );
+  }
+  return new AppError(
+    "Instagram credential could not be saved.",
+    500,
+    "INSTAGRAM_CREDENTIAL_SAVE_FAILED"
+  );
+};
+
+const encryptInstagramSecret = (secret) => {
+  try {
+    return encryptSecret(secret);
+  } catch (err) {
+    const wrapped = new AppError(
+      "Instagram credential could not be encrypted.",
+      500,
+      "INSTAGRAM_CREDENTIAL_ENCRYPT_FAILED"
+    );
+    wrapped.cause = err;
+    throw wrapped;
+  }
+};
+
+const assertPersistTargets = async ({ workspaceId, userId }) => {
+  const schema = await inspectInstagramCredentialSchema();
+  if (!schema.instagramTypeSupported) {
+    const err = new Error("workflow_credentials.type ENUM missing instagram");
+    err.code = "ER_INSTAGRAM_ENUM_MISSING";
+    err.sqlState = "SCHEMA";
+    throw err;
+  }
+  if (!schema.configJsonColumnPresent) {
+    const err = new Error("workflow_credentials.config_json column missing");
+    err.code = "ER_INSTAGRAM_CONFIG_JSON_MISSING";
+    err.sqlState = "SCHEMA";
+    throw err;
+  }
+  const [ws] = await pool.execute(`SELECT id FROM workspaces WHERE id = ? LIMIT 1`, [
+    workspaceId,
+  ]);
+  if (!ws.length) {
+    const err = new Error("workspace missing for Instagram credential");
+    err.code = "ER_INSTAGRAM_WORKSPACE_MISSING";
+    err.sqlState = "FK";
+    throw err;
+  }
+  const [users] = await pool.execute(`SELECT id FROM users WHERE id = ? LIMIT 1`, [
+    userId,
+  ]);
+  if (!users.length) {
+    const err = new Error("user missing for Instagram credential");
+    err.code = "ER_INSTAGRAM_USER_MISSING";
+    err.sqlState = "FK";
+    throw err;
+  }
+};
+
+const insertInstagramCredentialRow = async ({
+  id,
+  workspaceId,
+  name,
+  encryptedSecret,
+  configJson,
+  userId,
+}) => {
+  await pool.execute(
+    `INSERT INTO workflow_credentials
+      (id, workspace_id, name, type, secret_json, config_json, created_by)
+     VALUES (?, ?, ?, 'instagram', ?, ?, ?)`,
+    [id, workspaceId, name, encryptedSecret, JSON.stringify(configJson), userId]
+  );
+};
+
 const saveConnectedCredential = async ({ parsed, secret, account, missingScopes }) => {
   const configJson = publicConfigFrom({ secret, account, missingScopes });
+  const meta = {
+    workspaceId: parsed.workspaceId,
+    userId: parsed.userId,
+    instagramUserId: account?.id || secret?.instagramUserId,
+  };
+
   if (parsed.credentialId && hooks.updateCredential) {
     await hooks.updateCredential(parsed.credentialId, secret, configJson);
     return parsed.credentialId;
@@ -276,43 +469,90 @@ const saveConnectedCredential = async ({ parsed, secret, account, missingScopes 
   if (parsed.credentialId) {
     const existing = await loadCredentialRow(parsed.credentialId, parsed.workspaceId);
     if (existing && existing.type === "instagram") {
-      // Preserve non-secret fields that discovery might not re-send.
       const mergedConfig = {
         ...existing.config,
         ...configJson,
       };
-      await pool.execute(
-        `UPDATE workflow_credentials SET secret_json = ?, config_json = ? WHERE id = ?`,
-        [encryptSecret(secret), JSON.stringify(mergedConfig), parsed.credentialId]
-      );
-      return parsed.credentialId;
+      try {
+        await pool.execute(
+          `UPDATE workflow_credentials SET secret_json = ?, config_json = ? WHERE id = ?`,
+          [
+            encryptInstagramSecret(secret),
+            JSON.stringify(mergedConfig),
+            parsed.credentialId,
+          ]
+        );
+        return parsed.credentialId;
+      } catch (err) {
+        logCredentialPersistFailure(err, { ...meta, operation: "update" });
+        throw classifyCredentialSaveError(err);
+      }
     }
   }
-  const id = uuidv4();
-  const name = hooks.insertCredential
-    ? parsed.name || "Instagram"
-    : await allocateUniqueCredentialName(
-        parsed.workspaceId,
-        parsed.name || "Instagram"
-      );
+
   if (hooks.insertCredential) {
+    const id = uuidv4();
+    const name = parsed.name || "Instagram";
     await hooks.insertCredential({ id, name, secret, config: configJson, parsed });
     return id;
   }
-  await pool.execute(
-    `INSERT INTO workflow_credentials
-      (id, workspace_id, name, type, secret_json, config_json, created_by)
-     VALUES (?, ?, ?, 'instagram', ?, ?, ?)`,
-    [
-      id,
-      parsed.workspaceId,
-      name,
-      encryptSecret(secret),
-      JSON.stringify(configJson),
-      parsed.userId,
-    ]
+
+  try {
+    await assertPersistTargets({
+      workspaceId: parsed.workspaceId,
+      userId: parsed.userId,
+    });
+  } catch (err) {
+    logCredentialPersistFailure(err, { ...meta, operation: "precheck" });
+    throw classifyCredentialSaveError(err);
+  }
+
+  const encryptedSecret = encryptInstagramSecret(secret);
+  let id = uuidv4();
+  let name = await allocateUniqueCredentialName(
+    parsed.workspaceId,
+    parsed.name || "Instagram"
   );
-  return id;
+
+  try {
+    await insertInstagramCredentialRow({
+      id,
+      workspaceId: parsed.workspaceId,
+      name,
+      encryptedSecret,
+      configJson,
+      userId: parsed.userId,
+    });
+    return id;
+  } catch (err) {
+    // Unique name race — allocate a fresh name once and retry insert only.
+    if (String(err?.code || "") === "ER_DUP_ENTRY") {
+      try {
+        id = uuidv4();
+        name = await allocateUniqueCredentialName(
+          parsed.workspaceId,
+          parsed.name || "Instagram"
+        );
+        await insertInstagramCredentialRow({
+          id,
+          workspaceId: parsed.workspaceId,
+          name,
+          encryptedSecret,
+          configJson,
+          userId: parsed.userId,
+        });
+        return id;
+      } catch (retryErr) {
+        logCredentialPersistFailure(retryErr, {
+          ...meta,
+          operation: "insert_retry",
+        });
+        throw classifyCredentialSaveError(retryErr);
+      }
+    }
+    logCredentialPersistFailure(err, { ...meta, operation: "insert" });
+    throw classifyCredentialSaveError(err);
+  }
 };
 
 const startInstagramOAuth = async ({ workspaceId, name, credentialId }, authUser) => {
@@ -470,16 +710,16 @@ const finishInstagramOAuth = async (code, state) => {
       stage: "credential_persist",
     });
   } catch (err) {
-    hooks.logger({
-      event: "instagram_oauth_stage",
-      stage: "credential_persist_failed",
-      code: String(err?.code || "DB_ERROR").slice(0, 40),
+    if (err instanceof AppError && String(err.code || "").startsWith("INSTAGRAM_")) {
+      throw err;
+    }
+    logCredentialPersistFailure(err, {
+      operation: "save",
+      workspaceId: parsed.workspaceId,
+      userId: parsed.userId,
+      instagramUserId: account?.id,
     });
-    throw new AppError(
-      "Instagram credential could not be saved.",
-      500,
-      "INSTAGRAM_CREDENTIAL_SAVE_FAILED"
-    );
+    throw classifyCredentialSaveError(err);
   }
 
   return {
@@ -545,8 +785,18 @@ const sanitizeCallbackError = (err) => {
       "Instagram authorization succeeded, but no Instagram account was available."
     );
   }
-  if (code === "INSTAGRAM_CREDENTIAL_SAVE_FAILED") {
+  if (
+    code === "INSTAGRAM_CREDENTIAL_SAVE_FAILED" ||
+    code === "INSTAGRAM_CREDENTIAL_FK" ||
+    code === "INSTAGRAM_CREDENTIAL_ENCRYPT_FAILED"
+  ) {
     return "Instagram credential could not be saved.";
+  }
+  if (code === "INSTAGRAM_CREDENTIAL_SCHEMA") {
+    return (
+      stripSecrets(err.message) ||
+      "Instagram credential type is not available in the database schema."
+    );
   }
   if (code === "INSTAGRAM_APP_NOT_CONFIGURED") {
     return "Instagram OAuth configuration mismatch.";
@@ -638,4 +888,7 @@ module.exports = {
   oauthCallbackHtml,
   applyOAuthPopupResponseHeaders,
   getInstagramIntegrationStatus,
+  inspectInstagramCredentialSchema,
+  classifyCredentialSaveError,
+  logCredentialPersistFailure,
 };

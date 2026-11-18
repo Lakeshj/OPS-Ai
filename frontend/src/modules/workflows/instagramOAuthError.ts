@@ -27,6 +27,11 @@ export function sanitizeInstagramOAuthError(error: unknown): string {
   if (/denied|access_denied|user_denied/i.test(lower)) {
     return "Instagram authorization was denied.";
   }
+  if (
+    /credential type is not available|database schema|config_json/i.test(lower)
+  ) {
+    return "Instagram credential type is not available in the database schema.";
+  }
   if (/credential could not be saved|database|er_|sql|encrypt/i.test(lower)) {
     return "Instagram credential could not be saved.";
   }

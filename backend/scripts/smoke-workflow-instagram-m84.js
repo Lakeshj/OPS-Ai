@@ -323,10 +323,11 @@ async function main() {
             }
           ),
         (err) => {
-          assert.equal(err.code, "INSTAGRAM_CREDENTIAL_SAVE_FAILED");
-          assert.equal(
+          // Truncated `type` is classified as schema (ENUM) — not a generic save failure.
+          assert.equal(err.code, "INSTAGRAM_CREDENTIAL_SCHEMA");
+          assert.match(
             oauth().sanitizeCallbackError(err),
-            "Instagram credential could not be saved."
+            /database schema|could not be saved/i
           );
           return true;
         }

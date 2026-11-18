@@ -216,7 +216,15 @@ const startInstagramOAuth = asyncHandler(async (req, res) => {
 
 const getInstagramOAuthStatus = asyncHandler(async (_req, res) => {
   const instagramOAuth = require("../../services/instagramOAuth.service");
-  res.json(instagramOAuth.getInstagramIntegrationStatus());
+  const status = instagramOAuth.getInstagramIntegrationStatus();
+  const schema = await instagramOAuth.inspectInstagramCredentialSchema();
+  res.json({
+    ...status,
+    ...schema,
+    encryptionKeyConfigured: Boolean(
+      process.env.WORKFLOW_CREDENTIALS_KEY || process.env.JWT_SECRET
+    ),
+  });
 });
 
 const instagramOAuthCallback = asyncHandler(async (req, res) => {

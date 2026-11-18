@@ -471,6 +471,10 @@ export const workflowCredentialsApi = {
       resolvedRedirectUri?: string;
       authMode?: string;
       tokenKind?: string;
+      credentialSchemaReady?: boolean;
+      instagramTypeSupported?: boolean;
+      configJsonColumnPresent?: boolean;
+      encryptionKeyConfigured?: boolean;
     }>("/workflows/instagram-oauth/status"),
 
   listInstagramAccounts: (credentialId: string) =>
