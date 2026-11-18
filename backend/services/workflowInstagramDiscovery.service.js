@@ -406,9 +406,9 @@ const resolveGranularTargetCandidates = async ({
             transport,
             accessToken,
             path: targetId,
-            query: { fields: "id,username,account_type" },
+            query: { fields: "id,username" },
           });
-          if (res.ok && (res.body?.username || res.body?.account_type)) {
+          if (res.ok && res.body?.username) {
             category = "instagram_user";
             account = {
               id: String(res.body.id || targetId),
@@ -860,7 +860,7 @@ const resolvePendingAssetsAndUsers = async ({
         path: id,
         query: {
           fields:
-            "id,username,name,profile_picture_url,followers_count,media_count,account_type",
+            "id,username,name,profile_picture_url,followers_count,follows_count,media_count,biography,website,ig_id",
         },
       });
       const profile = presentInstagramAccount({
@@ -869,7 +869,9 @@ const resolvePendingAssetsAndUsers = async ({
         name: body?.name,
         profile_picture_url: body?.profile_picture_url,
         followers_count: body?.followers_count,
+        follows_count: body?.follows_count,
         media_count: body?.media_count,
+        // Unified Login IGUser may omit account_type; treat as professional.
         account_type: body?.account_type || "BUSINESS",
       });
       if (profile.id && profile.username) {

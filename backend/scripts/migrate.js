@@ -57,6 +57,30 @@ const migrate = async () => {
       );
       console.log(`Applied ${migrationFile}`);
     }
+
+    // Content check: filename history alone cannot prove ENUM values.
+    const [tables] = await connection.query(
+      `SELECT 1 AS ok
+       FROM information_schema.tables
+       WHERE table_schema = DATABASE()
+         AND table_name = 'workflow_credentials'
+       LIMIT 1`
+    );
+    if (tables.length) {
+      const [typeCols] = await connection.query(
+        "SHOW COLUMNS FROM workflow_credentials LIKE 'type'"
+      );
+      if (typeCols.length) {
+        const typeDef = String(typeCols[0].Type || "");
+        if (!/'instagram'/.test(typeDef)) {
+          throw new Error(
+            "workflow_credentials.type is missing 'instagram' after migrations. " +
+              "Apply 031_instagram_credential_type_repair.sql (schema history drift)."
+          );
+        }
+        console.log("Verified workflow_credentials.type includes 'instagram'");
+      }
+    }
   } finally {
     await connection.end();
   }

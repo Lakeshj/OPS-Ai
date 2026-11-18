@@ -1,6 +1,8 @@
 /**
  * Instagram native node — account/media reads (M3) + insights (M4).
- * Uses Instagram Login Graph (graph.instagram.com). Separate from Meta Ads.
+ * Unified Login Graph (graph.facebook.com). Separate from Meta Ads.
+ * IGUser path: /{instagramUserId} — never request Instagram-Login-only fields
+ * such as user_id on the IGUser node.
  */
 
 const AppError = require("../utils/AppError");
@@ -27,9 +29,10 @@ const PAGE_SIZE = 50;
 const MAX_ROWS = 500;
 const MAX_PAGES = 20;
 
-const PROFILE_FIELDS_REQUIRED = "id,user_id,username";
+/** Unified Login IGUser fields (graph.facebook.com). No user_id / account_type. */
+const PROFILE_FIELDS_REQUIRED = "id,username";
 const PROFILE_FIELDS_OPTIONAL =
-  "name,account_type,biography,profile_picture_url,followers_count,follows_count,media_count";
+  "name,biography,website,profile_picture_url,followers_count,follows_count,media_count,ig_id";
 const PROFILE_FIELDS = `${PROFILE_FIELDS_REQUIRED},${PROFILE_FIELDS_OPTIONAL}`;
 
 const MEDIA_FIELDS_CORE =
@@ -154,9 +157,30 @@ const exprValue = (value, context, item) => {
 
 const isUnsupportedFieldError = (err) => {
   const msg = String(err?.message || "");
+  const code = String(err?.code || "");
   return (
-    err?.code === "INSTAGRAM_GRAPH_ERROR" &&
-    /nonexisting field|unknown field|unsupported field|invalid field/i.test(msg)
+    (code === "INSTAGRAM_GRAPH_ERROR" ||
+      code === "INSTAGRAM_INVALID_GRAPH_FIELD") &&
+    /nonexisting field|unknown field|unsupported field|invalid field|\(#100\)/i.test(
+      msg
+    )
+  );
+};
+
+const sanitizeInvalidFieldError = (err, { resource, operation } = {}) => {
+  const msg = String(err?.message || "");
+  const fieldMatch =
+    msg.match(/nonexisting field\s*\(([^)]+)\)/i) ||
+    msg.match(/unsupported field\s*\(([^)]+)\)/i) ||
+    msg.match(/rejected unsupported field\s*\(([^)]+)\)/i);
+  const field = fieldMatch ? fieldMatch[1] : "";
+  const op = [resource, operation].filter(Boolean).join("/");
+  return igError(
+    field
+      ? `Instagram ${op || "request"} used an unsupported Graph field (${field}).`
+      : `Instagram ${op || "request"} used an unsupported Graph field contract.`,
+    "INSTAGRAM_INVALID_GRAPH_FIELD",
+    400
   );
 };
 
@@ -195,6 +219,8 @@ const buildMeta = ({
 };
 
 const normalizeProfile = (row, provenance = {}) => {
+  // IGUser.id is the professional account id under Unified Login.
+  // Accept legacy user_id if a response still includes it; never require requesting it.
   const id = resolveInstagramUserId(row);
   const username = String(row?.username || "").trim();
   if (!id || !username) {
@@ -205,14 +231,19 @@ const normalizeProfile = (row, provenance = {}) => {
   }
   const json = {
     id,
+    instagramUserId: id,
     username,
   };
   const name = String(row?.name || "").trim();
   if (name) json.name = name;
-  const accountType = normalizeAccountType(row?.account_type);
+  const accountType =
+    normalizeAccountType(row?.account_type) ||
+    normalizeAccountType(provenance.accountType);
   if (accountType) json.accountType = accountType;
   const biography = String(row?.biography || "").trim();
   if (biography) json.biography = biography;
+  const website = String(row?.website || "").trim();
+  if (website) json.website = website;
   const picture = String(row?.profile_picture_url || "").trim();
   if (picture) json.profilePictureUrl = picture;
   const followers = asOptionalNumber(row?.followers_count);
@@ -221,6 +252,8 @@ const normalizeProfile = (row, provenance = {}) => {
   if (follows !== undefined) json.followsCount = follows;
   const mediaCount = asOptionalNumber(row?.media_count);
   if (mediaCount !== undefined) json.mediaCount = mediaCount;
+  const igId = String(row?.ig_id || "").trim();
+  if (igId) json.igId = igId;
   json._meta = buildMeta({
     resource: "account",
     operation: "get_profile",
@@ -401,17 +434,37 @@ const graphGetWithFieldFallback = async ({
   }
 };
 
-const getProfile = async ({ credentialId, workspaceId, instagramUserId }) => {
-  const body = await graphGetWithFieldFallback({
-    credentialId,
-    workspaceId,
-    path: String(instagramUserId),
-    fullFields: PROFILE_FIELDS,
-    coreFields: PROFILE_FIELDS_REQUIRED,
-  });
+const getProfile = async ({
+  credentialId,
+  workspaceId,
+  instagramUserId,
+  accountTypeHint,
+}) => {
+  let body;
+  try {
+    body = await graphGetWithFieldFallback({
+      credentialId,
+      workspaceId,
+      path: String(instagramUserId),
+      fullFields: PROFILE_FIELDS,
+      coreFields: PROFILE_FIELDS_REQUIRED,
+    });
+  } catch (err) {
+    if (isUnsupportedFieldError(err)) {
+      throw sanitizeInvalidFieldError(err, {
+        resource: "account",
+        operation: "get_profile",
+      });
+    }
+    throw err;
+  }
   const row = unwrapMePayload(body);
-  const presented = presentInstagramAccount(row);
+  const presented = presentInstagramAccount({
+    ...row,
+    account_type: row?.account_type || accountTypeHint,
+  });
   const type = String(presented.accountType || "").toLowerCase();
+  // Unified Login IGUser often omits account_type; OAuth already proved professional.
   if (type && type !== "business" && type !== "media_creator") {
     throw igError(
       "Connect an Instagram professional account (Business or Creator).",
@@ -419,7 +472,10 @@ const getProfile = async ({ credentialId, workspaceId, instagramUserId }) => {
       403
     );
   }
-  return normalizeProfile(row, { instagramUserId });
+  return normalizeProfile(row, {
+    instagramUserId,
+    accountType: accountTypeHint || presented.accountType,
+  });
 };
 
 const collectMediaPages = async ({
@@ -875,20 +931,28 @@ const executeInstagramNode = async (node, context) => {
   const first = itemsIn[0] || { json: {} };
 
   if (resource === "account" && operation === "get_profile") {
-    const json = await getProfile({
-      credentialId,
-      workspaceId: context?.workspaceId,
-      instagramUserId,
-    });
-    return {
-      items: [{ json, pairedItem: { item: 0 } }],
-      output: {
-        resource,
-        operation,
+    try {
+      const json = await getProfile({
+        credentialId,
+        workspaceId: context?.workspaceId,
         instagramUserId,
-        rowCount: 1,
-      },
-    };
+        accountTypeHint: cred?.config?.accountType || cred?.secret?.accountType,
+      });
+      return {
+        items: [{ json, pairedItem: { item: 0 } }],
+        output: {
+          resource,
+          operation,
+          instagramUserId,
+          rowCount: 1,
+        },
+      };
+    } catch (err) {
+      if (isUnsupportedFieldError(err)) {
+        throw sanitizeInvalidFieldError(err, { resource, operation });
+      }
+      throw err;
+    }
   }
 
   if (resource === "media" && operation === "list_media") {
@@ -1092,10 +1156,12 @@ module.exports = {
   MAX_PAGES,
   PROFILE_FIELDS,
   PROFILE_FIELDS_REQUIRED,
+  PROFILE_FIELDS_OPTIONAL,
   MEDIA_FIELDS,
   MEDIA_FIELDS_CORE,
   withInstagramNodeTestHooks,
   sanitizeInstagramNodeData,
+  sanitizeInvalidFieldError,
   normalizeProfile,
   normalizeMedia,
   normalizeInsightRows,

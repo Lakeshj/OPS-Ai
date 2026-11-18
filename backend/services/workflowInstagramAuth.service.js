@@ -63,6 +63,22 @@ const mapInstagramError = (status, body) => {
       403
     );
   }
+  if (
+    code === 100 &&
+    /nonexisting field|unknown field|unsupported field|invalid field/i.test(
+      message
+    )
+  ) {
+    const fieldMatch = message.match(/nonexisting field\s*\(([^)]+)\)/i);
+    const field = fieldMatch ? fieldMatch[1] : "";
+    return igError(
+      field
+        ? `Instagram Graph rejected unsupported field (${field}).`
+        : "Instagram Graph rejected an unsupported field contract.",
+      "INSTAGRAM_INVALID_GRAPH_FIELD",
+      400
+    );
+  }
   if (code === 4 || code === 17 || code === 32 || code === 613 || status === 429) {
     return igError(
       "Instagram rate limit reached. Wait and try again.",
@@ -295,11 +311,14 @@ const unwrapMePayload = (body) => {
   return body;
 };
 
-/** Required for connection. Prefer user_id (IG professional / webhook id). */
-const ME_FIELDS_REQUIRED = "id,user_id,username";
+/**
+ * Legacy Instagram Login /me fields only (graph.instagram.com era).
+ * Unified Login discovery uses IGUser / business-asset paths — not these.
+ */
+const ME_FIELDS_REQUIRED = "id,username";
 /** Optional enrichment — never fail OAuth if one of these is unsupported. */
 const ME_FIELDS_OPTIONAL =
-  "name,account_type,profile_picture_url,followers_count,follows_count,media_count";
+  "name,profile_picture_url,followers_count,follows_count,media_count,biography,website,ig_id";
 const ME_FIELDS = `${ME_FIELDS_REQUIRED},${ME_FIELDS_OPTIONAL}`;
 
 const normalizeAccountType = (raw) => {
@@ -356,9 +375,13 @@ const assertProfessionalAccount = (account) => {
 
 const isUnsupportedFieldError = (err) => {
   const msg = String(err?.message || "");
+  const code = String(err?.code || "");
   return (
-    err?.code === "INSTAGRAM_GRAPH_ERROR" &&
-    /nonexisting field|unknown field|unsupported field|invalid field/i.test(msg)
+    (code === "INSTAGRAM_GRAPH_ERROR" ||
+      code === "INSTAGRAM_INVALID_GRAPH_FIELD") &&
+    /nonexisting field|unknown field|unsupported field|invalid field|\(#100\)/i.test(
+      msg
+    )
   );
 };
 
