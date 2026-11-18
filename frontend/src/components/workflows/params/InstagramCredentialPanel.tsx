@@ -12,6 +12,7 @@ import {
   isInstagramPlatformConfigError,
   type InstagramConnectIntent,
 } from "@/modules/workflows/instagramCredentialUx";
+import { sanitizeInstagramOAuthError } from "@/modules/workflows/instagramOAuthError";
 import type { WorkflowCredential } from "@/modules/workflows/types";
 
 type Props = {
@@ -35,10 +36,10 @@ function platformErrorMessage(
     return formatInstagramPlatformConfigError(missingConfigKeys);
   }
   if (err instanceof ApiError) {
-    return err.message || "Instagram connect failed";
+    return sanitizeInstagramOAuthError(err.message || "Instagram connect failed");
   }
   if (err instanceof Error) {
-    return err.message || "Instagram connect failed";
+    return sanitizeInstagramOAuthError(err.message || "Instagram connect failed");
   }
   return "Instagram connect failed";
 }
@@ -126,8 +127,9 @@ export function InstagramCredentialPanel({
         }),
       });
       if (!result.ok) {
-        setInlineError(result.error);
-        toast.error(result.error);
+        const msg = sanitizeInstagramOAuthError(result.error);
+        setInlineError(msg);
+        toast.error(msg);
         return;
       }
       onConnected(result.credentialId);

@@ -33,6 +33,7 @@ import {
 import { MetaCredentialPanel } from "./MetaCredentialPanel";
 import { InstagramCredentialPanel } from "./InstagramCredentialPanel";
 import { startInstagramOAuthPopup } from "@/modules/workflows/instagramOAuthPopup";
+import { sanitizeInstagramOAuthError } from "@/modules/workflows/instagramOAuthError";
 import {
   formatInstagramPlatformConfigError,
   isInstagramFirstConnectState,
@@ -389,7 +390,7 @@ export function CredentialPicker({
       if (!result.ok) {
         // Preserve the previously selected credential on cancel/error.
         if (previousId && value !== previousId) onChange(previousId);
-        toast.error(result.error);
+        toast.error(sanitizeInstagramOAuthError(result.error));
         return;
       }
       reload();

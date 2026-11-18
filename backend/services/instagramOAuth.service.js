@@ -48,7 +48,9 @@ const hooks = {
 
 const withInstagramOAuthTestHooks = async (overrides, fn) => {
   const prev = { ...hooks };
-  Object.assign(hooks, overrides || {});
+  for (const [key, value] of Object.entries(overrides || {})) {
+    if (value !== undefined) hooks[key] = value;
+  }
   try {
     return await withInstagramAuthTestHooks(
       {
@@ -338,12 +340,14 @@ const startInstagramOAuth = async ({ workspaceId, name, credentialId }, authUser
     nonce: crypto.randomBytes(8).toString("hex"),
   });
   // Unified Login: config_id replaces scope. Do not send instagram_business_*.
+  // Meta requires override_default_response_type=true so response_type=code wins for SUAT.
   const params = new URLSearchParams({
     client_id: app.appId,
     config_id: app.loginConfigId,
     redirect_uri: app.redirectUri,
     state,
     response_type: "code",
+    override_default_response_type: "true",
     // Prefer showing login chooser even if a Facebook session exists.
     prompt: "login",
   });
@@ -368,7 +372,23 @@ const finishInstagramOAuth = async (code, state) => {
   const parsed = verifyState(state);
   consumeNonce(parsed);
   const app = requireApp();
-  const exchanged = await exchangeAuthorizationCode({ code, app });
+  hooks.logger({ event: "instagram_oauth_stage", stage: "state_validation" });
+
+  let exchanged;
+  try {
+    exchanged = await exchangeAuthorizationCode({ code, app });
+    hooks.logger({ event: "instagram_oauth_stage", stage: "code_exchange" });
+  } catch (err) {
+    if (err instanceof AppError && String(err.code || "").startsWith("INSTAGRAM_")) {
+      throw err;
+    }
+    throw new AppError(
+      "Instagram OAuth callback could not be completed.",
+      400,
+      "INSTAGRAM_OAUTH_EXCHANGE"
+    );
+  }
+
   // Prefer observed grants; Unified Login often omits permissions on exchange —
   // fall back to configured V1 list (source recorded on credential).
   const granted = exchanged.permissions.length
@@ -401,11 +421,29 @@ const finishInstagramOAuth = async (code, state) => {
       preferredInstagramUserId = "";
     }
   }
-  const account = await discoverInstagramAccount({
-    accessToken: exchanged.accessToken,
-    authMode: AUTH_MODE_UNIFIED,
-    preferredInstagramUserId,
-  });
+
+  let account;
+  try {
+    account = await discoverInstagramAccount({
+      accessToken: exchanged.accessToken,
+      authMode: AUTH_MODE_UNIFIED,
+      preferredInstagramUserId,
+    });
+    hooks.logger({
+      event: "instagram_oauth_stage",
+      stage: "instagram_discovery",
+    });
+  } catch (err) {
+    if (err instanceof AppError && String(err.code || "").startsWith("INSTAGRAM_")) {
+      throw err;
+    }
+    throw new AppError(
+      "Instagram authorization succeeded, but no Instagram account was available.",
+      403,
+      "INSTAGRAM_ACCOUNT_DISCOVERY_FAILED"
+    );
+  }
+
   const secret = {
     accessToken: exchanged.accessToken,
     tokenKind: TOKEN_KIND,
@@ -418,12 +456,32 @@ const finishInstagramOAuth = async (code, state) => {
     instagramUserId: account.id,
     username: account.username,
   };
-  const credentialId = await saveConnectedCredential({
-    parsed,
-    secret,
-    account,
-    missingScopes,
-  });
+
+  let credentialId;
+  try {
+    credentialId = await saveConnectedCredential({
+      parsed,
+      secret,
+      account,
+      missingScopes,
+    });
+    hooks.logger({
+      event: "instagram_oauth_stage",
+      stage: "credential_persist",
+    });
+  } catch (err) {
+    hooks.logger({
+      event: "instagram_oauth_stage",
+      stage: "credential_persist_failed",
+      code: String(err?.code || "DB_ERROR").slice(0, 40),
+    });
+    throw new AppError(
+      "Instagram credential could not be saved.",
+      500,
+      "INSTAGRAM_CREDENTIAL_SAVE_FAILED"
+    );
+  }
+
   return {
     credentialId,
     workspaceId: parsed.workspaceId,
@@ -481,8 +539,43 @@ const allowedFrontendOrigins = () =>
 
 const sanitizeCallbackError = (err) => {
   const code = String(err?.code || "");
-  if (code.startsWith("INSTAGRAM_")) return stripSecrets(err.message);
-  return "Instagram connect failed";
+  if (code === "INSTAGRAM_ACCOUNT_DISCOVERY_FAILED") {
+    return (
+      stripSecrets(err.message) ||
+      "Instagram authorization succeeded, but no Instagram account was available."
+    );
+  }
+  if (code === "INSTAGRAM_CREDENTIAL_SAVE_FAILED") {
+    return "Instagram credential could not be saved.";
+  }
+  if (code === "INSTAGRAM_APP_NOT_CONFIGURED") {
+    return "Instagram OAuth configuration mismatch.";
+  }
+  if (
+    code === "INSTAGRAM_OAUTH_EXCHANGE" ||
+    code === "INSTAGRAM_OAUTH_STATE" ||
+    code === "INSTAGRAM_PERMISSION_DENIED"
+  ) {
+    return (
+      stripSecrets(err.message) ||
+      "Instagram OAuth callback could not be completed."
+    );
+  }
+  if (code.startsWith("INSTAGRAM_")) {
+    return (
+      stripSecrets(err.message) ||
+      "Instagram OAuth callback could not be completed."
+    );
+  }
+  // DB / unexpected — never expose driver details.
+  if (
+    code.startsWith("ER_") ||
+    code === "ECONNREFUSED" ||
+    /sql|database|pool|encrypt/i.test(String(err?.message || ""))
+  ) {
+    return "Instagram credential could not be saved.";
+  }
+  return "Instagram OAuth callback could not be completed.";
 };
 
 const oauthCallbackHtml = ({ ok, credentialId, error }) => {

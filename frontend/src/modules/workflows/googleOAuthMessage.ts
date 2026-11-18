@@ -68,7 +68,12 @@ const isAllowedOAuthMessageOrigin = (
 const sanitizeOauthError = (error: unknown): string => {
   const raw = typeof error === "string" ? error : "Google connect failed";
   const clipped = raw.slice(0, 200);
-  if (/token|bearer|secret|authorization|refresh/i.test(clipped)) {
+  // Redact only secret-like payloads — not ordinary words like "authorization".
+  if (
+    /(access_token|refresh_token|appsecret_proof|client_secret|Bearer\s+[A-Za-z0-9._-]{12,})/i.test(
+      clipped
+    )
+  ) {
     return "Google connect failed";
   }
   return clipped || "Google connect failed";

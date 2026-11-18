@@ -75,6 +75,12 @@ const unifiedTransport = () => async (url) => {
       body: { data: [{ id: "178414123", username: "unified_client" }] },
     };
   }
+  if (u.includes("debug_token")) {
+    return { ok: true, status: 200, body: { data: { granular_scopes: [] } } };
+  }
+  if (u.includes("me/accounts")) {
+    return { ok: true, status: 200, body: { data: [] } };
+  }
   if (u.includes("/me?")) {
     return { ok: true, status: 200, body: { client_business_id: "biz-9" } };
   }
@@ -142,6 +148,10 @@ async function main() {
       assert.equal(url.searchParams.get("config_id"), "config-999");
       assert.equal(url.searchParams.get("client_id"), "app-111");
       assert.equal(url.searchParams.get("response_type"), "code");
+      assert.equal(
+        url.searchParams.get("override_default_response_type"),
+        "true"
+      );
       assert.equal(started.authMode, "unified_login");
       assert.equal(started.loginConfigId, "config-999");
     });

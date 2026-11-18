@@ -2,6 +2,7 @@ import {
   acceptGoogleOAuthPostMessage,
   resolveOAuthMessageAllowedOrigins,
 } from "@/modules/workflows/googleOAuthMessage";
+import { sanitizeInstagramOAuthError } from "@/modules/workflows/instagramOAuthError";
 import { workflowCredentialsApi } from "@/modules/workflows/api";
 
 const MESSAGE_TYPE = "opsai-instagram-oauth";
@@ -68,7 +69,9 @@ export async function startInstagramOAuthPopup(
       } else {
         finish({
           ok: false,
-          error: String(result.error || "Instagram connect failed. Start again."),
+          error: sanitizeInstagramOAuthError(
+            result.error || "Instagram connect failed"
+          ),
         });
       }
     };
