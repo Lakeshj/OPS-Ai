@@ -17,12 +17,24 @@ export function sanitizeInstagramOAuthError(error: unknown): string {
   }
 
   const lower = clipped.toLowerCase();
+  if (/pages_read_engagement/i.test(lower)) {
+    return "pages_read_engagement is required to resolve Instagram accounts shared through Business Manager.";
+  }
+  if (/required instagram permission|permission was not granted/i.test(lower)) {
+    return "A required Instagram permission was not granted. Reconnect and allow the requested access.";
+  }
+  if (/business context was not found/i.test(lower)) {
+    return "Instagram business context was not found for this login.";
+  }
+  if (/none could be resolved|selected asset/i.test(lower)) {
+    return "Instagram assets were shared, but none could be resolved for API access.";
+  }
   if (
-    /no instagram|not (been )?available|not shared|discovery|assigned_instagram|professional account was shared/i.test(
+    /no (accessible )?instagram|not (been )?available|not shared|discovery|assigned_instagram|professional account was shared/i.test(
       lower
     )
   ) {
-    return "Instagram authorization succeeded, but no Instagram account was available.";
+    return "Instagram authorization succeeded, but no accessible Instagram account was found.";
   }
   if (/denied|access_denied|user_denied/i.test(lower)) {
     return "Instagram authorization was denied.";

@@ -68,6 +68,27 @@ const unifiedTransport = () => async (url) => {
       },
     };
   }
+  if (u.includes("debug_token")) {
+    return {
+      ok: true,
+      status: 200,
+      body: {
+        data: {
+          app_id: "app-111",
+          is_valid: true,
+          type: "SYSTEM_USER",
+          scopes: [
+            "instagram_basic",
+            "pages_read_engagement",
+            "instagram_content_publish",
+            "instagram_manage_comments",
+            "instagram_manage_insights",
+          ],
+          granular_scopes: [],
+        },
+      },
+    };
+  }
   if (u.includes("assigned_instagram_accounts")) {
     return {
       ok: true,
@@ -75,10 +96,13 @@ const unifiedTransport = () => async (url) => {
       body: { data: [{ id: "178414123", username: "unified_client" }] },
     };
   }
-  if (u.includes("debug_token")) {
-    return { ok: true, status: 200, body: { data: { granular_scopes: [] } } };
-  }
-  if (u.includes("me/accounts")) {
+  if (
+    u.includes("owned_instagram_assets") ||
+    u.includes("client_instagram_assets") ||
+    u.includes("instagram_business_accounts") ||
+    u.includes("me/accounts") ||
+    u.includes("me/businesses")
+  ) {
     return { ok: true, status: 200, body: { data: [] } };
   }
   if (u.includes("/me?")) {

@@ -69,6 +69,26 @@ const transportFor = (accounts) => {
         },
       };
     }
+    if (u.includes("debug_token")) {
+      return {
+        ok: true,
+        status: 200,
+        body: {
+          data: {
+            app_id: String(process.env.INSTAGRAM_APP_ID || "ig-app"),
+            is_valid: true,
+            scopes: [
+              "instagram_basic",
+              "pages_read_engagement",
+              "instagram_content_publish",
+              "instagram_manage_comments",
+              "instagram_manage_insights",
+            ],
+            granular_scopes: [],
+          },
+        },
+      };
+    }
     if (u.includes("assigned_instagram_accounts")) {
       const idx = Math.min(step, accounts.length - 1);
       const account = accounts[idx];
@@ -79,6 +99,15 @@ const transportFor = (accounts) => {
           data: [{ id: account.id, username: account.username }],
         },
       };
+    }
+    if (
+      u.includes("owned_instagram_assets") ||
+      u.includes("client_instagram_assets") ||
+      u.includes("instagram_business_accounts") ||
+      u.includes("me/accounts") ||
+      u.includes("me/businesses")
+    ) {
+      return { ok: true, status: 200, body: { data: [] } };
     }
     if (u.includes("/me?")) {
       return { ok: true, status: 200, body: { client_business_id: "biz-m71" } };

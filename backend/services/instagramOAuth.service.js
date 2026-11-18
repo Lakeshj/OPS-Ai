@@ -779,10 +779,37 @@ const allowedFrontendOrigins = () =>
 
 const sanitizeCallbackError = (err) => {
   const code = String(err?.code || "");
-  if (code === "INSTAGRAM_ACCOUNT_DISCOVERY_FAILED") {
+  if (code === "INSTAGRAM_PERMISSION_PAGES_READ_ENGAGEMENT_REQUIRED") {
     return (
       stripSecrets(err.message) ||
-      "Instagram authorization succeeded, but no Instagram account was available."
+      "pages_read_engagement is required to resolve Instagram accounts shared through Business Manager."
+    );
+  }
+  if (code === "INSTAGRAM_REQUIRED_PERMISSION_MISSING") {
+    return (
+      stripSecrets(err.message) ||
+      "A required Instagram permission was not granted. Reconnect and allow the requested access."
+    );
+  }
+  if (code === "INSTAGRAM_BUSINESS_CONTEXT_NOT_FOUND") {
+    return (
+      stripSecrets(err.message) ||
+      "Instagram business context was not found for this login."
+    );
+  }
+  if (code === "INSTAGRAM_SELECTED_ASSET_NOT_RESOLVABLE") {
+    return (
+      stripSecrets(err.message) ||
+      "Instagram assets were shared, but none could be resolved for API access."
+    );
+  }
+  if (
+    code === "INSTAGRAM_NO_ACCESSIBLE_ACCOUNT" ||
+    code === "INSTAGRAM_ACCOUNT_DISCOVERY_FAILED"
+  ) {
+    return (
+      stripSecrets(err.message) ||
+      "Instagram authorization succeeded, but no accessible Instagram account was found."
     );
   }
   if (

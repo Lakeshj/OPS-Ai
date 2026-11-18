@@ -107,23 +107,24 @@ async function main() {
         const u = String(url);
         const ex = exchangeOk(u);
         if (ex) return ex;
-        if (u.includes("assigned_instagram_accounts")) {
-          return { ok: true, status: 200, body: { data: [] } };
-        }
-        if (u.includes("/me?")) {
-          return { ok: true, status: 200, body: { client_business_id: "biz-84" } };
-        }
         if (u.includes("debug_token")) {
           assert.equal(u.includes(`input_token=${TOKEN}`), true);
-          // App access token is appId|appSecret — never log it; URL may contain secret.
           assert.equal(u.includes("access_token="), true);
           return {
             ok: true,
             status: 200,
             body: {
               data: {
+                app_id: "app-m84",
                 type: "SYSTEM_USER",
                 is_valid: true,
+                scopes: [
+                  "instagram_basic",
+                  "pages_read_engagement",
+                  "instagram_content_publish",
+                  "instagram_manage_comments",
+                  "instagram_manage_insights",
+                ],
                 granular_scopes: [
                   {
                     scope: "instagram_basic",
@@ -133,6 +134,21 @@ async function main() {
               },
             },
           };
+        }
+        if (u.includes("assigned_instagram_accounts")) {
+          return { ok: true, status: 200, body: { data: [] } };
+        }
+        if (u.includes("/me?")) {
+          return { ok: true, status: 200, body: { client_business_id: "biz-84" } };
+        }
+        if (
+          u.includes("owned_instagram_assets") ||
+          u.includes("client_instagram_assets") ||
+          u.includes("instagram_business_accounts") ||
+          u.includes("me/accounts") ||
+          u.includes("me/businesses")
+        ) {
+          return { ok: true, status: 200, body: { data: [] } };
         }
         const prof = profileOk(u);
         if (prof) return prof;
@@ -171,27 +187,55 @@ async function main() {
         const u = String(url);
         const ex = exchangeOk(u);
         if (ex) return ex;
+        if (u.includes("debug_token")) {
+          return {
+            ok: true,
+            status: 200,
+            body: {
+              data: {
+                app_id: "app-m84",
+                is_valid: true,
+                scopes: [
+                  "instagram_basic",
+                  "pages_read_engagement",
+                  "instagram_content_publish",
+                  "instagram_manage_comments",
+                  "instagram_manage_insights",
+                ],
+                granular_scopes: [],
+              },
+            },
+          };
+        }
         if (u.includes("assigned_instagram_accounts")) {
           return { ok: true, status: 200, body: { data: [] } };
         }
         if (u.includes("/me?")) {
           return { ok: true, status: 200, body: { client_business_id: "biz-84" } };
         }
-        if (u.includes("debug_token")) {
+        if (u.includes("me/businesses")) {
+          return { ok: true, status: 200, body: { data: [{ id: "biz-84" }] } };
+        }
+        if (u.includes("owned_instagram_assets")) {
           return {
             ok: true,
             status: 200,
-            body: { data: { granular_scopes: [] } },
+            body: {
+              data: [
+                {
+                  id: "asset-84",
+                  ig_user_id: "178414888",
+                  ig_username: "owned_ig",
+                },
+              ],
+            },
           };
         }
-        if (u.includes("biz-84/owned_instagram_accounts")) {
-          return {
-            ok: true,
-            status: 200,
-            body: { data: [{ id: "178414888", username: "owned_ig" }] },
-          };
-        }
-        if (u.includes("biz-84/")) {
+        if (
+          u.includes("client_instagram_assets") ||
+          u.includes("instagram_business_accounts") ||
+          u.includes("me/accounts")
+        ) {
           return { ok: true, status: 200, body: { data: [] } };
         }
         const prof = profileOk(u, "178414888", "owned_ig");
@@ -228,20 +272,39 @@ async function main() {
         const u = String(url);
         const ex = exchangeOk(u);
         if (ex) return ex;
-        if (u.includes("assigned_instagram_accounts")) {
-          return { ok: true, status: 200, body: { data: [] } };
-        }
-        if (u.includes("/me?")) {
-          return { ok: true, status: 200, body: {} };
-        }
         if (u.includes("debug_token")) {
           return {
             ok: true,
             status: 200,
-            body: { data: { granular_scopes: [] } },
+            body: {
+              data: {
+                app_id: "app-m84",
+                is_valid: true,
+                scopes: [
+                  "instagram_basic",
+                  "pages_read_engagement",
+                  "instagram_content_publish",
+                  "instagram_manage_comments",
+                  "instagram_manage_insights",
+                ],
+                granular_scopes: [],
+              },
+            },
           };
         }
-        if (u.includes("me/accounts")) {
+        if (u.includes("assigned_instagram_accounts")) {
+          return { ok: true, status: 200, body: { data: [] } };
+        }
+        if (u.includes("/me?")) {
+          return { ok: true, status: 200, body: { client_business_id: "biz-empty" } };
+        }
+        if (
+          u.includes("owned_instagram_assets") ||
+          u.includes("client_instagram_assets") ||
+          u.includes("instagram_business_accounts") ||
+          u.includes("me/accounts") ||
+          u.includes("me/businesses")
+        ) {
           return { ok: true, status: 200, body: { data: [] } };
         }
         return { ok: false, status: 404, body: { error: { message: u } } };
@@ -259,19 +322,16 @@ async function main() {
             );
           }),
         (err) => {
-          assert.equal(err.code, "INSTAGRAM_ACCOUNT_DISCOVERY_FAILED");
-          assert.match(
-            err.message,
-            /authorization succeeded, but no Instagram account was available/i
+          assert.ok(
+            err.code === "INSTAGRAM_NO_ACCESSIBLE_ACCOUNT" ||
+              err.code === "INSTAGRAM_ACCOUNT_DISCOVERY_FAILED"
           );
+          assert.match(err.message, /no accessible Instagram account|no Instagram account/i);
           const html = oauth().oauthCallbackHtml({
             ok: false,
             error: oauth().sanitizeCallbackError(err),
           });
-          assert.match(
-            html,
-            /Instagram authorization succeeded, but no Instagram account was available/
-          );
+          assert.match(html, /no accessible Instagram account|no Instagram account/i);
           assert.equal(html.includes(TOKEN), false);
           return true;
         }
@@ -286,6 +346,26 @@ async function main() {
         const u = String(url);
         const ex = exchangeOk(u);
         if (ex) return ex;
+        if (u.includes("debug_token")) {
+          return {
+            ok: true,
+            status: 200,
+            body: {
+              data: {
+                app_id: "app-m84",
+                is_valid: true,
+                scopes: [
+                  "instagram_basic",
+                  "pages_read_engagement",
+                  "instagram_content_publish",
+                  "instagram_manage_comments",
+                  "instagram_manage_insights",
+                ],
+                granular_scopes: [],
+              },
+            },
+          };
+        }
         if (u.includes("assigned_instagram_accounts")) {
           return {
             ok: true,
@@ -295,6 +375,15 @@ async function main() {
         }
         if (u.includes("/me?")) {
           return { ok: true, status: 200, body: { client_business_id: "biz" } };
+        }
+        if (
+          u.includes("owned_instagram_assets") ||
+          u.includes("client_instagram_assets") ||
+          u.includes("instagram_business_accounts") ||
+          u.includes("me/accounts") ||
+          u.includes("me/businesses")
+        ) {
+          return { ok: true, status: 200, body: { data: [] } };
         }
         const prof = profileOk(u, "178414777", "ok_ig");
         if (prof) return prof;
@@ -339,6 +428,26 @@ async function main() {
     await withEnv(FULL, async () => {
       const transport = async (url) => {
         const u = String(url);
+        if (u.includes("debug_token")) {
+          return {
+            ok: true,
+            status: 200,
+            body: {
+              data: {
+                app_id: "app-m84",
+                is_valid: true,
+                scopes: [
+                  "instagram_basic",
+                  "pages_read_engagement",
+                  "instagram_content_publish",
+                  "instagram_manage_comments",
+                  "instagram_manage_insights",
+                ],
+                granular_scopes: [],
+              },
+            },
+          };
+        }
         if (u.includes("assigned_instagram_accounts")) {
           return {
             ok: true,
@@ -348,6 +457,15 @@ async function main() {
         }
         if (u.includes("/me?")) {
           return { ok: true, status: 200, body: { client_business_id: "biz" } };
+        }
+        if (
+          u.includes("owned_instagram_assets") ||
+          u.includes("client_instagram_assets") ||
+          u.includes("instagram_business_accounts") ||
+          u.includes("me/accounts") ||
+          u.includes("me/businesses")
+        ) {
+          return { ok: true, status: 200, body: { data: [] } };
         }
         if (u.includes("178414000")) {
           return {
@@ -366,7 +484,7 @@ async function main() {
               authMode: "unified_login",
             })
           ),
-        (err) => err.code === "INSTAGRAM_ACCOUNT_DISCOVERY_FAILED"
+        (err) => err.code === "INSTAGRAM_SELECTED_ASSET_NOT_RESOLVABLE"
       );
     });
   });

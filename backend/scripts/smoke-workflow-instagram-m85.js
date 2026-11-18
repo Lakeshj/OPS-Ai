@@ -60,7 +60,27 @@ const okTransport = async (url) => {
         access_token: TOKEN,
         expires_in: 0,
         permissions:
-          "instagram_basic,instagram_content_publish,instagram_manage_comments,instagram_manage_insights",
+          "instagram_basic,pages_read_engagement,instagram_content_publish,instagram_manage_comments,instagram_manage_insights",
+      },
+    };
+  }
+  if (u.includes("debug_token")) {
+    return {
+      ok: true,
+      status: 200,
+      body: {
+        data: {
+          app_id: "app-m85",
+          is_valid: true,
+          scopes: [
+            "instagram_basic",
+            "pages_read_engagement",
+            "instagram_content_publish",
+            "instagram_manage_comments",
+            "instagram_manage_insights",
+          ],
+          granular_scopes: [],
+        },
       },
     };
   }
@@ -74,7 +94,13 @@ const okTransport = async (url) => {
   if (u.includes("/me?")) {
     return { ok: true, status: 200, body: { client_business_id: "biz-85" } };
   }
-  if (u.includes("debug_token") || u.includes("me/accounts")) {
+  if (
+    u.includes("owned_instagram_assets") ||
+    u.includes("client_instagram_assets") ||
+    u.includes("instagram_business_accounts") ||
+    u.includes("me/accounts") ||
+    u.includes("me/businesses")
+  ) {
     return { ok: true, status: 200, body: { data: [] } };
   }
   if (u.includes("178414555")) {

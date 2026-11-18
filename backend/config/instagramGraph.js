@@ -8,11 +8,14 @@
  * - Graph calls: graph.facebook.com (Instagram account id paths)
  *
  * V1 permissions (configured in Meta login configuration — not sent as scope):
- * instagram_basic, instagram_content_publish, instagram_manage_comments,
- * instagram_manage_insights
+ * instagram_basic, pages_read_engagement, instagram_content_publish,
+ * instagram_manage_comments, instagram_manage_insights
  *
- * Never include: instagram_manage_messages, ads_management, ads_read.
- * Meta Ads Graph (metaGraph.js) stays separate.
+ * pages_read_engagement is required for Business Manager / Page-role Instagram
+ * asset visibility on Unified Login. ads_read may appear as an access dependency
+ * only — never add Instagram Ads operations; Meta Ads Graph stays separate.
+ *
+ * Never include: instagram_manage_messages, Human Agent, instagram_manage_events.
  */
 
 const config = require("./index");
@@ -26,9 +29,12 @@ const TOKEN_KIND_UNIFIED = "unified_system_user";
 const AUTH_MODE_UNIFIED = "unified_login";
 
 const SCOPE_BASIC = "instagram_basic";
+const SCOPE_PAGES_READ = "pages_read_engagement";
 const SCOPE_PUBLISH = "instagram_content_publish";
 const SCOPE_COMMENTS = "instagram_manage_comments";
 const SCOPE_INSIGHTS = "instagram_manage_insights";
+/** Access dependency for some Business Manager asset paths — not an Ads feature. */
+const SCOPE_ADS_READ_DEPENDENCY = "ads_read";
 
 /**
  * Permissions OpsAi V1 expects from the Unified Login configuration.
@@ -36,12 +42,27 @@ const SCOPE_INSIGHTS = "instagram_manage_insights";
  */
 const OAUTH_SCOPES = Object.freeze([
   SCOPE_BASIC,
+  SCOPE_PAGES_READ,
   SCOPE_PUBLISH,
   SCOPE_COMMENTS,
   SCOPE_INSIGHTS,
 ]);
 
+/** Required at runtime (debug_token authoritative). */
 const REQUIRED_SCOPE = SCOPE_BASIC;
+const REQUIRED_UNIFIED_PERMISSIONS = Object.freeze([
+  SCOPE_BASIC,
+  SCOPE_PAGES_READ,
+]);
+
+/**
+ * Optional Business Manager access dependencies. Presence is reported in traces;
+ * missing values do not by themselves fail discovery when assets resolve.
+ */
+const ACCESS_DEPENDENCY_PERMISSIONS = Object.freeze([
+  SCOPE_ADS_READ_DEPENDENCY,
+  "ads_management",
+]);
 
 /**
  * Map legacy Instagram Login granted names → Unified Login canonical names.
@@ -151,6 +172,9 @@ const getInstagramIntegrationStatus = () => {
     resolvedRedirectUri: resolveRedirectUri(),
     authMode: AUTH_MODE_UNIFIED,
     tokenKind: TOKEN_KIND_UNIFIED,
+    requiredUnifiedPermissions: [...REQUIRED_UNIFIED_PERMISSIONS],
+    oauthScopesConfigured: [...OAUTH_SCOPES],
+    accessDependencyPermissions: [...ACCESS_DEPENDENCY_PERMISSIONS],
   };
 };
 
@@ -159,10 +183,14 @@ module.exports = {
   GRAPH_HOST,
   OAUTH_SCOPES,
   REQUIRED_SCOPE,
+  REQUIRED_UNIFIED_PERMISSIONS,
+  ACCESS_DEPENDENCY_PERMISSIONS,
   SCOPE_BASIC,
+  SCOPE_PAGES_READ,
   SCOPE_PUBLISH,
   SCOPE_COMMENTS,
   SCOPE_INSIGHTS,
+  SCOPE_ADS_READ_DEPENDENCY,
   SCOPE_GRANT_ALIASES,
   TOKEN_KIND_UNIFIED,
   AUTH_MODE_UNIFIED,

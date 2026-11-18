@@ -9,10 +9,12 @@ OpsAi uses **one** platform Meta Developer App with **Instagram API setup with U
 3. Assets: Instagram accounts (as required by your product).
 4. Permissions for OpsAi V1 only:
    - `instagram_basic`
+   - `pages_read_engagement` (required for Business Manager / Page-role Instagram asset discovery)
    - `instagram_content_publish`
    - `instagram_manage_comments`
    - `instagram_manage_insights`
-5. Do **not** enable for V1: `instagram_manage_messages`, Human Agent, `instagram_manage_events`, `ads_management`.
+   - `ads_read` only if Meta requires it as a Business Manager access dependency (not for Instagram Ads features)
+5. Do **not** enable for V1: `instagram_manage_messages`, Human Agent, `instagram_manage_events`. Do not add Instagram Ads operations.
 6. Set server environment:
    - `INSTAGRAM_APP_ID`
    - `INSTAGRAM_APP_SECRET`

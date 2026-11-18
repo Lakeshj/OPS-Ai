@@ -31,9 +31,9 @@ console.log("\nInstagram M8.4 frontend OAuth errors");
 check("IG-M84-FE-1 discovery empty maps to clear message", () => {
   assert.equal(
     sanitizeInstagramOAuthError(
-      "No Instagram professional account was shared. Reconnect and select an Instagram asset."
+      "Instagram authorization succeeded, but no accessible Instagram account was found."
     ),
-    "Instagram authorization succeeded, but no Instagram account was available."
+    "Instagram authorization succeeded, but no accessible Instagram account was found."
   );
 });
 

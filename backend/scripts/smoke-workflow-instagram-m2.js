@@ -76,6 +76,26 @@ const registerInstagramM2Tests = ({ check, section, assert: a }) => {
         },
       };
     }
+    if (u.includes("debug_token")) {
+      return {
+        ok: true,
+        status: 200,
+        body: {
+          data: {
+            app_id: String(process.env.INSTAGRAM_APP_ID || "ig-app"),
+            is_valid: true,
+            scopes: [
+              "instagram_basic",
+              "pages_read_engagement",
+              "instagram_content_publish",
+              "instagram_manage_comments",
+              "instagram_manage_insights",
+            ],
+            granular_scopes: [],
+          },
+        },
+      };
+    }
     if (u.includes("me/assigned_instagram_accounts")) {
       return {
         ok: true,
@@ -89,6 +109,15 @@ const registerInstagramM2Tests = ({ check, section, assert: a }) => {
           ],
         },
       };
+    }
+    if (
+      u.includes("owned_instagram_assets") ||
+      u.includes("client_instagram_assets") ||
+      u.includes("instagram_business_accounts") ||
+      u.includes("me/accounts") ||
+      u.includes("me/businesses")
+    ) {
+      return { ok: true, status: 200, body: { data: [] } };
     }
     if (u.includes("/me?")) {
       return {
@@ -169,10 +198,12 @@ const registerInstagramM2Tests = ({ check, section, assert: a }) => {
       const scopes = igGraph().OAUTH_SCOPES;
       assertX.deepEqual(scopes, [
         "instagram_basic",
+        "pages_read_engagement",
         "instagram_content_publish",
         "instagram_manage_comments",
         "instagram_manage_insights",
       ]);
+      // ads_read may be a Business access dependency, but is not an OAuth V1 feature scope.
       assertX.equal(scopes.includes("ads_read"), false);
       assertX.equal(scopes.includes("ads_management"), false);
       assertX.equal(scopes.includes("instagram_manage_messages"), false);
@@ -305,12 +336,41 @@ const registerInstagramM2Tests = ({ check, section, assert: a }) => {
         {
           transport: async (url) => {
             const u = String(url);
+            if (u.includes("debug_token")) {
+              return {
+                ok: true,
+                status: 200,
+                body: {
+                  data: {
+                    app_id: String(process.env.INSTAGRAM_APP_ID || "ig-app"),
+                    is_valid: true,
+                    scopes: [
+                      "instagram_basic",
+                      "pages_read_engagement",
+                      "instagram_content_publish",
+                      "instagram_manage_comments",
+                      "instagram_manage_insights",
+                    ],
+                    granular_scopes: [],
+                  },
+                },
+              };
+            }
             if (u.includes("assigned_instagram_accounts")) {
               return {
                 ok: true,
                 status: 200,
                 body: { data: [{ id: "178414111", username: "brand_ig" }] },
               };
+            }
+            if (
+              u.includes("owned_instagram_assets") ||
+              u.includes("client_instagram_assets") ||
+              u.includes("instagram_business_accounts") ||
+              u.includes("me/accounts") ||
+              u.includes("me/businesses")
+            ) {
+              return { ok: true, status: 200, body: { data: [] } };
             }
             if (u.includes("/me?")) {
               return { ok: true, status: 200, body: { client_business_id: "biz" } };

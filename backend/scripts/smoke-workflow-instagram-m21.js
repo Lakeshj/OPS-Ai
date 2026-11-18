@@ -123,6 +123,26 @@ const registerInstagramM21Tests = ({ check, section, assert: a }) => {
         {
           transport: async (url) => {
             const u = String(url);
+            if (u.includes("debug_token")) {
+              return {
+                ok: true,
+                status: 200,
+                body: {
+                  data: {
+                    app_id: "ig-app",
+                    is_valid: true,
+                    scopes: [
+                      "instagram_basic",
+                      "pages_read_engagement",
+                      "instagram_content_publish",
+                      "instagram_manage_comments",
+                      "instagram_manage_insights",
+                    ],
+                    granular_scopes: [],
+                  },
+                },
+              };
+            }
             if (u.includes("assigned_instagram_accounts")) {
               return {
                 ok: true,
@@ -131,6 +151,15 @@ const registerInstagramM21Tests = ({ check, section, assert: a }) => {
                   data: [{ id: "178414777", username: "unified_brand" }],
                 },
               };
+            }
+            if (
+              u.includes("owned_instagram_assets") ||
+              u.includes("client_instagram_assets") ||
+              u.includes("instagram_business_accounts") ||
+              u.includes("me/accounts") ||
+              u.includes("me/businesses")
+            ) {
+              return { ok: true, status: 200, body: { data: [] } };
             }
             if (u.includes("/me?")) {
               return {
