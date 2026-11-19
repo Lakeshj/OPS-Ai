@@ -165,8 +165,19 @@ export function InstagramCredentialPanel({
   else if (showReconnect) primaryLabel = "Reconnect Instagram";
 
   const disconnect = async () => {
-    const selectedCredentialId = String(credential && credential.id ? credential.id : "").trim();
-    if (!selectedCredentialId) return;
+    if (!credential) {
+      const msg = "Select an Instagram account first.";
+      setInlineError(msg);
+      toast.error(msg);
+      return;
+    }
+    const selectedCredentialId = String(credential.id || "").trim();
+    if (!selectedCredentialId) {
+      const msg = "Select an Instagram account first.";
+      setInlineError(msg);
+      toast.error(msg);
+      return;
+    }
     setInlineError(null);
     let usageNote = "";
     try {
