@@ -88,6 +88,7 @@ const sanitizeInstagramNodeData = (data) => {
   }
   if (next.period != null) next.period = String(next.period).trim();
   if (next.breakdown != null) next.breakdown = String(next.breakdown).trim();
+  if (next.timeframe != null) next.timeframe = String(next.timeframe).trim();
   if (next.metricType != null) next.metricType = String(next.metricType).trim();
   if (next.mediaType != null) next.mediaType = String(next.mediaType).trim();
   if (next.dateRange != null) next.dateRange = String(next.dateRange).trim();
@@ -711,6 +712,7 @@ const normalizeInsightRows = ({
   dateStart,
   dateEnd,
   breakdown,
+  timeframe,
 }) => {
   const items = [];
   for (const metricRow of metricRows || []) {
@@ -721,6 +723,9 @@ const normalizeInsightRows = ({
     const isDemographic = DEMOGRAPHIC_METRICS.has(metric);
     const rowBreakdown = isDemographic
       ? String(breakdown || "").trim() || undefined
+      : undefined;
+    const rowTimeframe = isDemographic
+      ? String(timeframe || "").trim() || undefined
       : undefined;
     const { points } = insightValuePoints(metricRow);
     const periodName = String(metricRow?.period || period || "").trim() || undefined;
@@ -735,6 +740,7 @@ const normalizeInsightRows = ({
         dateStart: dateStart || undefined,
         dateEnd: dateEnd || undefined,
         breakdown: rowBreakdown,
+        timeframe: rowTimeframe,
         mediaId: mediaId || undefined,
         mediaType: mediaType || undefined,
         unavailableReason: isDemographic
@@ -815,6 +821,7 @@ const normalizeInsightRows = ({
         dateEnd: dateEnd || endTime || undefined,
         endTime,
         breakdown: rowBreakdown,
+        timeframe: rowTimeframe,
         mediaId: mediaId || undefined,
         mediaType: mediaType || undefined,
         status,
@@ -858,6 +865,7 @@ const runAccountInsights = async ({
     since: data.since,
     until: data.until,
     breakdown: data.breakdown,
+    timeframe: data.timeframe,
     metricType: data.metricType,
     nowMs,
   });
@@ -870,6 +878,7 @@ const runAccountInsights = async ({
     };
     if (group.metricType) query.metric_type = group.metricType;
     if (group.breakdown) query.breakdown = group.breakdown;
+    if (group.timeframe) query.timeframe = group.timeframe;
     if (group.sinceUnix != null) query.since = String(group.sinceUnix);
     if (group.untilUnix != null) query.until = String(group.untilUnix);
 
@@ -886,16 +895,18 @@ const runAccountInsights = async ({
     metricRows,
     operation: "account_insights",
     instagramUserId,
-    period: data.period,
+    period: data.period || "lifetime",
     dateStart: built.range?.since,
     dateEnd: built.range?.until,
     breakdown: data.breakdown,
+    timeframe: built.timeframe || data.timeframe,
   });
 
   return {
     rows: jsonRows,
     metrics: built.metrics,
     range: built.range,
+    timeframe: built.timeframe || data.timeframe,
   };
 };
 

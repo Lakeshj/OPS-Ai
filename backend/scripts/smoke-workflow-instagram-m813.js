@@ -70,6 +70,8 @@ check("IG-M813-B3 demographics+age accepted", () => {
     breakdown: "age",
   });
   assert.equal(built.groups[0].breakdown, "age");
+  assert.equal(built.groups[0].timeframe, "this_month");
+  assert.equal(built.groups[0].period, "lifetime");
 });
 
 check("IG-M813-B4 total_value parsed as ok value", () => {

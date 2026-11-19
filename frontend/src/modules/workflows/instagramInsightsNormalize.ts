@@ -14,6 +14,7 @@ export const PERFORMANCE_INSIGHT_PRESETS = new Set([
 ]);
 
 export const DEMOGRAPHIC_INSIGHT_PRESET = "demographics";
+export const DEFAULT_DEMOGRAPHIC_TIMEFRAME = "this_month";
 
 const deleteKeys = (values: ParamValues, keys: readonly string[]): ParamValues => {
   const next: ParamValues = { ...values };
@@ -73,11 +74,15 @@ export function normalizeInstagramInsightsParams(
       "until",
       "dateStart",
       "dateEnd",
-      "timeframe",
     ]);
     if (!String(next.breakdown || "").trim()) {
       next.breakdown = "age";
     }
+    const tf = String(next.timeframe || "").trim();
+    next.timeframe =
+      tf === "this_week" || tf === "this_month"
+        ? tf
+        : DEFAULT_DEMOGRAPHIC_TIMEFRAME;
     return next;
   }
 

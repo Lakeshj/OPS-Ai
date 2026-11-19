@@ -66,6 +66,7 @@ check("IG-M8131-3 demographics + days_28 → period becomes lifetime", () => {
   });
   assert.equal(next.period, "lifetime");
   assert.equal(next.breakdown, "city");
+  assert.equal(next.timeframe, "this_month");
 });
 
 check("IG-M8131-4 demographics + day → period becomes lifetime", () => {
@@ -119,11 +120,13 @@ check("IG-M8131-7 demographics → performance removes breakdown", () => {
       insightsPreset: "demographics",
       period: "lifetime",
       breakdown: "city",
+      timeframe: "this_month",
     },
     "engagement"
   );
   assert.equal(next.insightsPreset, "engagement");
   assert.equal(Object.prototype.hasOwnProperty.call(next, "breakdown"), false);
+  assert.equal(Object.prototype.hasOwnProperty.call(next, "timeframe"), false);
 });
 
 check("IG-M8131-8 performance → demographics forces lifetime", () => {
@@ -153,6 +156,8 @@ check("IG-M8131-8 performance → demographics forces lifetime", () => {
     "demographics"
   );
   assert.equal(withoutBreakdown.breakdown, "age");
+  assert.equal(withoutBreakdown.timeframe, "this_month");
+  assert.equal(next.timeframe, "this_month");
 });
 
 check("IG-M8131-9 saved invalid workflow repaired on editor load", () => {

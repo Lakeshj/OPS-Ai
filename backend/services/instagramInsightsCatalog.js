@@ -26,12 +26,23 @@ const ACCOUNT_BREAKDOWNS = Object.freeze([
   "follow_type",
 ]);
 
+/** Safe demographic timeframe values for current Graph version. */
+const DEMOGRAPHIC_TIMEFRAMES = Object.freeze(["this_week", "this_month"]);
+const DEFAULT_DEMOGRAPHIC_TIMEFRAME = "this_month";
+
+const DEMOGRAPHIC_TIMEFRAME_LABELS = Object.freeze({
+  this_week: "This week",
+  this_month: "This month",
+});
+
 /** @type {Record<string, {
  *   allowedPeriods: string[],
  *   requiredMetricType?: string|null,
  *   supportsDateRange: boolean,
  *   supportsBreakdown: boolean,
  *   allowedBreakdowns?: string[],
+ *   requiresTimeframe?: boolean,
+ *   allowedTimeframes?: string[],
  *   title: string,
  * }>} */
 const ACCOUNT_METRICS = Object.freeze({
@@ -140,6 +151,9 @@ const ACCOUNT_METRICS = Object.freeze({
     supportsDateRange: false,
     supportsBreakdown: true,
     allowedBreakdowns: [...ACCOUNT_BREAKDOWNS],
+    // Accepts timeframe when present; not always required alone.
+    requiresTimeframe: false,
+    allowedTimeframes: [...DEMOGRAPHIC_TIMEFRAMES],
   },
   engaged_audience_demographics: {
     title: "Engaged audience demographics",
@@ -148,6 +162,8 @@ const ACCOUNT_METRICS = Object.freeze({
     supportsDateRange: false,
     supportsBreakdown: true,
     allowedBreakdowns: [...ACCOUNT_BREAKDOWNS],
+    requiresTimeframe: true,
+    allowedTimeframes: [...DEMOGRAPHIC_TIMEFRAMES],
   },
   reached_audience_demographics: {
     title: "Reached audience demographics",
@@ -156,6 +172,8 @@ const ACCOUNT_METRICS = Object.freeze({
     supportsDateRange: false,
     supportsBreakdown: true,
     allowedBreakdowns: [...ACCOUNT_BREAKDOWNS],
+    requiresTimeframe: true,
+    allowedTimeframes: [...DEMOGRAPHIC_TIMEFRAMES],
   },
 });
 
@@ -488,10 +506,77 @@ const resolveInsightsDateRange = ({
   };
 };
 
+const normalizeDemographicTimeframe = (raw) => {
+  const value = String(raw || "").trim();
+  if (!value) return "";
+  if (DEMOGRAPHIC_TIMEFRAMES.includes(value)) return value;
+  // Tolerate UI aliases
+  if (value === "thisWeek" || value === "this week") return "this_week";
+  if (value === "thisMonth" || value === "this month") return "this_month";
+  return value;
+};
+
+const demographicTimeframeLabel = (raw) => {
+  const key = normalizeDemographicTimeframe(raw);
+  return DEMOGRAPHIC_TIMEFRAME_LABELS[key] || key || "";
+};
+
+/**
+ * Compatible timeframe intersection for selected demographic metrics.
+ */
+const resolveCompatibleDemographicTimeframes = (metricNames) => {
+  const names = Array.isArray(metricNames) ? metricNames : [];
+  let intersection = null;
+  for (const name of names) {
+    const metric = getAccountMetric(name);
+    if (!metric.supportsBreakdown) continue;
+    const allowed = Array.isArray(metric.allowedTimeframes)
+      ? metric.allowedTimeframes
+      : [...DEMOGRAPHIC_TIMEFRAMES];
+    intersection = intersection
+      ? intersection.filter((t) => allowed.includes(t))
+      : [...allowed];
+  }
+  return intersection && intersection.length
+    ? intersection
+    : [...DEMOGRAPHIC_TIMEFRAMES];
+};
+
+/**
+ * Guard before Graph: metrics that require timeframe must have a valid value.
+ * Normalize/defaults should usually fill this; this blocks known-invalid empties.
+ */
+const assertDemographicTimeframeForMetrics = (metricNames, timeframeRaw) => {
+  const names = (Array.isArray(metricNames) ? metricNames : []).filter(
+    (name) => getAccountMetric(name).supportsBreakdown
+  );
+  if (!names.length) {
+    return normalizeDemographicTimeframe(timeframeRaw) || "";
+  }
+  const timeframeValue = normalizeDemographicTimeframe(timeframeRaw);
+  const requiresTimeframe = names.some(
+    (name) => getAccountMetric(name).requiresTimeframe
+  );
+  const compatible = resolveCompatibleDemographicTimeframes(names);
+  if (requiresTimeframe && !timeframeValue) {
+    throw catalogError(
+      "Select a timeframe for audience demographic insights.",
+      "INSTAGRAM_INSIGHTS_TIMEFRAME_REQUIRED"
+    );
+  }
+  if (timeframeValue && !compatible.includes(timeframeValue)) {
+    throw catalogError(
+      `Timeframe "${timeframeValue}" is not valid for the selected demographic metrics. Allowed: ${compatible.join(", ")}.`,
+      "INSTAGRAM_INSIGHTS_TIMEFRAME_INVALID"
+    );
+  }
+  return timeframeValue;
+};
+
 /**
  * Strip mode-incompatible Account Insights params before validation/Graph.
- * Performance must not retain demographic breakdown; demographics force lifetime.
- * Does not invent metric values — only repairs stale hidden node state.
+ * Performance must not retain demographic breakdown/timeframe.
+ * Demographics force lifetime + default timeframe.
  */
 const normalizeAccountInsightsData = (data = {}) => {
   const next = data && typeof data === "object" && !Array.isArray(data) ? { ...data } : {};
@@ -507,10 +592,11 @@ const normalizeAccountInsightsData = (data = {}) => {
     delete next.until;
     delete next.dateStart;
     delete next.dateEnd;
-    delete next.timeframe;
     if (!String(next.breakdown || "").trim()) {
       next.breakdown = "age";
     }
+    const tf = normalizeDemographicTimeframe(next.timeframe);
+    next.timeframe = tf || DEFAULT_DEMOGRAPHIC_TIMEFRAME;
     return next;
   }
 
@@ -540,6 +626,7 @@ const buildAccountInsightRequests = (rawInput = {}) => {
   const requestedPeriod = String(period || "").trim();
   const breakdownValue = String(breakdown || "").trim();
   const metricTypeOverride = String(metricType || "").trim();
+  const timeframeValue = normalizeDemographicTimeframe(input.timeframe);
 
   const demographicNames = names.filter(
     (name) => getAccountMetric(name).supportsBreakdown
@@ -570,6 +657,10 @@ const buildAccountInsightRequests = (rawInput = {}) => {
     );
   }
 
+  if (demographicNames.length) {
+    assertDemographicTimeframeForMetrics(demographicNames, timeframeValue);
+  }
+
   const wantsRange = Boolean(
     String(dateRange || "").trim() ||
       String(since || "").trim() ||
@@ -577,7 +668,7 @@ const buildAccountInsightRequests = (rawInput = {}) => {
       requestedPeriod === "total_over_range"
   );
   let range = null;
-  if (wantsRange) {
+  if (wantsRange && !demographicNames.length) {
     range = resolveInsightsDateRange({ dateRange, since, until, nowMs });
   }
   if (requestedPeriod === "total_over_range" && !range) {
@@ -630,6 +721,13 @@ const buildAccountInsightRequests = (rawInput = {}) => {
       }
     }
 
+    if (metric.requiresTimeframe && !timeframeValue) {
+      throw catalogError(
+        "Select a timeframe for audience demographic insights.",
+        "INSTAGRAM_INSIGHTS_TIMEFRAME_REQUIRED"
+      );
+    }
+
     const type =
       metricTypeOverride ||
       metric.requiredMetricType ||
@@ -659,10 +757,23 @@ const buildAccountInsightRequests = (rawInput = {}) => {
       );
     }
 
+    const groupTimeframe =
+      metric.supportsBreakdown &&
+      timeframeValue &&
+      Array.isArray(metric.allowedTimeframes) &&
+      metric.allowedTimeframes.includes(timeframeValue)
+        ? timeframeValue
+        : metric.requiresTimeframe
+          ? timeframeValue
+          : metric.supportsBreakdown && timeframeValue
+            ? timeframeValue
+            : undefined;
+
     const key = [
       periodForMetric,
       type || "",
       metric.supportsBreakdown ? breakdownValue : "",
+      groupTimeframe || "",
       metric.supportsDateRange && range ? `${range.sinceUnix}:${range.untilUnix}` : "",
     ].join("|");
 
@@ -671,6 +782,7 @@ const buildAccountInsightRequests = (rawInput = {}) => {
         period: periodForMetric,
         metricType: type || undefined,
         breakdown: metric.supportsBreakdown ? breakdownValue : undefined,
+        timeframe: groupTimeframe || undefined,
         sinceUnix: metric.supportsDateRange && range ? range.sinceUnix : undefined,
         untilUnix: metric.supportsDateRange && range ? range.untilUnix : undefined,
         since: metric.supportsDateRange && range ? range.since : undefined,
@@ -685,6 +797,7 @@ const buildAccountInsightRequests = (rawInput = {}) => {
     groups: [...groups.values()],
     range,
     metrics: names,
+    timeframe: timeframeValue || undefined,
   };
 };
 
@@ -734,6 +847,9 @@ module.exports = {
   PERIODS,
   METRIC_TYPES,
   ACCOUNT_BREAKDOWNS,
+  DEMOGRAPHIC_TIMEFRAMES,
+  DEFAULT_DEMOGRAPHIC_TIMEFRAME,
+  DEMOGRAPHIC_TIMEFRAME_LABELS,
   ACCOUNT_METRICS,
   MEDIA_METRICS,
   ACCOUNT_PRESETS,
@@ -747,6 +863,10 @@ module.exports = {
   assertMediaMetricForType,
   normalizeMediaType,
   resolveInsightsDateRange,
+  normalizeDemographicTimeframe,
+  demographicTimeframeLabel,
+  resolveCompatibleDemographicTimeframes,
+  assertDemographicTimeframeForMetrics,
   normalizeAccountInsightsData,
   buildAccountInsightRequests,
   buildMediaInsightRequest,

@@ -21,6 +21,8 @@ export type InstagramInsightBreakdownTable = {
   breakdownKey: string;
   breakdownLabel: string;
   valueColumnLabel: string;
+  timeframeKey?: string;
+  timeframeLabel?: string;
   rows: InstagramInsightBreakdownRow[];
   /** City/country may truncate in UI; age/gender show all. */
   collapsible: boolean;
@@ -323,11 +325,17 @@ export function parseInsightBreakdownTable(
   if (!rows.length) return null;
 
   const key = breakdownKey || "breakdown";
+  const timeframeKey = str(json.timeframe).toLowerCase() || undefined;
+  const timeframeLabel = timeframeKey
+    ? formatInsightTimeframeLabel(timeframeKey)
+    : undefined;
   return {
     metricLabel,
     breakdownKey: key,
     breakdownLabel: titleCaseKey(key),
     valueColumnLabel: demographicValueColumnLabel(metric),
+    timeframeKey,
+    timeframeLabel,
     rows,
     collapsible: key === "city" || key === "country",
   };
@@ -359,6 +367,14 @@ function formatPeriodLabel(period: string): string {
   if (key === "days_28") return "28 days";
   if (key === "total_over_range") return "Total over range";
   return titleCaseKey(key);
+}
+
+export function formatInsightTimeframeLabel(raw: unknown): string {
+  const key = str(raw).toLowerCase();
+  if (!key) return "";
+  if (key === "this_week" || key === "thisweek") return "This week";
+  if (key === "this_month" || key === "thismonth") return "This month";
+  return key.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
 function formatInsightDateRange(items: Record<string, unknown>[]): string {
@@ -448,13 +464,18 @@ export function buildInstagramInsightsCollection(
   const breakdownTables: InstagramInsightBreakdownTable[] = [];
   const textChunks: string[] = ["Instagram Insights"];
 
-  const period = str([...latestByMetric.values()][0]?.period);
-  if (period) {
+  const firstRow = [...latestByMetric.values()][0];
+  const period = str(firstRow?.period);
+  const headerTimeframe = formatInsightTimeframeLabel(firstRow?.timeframe);
+  const range = formatInsightDateRange(rows);
+  // Demographic rows carry Timeframe on each metric section; Period=lifetime stays internal.
+  if (headerTimeframe) {
+    lines.push({ label: "Timeframe", value: headerTimeframe });
+    textChunks.push(`Timeframe: ${headerTimeframe}`);
+  } else if (period) {
     lines.push({ label: "Period", value: formatPeriodLabel(period) });
     textChunks.push(`Period: ${formatPeriodLabel(period)}`);
-  }
-  const range = formatInsightDateRange(rows);
-  if (range && !period) {
+  } else if (range) {
     lines.push({ label: "Range", value: range });
     textChunks.push(range);
   }
@@ -464,9 +485,17 @@ export function buildInstagramInsightsCollection(
     const table = parseInsightBreakdownTable(row);
     if (table) {
       breakdownTables.push(table);
-      lines.push({ label: table.metricLabel, value: `Breakdown: ${table.breakdownLabel}` });
+      lines.push({
+        label: table.metricLabel,
+        value: table.timeframeLabel
+          ? `Breakdown: ${table.breakdownLabel} · ${table.timeframeLabel}`
+          : `Breakdown: ${table.breakdownLabel}`,
+      });
       textChunks.push(table.metricLabel);
       textChunks.push(`Breakdown: ${table.breakdownLabel}`);
+      if (table.timeframeLabel) {
+        textChunks.push(`Timeframe: ${table.timeframeLabel}`);
+      }
       textChunks.push("");
       for (const r of table.rows) {
         textChunks.push(`${r.label}: ${r.value}`);

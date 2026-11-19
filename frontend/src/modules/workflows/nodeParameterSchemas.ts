@@ -2186,6 +2186,25 @@ export const NODE_PARAMETER_SCHEMAS: Record<WorkflowNodeType, ParamDescriptor[]>
         },
       },
       {
+        name: "timeframe",
+        displayName: "Timeframe",
+        type: "options",
+        default: "this_month",
+        description:
+          "Required for engaged and reached audience demographics. Applied to the demographic request.",
+        options: [
+          { name: "This week", value: "this_week" },
+          { name: "This month", value: "this_month" },
+        ],
+        displayOptions: {
+          show: {
+            resource: ["insights"],
+            operation: ["account_insights"],
+            insightsPreset: ["demographics"],
+          },
+        },
+      },
+      {
         name: "dateRange",
         displayName: "Date range",
         type: "options",

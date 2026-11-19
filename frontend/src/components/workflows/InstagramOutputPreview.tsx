@@ -130,13 +130,18 @@ function InstagramBlockView({
   }
   if (block.layout === "insights") {
     const period = block.lines.find((l) => l.label === "Period")?.value;
+    const timeframe = block.lines.find((l) => l.label === "Timeframe")?.value;
     const range = block.lines.find((l) => l.label === "Range")?.value;
     const hasBreakdown = Boolean(block.breakdownTables?.length);
     const hasStats = Boolean(block.stats?.length);
     return (
       <div className="space-y-3" data-instagram-insights-card="true">
         <div className="text-xs font-semibold text-foreground">{block.title}</div>
-        {period ? (
+        {timeframe ? (
+          <div className="text-[11px] text-muted-foreground">
+            Timeframe: {timeframe}
+          </div>
+        ) : period ? (
           <div className="text-[11px] text-muted-foreground">
             Period: {period}
           </div>
@@ -145,13 +150,21 @@ function InstagramBlockView({
         ) : null}
         {hasBreakdown
           ? block.breakdownTables!.map((table) => (
-              <InsightBreakdownTableView key={`${table.metricLabel}-${table.breakdownKey}`} table={table} />
+              <InsightBreakdownTableView
+                key={`${table.metricLabel}-${table.breakdownKey}-${table.timeframeKey || ""}`}
+                table={table}
+              />
             ))
           : null}
         {hasStats ? <StatsRow stats={block.stats!} /> : null}
         {!hasBreakdown && !hasStats
           ? block.lines
-              .filter((l) => l.label !== "Period" && l.label !== "Range")
+              .filter(
+                (l) =>
+                  l.label !== "Period" &&
+                  l.label !== "Range" &&
+                  l.label !== "Timeframe"
+              )
               .map((row) => (
                 <div key={row.label}>
                   <div className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
@@ -288,6 +301,11 @@ function InsightBreakdownTableView({
         <div className="text-[11px] text-muted-foreground">
           Breakdown: {table.breakdownLabel}
         </div>
+        {table.timeframeLabel ? (
+          <div className="text-[11px] text-muted-foreground">
+            Timeframe: {table.timeframeLabel}
+          </div>
+        ) : null}
       </div>
       <div className="overflow-hidden rounded-md border border-border/60">
         <div className="grid grid-cols-2 gap-0 border-b border-border/60 bg-muted/40 px-2 py-1.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
