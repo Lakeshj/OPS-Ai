@@ -1,12 +1,16 @@
 "use client";
 
-import React from "react";
+import React, { useEffect, useRef } from "react";
 import type { ParamDescriptor } from "@/modules/workflows/nodeContract";
 import type { WorkflowNodeData } from "@/modules/workflows/types";
 import {
   getVisibleParams,
   valuesWithParamDefaults,
 } from "@/modules/workflows/paramDisplayOptions";
+import {
+  dependentParamsNeedReconcile,
+  reconcileDependentOptionParams,
+} from "@/modules/workflows/dependentParamCascade";
 import { CredentialPicker } from "./CredentialPicker";
 import { GoogleResourcePicker } from "./GoogleResourcePicker";
 import { HttpAuthField } from "./HttpAuthField";
@@ -392,9 +396,31 @@ export function NodeParameterRenderer({
   const rawValues = values as Record<string, unknown>;
   const resolvedValues = valuesWithParamDefaults(schema, rawValues);
   const visible = getVisibleParams(schema, rawValues);
+  const reconcilePass = useRef(false);
+  const resourceKey = String(rawValues.resource ?? "");
+  const operationKey = String(rawValues.operation ?? "");
+
+  // Loaded/saved invalid resource/operation pairs: normalize in the editor.
+  useEffect(() => {
+    const reconciled = reconcileDependentOptionParams(schema, rawValues);
+    if (!dependentParamsNeedReconcile(rawValues, reconciled, schema)) return;
+    if (reconcilePass.current) return;
+    reconcilePass.current = true;
+    onChange({ ...values, ...reconciled } as WorkflowNodeData);
+    const timer = window.setTimeout(() => {
+      reconcilePass.current = false;
+    }, 0);
+    return () => window.clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- resource/operation only
+  }, [schema, resourceKey, operationKey]);
 
   const onFieldChange = (name: string, fieldValue: unknown) => {
-    onChange({ ...values, [name]: fieldValue });
+    const patched = { ...rawValues, [name]: fieldValue };
+    const reconciled =
+      name === "resource" || name === "operation"
+        ? reconcileDependentOptionParams(schema, patched)
+        : patched;
+    onChange({ ...values, ...reconciled } as WorkflowNodeData);
   };
 
   return (

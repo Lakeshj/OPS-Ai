@@ -11,6 +11,7 @@ import {
   isParamVisible,
   valuesWithParamDefaults,
 } from "./paramDisplayOptions";
+import { getVisibleOptionValues } from "./dependentParamCascade";
 import type { WorkflowNodeData, WorkflowNodeType } from "./types";
 
 function isEmptyValue(value: unknown): boolean {
@@ -51,14 +52,29 @@ function validateParam(
   }
 
   if (param.type === "options" && value != null && value !== "" && param.options) {
-    const allowed = param.options.map((o) => String(o.value));
+    // Only options visible for the current parent values (e.g. resource) are valid.
+    const hasDependentOptions = param.options.some((o) =>
+      Boolean(o.displayOptions)
+    );
+    const allowed = (
+      hasDependentOptions
+        ? getVisibleOptionValues(param, visibilityValues)
+        : param.options.map((o) => o.value)
+    ).map((o) => String(o));
     if (!allowed.includes(String(value))) {
       return `${param.displayName} has an invalid value`;
     }
   }
 
   if (param.type === "multiOptions" && Array.isArray(value) && param.options) {
-    const allowed = new Set(param.options.map((o) => o.value));
+    const hasDependentOptions = param.options.some((o) =>
+      Boolean(o.displayOptions)
+    );
+    const allowed = new Set(
+      hasDependentOptions
+        ? getVisibleOptionValues(param, visibilityValues)
+        : param.options.map((o) => o.value)
+    );
     for (const v of value) {
       if (!allowed.has(v as string | number | boolean)) {
         return `${param.displayName} contains an invalid selection`;

@@ -270,10 +270,28 @@ export function flattenRowForDisplay(
   json: Record<string, unknown>
 ): Record<string, unknown> {
   const out: Record<string, unknown> = {};
+  const meta =
+    json._meta && typeof json._meta === "object" && !Array.isArray(json._meta)
+      ? (json._meta as Record<string, unknown>)
+      : null;
+  const hideInstagramTechnical =
+    String(meta?.provider || "") === "instagram"
+      ? new Set([
+          "id",
+          "instagramUserId",
+          "igId",
+          "profilePictureUrl",
+          "apiVersion",
+        ])
+      : null;
 
   for (const [key, value] of Object.entries(json)) {
     if (key === "_meta") {
       // Provenance stays in JSON/Schema; omit noisy envelope from Table.
+      continue;
+    }
+    if (hideInstagramTechnical?.has(key)) {
+      // Technical Instagram ids / raw image URL stay in JSON tab.
       continue;
     }
 

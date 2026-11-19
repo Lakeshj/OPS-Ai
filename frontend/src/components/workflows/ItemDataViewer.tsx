@@ -36,6 +36,8 @@ import {
   tableSortDatasetKey,
   type TableSortState,
 } from "@/modules/workflows/inspectorTableSort";
+import { InstagramOutputPreview } from "@/components/workflows/InstagramOutputPreview";
+import { isInstagramOutputJson } from "@/modules/workflows/instagramOutputPresentation";
 import { toast } from "sonner";
 import {
   looksLikeMarkdownProse,
@@ -792,9 +794,14 @@ export function ItemDataViewer({
 
   const jsonText = prettyJson(canonicalJsonForView(viewItems));
   const selectedRow = canonical[selectedIndex];
-  const prosePreview = extractProseField(
-    selectedRow?.json as Record<string, unknown> | undefined
+  const selectedJson = selectedRow?.json as Record<string, unknown> | undefined;
+  const instagramPreviewItems = viewItems.filter((row) =>
+    isInstagramOutputJson((row?.json || {}) as Record<string, unknown>)
   );
+  const prosePreview =
+    instagramPreviewItems.length > 0
+      ? null
+      : extractProseField(selectedJson);
 
   const dataViewer = (
     <div
@@ -850,6 +857,11 @@ export function ItemDataViewer({
         data-inspector-region="item-data"
         className={cn(INSPECTOR_PANE_SCROLL_CLASS, "flex min-h-0 flex-1 flex-col gap-2")}
       >
+        {instagramPreviewItems.length > 0 &&
+          (mode === "table" || mode === "schema") && (
+            <InstagramOutputPreview items={instagramPreviewItems} />
+          )}
+
         {prosePreview && (mode === "table" || mode === "schema") && (
           <div className="shrink-0 rounded-lg border border-dashed border-border bg-muted/20 px-3 py-2">
             <div className="mb-1 flex items-center justify-between gap-2">

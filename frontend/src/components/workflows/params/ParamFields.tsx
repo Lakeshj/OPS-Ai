@@ -114,11 +114,11 @@ export function OptionsParamField({
   const options = (param.options || []).filter((opt) =>
     isParamVisible({ displayOptions: opt.displayOptions }, parentValues || {})
   );
-  const shown = options.some((opt) => String(opt.value) === str)
-    ? options
-    : str
-      ? [...options, { name: `${str} (current)`, value: str }]
-      : options;
+  // Never keep a filtered-out value as a fake "(current)" choice — dependent
+  // parents (resource → operation) must reconcile via NodeParameterRenderer.
+  const valueVisible = options.some((opt) => String(opt.value) === str);
+  const shown = options;
+  const selectValue = valueVisible ? str : "";
   const hasOptionDescriptions = shown.some((opt) =>
     Boolean(opt.description && String(opt.description).trim())
   );
@@ -158,6 +158,12 @@ export function OptionsParamField({
             );
           })}
         </div>
+        {!valueVisible && shown.length > 0 ? (
+          <p className="text-[11px] text-amber-700 dark:text-amber-400">
+            Select a valid {param.displayName.toLowerCase()} for the current
+            configuration.
+          </p>
+        ) : null}
         {param.description ? (
           <p className="text-[11px] text-muted-foreground">{param.description}</p>
         ) : null}
@@ -169,14 +175,14 @@ export function OptionsParamField({
     <div className="space-y-1">
       <Label className="text-xs">{param.displayName}</Label>
       <Select
-        value={str}
+        value={selectValue || undefined}
         onValueChange={(next) => {
           // Always persist the canonical option value (never the display name).
           onChange(next);
         }}
       >
         <SelectTrigger className="text-xs">
-          <SelectValue />
+          <SelectValue placeholder={`Select ${param.displayName.toLowerCase()}`} />
         </SelectTrigger>
         <SelectContent>
           {shown.map((opt) => (

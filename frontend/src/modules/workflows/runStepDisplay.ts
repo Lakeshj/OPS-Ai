@@ -4,6 +4,7 @@
  */
 
 import type { WorkflowDefinition, WorkflowRunStep } from "./types";
+import { summarizeInstagramOutput } from "./instagramOutputPresentation";
 
 const ts = (value: string | Date | null | undefined): number => {
   if (!value) return Number.POSITIVE_INFINITY;
@@ -129,6 +130,8 @@ function unwrapMessageJson(value: string): string {
 }
 
 function summarizeBusinessFields(obj: Record<string, unknown>): string | null {
+  const ig = summarizeInstagramOutput(obj);
+  if (ig) return ig;
   const skip = new Set([
     ...TRIGGER_ENVELOPE_KEYS,
     "pairedItem",
@@ -143,6 +146,10 @@ function summarizeBusinessFields(obj: Record<string, unknown>): string | null {
     "__callableReturnItems",
     "__gscIntelligence",
     "__gscCapabilitySection",
+    "_meta",
+    "profilePictureUrl",
+    "instagramUserId",
+    "igId",
   ]);
   const entries = Object.entries(obj).filter(([k, v]) => {
     if (skip.has(k)) return false;
