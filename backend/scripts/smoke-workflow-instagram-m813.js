@@ -35,17 +35,31 @@ check("IG-M813-B1 engagement preset has no breakdown on groups", () => {
   assert.ok(built.metrics.includes("likes"));
 });
 
-check("IG-M813-B2 likes+age rejected", () => {
+check("IG-M813-B2 likes+age stripped as stale hidden param", () => {
+  const built = catalog.buildAccountInsightRequests({
+    preset: "custom",
+    metrics: ["likes", "comments", "shares", "saves"],
+    period: "day",
+    breakdown: "age",
+    dateRange: "last7days",
+  });
+  for (const group of built.groups) {
+    assert.equal(group.breakdown, undefined);
+  }
+});
+
+check("IG-M813-B2b metric mix still rejected", () => {
   assert.throws(
     () =>
       catalog.buildAccountInsightRequests({
         preset: "custom",
-        metrics: ["likes", "comments", "shares", "saves"],
+        metrics: ["likes", "follower_demographics"],
         period: "day",
-        breakdown: "age",
         dateRange: "last7days",
       }),
-    (err) => err.code === "INSTAGRAM_INSIGHTS_BREAKDOWN_INVALID"
+    (err) =>
+      err.code === "INSTAGRAM_INSIGHTS_METRIC_MIX_INVALID" ||
+      err.code === "INSTAGRAM_INSIGHTS_PERIOD_INVALID"
   );
 });
 

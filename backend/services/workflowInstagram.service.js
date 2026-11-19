@@ -94,6 +94,13 @@ const sanitizeInstagramNodeData = (data) => {
   if (next.since != null) next.since = String(next.since).trim();
   if (next.until != null) next.until = String(next.until).trim();
   if (next.metrics != null) next.metrics = insightsCatalog.listOf(next.metrics);
+  // M8.13.1 — strip stale hidden Insights params before execution.
+  if (
+    String(next.resource || "") === "insights" &&
+    String(next.operation || "") === "account_insights"
+  ) {
+    Object.assign(next, insightsCatalog.normalizeAccountInsightsData(next));
+  }
   if (next.imageUrl != null) next.imageUrl = String(next.imageUrl).trim();
   if (next.videoUrl != null) next.videoUrl = String(next.videoUrl).trim();
   if (next.mediaUrl != null) next.mediaUrl = String(next.mediaUrl).trim();

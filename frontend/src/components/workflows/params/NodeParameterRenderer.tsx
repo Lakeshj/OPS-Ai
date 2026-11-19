@@ -16,6 +16,8 @@ import {
   applyInstagramInsightsPresetChange,
   applyInstagramPublishOperationChange,
   applyInstagramResourceChange,
+  instagramInsightsParamsNeedNormalize,
+  normalizeInstagramInsightsParams,
 } from "@/modules/workflows/instagramDependentCascade";
 import { CredentialPicker } from "./CredentialPicker";
 import { GoogleResourcePicker } from "./GoogleResourcePicker";
@@ -540,20 +542,31 @@ export function NodeParameterRenderer({
   const reconcilePass = useRef(false);
   const resourceKey = String(rawValues.resource ?? "");
   const operationKey = String(rawValues.operation ?? "");
+  const insightsPresetKey = String(rawValues.insightsPreset ?? "");
 
-  // Loaded/saved invalid resource/operation pairs: normalize in the editor.
+  // Loaded/saved invalid pairs + Insights stale hidden params: mutate config.
   useEffect(() => {
-    const reconciled = reconcileDependentOptionParams(schema, rawValues);
-    if (!dependentParamsNeedReconcile(rawValues, reconciled, schema)) return;
+    let next = reconcileDependentOptionParams(schema, rawValues);
+    next = normalizeInstagramInsightsParams(next);
+    const optionChanged = dependentParamsNeedReconcile(
+      rawValues,
+      next,
+      schema
+    );
+    const insightsChanged = instagramInsightsParamsNeedNormalize(
+      rawValues,
+      next
+    );
+    if (!optionChanged && !insightsChanged) return;
     if (reconcilePass.current) return;
     reconcilePass.current = true;
-    onChange({ ...values, ...reconciled } as WorkflowNodeData);
+    onChange({ ...values, ...next } as WorkflowNodeData);
     const timer = window.setTimeout(() => {
       reconcilePass.current = false;
     }, 0);
     return () => window.clearTimeout(timer);
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- resource/operation only
-  }, [schema, resourceKey, operationKey]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- mode keys only
+  }, [schema, resourceKey, operationKey, insightsPresetKey]);
 
   const onFieldChange = (name: string, fieldValue: unknown) => {
     let patched: Record<string, unknown> = { ...rawValues, [name]: fieldValue };
@@ -571,12 +584,17 @@ export function NodeParameterRenderer({
         patched,
         String(fieldValue ?? "")
       );
+    } else {
+      patched = normalizeInstagramInsightsParams(patched);
     }
     const reconciled =
       name === "resource" || name === "operation" || name === "insightsPreset"
         ? reconcileDependentOptionParams(schema, patched)
         : patched;
-    onChange({ ...values, ...reconciled } as WorkflowNodeData);
+    onChange({
+      ...values,
+      ...normalizeInstagramInsightsParams(reconciled),
+    } as WorkflowNodeData);
   };
 
   return (

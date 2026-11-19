@@ -4,6 +4,16 @@
  */
 
 import type { ParamValues } from "./paramDisplayOptions";
+import {
+  isDemographicInsightsPreset,
+  isPerformanceInsightsPreset,
+  normalizeInstagramInsightsParams,
+} from "./instagramInsightsNormalize";
+
+export {
+  normalizeInstagramInsightsParams,
+  instagramInsightsParamsNeedNormalize,
+} from "./instagramInsightsNormalize";
 
 /** Fields scoped to the selected Instagram credential / media selection. */
 export const INSTAGRAM_CREDENTIAL_SCOPED_FIELDS = [
@@ -107,14 +117,7 @@ export function applyInstagramPublishOperationChange(
   return next;
 }
 
-const PERFORMANCE_INSIGHT_PRESETS = new Set([
-  "overview",
-  "engagement",
-  "audience",
-  "custom",
-]);
-
-/** Account Insights: Performance ↔ Demographics clears incompatible params. */
+/** Account Insights: Performance ↔ Demographics mutates stored params (not just hide). */
 export function applyInstagramInsightsPresetChange(
   values: ParamValues,
   nextPreset: string
@@ -122,28 +125,19 @@ export function applyInstagramInsightsPresetChange(
   const prev = String(values.insightsPreset || "");
   const nextKey = String(nextPreset || "");
   let next: ParamValues = { ...values, insightsPreset: nextKey };
-  if (prev === nextKey) return next;
 
-  const wasDemo = prev === "demographics";
-  const isDemo = nextKey === "demographics";
-  const wasPerf = PERFORMANCE_INSIGHT_PRESETS.has(prev) || prev === "";
-  const isPerf = PERFORMANCE_INSIGHT_PRESETS.has(nextKey);
+  const wasDemo = isDemographicInsightsPreset(prev);
+  const isDemo = isDemographicInsightsPreset(nextKey);
+  const wasPerf = isPerformanceInsightsPreset(prev);
+  const isPerf = isPerformanceInsightsPreset(nextKey);
 
-  if (wasDemo && isPerf) {
-    next.breakdown = "";
+  // Crossing mode boundary: drop metric selections that belong to the other mode.
+  if (prev !== nextKey && ((wasDemo && isPerf) || (wasPerf && isDemo))) {
     next.metrics = [];
   }
-  if (wasPerf && isDemo) {
-    next.period = "lifetime";
-    next.dateRange = "";
-    next.since = "";
-    next.until = "";
-    next.metrics = [];
-    if (!String(next.breakdown || "").trim()) {
-      next.breakdown = "age";
-    }
-  }
-  return next;
+
+  // Always normalize — deletes stale hidden breakdown/period values.
+  return normalizeInstagramInsightsParams(next);
 }
 
 export function applyInstagramResourceChange(
@@ -171,5 +165,5 @@ export function applyInstagramResourceChange(
     next.mediaIdMode = "list";
     next.mediaIdLabel = "";
   }
-  return next;
+  return normalizeInstagramInsightsParams(next);
 }

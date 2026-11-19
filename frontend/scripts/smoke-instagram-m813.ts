@@ -85,22 +85,16 @@ check("IG-M813-4 saves + no breakdown valid", () => {
   assert.equal(built.groups[0].breakdown, undefined);
 });
 
-check("IG-M813-5 likes + age rejected before Graph call", () => {
-  assert.throws(
-    () =>
-      catalog().buildAccountInsightRequests({
-        preset: "custom",
-        metrics: ["likes"],
-        period: "day",
-        breakdown: "age",
-        dateRange: "last7days",
-      }),
-    (err: { code?: string; message?: string }) =>
-      err.code === "INSTAGRAM_INSIGHTS_BREAKDOWN_INVALID" &&
-      /Age breakdown is only available for audience demographic insights/i.test(
-        String(err.message || "")
-      )
-  );
+check("IG-M813-5 likes + age stripped before Graph (stale hidden safe)", () => {
+  const built = catalog().buildAccountInsightRequests({
+    preset: "custom",
+    metrics: ["likes"],
+    period: "day",
+    breakdown: "age",
+    dateRange: "last7days",
+  });
+  assert.equal(built.groups[0].breakdown, undefined);
+  assert.deepEqual(built.groups[0].metrics, ["likes"]);
 });
 
 check("IG-M813-6 demographic metric + age valid", () => {
@@ -118,6 +112,8 @@ check("IG-M813-6 demographic metric + age valid", () => {
 check("IG-M813-7 audience → performance clears breakdown", () => {
   const next = applyInstagramInsightsPresetChange(
     {
+      resource: "insights",
+      operation: "account_insights",
       insightsPreset: "demographics",
       breakdown: "age",
       period: "lifetime",
@@ -126,25 +122,26 @@ check("IG-M813-7 audience → performance clears breakdown", () => {
     "engagement"
   );
   assert.equal(next.insightsPreset, "engagement");
-  assert.equal(next.breakdown, "");
+  assert.equal(Object.prototype.hasOwnProperty.call(next, "breakdown"), false);
 });
 
 check("IG-M813-8 performance → audience clears incompatible inputs", () => {
   const next = applyInstagramInsightsPresetChange(
     {
+      resource: "insights",
+      operation: "account_insights",
       insightsPreset: "engagement",
       period: "day",
       dateRange: "last7days",
       since: "2026-01-01",
       until: "2026-01-07",
-      breakdown: "",
     },
     "demographics"
   );
   assert.equal(next.period, "lifetime");
-  assert.equal(next.dateRange, "");
-  assert.equal(next.since, "");
-  assert.equal(next.until, "");
+  assert.equal(Object.prototype.hasOwnProperty.call(next, "dateRange"), false);
+  assert.equal(Object.prototype.hasOwnProperty.call(next, "since"), false);
+  assert.equal(Object.prototype.hasOwnProperty.call(next, "until"), false);
   assert.equal(next.breakdown, "age");
 });
 

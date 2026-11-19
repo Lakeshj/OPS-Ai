@@ -489,20 +489,53 @@ const resolveInsightsDateRange = ({
 };
 
 /**
+ * Strip mode-incompatible Account Insights params before validation/Graph.
+ * Performance must not retain demographic breakdown; demographics force lifetime.
+ * Does not invent metric values — only repairs stale hidden node state.
+ */
+const normalizeAccountInsightsData = (data = {}) => {
+  const next = data && typeof data === "object" && !Array.isArray(data) ? { ...data } : {};
+  const preset =
+    String(next.insightsPreset || next.preset || "overview").trim() || "overview";
+  next.insightsPreset = preset;
+  next.preset = preset;
+
+  if (preset === "demographics") {
+    next.period = "lifetime";
+    delete next.dateRange;
+    delete next.since;
+    delete next.until;
+    delete next.dateStart;
+    delete next.dateEnd;
+    delete next.timeframe;
+    if (!String(next.breakdown || "").trim()) {
+      next.breakdown = "age";
+    }
+    return next;
+  }
+
+  delete next.breakdown;
+  delete next.timeframe;
+  return next;
+};
+
+/**
  * Build validated account insight request groups.
  * Metrics with incompatible periods/types are not silently coerced.
  */
-const buildAccountInsightRequests = ({
-  preset,
-  metrics,
-  period,
-  dateRange,
-  since,
-  until,
-  breakdown,
-  metricType,
-  nowMs,
-}) => {
+const buildAccountInsightRequests = (rawInput = {}) => {
+  const input = normalizeAccountInsightsData(rawInput);
+  const {
+    metrics,
+    period,
+    dateRange,
+    since,
+    until,
+    breakdown,
+    metricType,
+    nowMs,
+  } = input;
+  const preset = input.insightsPreset || input.preset || "overview";
   const names = resolveAccountPresetMetrics(preset, metrics);
   const requestedPeriod = String(period || "").trim();
   const breakdownValue = String(breakdown || "").trim();
@@ -714,6 +747,7 @@ module.exports = {
   assertMediaMetricForType,
   normalizeMediaType,
   resolveInsightsDateRange,
+  normalizeAccountInsightsData,
   buildAccountInsightRequests,
   buildMediaInsightRequest,
   filterMediaPresetForType,
