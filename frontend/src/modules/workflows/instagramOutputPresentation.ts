@@ -13,10 +13,18 @@ export type InstagramOutputMeta = {
 
 export type InstagramReadableBlock = {
   title: string;
+  layout: "account" | "media" | "insights" | "comments" | "publish" | "generic";
   lines: Array<{ label: string; value: string }>;
   imageUrl?: string;
   /** Plain-text fallback for previews / copy / Run Results. */
   text: string;
+  /** Account card header (display-only). */
+  headerName?: string;
+  headerUsername?: string;
+  headerAccountType?: string;
+  /** Compact stats row for account / insight cards. */
+  stats?: Array<{ label: string; value: string }>;
+  biography?: string;
 };
 
 const asRecord = (value: unknown): Record<string, unknown> | null =>
@@ -80,27 +88,31 @@ function str(value: unknown): string {
 function formatAccountBlock(
   json: Record<string, unknown>
 ): InstagramReadableBlock {
-  const name = str(json.name) || str(json.username) || "Instagram account";
+  const headerName = str(json.name) || undefined;
   const username = str(json.username);
-  const lines: Array<{ label: string; value: string }> = [];
-  if (str(json.name)) lines.push({ label: "Name", value: str(json.name) });
-  if (username) lines.push({ label: "Username", value: `@${username}` });
-  if (str(json.accountType)) {
-    lines.push({ label: "Account Type", value: str(json.accountType) });
-  }
+  const headerUsername = username ? `@${username}` : undefined;
+  const headerAccountType = str(json.accountType) || undefined;
+  const biography = str(json.biography) || undefined;
+  const stats: Array<{ label: string; value: string }> = [];
   if (json.followersCount != null && json.followersCount !== "") {
-    lines.push({ label: "Followers", value: String(json.followersCount) });
+    stats.push({ label: "Followers", value: String(json.followersCount) });
   }
   if (json.followsCount != null && json.followsCount !== "") {
-    lines.push({ label: "Following", value: String(json.followsCount) });
+    stats.push({ label: "Following", value: String(json.followsCount) });
   }
   if (json.mediaCount != null && json.mediaCount !== "") {
-    lines.push({ label: "Media", value: String(json.mediaCount) });
+    stats.push({ label: "Media", value: String(json.mediaCount) });
   }
+
+  const lines: Array<{ label: string; value: string }> = [];
+  if (headerName) lines.push({ label: "Name", value: headerName });
+  if (headerUsername) lines.push({ label: "Username", value: headerUsername });
+  if (headerAccountType) {
+    lines.push({ label: "Account Type", value: headerAccountType });
+  }
+  for (const stat of stats) lines.push(stat);
   if (str(json.website)) lines.push({ label: "Website", value: str(json.website) });
-  if (str(json.biography)) {
-    lines.push({ label: "Biography", value: str(json.biography) });
-  }
+  if (biography) lines.push({ label: "Biography", value: biography });
 
   const imageUrl = isSafeInstagramImageUrl(json.profilePictureUrl)
     ? str(json.profilePictureUrl)
@@ -109,13 +121,25 @@ function formatAccountBlock(
   const textLines = [
     "Instagram Account",
     "",
-    ...lines.map((row) => `${row.label}\n${row.value}`),
-  ];
+    headerName || "",
+    headerUsername || "",
+    headerAccountType || "",
+    "",
+    ...stats.map((row) => `${row.label}: ${row.value}`),
+    biography ? `\nBiography\n${biography}` : "",
+  ].filter((line, index, arr) => !(line === "" && arr[index - 1] === ""));
+
   return {
     title: "Instagram Account",
+    layout: "account",
     lines,
     imageUrl,
     text: textLines.join("\n").trimEnd(),
+    headerName,
+    headerUsername,
+    headerAccountType,
+    stats,
+    biography,
   };
 }
 
@@ -160,6 +184,7 @@ function formatMediaBlock(
     : undefined;
   return {
     title,
+    layout: "media",
     lines,
     imageUrl,
     text: [title, "", ...lines.map((row) => `${row.label}\n${row.value}`)]
@@ -184,9 +209,15 @@ function formatInsightBlock(
   if (str(json.description)) {
     lines.push({ label: "Description", value: str(json.description) });
   }
+  const stats =
+    metric && lines.find((l) => l.label === "Value")
+      ? [{ label: metric, value: lines.find((l) => l.label === "Value")!.value }]
+      : undefined;
   return {
     title: "Instagram Insights",
+    layout: "insights",
     lines,
+    stats,
     text: ["Instagram Insights", "", ...lines.map((r) => `${r.label}\n${r.value}`)]
       .join("\n")
       .trimEnd(),
@@ -210,6 +241,7 @@ function formatCommentBlock(
   }
   return {
     title: "Instagram Comment",
+    layout: "comments",
     lines,
     text: ["Instagram Comment", "", ...lines.map((r) => `${r.label}\n${r.value}`)]
       .join("\n")
@@ -238,6 +270,7 @@ function formatPublishBlock(
   }
   return {
     title: "Instagram Publish",
+    layout: "publish",
     lines,
     text: ["Instagram Publish", "", ...lines.map((r) => `${r.label}\n${r.value}`)]
       .join("\n")

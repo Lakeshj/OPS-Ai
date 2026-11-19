@@ -37,7 +37,7 @@ import {
   type TableSortState,
 } from "@/modules/workflows/inspectorTableSort";
 import { InstagramOutputPreview } from "@/components/workflows/InstagramOutputPreview";
-import { isInstagramOutputJson } from "@/modules/workflows/instagramOutputPresentation";
+import { resolveOutputPresentation } from "@/modules/workflows/outputPresentation";
 import { toast } from "sonner";
 import {
   looksLikeMarkdownProse,
@@ -761,14 +761,27 @@ export function ItemDataViewer({
     Math.max(0, canonical.length - 1)
   );
   const viewItems = splitItems ? [canonical[selectedIndex]] : canonical;
+  const presentation = useMemo(
+    () =>
+      resolveOutputPresentation(
+        canonical.length === 1 ? canonical[0] : canonical
+      ),
+    [canonical]
+  );
+
   const displayTable = useMemo(() => {
-    const source = (
+    const base =
       canonical.length > 1 && onSelectedItemIndexChange
         ? [canonical[Math.min(Math.max(0, selectedItemIndex), canonical.length - 1)]]
-        : canonical
-    ).map(withReadableReport);
+        : canonical;
+    // Display-only: when Result wraps Instagram under `result`, table the
+    // unwrapped item instead of one opaque `result` cell. JSON tab stays original.
+    const source =
+      presentation?.provider === "instagram"
+        ? presentation.workflowItems.map(withReadableReport)
+        : base.map(withReadableReport);
     return buildDisplayTable(source);
-  }, [canonical, onSelectedItemIndexChange, selectedItemIndex]);
+  }, [canonical, onSelectedItemIndexChange, selectedItemIndex, presentation]);
 
   const nextDatasetKey = tableSortDatasetKey(displayTable);
   if (datasetKey !== nextDatasetKey) {
@@ -795,13 +808,13 @@ export function ItemDataViewer({
   const jsonText = prettyJson(canonicalJsonForView(viewItems));
   const selectedRow = canonical[selectedIndex];
   const selectedJson = selectedRow?.json as Record<string, unknown> | undefined;
-  const instagramPreviewItems = viewItems.filter((row) =>
-    isInstagramOutputJson((row?.json || {}) as Record<string, unknown>)
+  const selectedPresentation = resolveOutputPresentation(
+    viewItems.length === 1 ? viewItems[0] : viewItems
   );
-  const prosePreview =
-    instagramPreviewItems.length > 0
-      ? null
-      : extractProseField(selectedJson);
+  const showInstagramPreview = selectedPresentation?.provider === "instagram";
+  const prosePreview = showInstagramPreview
+    ? null
+    : extractProseField(selectedJson);
 
   const dataViewer = (
     <div
@@ -857,9 +870,15 @@ export function ItemDataViewer({
         data-inspector-region="item-data"
         className={cn(INSPECTOR_PANE_SCROLL_CLASS, "flex min-h-0 flex-1 flex-col gap-2")}
       >
-        {instagramPreviewItems.length > 0 &&
+        {showInstagramPreview &&
+          selectedPresentation &&
           (mode === "table" || mode === "schema") && (
-            <InstagramOutputPreview items={instagramPreviewItems} />
+            <InstagramOutputPreview
+              items={selectedPresentation.workflowItems}
+              value={
+                viewItems.length === 1 ? viewItems[0]?.json : viewItems
+              }
+            />
           )}
 
         {prosePreview && (mode === "table" || mode === "schema") && (

@@ -5,6 +5,7 @@
 
 import type { WorkflowDefinition, WorkflowRunStep } from "./types";
 import { summarizeInstagramOutput } from "./instagramOutputPresentation";
+import { resolveOutputPresentation } from "./outputPresentation";
 
 const ts = (value: string | Date | null | undefined): number => {
   if (!value) return Number.POSITIVE_INFINITY;
@@ -130,6 +131,10 @@ function unwrapMessageJson(value: string): string {
 }
 
 function summarizeBusinessFields(obj: Record<string, unknown>): string | null {
+  const presented = resolveOutputPresentation(obj);
+  if (presented?.provider === "instagram") {
+    return presented.summaryText;
+  }
   const ig = summarizeInstagramOutput(obj);
   if (ig) return ig;
   const skip = new Set([
@@ -251,6 +256,11 @@ export function formatStepOutput(output: unknown): string {
     }
   }
   if (typeof obj.text === "string" && obj.text.trim()) return obj.text;
+
+  const presented = resolveOutputPresentation(obj);
+  if (presented?.provider === "instagram") {
+    return presented.summaryText;
+  }
 
   if (obj.result != null) {
     if (typeof obj.result === "string") return unwrapMessageJson(obj.result);

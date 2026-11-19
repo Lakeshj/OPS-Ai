@@ -22,6 +22,9 @@ import {
   plainPreview,
   WorkflowProseContent,
 } from "./WorkflowProseContent";
+import { InstagramOutputPreview } from "./InstagramOutputPreview";
+import { resolveOutputPresentation } from "@/modules/workflows/outputPresentation";
+import { prettyJson } from "@/modules/workflows/inspectorViewModel";
 
 export type WorkflowResultsPanelProps = {
   latestRun?: WorkflowRun | null;
@@ -263,6 +266,14 @@ export function WorkflowResultsPanel({
     latestRun?.output != null && latestRun.status === "succeeded"
       ? formatStepOutput(latestRun.output)
       : null;
+  const finalPresentation =
+    latestRun?.output != null && latestRun.status === "succeeded"
+      ? resolveOutputPresentation(latestRun.output)
+      : null;
+  const finalRawJson =
+    latestRun?.output != null && latestRun.status === "succeeded"
+      ? prettyJson(latestRun.output)
+      : null;
 
   const waitingLabel = (() => {
     if (!latestRun || latestRun.status !== "waiting") return null;
@@ -396,9 +407,33 @@ export function WorkflowResultsPanel({
                   <div className="text-[11px] font-semibold uppercase text-muted-foreground">
                     Final result
                   </div>
-                  <CopyButton value={finalResultText} label="final result" />
+                  <CopyButton
+                    value={finalRawJson ?? finalResultText}
+                    label="final result"
+                  />
                 </div>
-                <WorkflowProseContent text={finalResultText} />
+                {finalPresentation?.provider === "instagram" ? (
+                  <div className="space-y-2">
+                    <InstagramOutputPreview
+                      value={latestRun?.output}
+                      items={finalPresentation.workflowItems}
+                      showTechnicalHint={false}
+                      className="rounded-md border border-border/60 bg-background/50 px-3 py-2"
+                    />
+                    {finalRawJson ? (
+                      <details className="rounded-md border border-border/50 bg-muted/30">
+                        <summary className="cursor-pointer px-2 py-1.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                          JSON / Raw data
+                        </summary>
+                        <pre className="max-h-64 overflow-auto border-t border-border/40 p-2 font-mono text-[11px] leading-snug whitespace-pre-wrap break-words">
+                          {finalRawJson}
+                        </pre>
+                      </details>
+                    ) : null}
+                  </div>
+                ) : (
+                  <WorkflowProseContent text={finalResultText} />
+                )}
               </div>
             )}
 
