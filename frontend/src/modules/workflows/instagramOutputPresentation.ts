@@ -11,6 +11,21 @@ export type InstagramOutputMeta = {
   instagramUserId?: unknown;
 };
 
+export type InstagramInsightBreakdownRow = {
+  label: string;
+  value: string;
+};
+
+export type InstagramInsightBreakdownTable = {
+  metricLabel: string;
+  breakdownKey: string;
+  breakdownLabel: string;
+  valueColumnLabel: string;
+  rows: InstagramInsightBreakdownRow[];
+  /** City/country may truncate in UI; age/gender show all. */
+  collapsible: boolean;
+};
+
 export type InstagramReadableBlock = {
   title: string;
   layout: "account" | "media" | "insights" | "comments" | "publish" | "generic";
@@ -24,6 +39,8 @@ export type InstagramReadableBlock = {
   headerAccountType?: string;
   /** Compact stats row for account / insight cards. */
   stats?: Array<{ label: string; value: string }>;
+  /** Demographic breakdown tables for Insights (primary human view). */
+  breakdownTables?: InstagramInsightBreakdownTable[];
   biography?: string;
 };
 
@@ -202,6 +219,120 @@ function insightMetricLabel(json: Record<string, unknown>): string {
   );
 }
 
+function titleCaseKey(raw: string): string {
+  const key = str(raw).toLowerCase();
+  if (key === "age") return "Age";
+  if (key === "gender") return "Gender";
+  if (key === "city") return "City";
+  if (key === "country") return "Country";
+  if (key === "follow_type") return "Follow type";
+  if (!key) return "Breakdown";
+  return key.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+function demographicValueColumnLabel(metric: string): string {
+  const key = str(metric).toLowerCase();
+  if (key === "follower_demographics") return "Followers";
+  if (key === "engaged_audience_demographics") return "Accounts";
+  if (key === "reached_audience_demographics") return "Accounts";
+  return "Value";
+}
+
+function formatAgeLabel(raw: string): string {
+  const text = str(raw);
+  // Prefer en-dash in human view: 13-17 → 13–17
+  return text.replace(/(\d+)\s*-\s*(\d+)/g, "$1–$2").replace(/(\d+)\+$/g, "$1+");
+}
+
+/**
+ * Flatten Meta `breakdownValues` into readable table rows (display-only).
+ */
+export function parseInsightBreakdownTable(
+  json: Record<string, unknown>
+): InstagramInsightBreakdownTable | null {
+  const raw = json.breakdownValues;
+  if (raw == null) return null;
+
+  const metric = str(json.metric || json.name);
+  const metricLabel = insightMetricLabel(json);
+  const fallbackBreakdown = str(json.breakdown).toLowerCase();
+  const buckets: Array<{
+    dimensionKeys: string[];
+    results: Array<Record<string, unknown>>;
+  }> = [];
+
+  const pushBucket = (entry: unknown) => {
+    const obj = asRecord(entry);
+    if (!obj) return;
+    const dimensionKeys = Array.isArray(obj.dimension_keys)
+      ? obj.dimension_keys.map((k) => String(k || "").trim()).filter(Boolean)
+      : fallbackBreakdown
+        ? [fallbackBreakdown]
+        : [];
+    const results = Array.isArray(obj.results)
+      ? obj.results
+          .map((r) => asRecord(r))
+          .filter(Boolean) as Array<Record<string, unknown>>
+      : [];
+    buckets.push({ dimensionKeys, results });
+  };
+
+  if (Array.isArray(raw)) {
+    raw.forEach(pushBucket);
+  } else if (asRecord(raw)) {
+    const obj = asRecord(raw)!;
+    if (Array.isArray(obj.breakdowns)) {
+      obj.breakdowns.forEach(pushBucket);
+    } else if (Array.isArray(obj.results)) {
+      pushBucket(obj);
+    } else {
+      // Plain map: { "18-24": 40, ... }
+      for (const [key, value] of Object.entries(obj)) {
+        if (value != null && typeof value === "object") continue;
+        buckets.push({
+          dimensionKeys: fallbackBreakdown ? [fallbackBreakdown] : ["value"],
+          results: [{ dimension_values: [key], value }],
+        });
+      }
+    }
+  }
+
+  const rows: InstagramInsightBreakdownRow[] = [];
+  let breakdownKey = fallbackBreakdown;
+  for (const bucket of buckets) {
+    if (!breakdownKey && bucket.dimensionKeys[0]) {
+      breakdownKey = bucket.dimensionKeys[0];
+    }
+    for (const result of bucket.results) {
+      const dims = Array.isArray(result.dimension_values)
+        ? result.dimension_values.map((d) => String(d ?? "").trim())
+        : [];
+      const labelRaw = dims[0] || "";
+      if (!labelRaw && result.value == null) continue;
+      const label =
+        (breakdownKey || bucket.dimensionKeys[0] || "") === "age"
+          ? formatAgeLabel(labelRaw)
+          : labelRaw || "—";
+      rows.push({
+        label,
+        value: result.value == null ? "—" : String(result.value),
+      });
+    }
+  }
+
+  if (!rows.length) return null;
+
+  const key = breakdownKey || "breakdown";
+  return {
+    metricLabel,
+    breakdownKey: key,
+    breakdownLabel: titleCaseKey(key),
+    valueColumnLabel: demographicValueColumnLabel(metric),
+    rows,
+    collapsible: key === "city" || key === "country",
+  };
+}
+
 function insightDisplayValue(json: Record<string, unknown>): string {
   if (str(json.unavailableReason)) return str(json.unavailableReason);
   if (String(json.status || "") === "unavailable") return "Not available";
@@ -209,10 +340,25 @@ function insightDisplayValue(json: Record<string, unknown>): string {
   if (json.value != null && typeof json.value !== "object") {
     return String(json.value);
   }
+  // Breakdown metrics are rendered via breakdownTables — never "See breakdown".
   if (json.breakdownValues != null) {
-    return "See breakdown";
+    const table = parseInsightBreakdownTable(json);
+    if (!table) {
+      return "Demographic data is not available for this account or timeframe.";
+    }
+    return table.rows.map((r) => `${r.label}: ${r.value}`).join(", ");
   }
   return "Not available";
+}
+
+function formatPeriodLabel(period: string): string {
+  const key = str(period).toLowerCase();
+  if (key === "lifetime") return "Lifetime";
+  if (key === "day") return "Day";
+  if (key === "week") return "Week";
+  if (key === "days_28") return "28 days";
+  if (key === "total_over_range") return "Total over range";
+  return titleCaseKey(key);
 }
 
 function formatInsightDateRange(items: Record<string, unknown>[]): string {
@@ -273,7 +419,7 @@ export function buildInstagramInsightsCollection(
   if (demographicEmpty) {
     const message =
       str(rows[0].unavailableReason) ||
-      "Audience demographic data is not available for this account or selected timeframe.";
+      "Demographic data is not available for this account or timeframe.";
     return {
       title: "Instagram Insights",
       layout: "insights",
@@ -299,28 +445,61 @@ export function buildInstagramInsightsCollection(
 
   const stats: Array<{ label: string; value: string }> = [];
   const lines: Array<{ label: string; value: string }> = [];
+  const breakdownTables: InstagramInsightBreakdownTable[] = [];
+  const textChunks: string[] = ["Instagram Insights"];
+
+  const period = str([...latestByMetric.values()][0]?.period);
+  if (period) {
+    lines.push({ label: "Period", value: formatPeriodLabel(period) });
+    textChunks.push(`Period: ${formatPeriodLabel(period)}`);
+  }
+  const range = formatInsightDateRange(rows);
+  if (range && !period) {
+    lines.push({ label: "Range", value: range });
+    textChunks.push(range);
+  }
+  textChunks.push("");
+
   for (const row of latestByMetric.values()) {
+    const table = parseInsightBreakdownTable(row);
+    if (table) {
+      breakdownTables.push(table);
+      lines.push({ label: table.metricLabel, value: `Breakdown: ${table.breakdownLabel}` });
+      textChunks.push(table.metricLabel);
+      textChunks.push(`Breakdown: ${table.breakdownLabel}`);
+      textChunks.push("");
+      for (const r of table.rows) {
+        textChunks.push(`${r.label}: ${r.value}`);
+      }
+      textChunks.push("");
+      continue;
+    }
+
+    if (row.breakdownValues != null) {
+      const message =
+        str(row.unavailableReason) ||
+        "Demographic data is not available for this account or timeframe.";
+      lines.push({ label: insightMetricLabel(row), value: message });
+      textChunks.push(insightMetricLabel(row));
+      textChunks.push(message);
+      textChunks.push("");
+      continue;
+    }
+
     const label = insightMetricLabel(row);
     const value = insightDisplayValue(row);
     stats.push({ label, value });
     lines.push({ label, value });
+    textChunks.push(`${label.padEnd(14)} ${value}`);
   }
 
-  const range = formatInsightDateRange(rows);
-  const title = range ? `Instagram Insights\n${range}` : "Instagram Insights";
-  const textLines = [
-    "Instagram Insights",
-    ...(range ? [range, ""] : [""]),
-    ...stats.map((s) => `${s.label.padEnd(14)} ${s.value}`),
-  ];
   return {
-    title: title.split("\n")[0],
+    title: "Instagram Insights",
     layout: "insights",
-    lines: range
-      ? [{ label: "Range", value: range }, ...lines]
-      : lines,
-    stats,
-    text: textLines.join("\n").trimEnd(),
+    lines,
+    stats: stats.length ? stats : undefined,
+    breakdownTables: breakdownTables.length ? breakdownTables : undefined,
+    text: textChunks.join("\n").trimEnd(),
   };
 }
 

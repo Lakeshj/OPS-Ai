@@ -1,10 +1,12 @@
 "use client";
 
 import React from "react";
+import { Check, Copy } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { WorkflowItem } from "@/modules/workflows/types";
 import {
   buildInstagramReadableBlock,
+  type InstagramInsightBreakdownTable,
   type InstagramReadableBlock,
 } from "@/modules/workflows/instagramOutputPresentation";
 import { resolveOutputPresentation } from "@/modules/workflows/outputPresentation";
@@ -17,6 +19,8 @@ type Props = {
   /** Hide the "JSON tab" hint outside inspector contexts. */
   showTechnicalHint?: boolean;
 };
+
+const BREAKDOWN_PREVIEW_ROWS = 15;
 
 /**
  * Human-readable Instagram preview. Raw JSON remains with the caller / JSON tab.
@@ -31,6 +35,7 @@ export function InstagramOutputPreview({
   if (!blocks.length) return null;
 
   const showList = blocks.length > 1;
+  const copyText = blocks.map((b) => b.text).filter(Boolean).join("\n\n");
 
   return (
     <div
@@ -40,8 +45,11 @@ export function InstagramOutputPreview({
       }
       data-instagram-output-preview="true"
     >
-      <div className="mb-2 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-        Instagram
+      <div className="mb-2 flex items-center justify-between gap-2">
+        <div className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+          Instagram
+        </div>
+        {copyText ? <HumanCopyButton text={copyText} /> : null}
       </div>
       {!showList ? (
         <InstagramBlockView block={blocks[0]!} />
@@ -63,6 +71,26 @@ export function InstagramOutputPreview({
         </p>
       ) : null}
     </div>
+  );
+}
+
+function HumanCopyButton({ text }: { text: string }) {
+  const [copied, setCopied] = React.useState(false);
+  return (
+    <button
+      type="button"
+      className="inline-flex items-center gap-1 rounded border border-border/60 bg-background/70 px-1.5 py-0.5 text-[10px] text-muted-foreground hover:text-foreground"
+      title="Copy human-readable insights"
+      onClick={() => {
+        void navigator.clipboard.writeText(text).then(() => {
+          setCopied(true);
+          window.setTimeout(() => setCopied(false), 1500);
+        });
+      }}
+    >
+      {copied ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
+      {copied ? "Copied" : "Copy"}
+    </button>
   );
 }
 
@@ -100,15 +128,41 @@ function InstagramBlockView({
   if (block.layout === "account") {
     return <AccountCard block={block} compact={compact} />;
   }
-  if (block.layout === "insights" && block.stats?.length) {
+  if (block.layout === "insights") {
+    const period = block.lines.find((l) => l.label === "Period")?.value;
     const range = block.lines.find((l) => l.label === "Range")?.value;
+    const hasBreakdown = Boolean(block.breakdownTables?.length);
+    const hasStats = Boolean(block.stats?.length);
     return (
-      <div className="space-y-2">
+      <div className="space-y-3" data-instagram-insights-card="true">
         <div className="text-xs font-semibold text-foreground">{block.title}</div>
-        {range ? (
+        {period ? (
+          <div className="text-[11px] text-muted-foreground">
+            Period: {period}
+          </div>
+        ) : range ? (
           <div className="text-[11px] text-muted-foreground">{range}</div>
         ) : null}
-        <StatsRow stats={block.stats} />
+        {hasBreakdown
+          ? block.breakdownTables!.map((table) => (
+              <InsightBreakdownTableView key={`${table.metricLabel}-${table.breakdownKey}`} table={table} />
+            ))
+          : null}
+        {hasStats ? <StatsRow stats={block.stats!} /> : null}
+        {!hasBreakdown && !hasStats
+          ? block.lines
+              .filter((l) => l.label !== "Period" && l.label !== "Range")
+              .map((row) => (
+                <div key={row.label}>
+                  <div className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                    {row.label}
+                  </div>
+                  <div className="whitespace-pre-wrap text-xs text-foreground">
+                    {row.value}
+                  </div>
+                </div>
+              ))
+          : null}
       </div>
     );
   }
@@ -204,6 +258,62 @@ function AccountCard({
             {block.biography}
           </p>
         </div>
+      ) : null}
+    </div>
+  );
+}
+
+function InsightBreakdownTableView({
+  table,
+}: {
+  table: InstagramInsightBreakdownTable;
+}) {
+  const [expanded, setExpanded] = React.useState(false);
+  const truncate =
+    table.collapsible && table.rows.length > BREAKDOWN_PREVIEW_ROWS;
+  const visible =
+    truncate && !expanded
+      ? table.rows.slice(0, BREAKDOWN_PREVIEW_ROWS)
+      : table.rows;
+
+  return (
+    <div
+      className="space-y-2"
+      data-instagram-insights-breakdown={table.breakdownKey}
+    >
+      <div>
+        <div className="text-xs font-medium text-foreground">
+          {table.metricLabel}
+        </div>
+        <div className="text-[11px] text-muted-foreground">
+          Breakdown: {table.breakdownLabel}
+        </div>
+      </div>
+      <div className="overflow-hidden rounded-md border border-border/60">
+        <div className="grid grid-cols-2 gap-0 border-b border-border/60 bg-muted/40 px-2 py-1.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+          <div>{table.breakdownLabel}</div>
+          <div className="text-right">{table.valueColumnLabel}</div>
+        </div>
+        <ul className="divide-y divide-border/40">
+          {visible.map((row) => (
+            <li
+              key={`${row.label}-${row.value}`}
+              className="grid grid-cols-2 gap-0 px-2 py-1.5 text-xs text-foreground"
+            >
+              <span>{row.label}</span>
+              <span className="text-right tabular-nums">{row.value}</span>
+            </li>
+          ))}
+        </ul>
+      </div>
+      {truncate ? (
+        <button
+          type="button"
+          className="text-[11px] text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
+          onClick={() => setExpanded((v) => !v)}
+        >
+          {expanded ? "Collapse" : "Show all"}
+        </button>
       ) : null}
     </div>
   );
