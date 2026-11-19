@@ -1636,6 +1636,33 @@ function WorkflowCanvasInner({
         );
         return;
       }
+      const target = nodes.find((n) => n.id === nodeId);
+      if (
+        target?.type === "instagram" &&
+        String(target.data?.resource || "") === "insights" &&
+        workspaceId &&
+        String(target.data?.credentialId || "").trim()
+      ) {
+        try {
+          const { workflowCredentialsApi } = await import(
+            "@/modules/workflows/api"
+          );
+          const {
+            credentialHasInsightsPermission,
+            insightsPermissionBlockedMessage,
+          } = await import("@/modules/workflows/instagramPermissions");
+          const list = await workflowCredentialsApi.list(workspaceId);
+          const cred = list.find(
+            (c) => c.id === String(target.data?.credentialId || "")
+          );
+          if (credentialHasInsightsPermission(cred) === false) {
+            toast.error(insightsPermissionBlockedMessage());
+            return;
+          }
+        } catch {
+          // Backend assertInsightsPermission remains authoritative.
+        }
+      }
       setExecutingNode(nodeId);
       setNodes((prev) =>
         prev.map((n) =>

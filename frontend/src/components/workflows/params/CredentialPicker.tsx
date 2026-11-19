@@ -325,7 +325,11 @@ export function CredentialPicker({
       await workflowCredentialsApi.remove(selected.id);
       if (value === selected.id) onChange("");
       reload();
-      toast.success("Google connection removed");
+      toast.success(
+        selected.type === "instagram"
+          ? "Instagram disconnected from OpsAi"
+          : "Google connection removed"
+      );
     } catch (err) {
       toast.error(
         err instanceof Error ? err.message : "Could not remove connection"
@@ -727,6 +731,10 @@ export function CredentialPicker({
             onConnected={(id) => {
               reload();
               onChange(id);
+            }}
+            onDisconnected={(removedId) => {
+              if (value === removedId) onChange("");
+              reload();
             }}
           />
           {instagramOnly && instagramCredentialCount > 0 ? (

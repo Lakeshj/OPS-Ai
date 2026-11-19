@@ -162,7 +162,11 @@ export type ParamCustomRenderer =
   /** Instagram MCP tools. Provider is fixed by the node type. */
   | "instagramMcpTool"
   | "metaAdAccount"
-  | "metaAdsFilters";
+  | "metaAdsFilters"
+  | "instagramMediaLocator"
+  | "instagramCommentLocator"
+  | "instagramPublishMedia"
+  | "instagramInsightsNotice";
 
 export interface DisplayOptions {
   show?: Record<string, Array<string | number | boolean>>;
@@ -207,7 +211,10 @@ export interface ParamDescriptor {
     | "gmailLabels"
     | "sheetTabs"
     | "aiModels"
-    | "spreadsheetId";
+    | "spreadsheetId"
+    | "image"
+    | "video"
+    | "story";
   locatorModes?: Array<"account" | "manual" | "expression">;
   locatorModeField?: string;
   locatorLabelField?: string;

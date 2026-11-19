@@ -150,6 +150,10 @@ const formatCredential = (row) => {
       isInstagram && Array.isArray(cfg.missingPermissions)
         ? cfg.missingPermissions.map(String)
         : undefined,
+    grantedPermissions:
+      isInstagram && Array.isArray(cfg.grantedPermissions)
+        ? cfg.grantedPermissions.map(String)
+        : undefined,
   };
 };
 
@@ -450,6 +454,52 @@ const remove = async (id, authUser) => {
   await pool.execute(`DELETE FROM workflow_credentials WHERE id = ?`, [id]);
 };
 
+/**
+ * List workflows in the credential's workspace that reference credentialId
+ * on any node. Used for disconnect confirmation warnings only.
+ */
+const listCredentialUsage = async (credentialId, authUser) => {
+  const [rows] = await pool.execute(
+    `SELECT * FROM workflow_credentials WHERE id = ?`,
+    [credentialId]
+  );
+  if (rows.length === 0) {
+    throw new AppError("Credential not found", 404, "NOT_FOUND");
+  }
+  const workspaceId = rows[0].workspace_id;
+  await assertWorkspaceAccess(authUser, workspaceId);
+  const [workflows] = await pool.execute(
+    `SELECT id, name, definition_json FROM workflows WHERE workspace_id = ?`,
+    [workspaceId]
+  );
+  const id = String(credentialId);
+  const matches = [];
+  for (const wf of workflows) {
+    let definition = { nodes: [] };
+    try {
+      definition =
+        typeof wf.definition_json === "string"
+          ? JSON.parse(wf.definition_json || "{}")
+          : wf.definition_json || {};
+    } catch {
+      definition = { nodes: [] };
+    }
+    const nodes = Array.isArray(definition.nodes) ? definition.nodes : [];
+    const uses = nodes.some(
+      (node) => String(node?.data?.credentialId || "").trim() === id
+    );
+    if (uses) {
+      matches.push({ id: wf.id, name: String(wf.name || "Untitled workflow") });
+    }
+  }
+  return {
+    credentialId: id,
+    workspaceId,
+    workflowCount: matches.length,
+    workflows: matches.slice(0, 20),
+  };
+};
+
 const getEditorView = async (id, authUser) => {
   const [rows] = await pool.execute(
     `SELECT * FROM workflow_credentials WHERE id = ?`,
@@ -621,6 +671,7 @@ module.exports = {
   create,
   update,
   remove,
+  listCredentialUsage,
   getEditorView,
   getForWorkspace,
   saveSecretAndConfig,

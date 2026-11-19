@@ -149,7 +149,10 @@ check("IG-OAUTH-UX-8 missing Instagram app config: visible sanitized error", () 
   assert.match(panel, /Missing: \$\{missingConfigKeys\.join/);
   // Button must remain clickable when platform blocked (no silent disabled no-op)
   assert.equal(/disabled=\{connecting \|\| !workspaceId \|\| platformBlocked\}/.test(panel), false);
-  assert.match(panel, /disabled=\{connecting \|\| !workspaceId\}/);
+  assert.match(
+    panel,
+    /disabled=\{connecting \|\| disconnecting \|\| !workspaceId\}/
+  );
   assert.equal(/App Secret/.test(panel), false);
   assert.equal(/access_token/i.test(panel), false);
 });

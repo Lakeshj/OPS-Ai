@@ -348,6 +348,70 @@ export const workflowCredentialsApi = {
       `/workflows/credentials/${credentialId}`
     ),
 
+  getCredentialUsage: (credentialId: string) =>
+    apiClient.get<{
+      credentialId: string;
+      workspaceId: string;
+      workflowCount: number;
+      workflows: Array<{ id: string; name: string }>;
+    }>(`/workflows/credentials/${encodeURIComponent(credentialId)}/usage`),
+
+  listInstagramMediaOptions: (workspaceId: string, credentialId: string) =>
+    apiClient.get<{
+      instagramUserId?: string;
+      options: Array<{
+        id: string;
+        mediaId: string;
+        label: string;
+        captionSnippet?: string;
+        mediaType?: string;
+        timestamp?: string;
+        thumbnailUrl?: string;
+      }>;
+    }>(
+      `/workflows/instagram/media-options?workspaceId=${encodeURIComponent(workspaceId)}&credentialId=${encodeURIComponent(credentialId)}`
+    ),
+
+  listInstagramCommentOptions: (
+    workspaceId: string,
+    credentialId: string,
+    mediaId: string
+  ) =>
+    apiClient.get<{
+      instagramUserId?: string;
+      mediaId: string;
+      options: Array<{
+        id: string;
+        commentId: string;
+        label: string;
+        username?: string;
+        text?: string;
+        timestamp?: string;
+        repliesCount?: number;
+      }>;
+    }>(
+      `/workflows/instagram/comment-options?workspaceId=${encodeURIComponent(workspaceId)}&credentialId=${encodeURIComponent(credentialId)}&mediaId=${encodeURIComponent(mediaId)}`
+    ),
+
+  stageInstagramPublishMedia: (payload: {
+    workspaceId: string;
+    file: File;
+    kind?: "image" | "video";
+  }) => {
+    const form = new FormData();
+    form.append("file", payload.file);
+    form.append("workspaceId", payload.workspaceId);
+    if (payload.kind) form.append("kind", payload.kind);
+    return apiClient.postForm<{
+      url: string;
+      publicPath: string;
+      filename: string;
+      mimeType: string;
+      sizeBytes: number;
+      kind: string;
+    }>("/workflows/instagram/stage-media", form);
+  },
+
   startOAuth2: (payload: { workspaceId: string; credentialId: string }) =>
     apiClient.post<{ url: string; callbackOrigin: string; redirectUri: string }>(
       "/workflows/oauth2/start",

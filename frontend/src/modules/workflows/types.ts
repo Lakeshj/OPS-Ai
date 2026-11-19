@@ -257,6 +257,7 @@ export interface WorkflowCredential {
   accountType?: string;
   profilePictureUrl?: string;
   missingPermissions?: string[];
+  grantedPermissions?: string[];
 }
 
 export type WorkflowCredentialSecret = Record<string, string>;
@@ -354,7 +355,7 @@ export const CREDENTIAL_TYPE_FIELDS: Record<
     label: "Instagram",
     accountLabel: "Instagram Account",
     connectAction: "Connect Instagram",
-    connectAnotherAction: "Connect another Instagram account",
+    connectAnotherAction: "Connect other account",
     fields: [],
     oauth: true,
   },

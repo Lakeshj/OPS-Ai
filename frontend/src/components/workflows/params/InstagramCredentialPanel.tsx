@@ -21,6 +21,8 @@ type Props = {
   /** Optional display name for a new connection (multi-client). */
   connectName?: string;
   onConnected: (credentialId: string) => void;
+  /** Called after the selected OpsAi Instagram credential is deleted. */
+  onDisconnected?: (credentialId: string) => void;
   /**
    * When true, OAuth creates a NEW credential (Connect / Connect other).
    * When false and credential.id is set, OAuth may reconnect that credential.
@@ -65,9 +67,11 @@ export function InstagramCredentialPanel({
   credential,
   connectName,
   onConnected,
+  onDisconnected,
   forceNew = false,
 }: Props) {
   const [connecting, setConnecting] = React.useState(false);
+  const [disconnecting, setDisconnecting] = React.useState(false);
   const [platformReady, setPlatformReady] = React.useState<boolean | null>(null);
   const [missingConfigKeys, setMissingConfigKeys] = React.useState<string[]>(
     []
@@ -155,12 +159,57 @@ export function InstagramCredentialPanel({
   );
   const showConnectNew = !reconnectingExisting;
   const showReconnect = needsReconnect;
+  const showDisconnect = Boolean(credential?.id) && !forceNew;
   let primaryLabel = "Connect Instagram";
   if (connecting) primaryLabel = "Connecting…";
   else if (showReconnect) primaryLabel = "Reconnect Instagram";
 
+  const disconnect = async () => {
+    const selectedCredentialId = String(credential && credential.id ? credential.id : "").trim();
+    if (!selectedCredentialId) return;
+    setInlineError(null);
+    let usageNote = "";
+    try {
+      const usage = await workflowCredentialsApi.getCredentialUsage(
+        selectedCredentialId
+      );
+      if (usage.workflowCount > 0) {
+        const names = (usage.workflows || [])
+          .slice(0, 3)
+          .map((w) => w.name)
+          .join(", ");
+        usageNote = `\n\n${usage.workflowCount} workflow(s) still reference this connection${
+          names ? ` (${names}${usage.workflowCount > 3 ? ", …" : ""})` : ""
+        }. Those nodes will need another Instagram account.`;
+      }
+    } catch {
+      // usage check is advisory — still allow disconnect confirmation
+    }
+    const label = credential.username
+      ? `@${credential.username}`
+      : credential.name || "this Instagram account";
+    const ok = window.confirm(
+      `Disconnect ${label} from OpsAi?\n\nThis removes the saved connection in OpsAi only. It does not delete the Instagram account, posts, or Meta Business assets.${usageNote}`
+    );
+    if (!ok) return;
+    setDisconnecting(true);
+    try {
+      const removedId = selectedCredentialId;
+      await workflowCredentialsApi.remove(removedId);
+      onDisconnected?.(removedId);
+      toast.success("Instagram disconnected from OpsAi");
+    } catch (err) {
+      const msg =
+        err instanceof Error ? err.message : "Could not disconnect Instagram";
+      setInlineError(msg);
+      toast.error(msg);
+    } finally {
+      setDisconnecting(false);
+    }
+  };
+
   return (
-    <div className="space-y-2">
+    <div className="space-y-2" data-instagram-account-management="true">
       {platformBlocked ? (
         <div
           className="rounded-md border border-amber-500/40 bg-amber-500/10 px-2 py-1.5 text-[11px] text-amber-950 dark:text-amber-100"
@@ -185,19 +234,35 @@ export function InstagramCredentialPanel({
         </div>
       ) : null}
 
-      {showConnectNew || showReconnect ? (
-        <Button
-          type="button"
-          size="sm"
-          variant={showReconnect ? "default" : "default"}
-          disabled={connecting || !workspaceId}
-          data-instagram-connect-intent={
-            showReconnect ? "reconnect" : "connect_new"
-          }
-          onClick={() => void connect()}
-        >
-          {primaryLabel}
-        </Button>
+      {showConnectNew || showReconnect || showDisconnect ? (
+        <div className="flex flex-wrap gap-2">
+          {showConnectNew || showReconnect ? (
+            <Button
+              type="button"
+              size="sm"
+              variant="default"
+              disabled={connecting || disconnecting || !workspaceId}
+              data-instagram-connect-intent={
+                showReconnect ? "reconnect" : "connect_new"
+              }
+              onClick={() => void connect()}
+            >
+              {primaryLabel}
+            </Button>
+          ) : null}
+          {showDisconnect ? (
+            <Button
+              type="button"
+              size="sm"
+              variant="destructive"
+              disabled={disconnecting || connecting}
+              data-instagram-disconnect="true"
+              onClick={() => void disconnect()}
+            >
+              {disconnecting ? "Disconnecting…" : "Disconnect from OpsAi"}
+            </Button>
+          ) : null}
+        </div>
       ) : null}
 
       {credential?.username ? (

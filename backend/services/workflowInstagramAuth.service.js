@@ -57,11 +57,42 @@ const mapInstagramError = (status, body) => {
     );
   }
   if (code === 10 || code === 200 || /permission/i.test(message)) {
-    return igError(
-      "Instagram denied this request. A required permission is missing — reconnect and grant access.",
-      "INSTAGRAM_PERMISSION_DENIED",
-      403
-    );
+    const lower = message.toLowerCase();
+    let errCode = "GRAPH_PERMISSION_ERROR";
+    let human =
+      "Instagram denied this request due to a Graph permission error.";
+    if (
+      /advanced access|not been approved|app review|standard access/i.test(
+        lower
+      )
+    ) {
+      errCode = /advanced access/i.test(lower)
+        ? "ADVANCED_ACCESS_REQUIRED"
+        : "APP_ACCESS_NOT_APPROVED";
+      human =
+        errCode === "ADVANCED_ACCESS_REQUIRED"
+          ? "Instagram requires Advanced Access for this permission. Complete Meta App Review, then reconnect."
+          : "This Instagram permission is not approved for the app yet. Finish Meta App Review, then reconnect.";
+    } else if (
+      /not eligible|business verification|professional account|creator account|page role/i.test(
+        lower
+      )
+    ) {
+      errCode = "ACCOUNT_NOT_ELIGIBLE";
+      human =
+        "This Instagram account is not eligible for the requested permission. Use a professional account with the required Page role.";
+    } else if (
+      /permission.*(not granted|missing)|missing permission|requires.*permission|(#200)|(#10)/i.test(
+        lower
+      ) ||
+      code === 10 ||
+      code === 200
+    ) {
+      errCode = "PERMISSION_NOT_GRANTED";
+      human =
+        "A required Instagram permission was not granted. Reconnect Instagram and grant access.";
+    }
+    return igError(human, errCode, 403);
   }
   if (
     code === 100 &&

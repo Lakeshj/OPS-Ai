@@ -65,6 +65,11 @@ import {
   parseAiErrorFromUnknown,
   providerResourceExplanation,
 } from "@/modules/workflows/aiAgentUx";
+import { workflowCredentialsApi } from "@/modules/workflows/api";
+import {
+  credentialHasInsightsPermission,
+  insightsPermissionBlockedMessage,
+} from "@/modules/workflows/instagramPermissions";
 
 type Props = {
   open: boolean;
@@ -487,6 +492,25 @@ export function WorkflowNodeDialog({
           : "Iteration-level rerun inside Loop isn't supported yet. Use Execute workflow or Run to a node after Done."
       );
       return;
+    }
+    if (
+      selectedType === "instagram" &&
+      String(selectedData?.resource || "") === "insights" &&
+      workspaceId &&
+      String(selectedData?.credentialId || "").trim()
+    ) {
+      try {
+        const list = await workflowCredentialsApi.list(workspaceId);
+        const cred = list.find(
+          (c) => c.id === String(selectedData?.credentialId || "")
+        );
+        if (credentialHasInsightsPermission(cred) === false) {
+          toast.error(insightsPermissionBlockedMessage());
+          return;
+        }
+      } catch {
+        // If credential list fails, allow backend assertInsightsPermission to decide.
+      }
     }
     setExecuting(true);
     try {

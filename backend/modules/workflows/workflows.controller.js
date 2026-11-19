@@ -272,6 +272,90 @@ const listInstagramAccounts = asyncHandler(async (req, res) => {
   );
 });
 
+const getCredentialUsage = asyncHandler(async (req, res) => {
+  res.json(
+    await credentialsService.listCredentialUsage(
+      req.params.credentialId,
+      req.user
+    )
+  );
+});
+
+const listInstagramMediaOptions = asyncHandler(async (req, res) => {
+  const picker = require("../../services/workflowInstagramPicker.service");
+  const { assertWorkspaceAccess } = require("../../services/authorization.service");
+  const workspaceId = String(req.query.workspaceId || "").trim();
+  const credentialId = String(req.query.credentialId || "").trim();
+  if (!workspaceId || !credentialId) {
+    res.status(400).json({
+      error: "workspaceId and credentialId are required",
+      code: "VALIDATION_ERROR",
+    });
+    return;
+  }
+  await assertWorkspaceAccess(req.user, workspaceId);
+  res.json(
+    await picker.listMediaOptions({
+      workspaceId,
+      credentialId,
+      limit: req.query.limit,
+    })
+  );
+});
+
+const listInstagramCommentOptions = asyncHandler(async (req, res) => {
+  const picker = require("../../services/workflowInstagramPicker.service");
+  const { assertWorkspaceAccess } = require("../../services/authorization.service");
+  const workspaceId = String(req.query.workspaceId || "").trim();
+  const credentialId = String(req.query.credentialId || "").trim();
+  const mediaId = String(req.query.mediaId || "").trim();
+  if (!workspaceId || !credentialId || !mediaId) {
+    res.status(400).json({
+      error: "workspaceId, credentialId, and mediaId are required",
+      code: "VALIDATION_ERROR",
+    });
+    return;
+  }
+  await assertWorkspaceAccess(req.user, workspaceId);
+  res.json(
+    await picker.listCommentOptions({
+      workspaceId,
+      credentialId,
+      mediaId,
+      limit: req.query.limit,
+    })
+  );
+});
+
+const stageInstagramPublishMedia = asyncHandler(async (req, res) => {
+  const picker = require("../../services/workflowInstagramPicker.service");
+  const { assertWorkspaceAccess } = require("../../services/authorization.service");
+  const workspaceId = String(req.body?.workspaceId || req.query.workspaceId || "").trim();
+  if (!workspaceId) {
+    res.status(400).json({
+      error: "workspaceId is required",
+      code: "VALIDATION_ERROR",
+    });
+    return;
+  }
+  await assertWorkspaceAccess(req.user, workspaceId);
+  if (!req.file) {
+    res.status(400).json({
+      error: "file is required",
+      code: "VALIDATION_ERROR",
+    });
+    return;
+  }
+  res.json(
+    await picker.stagePublishMedia({
+      buffer: req.file.buffer,
+      originalName: req.file.originalname,
+      mimeType: req.file.mimetype,
+      kind: req.body?.kind || req.query.kind,
+    })
+  );
+});
+
 const listMetaAdAccounts = asyncHandler(async (req, res) => {
   const metaOAuth = require("../../services/metaOAuth.service");
   res.json(
@@ -1028,6 +1112,10 @@ module.exports = {
   getInstagramOAuthStatus,
   instagramOAuthCallback,
   listInstagramAccounts,
+  getCredentialUsage,
+  listInstagramMediaOptions,
+  listInstagramCommentOptions,
+  stageInstagramPublishMedia,
   listMetaAdAccounts,
   selectMetaAdAccount,
   listConnectionTypes,

@@ -39,6 +39,10 @@ const {
   startInstagramOAuth,
   getInstagramOAuthStatus,
   listInstagramAccounts,
+  getCredentialUsage,
+  listInstagramMediaOptions,
+  listInstagramCommentOptions,
+  stageInstagramPublishMedia,
   listConnectionTypes,
   getCredentialEditor,
   startOAuth2,
@@ -79,6 +83,7 @@ router.get("/credentials", listCredentials);
 router.post("/credentials", validate(validateCredential), createCredential);
 router.put("/credentials/:credentialId", updateCredential);
 router.delete("/credentials/:credentialId", removeCredential);
+router.get("/credentials/:credentialId/usage", getCredentialUsage);
 router.get("/credentials/:credentialId/editor", getCredentialEditor);
 router.post("/credentials/:credentialId/test", testCredential);
 router.get("/connection-types", listConnectionTypes);
@@ -88,6 +93,15 @@ router.get("/meta-oauth/ad-accounts", listMetaAdAccounts);
 router.post("/instagram-oauth/start", startInstagramOAuth);
 router.get("/instagram-oauth/status", getInstagramOAuthStatus);
 router.get("/instagram-oauth/accounts", listInstagramAccounts);
+router.get("/instagram/media-options", listInstagramMediaOptions);
+router.get("/instagram/comment-options", listInstagramCommentOptions);
+router.post(
+  "/instagram/stage-media",
+  require("../../services/workflowInstagramPicker.service").stageUpload.single(
+    "file"
+  ),
+  stageInstagramPublishMedia
+);
 router.post("/credentials/:credentialId/meta-ad-account", selectMetaAdAccount);
 router.post("/oauth2/start", startOAuth2);
 router.get("/google-oauth/gsc-sites", listGscSites);

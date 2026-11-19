@@ -11,9 +11,21 @@ import {
   dependentParamsNeedReconcile,
   reconcileDependentOptionParams,
 } from "@/modules/workflows/dependentParamCascade";
+import {
+  applyInstagramCredentialChange,
+  applyInstagramPublishOperationChange,
+  applyInstagramResourceChange,
+} from "@/modules/workflows/instagramDependentCascade";
 import { CredentialPicker } from "./CredentialPicker";
 import { GoogleResourcePicker } from "./GoogleResourcePicker";
 import { HttpAuthField } from "./HttpAuthField";
+import { InstagramMediaLocatorField } from "./InstagramMediaLocatorField";
+import { InstagramCommentLocatorField } from "./InstagramCommentLocatorField";
+import { InstagramPublishMediaField } from "./InstagramPublishMediaField";
+import { InstagramInsightsNotice } from "./InstagramInsightsNotice";
+import { startInstagramOAuthPopup } from "@/modules/workflows/instagramOAuthPopup";
+import { toast } from "sonner";
+import { workflowCredentialsApi } from "@/modules/workflows/api";
 import {
   BooleanParamField,
   CodeParamField,
@@ -63,6 +75,72 @@ type Props = {
   context: ParameterRenderContext;
 };
 
+function InstagramInsightsNoticeBridge({
+  values,
+  workspaceId,
+  onChange,
+}: {
+  values: WorkflowNodeData;
+  workspaceId?: string;
+  onChange: (patch: WorkflowNodeData) => void;
+}) {
+  const credentialId = String(values.credentialId || "");
+  const [credential, setCredential] = React.useState<
+    import("@/modules/workflows/types").WorkflowCredential | null
+  >(null);
+
+  React.useEffect(() => {
+    if (!workspaceId || !credentialId) {
+      setCredential(null);
+      return;
+    }
+    let cancelled = false;
+    workflowCredentialsApi
+      .list(workspaceId)
+      .then((list) => {
+        if (cancelled) return;
+        setCredential(list.find((c) => c.id === credentialId) || null);
+      })
+      .catch(() => {
+        if (!cancelled) setCredential(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [workspaceId, credentialId]);
+
+  const reconnect = async () => {
+    if (!workspaceId || !credentialId) return;
+    try {
+      const result = await startInstagramOAuthPopup({
+        workspaceId,
+        name: credential?.name || "Instagram",
+        credentialId,
+      });
+      if (!result.ok) {
+        toast.error(result.error || "Reconnect cancelled");
+        return;
+      }
+      onChange(
+        applyInstagramCredentialChange(
+          values as Record<string, unknown>,
+          result.credentialId
+        ) as WorkflowNodeData
+      );
+      toast.success("Instagram reconnected");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Reconnect failed");
+    }
+  };
+
+  return (
+    <InstagramInsightsNotice
+      credential={credential}
+      onReconnect={() => void reconnect()}
+    />
+  );
+}
+
 function renderSpecial(
   param: ParamDescriptor,
   values: WorkflowNodeData,
@@ -80,11 +158,63 @@ function renderSpecial(
           workspaceId={context.workspaceId}
           workflowId={context.workflowId}
           value={String(values[param.name] || "")}
-          onChange={(credentialId) =>
-            onChange({ ...values, [param.name]: credentialId })
-          }
+          onChange={(credentialId) => {
+            const types = (param.credentialTypes || []).map(String);
+            if (types.includes("instagram")) {
+              onChange(
+                applyInstagramCredentialChange(
+                  values as Record<string, unknown>,
+                  credentialId
+                ) as WorkflowNodeData
+              );
+              return;
+            }
+            onChange({ ...values, [param.name]: credentialId });
+          }}
           label={param.displayName}
           allowedTypes={param.credentialTypes as import("@/modules/workflows/types").WorkflowCredentialType[] | undefined}
+        />
+      );
+    case "instagramMediaLocator":
+      return (
+        <InstagramMediaLocatorField
+          key={param.name}
+          param={param}
+          values={values}
+          onChange={onChange}
+          workspaceId={context.workspaceId}
+          previewContext={context.previewContext}
+        />
+      );
+    case "instagramCommentLocator":
+      return (
+        <InstagramCommentLocatorField
+          key={param.name}
+          param={param}
+          values={values}
+          onChange={onChange}
+          workspaceId={context.workspaceId}
+          previewContext={context.previewContext}
+        />
+      );
+    case "instagramPublishMedia":
+      return (
+        <InstagramPublishMediaField
+          key={param.name}
+          param={param}
+          values={values}
+          onChange={onChange}
+          workspaceId={context.workspaceId}
+          previewContext={context.previewContext}
+        />
+      );
+    case "instagramInsightsNotice":
+      return (
+        <InstagramInsightsNoticeBridge
+          key={param.name}
+          values={values}
+          workspaceId={context.workspaceId}
+          onChange={onChange}
         />
       );
     case "httpAuth":
@@ -194,9 +324,14 @@ function renderSpecial(
     case "googleGscSites":
     case "googleGa4Properties":
     case "resourceLocator": {
-      const kind =
-        param.locatorKind ||
-        (renderer === "googleGscSites" ? "gscSites" : "ga4Properties");
+      const kind = (param.locatorKind ||
+        (renderer === "googleGscSites" ? "gscSites" : "ga4Properties")) as
+        | "gscSites"
+        | "ga4Properties"
+        | "gmailLabels"
+        | "sheetTabs"
+        | "aiModels"
+        | "spreadsheetId";
       const modeField = param.locatorModeField || `${param.name}Mode`;
       const labelField = param.locatorLabelField;
       return (
@@ -415,7 +550,16 @@ export function NodeParameterRenderer({
   }, [schema, resourceKey, operationKey]);
 
   const onFieldChange = (name: string, fieldValue: unknown) => {
-    const patched = { ...rawValues, [name]: fieldValue };
+    let patched: Record<string, unknown> = { ...rawValues, [name]: fieldValue };
+    if (name === "resource") {
+      patched = applyInstagramResourceChange(patched, String(fieldValue ?? ""));
+    }
+    if (name === "operation") {
+      patched = applyInstagramPublishOperationChange(
+        patched,
+        String(fieldValue ?? "")
+      );
+    }
     const reconciled =
       name === "resource" || name === "operation"
         ? reconcileDependentOptionParams(schema, patched)

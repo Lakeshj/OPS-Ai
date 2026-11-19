@@ -363,8 +363,8 @@ const assertInsightsPermission = (cred) => {
   const missing = missingPermissions(granted, [SCOPE_INSIGHTS]);
   if (missing.length) {
     throw igError(
-      "Instagram insights permission is missing. Reconnect and grant insights access.",
-      "INSTAGRAM_PERMISSION_DENIED",
+      "Insights access is not enabled for this Instagram connection. Reconnect Instagram and grant Insights access.",
+      "PERMISSION_NOT_GRANTED",
       403
     );
   }

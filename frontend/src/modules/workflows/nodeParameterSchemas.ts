@@ -1773,25 +1773,44 @@ export const NODE_PARAMETER_SCHEMAS: Record<WorkflowNodeType, ParamDescriptor[]>
         },
       },
       {
+        name: "insightsPermissionNotice",
+        displayName: "Insights permission",
+        type: "notice",
+        customRenderer: "instagramInsightsNotice",
+        displayOptions: {
+          show: { resource: ["insights"] },
+        },
+      },
+      {
         name: "mediaId",
-        displayName: "Media ID",
+        displayName: "Media / Post",
         type: "string",
         required: true,
         expression: true,
+        customRenderer: "instagramMediaLocator",
+        locatorModeField: "mediaIdMode",
         placeholder: "17895695668004550",
         displayOptions: {
           show: {
             resource: ["media", "insights", "comments"],
-            operation: ["get_media", "media_insights", "list_comments"],
+            operation: [
+              "get_media",
+              "media_insights",
+              "list_comments",
+              "list_replies",
+              "reply_comment",
+            ],
           },
         },
       },
       {
         name: "commentId",
-        displayName: "Comment ID",
+        displayName: "Comment",
         type: "string",
         required: true,
         expression: true,
+        customRenderer: "instagramCommentLocator",
+        locatorModeField: "commentIdMode",
         placeholder: "17850000000000000",
         displayOptions: {
           show: {
@@ -2004,10 +2023,13 @@ export const NODE_PARAMETER_SCHEMAS: Record<WorkflowNodeType, ParamDescriptor[]>
       },
       {
         name: "imageUrl",
-        displayName: "Image URL",
+        displayName: "Image",
         type: "string",
         required: true,
         expression: true,
+        customRenderer: "instagramPublishMedia",
+        locatorModeField: "imageUrlMode",
+        locatorKind: "image",
         placeholder: "https://cdn.example.com/image.jpg",
         displayOptions: {
           show: { resource: ["publish"], operation: ["publish_image"] },
@@ -2015,10 +2037,13 @@ export const NODE_PARAMETER_SCHEMAS: Record<WorkflowNodeType, ParamDescriptor[]>
       },
       {
         name: "videoUrl",
-        displayName: "Video URL",
+        displayName: "Video",
         type: "string",
         required: true,
         expression: true,
+        customRenderer: "instagramPublishMedia",
+        locatorModeField: "videoUrlMode",
+        locatorKind: "video",
         placeholder: "https://cdn.example.com/video.mp4",
         displayOptions: {
           show: {
@@ -2042,10 +2067,13 @@ export const NODE_PARAMETER_SCHEMAS: Record<WorkflowNodeType, ParamDescriptor[]>
       },
       {
         name: "mediaUrl",
-        displayName: "Media URL",
+        displayName: "Story media",
         type: "string",
         required: true,
         expression: true,
+        customRenderer: "instagramPublishMedia",
+        locatorModeField: "mediaUrlMode",
+        locatorKind: "story",
         placeholder: "https://cdn.example.com/story.jpg",
         displayOptions: {
           show: { resource: ["publish"], operation: ["publish_story"] },
@@ -2053,9 +2081,12 @@ export const NODE_PARAMETER_SCHEMAS: Record<WorkflowNodeType, ParamDescriptor[]>
       },
       {
         name: "coverUrl",
-        displayName: "Cover URL",
+        displayName: "Cover image",
         type: "string",
         expression: true,
+        customRenderer: "instagramPublishMedia",
+        locatorModeField: "coverUrlMode",
+        locatorKind: "image",
         placeholder: "https://cdn.example.com/cover.jpg",
         displayOptions: {
           show: { resource: ["publish"], operation: ["publish_reel"] },
