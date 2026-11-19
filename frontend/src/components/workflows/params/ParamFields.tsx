@@ -434,8 +434,15 @@ export function FixedCollectionParamField({
   );
 }
 
-export function MultiOptionsParamField({ param, value, onChange }: ScalarFieldProps) {
-  const options = param.options || [];
+export function MultiOptionsParamField({
+  param,
+  value,
+  onChange,
+  parentValues,
+}: ScalarFieldProps & { parentValues?: Record<string, unknown> }) {
+  const options = (param.options || []).filter((opt) =>
+    isParamVisible({ displayOptions: opt.displayOptions }, parentValues || {})
+  );
   const defaultArr = Array.isArray(param.default) ? param.default : [];
   const selected = Array.isArray(value)
     ? value

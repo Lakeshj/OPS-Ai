@@ -668,6 +668,32 @@ const readInsightValue = (raw) => {
   return { status: "ok", value: raw };
 };
 
+const DEMOGRAPHIC_METRICS = new Set([
+  "follower_demographics",
+  "engaged_audience_demographics",
+  "reached_audience_demographics",
+]);
+
+/**
+ * Meta total_value metrics often omit `values[]` and return `total_value` instead.
+ * Do not treat that shape as unavailable.
+ */
+const insightValuePoints = (metricRow) => {
+  const values = Array.isArray(metricRow?.values) ? metricRow.values : [];
+  if (values.length) return { points: values, source: "values" };
+  const total = metricRow?.total_value;
+  if (total != null && typeof total === "object" && !Array.isArray(total)) {
+    return { points: [total], source: "total_value" };
+  }
+  if (total != null && typeof total !== "object") {
+    return { points: [{ value: total }], source: "total_value" };
+  }
+  return { points: [], source: "none" };
+};
+
+const demographicUnavailableMessage =
+  "Audience demographic data is not available for this account or selected timeframe.";
+
 const normalizeInsightRows = ({
   metricRows,
   operation,
@@ -685,10 +711,14 @@ const normalizeInsightRows = ({
     if (!metric) continue;
     const title = String(metricRow?.title || "").trim() || undefined;
     const description = String(metricRow?.description || "").trim() || undefined;
-    const values = Array.isArray(metricRow?.values) ? metricRow.values : [];
+    const isDemographic = DEMOGRAPHIC_METRICS.has(metric);
+    const rowBreakdown = isDemographic
+      ? String(breakdown || "").trim() || undefined
+      : undefined;
+    const { points } = insightValuePoints(metricRow);
     const periodName = String(metricRow?.period || period || "").trim() || undefined;
 
-    if (!values.length) {
+    if (!points.length) {
       const json = assertNoSecretLeak({
         metric,
         period: periodName,
@@ -697,9 +727,12 @@ const normalizeInsightRows = ({
         description,
         dateStart: dateStart || undefined,
         dateEnd: dateEnd || undefined,
-        breakdown: breakdown || undefined,
+        breakdown: rowBreakdown,
         mediaId: mediaId || undefined,
         mediaType: mediaType || undefined,
+        unavailableReason: isDemographic
+          ? demographicUnavailableMessage
+          : undefined,
         _meta: buildMeta({
           resource: "insights",
           operation,
@@ -712,33 +745,58 @@ const normalizeInsightRows = ({
     }
 
     // Sort time-series chronologically by end_time when present.
-    const ordered = [...values].sort((a, b) => {
+    const ordered = [...points].sort((a, b) => {
       const ta = Date.parse(String(a?.end_time || a?.endTime || "")) || 0;
       const tb = Date.parse(String(b?.end_time || b?.endTime || "")) || 0;
       return ta - tb;
     });
 
     for (const point of ordered) {
-      const parsed = readInsightValue(point);
       const endTime = String(point?.end_time || point?.endTime || "").trim() || undefined;
+      const nestedBreakdowns =
+        point && typeof point === "object" && Array.isArray(point.breakdowns)
+          ? point.breakdowns
+          : undefined;
       const dimensionValues =
         point && typeof point === "object" && point.dimension_values
           ? point.dimension_values
-          : point && typeof point === "object" && point.breakdowns
-            ? point.breakdowns
-            : undefined;
+          : undefined;
 
-      // Demographic total_value may nest value as object map — keep structure, never invent totals.
-      let value = parsed.value;
-      let status = parsed.status;
-      if (
-        parsed.status === "ok" &&
-        value &&
-        typeof value === "object" &&
-        !Array.isArray(value)
-      ) {
-        // Keep demographic maps as breakdown payload; value stays undefined (not 0).
-        status = "ok";
+      let value;
+      let status;
+      let breakdownValues;
+
+      if (nestedBreakdowns) {
+        const hasResults = nestedBreakdowns.some(
+          (b) => Array.isArray(b?.results) && b.results.length > 0
+        );
+        if (!hasResults) {
+          status = "unavailable";
+          value = undefined;
+        } else {
+          status = "ok";
+          breakdownValues = nestedBreakdowns;
+          value = undefined;
+        }
+      } else {
+        const parsed = readInsightValue(point);
+        value = parsed.value;
+        status = parsed.status;
+        if (
+          parsed.status === "ok" &&
+          value &&
+          typeof value === "object" &&
+          !Array.isArray(value)
+        ) {
+          // Keep demographic maps as breakdown payload; value stays undefined (not 0).
+          breakdownValues = value;
+          value = undefined;
+          status = "ok";
+        }
+      }
+
+      if (status === "missing" && isDemographic) {
+        status = "unavailable";
       }
 
       const json = {
@@ -749,7 +807,7 @@ const normalizeInsightRows = ({
         dateStart: dateStart || undefined,
         dateEnd: dateEnd || endTime || undefined,
         endTime,
-        breakdown: breakdown || undefined,
+        breakdown: rowBreakdown,
         mediaId: mediaId || undefined,
         mediaType: mediaType || undefined,
         status,
@@ -760,12 +818,14 @@ const normalizeInsightRows = ({
           mediaId,
         }),
       };
+      if (status === "unavailable" && isDemographic) {
+        json.unavailableReason = demographicUnavailableMessage;
+      }
       if (status === "ok" && value !== undefined) {
-        if (typeof value === "object" && !Array.isArray(value)) {
-          json.breakdownValues = value;
-        } else {
-          json.value = value;
-        }
+        json.value = value;
+      }
+      if (status === "ok" && breakdownValues != null) {
+        json.breakdownValues = breakdownValues;
       }
       if (dimensionValues != null) json.dimensionValues = dimensionValues;
       items.push(assertNoSecretLeak(json));

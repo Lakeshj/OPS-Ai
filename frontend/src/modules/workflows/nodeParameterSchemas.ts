@@ -1851,15 +1851,17 @@ export const NODE_PARAMETER_SCHEMAS: Record<WorkflowNodeType, ParamDescriptor[]>
       },
       {
         name: "insightsPreset",
-        displayName: "Metric preset",
+        displayName: "Insights mode",
         type: "options",
         default: "overview",
+        description:
+          "Performance metrics never use age/gender/city/country breakdowns. Demographics is a separate mode.",
         options: [
-          { name: "Overview", value: "overview" },
-          { name: "Engagement", value: "engagement" },
-          { name: "Audience", value: "audience" },
-          { name: "Demographics", value: "demographics" },
-          { name: "Custom", value: "custom" },
+          { name: "Performance · Overview", value: "overview" },
+          { name: "Performance · Engagement", value: "engagement" },
+          { name: "Performance · Audience", value: "audience" },
+          { name: "Audience · Demographics", value: "demographics" },
+          { name: "Performance · Custom", value: "custom" },
         ],
         displayOptions: {
           show: { resource: ["insights"], operation: ["account_insights"] },
@@ -1887,46 +1889,253 @@ export const NODE_PARAMETER_SCHEMAS: Record<WorkflowNodeType, ParamDescriptor[]>
         type: "multiOptions",
         default: [],
         options: [
-          { name: "Views", value: "views" },
-          { name: "Reach", value: "reach" },
-          { name: "Follower count", value: "follower_count" },
-          { name: "Profile views", value: "profile_views" },
-          { name: "Accounts engaged", value: "accounts_engaged" },
-          { name: "Total interactions", value: "total_interactions" },
-          { name: "Likes", value: "likes" },
-          { name: "Comments", value: "comments" },
-          { name: "Shares", value: "shares" },
-          { name: "Saves", value: "saves" },
-          { name: "Saved (media)", value: "saved" },
-          { name: "Replies", value: "replies" },
-          { name: "Follows and unfollows", value: "follows_and_unfollows" },
-          { name: "Profile links taps", value: "profile_links_taps" },
-          { name: "Online followers", value: "online_followers" },
-          { name: "Follower demographics", value: "follower_demographics" },
+          {
+            name: "Views",
+            value: "views",
+            displayOptions: {
+              showAny: [
+                { operation: ["media_insights"], mediaInsightsPreset: ["custom"] },
+                { operation: ["account_insights"], insightsPreset: ["custom"] },
+              ],
+            },
+          },
+          {
+            name: "Reach",
+            value: "reach",
+            displayOptions: {
+              showAny: [
+                { operation: ["media_insights"], mediaInsightsPreset: ["custom"] },
+                { operation: ["account_insights"], insightsPreset: ["custom"] },
+              ],
+            },
+          },
+          {
+            name: "Follower count",
+            value: "follower_count",
+            displayOptions: {
+              show: {
+                operation: ["account_insights"],
+                insightsPreset: ["custom"],
+              },
+            },
+          },
+          {
+            name: "Profile views",
+            value: "profile_views",
+            displayOptions: {
+              show: {
+                operation: ["account_insights"],
+                insightsPreset: ["custom"],
+              },
+            },
+          },
+          {
+            name: "Accounts engaged",
+            value: "accounts_engaged",
+            displayOptions: {
+              show: {
+                operation: ["account_insights"],
+                insightsPreset: ["custom"],
+              },
+            },
+          },
+          {
+            name: "Total interactions",
+            value: "total_interactions",
+            displayOptions: {
+              showAny: [
+                { operation: ["media_insights"], mediaInsightsPreset: ["custom"] },
+                { operation: ["account_insights"], insightsPreset: ["custom"] },
+              ],
+            },
+          },
+          {
+            name: "Likes",
+            value: "likes",
+            displayOptions: {
+              showAny: [
+                { operation: ["media_insights"], mediaInsightsPreset: ["custom"] },
+                { operation: ["account_insights"], insightsPreset: ["custom"] },
+              ],
+            },
+          },
+          {
+            name: "Comments",
+            value: "comments",
+            displayOptions: {
+              showAny: [
+                { operation: ["media_insights"], mediaInsightsPreset: ["custom"] },
+                { operation: ["account_insights"], insightsPreset: ["custom"] },
+              ],
+            },
+          },
+          {
+            name: "Shares",
+            value: "shares",
+            displayOptions: {
+              showAny: [
+                { operation: ["media_insights"], mediaInsightsPreset: ["custom"] },
+                { operation: ["account_insights"], insightsPreset: ["custom"] },
+              ],
+            },
+          },
+          {
+            name: "Saves",
+            value: "saves",
+            displayOptions: {
+              show: {
+                operation: ["account_insights"],
+                insightsPreset: ["custom"],
+              },
+            },
+          },
+          {
+            name: "Saved (media)",
+            value: "saved",
+            displayOptions: {
+              show: {
+                operation: ["media_insights"],
+                mediaInsightsPreset: ["custom"],
+              },
+            },
+          },
+          {
+            name: "Replies",
+            value: "replies",
+            displayOptions: {
+              showAny: [
+                { operation: ["media_insights"], mediaInsightsPreset: ["custom"] },
+                { operation: ["account_insights"], insightsPreset: ["custom"] },
+              ],
+            },
+          },
+          {
+            name: "Follows and unfollows",
+            value: "follows_and_unfollows",
+            displayOptions: {
+              show: {
+                operation: ["account_insights"],
+                insightsPreset: ["custom"],
+              },
+            },
+          },
+          {
+            name: "Profile links taps",
+            value: "profile_links_taps",
+            displayOptions: {
+              show: {
+                operation: ["account_insights"],
+                insightsPreset: ["custom"],
+              },
+            },
+          },
+          {
+            name: "Online followers",
+            value: "online_followers",
+            displayOptions: {
+              show: {
+                operation: ["account_insights"],
+                insightsPreset: ["custom"],
+              },
+            },
+          },
+          {
+            name: "Follower demographics",
+            value: "follower_demographics",
+            displayOptions: {
+              show: {
+                operation: ["account_insights"],
+                insightsPreset: ["demographics"],
+              },
+            },
+          },
           {
             name: "Engaged audience demographics",
             value: "engaged_audience_demographics",
+            displayOptions: {
+              show: {
+                operation: ["account_insights"],
+                insightsPreset: ["demographics"],
+              },
+            },
           },
           {
             name: "Reached audience demographics",
             value: "reached_audience_demographics",
+            displayOptions: {
+              show: {
+                operation: ["account_insights"],
+                insightsPreset: ["demographics"],
+              },
+            },
           },
-          { name: "Reels avg watch time", value: "ig_reels_avg_watch_time" },
+          {
+            name: "Reels avg watch time",
+            value: "ig_reels_avg_watch_time",
+            displayOptions: {
+              show: {
+                operation: ["media_insights"],
+                mediaInsightsPreset: ["custom"],
+              },
+            },
+          },
           {
             name: "Reels total watch time",
             value: "ig_reels_video_view_total_time",
+            displayOptions: {
+              show: {
+                operation: ["media_insights"],
+                mediaInsightsPreset: ["custom"],
+              },
+            },
           },
-          { name: "Navigation (story)", value: "navigation" },
-          { name: "Exits (story)", value: "exits" },
-          { name: "Taps forward (story)", value: "taps_forward" },
-          { name: "Taps back (story)", value: "taps_back" },
+          {
+            name: "Navigation (story)",
+            value: "navigation",
+            displayOptions: {
+              show: {
+                operation: ["media_insights"],
+                mediaInsightsPreset: ["custom"],
+              },
+            },
+          },
+          {
+            name: "Exits (story)",
+            value: "exits",
+            displayOptions: {
+              show: {
+                operation: ["media_insights"],
+                mediaInsightsPreset: ["custom"],
+              },
+            },
+          },
+          {
+            name: "Taps forward (story)",
+            value: "taps_forward",
+            displayOptions: {
+              show: {
+                operation: ["media_insights"],
+                mediaInsightsPreset: ["custom"],
+              },
+            },
+          },
+          {
+            name: "Taps back (story)",
+            value: "taps_back",
+            displayOptions: {
+              show: {
+                operation: ["media_insights"],
+                mediaInsightsPreset: ["custom"],
+              },
+            },
+          },
         ],
         displayOptions: {
           show: { resource: ["insights"] },
           showAny: [
             {
               operation: ["account_insights"],
-              insightsPreset: ["custom"],
+              insightsPreset: ["custom", "demographics"],
             },
             {
               operation: ["media_insights"],
@@ -1948,7 +2157,11 @@ export const NODE_PARAMETER_SCHEMAS: Record<WorkflowNodeType, ParamDescriptor[]>
           { name: "Total over range", value: "total_over_range" },
         ],
         displayOptions: {
-          show: { resource: ["insights"], operation: ["account_insights"] },
+          show: {
+            resource: ["insights"],
+            operation: ["account_insights"],
+            insightsPreset: ["overview", "engagement", "audience", "custom"],
+          },
         },
       },
       {
@@ -1956,6 +2169,7 @@ export const NODE_PARAMETER_SCHEMAS: Record<WorkflowNodeType, ParamDescriptor[]>
         displayName: "Breakdown",
         type: "options",
         default: "age",
+        description: "Only for audience demographic insights.",
         options: [
           { name: "Age", value: "age" },
           { name: "City", value: "city" },
@@ -1967,7 +2181,7 @@ export const NODE_PARAMETER_SCHEMAS: Record<WorkflowNodeType, ParamDescriptor[]>
           show: {
             resource: ["insights"],
             operation: ["account_insights"],
-            insightsPreset: ["demographics", "custom"],
+            insightsPreset: ["demographics"],
           },
         },
       },
@@ -1989,6 +2203,7 @@ export const NODE_PARAMETER_SCHEMAS: Record<WorkflowNodeType, ParamDescriptor[]>
           show: {
             resource: ["insights"],
             operation: ["account_insights"],
+            insightsPreset: ["overview", "engagement", "audience", "custom"],
             period: ["day", "week", "days_28", "total_over_range"],
           },
         },
@@ -2003,6 +2218,7 @@ export const NODE_PARAMETER_SCHEMAS: Record<WorkflowNodeType, ParamDescriptor[]>
           show: {
             resource: ["insights"],
             operation: ["account_insights"],
+            insightsPreset: ["overview", "engagement", "audience", "custom"],
             dateRange: ["custom"],
           },
         },
@@ -2017,6 +2233,7 @@ export const NODE_PARAMETER_SCHEMAS: Record<WorkflowNodeType, ParamDescriptor[]>
           show: {
             resource: ["insights"],
             operation: ["account_insights"],
+            insightsPreset: ["overview", "engagement", "audience", "custom"],
             dateRange: ["custom"],
           },
         },

@@ -99,7 +99,9 @@ const registerInstagramM4Tests = ({ check, section, assert: a }) => {
               config: { grantedPermissions: ["instagram_basic"] },
             })
         ),
-      (err) => err.code === "INSTAGRAM_PERMISSION_DENIED"
+      (err) =>
+        err.code === "PERMISSION_NOT_GRANTED" ||
+        err.code === "INSTAGRAM_PERMISSION_DENIED"
     );
   });
 

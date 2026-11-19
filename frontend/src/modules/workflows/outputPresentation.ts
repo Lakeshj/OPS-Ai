@@ -6,7 +6,9 @@
 
 import type { WorkflowItem } from "./types";
 import {
+  buildInstagramInsightsCollection,
   buildInstagramReadableBlock,
+  getInstagramMeta,
   isInstagramOutputJson,
   summarizeInstagramOutput,
   type InstagramReadableBlock,
@@ -72,14 +74,35 @@ function buildResolved(
   if (!items.length || !items.every((row) => isInstagramOutputJson(row))) {
     return null;
   }
-  const blocks = items
-    .map((row, index) => buildInstagramReadableBlock(row, index))
-    .filter(Boolean) as InstagramReadableBlock[];
-  if (!blocks.length) return null;
-  const summary =
-    items.length === 1
-      ? summarizeInstagramOutput(items[0]) || blocks[0].text
-      : `Instagram · ${items.length} items`;
+
+  const allInsights = items.every((row) => {
+    const meta = getInstagramMeta(row);
+    return (
+      String(meta?.resource || "").toLowerCase() === "insights" ||
+      String(meta?.operation || "")
+        .toLowerCase()
+        .includes("insights")
+    );
+  });
+
+  let blocks: InstagramReadableBlock[];
+  let summary: string;
+  if (allInsights) {
+    const collection = buildInstagramInsightsCollection(items);
+    if (!collection) return null;
+    blocks = [collection];
+    summary = collection.text;
+  } else {
+    blocks = items
+      .map((row, index) => buildInstagramReadableBlock(row, index))
+      .filter(Boolean) as InstagramReadableBlock[];
+    if (!blocks.length) return null;
+    summary =
+      items.length === 1
+        ? summarizeInstagramOutput(items[0]) || blocks[0].text
+        : `Instagram · ${items.length} items`;
+  }
+
   return {
     provider: "instagram",
     items,

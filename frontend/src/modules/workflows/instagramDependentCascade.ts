@@ -107,6 +107,45 @@ export function applyInstagramPublishOperationChange(
   return next;
 }
 
+const PERFORMANCE_INSIGHT_PRESETS = new Set([
+  "overview",
+  "engagement",
+  "audience",
+  "custom",
+]);
+
+/** Account Insights: Performance ↔ Demographics clears incompatible params. */
+export function applyInstagramInsightsPresetChange(
+  values: ParamValues,
+  nextPreset: string
+): ParamValues {
+  const prev = String(values.insightsPreset || "");
+  const nextKey = String(nextPreset || "");
+  let next: ParamValues = { ...values, insightsPreset: nextKey };
+  if (prev === nextKey) return next;
+
+  const wasDemo = prev === "demographics";
+  const isDemo = nextKey === "demographics";
+  const wasPerf = PERFORMANCE_INSIGHT_PRESETS.has(prev) || prev === "";
+  const isPerf = PERFORMANCE_INSIGHT_PRESETS.has(nextKey);
+
+  if (wasDemo && isPerf) {
+    next.breakdown = "";
+    next.metrics = [];
+  }
+  if (wasPerf && isDemo) {
+    next.period = "lifetime";
+    next.dateRange = "";
+    next.since = "";
+    next.until = "";
+    next.metrics = [];
+    if (!String(next.breakdown || "").trim()) {
+      next.breakdown = "age";
+    }
+  }
+  return next;
+}
+
 export function applyInstagramResourceChange(
   values: ParamValues,
   nextResource: string

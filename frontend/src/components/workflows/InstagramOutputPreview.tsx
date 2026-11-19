@@ -101,9 +101,13 @@ function InstagramBlockView({
     return <AccountCard block={block} compact={compact} />;
   }
   if (block.layout === "insights" && block.stats?.length) {
+    const range = block.lines.find((l) => l.label === "Range")?.value;
     return (
       <div className="space-y-2">
         <div className="text-xs font-semibold text-foreground">{block.title}</div>
+        {range ? (
+          <div className="text-[11px] text-muted-foreground">{range}</div>
+        ) : null}
         <StatsRow stats={block.stats} />
       </div>
     );

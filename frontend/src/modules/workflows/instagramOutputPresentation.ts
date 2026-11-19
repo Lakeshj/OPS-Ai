@@ -193,34 +193,134 @@ function formatMediaBlock(
   };
 }
 
+function insightMetricLabel(json: Record<string, unknown>): string {
+  return (
+    str(json.title) ||
+    str(json.metric || json.name)
+      .replace(/_/g, " ")
+      .replace(/\b\w/g, (c) => c.toUpperCase())
+  );
+}
+
+function insightDisplayValue(json: Record<string, unknown>): string {
+  if (str(json.unavailableReason)) return str(json.unavailableReason);
+  if (String(json.status || "") === "unavailable") return "Not available";
+  if (String(json.status || "") === "missing") return "Not available";
+  if (json.value != null && typeof json.value !== "object") {
+    return String(json.value);
+  }
+  if (json.breakdownValues != null) {
+    return "See breakdown";
+  }
+  return "Not available";
+}
+
+function formatInsightDateRange(items: Record<string, unknown>[]): string {
+  const starts = items.map((row) => str(row.dateStart)).filter(Boolean);
+  const ends = items.map((row) => str(row.dateEnd || row.endTime)).filter(Boolean);
+  const start = starts[0];
+  const end = ends[ends.length - 1] || ends[0];
+  if (start && end) {
+    const fmt = (iso: string) => {
+      const ms = Date.parse(iso);
+      if (!Number.isFinite(ms)) return iso;
+      return new Date(ms).toLocaleDateString("en-GB", {
+        day: "numeric",
+        month: "short",
+        year: "numeric",
+      });
+    };
+    return start === end ? fmt(start) : `${fmt(start)} – ${fmt(end)}`;
+  }
+  const period = str(items[0]?.period);
+  return period ? `Period: ${period}` : "";
+}
+
 function formatInsightBlock(
   json: Record<string, unknown>
 ): InstagramReadableBlock {
+  return (
+    buildInstagramInsightsCollection([json]) || {
+      title: "Instagram Insights",
+      layout: "insights",
+      lines: [],
+      text: "Instagram Insights",
+    }
+  );
+}
+
+/**
+ * One human-readable Insights card for a set of metric rows (display-only).
+ */
+export function buildInstagramInsightsCollection(
+  items: Record<string, unknown>[]
+): InstagramReadableBlock | null {
+  const rows = (items || []).filter((row) => {
+    const meta = getInstagramMeta(row);
+    return (
+      meta &&
+      (String(meta.resource || "").toLowerCase() === "insights" ||
+        String(meta.operation || "").toLowerCase().includes("insights"))
+    );
+  });
+  if (!rows.length) return null;
+
+  const demographicEmpty = rows.every(
+    (row) =>
+      String(row.status || "") === "unavailable" &&
+      Boolean(str(row.unavailableReason))
+  );
+  if (demographicEmpty) {
+    const message =
+      str(rows[0].unavailableReason) ||
+      "Audience demographic data is not available for this account or selected timeframe.";
+    return {
+      title: "Instagram Insights",
+      layout: "insights",
+      lines: [{ label: "Audience", value: message }],
+      text: ["Instagram Insights", "", message].join("\n"),
+    };
+  }
+
+  // Latest point per metric for time-series; preserve genuine zeros.
+  const latestByMetric = new Map<string, Record<string, unknown>>();
+  for (const row of rows) {
+    const key = str(row.metric || row.name);
+    if (!key) continue;
+    const prev = latestByMetric.get(key);
+    if (!prev) {
+      latestByMetric.set(key, row);
+      continue;
+    }
+    const prevT = Date.parse(String(prev.endTime || prev.dateEnd || "")) || 0;
+    const nextT = Date.parse(String(row.endTime || row.dateEnd || "")) || 0;
+    if (nextT >= prevT) latestByMetric.set(key, row);
+  }
+
+  const stats: Array<{ label: string; value: string }> = [];
   const lines: Array<{ label: string; value: string }> = [];
-  const metric = str(json.metric || json.name);
-  if (metric) lines.push({ label: "Metric", value: metric });
-  if (json.value != null && typeof json.value !== "object") {
-    lines.push({ label: "Value", value: String(json.value) });
-  } else if (json.values != null && typeof json.values !== "object") {
-    lines.push({ label: "Value", value: String(json.values) });
+  for (const row of latestByMetric.values()) {
+    const label = insightMetricLabel(row);
+    const value = insightDisplayValue(row);
+    stats.push({ label, value });
+    lines.push({ label, value });
   }
-  if (str(json.period)) lines.push({ label: "Period", value: str(json.period) });
-  if (str(json.title)) lines.push({ label: "Title", value: str(json.title) });
-  if (str(json.description)) {
-    lines.push({ label: "Description", value: str(json.description) });
-  }
-  const stats =
-    metric && lines.find((l) => l.label === "Value")
-      ? [{ label: metric, value: lines.find((l) => l.label === "Value")!.value }]
-      : undefined;
+
+  const range = formatInsightDateRange(rows);
+  const title = range ? `Instagram Insights\n${range}` : "Instagram Insights";
+  const textLines = [
+    "Instagram Insights",
+    ...(range ? [range, ""] : [""]),
+    ...stats.map((s) => `${s.label.padEnd(14)} ${s.value}`),
+  ];
   return {
-    title: "Instagram Insights",
+    title: title.split("\n")[0],
     layout: "insights",
-    lines,
+    lines: range
+      ? [{ label: "Range", value: range }, ...lines]
+      : lines,
     stats,
-    text: ["Instagram Insights", "", ...lines.map((r) => `${r.label}\n${r.value}`)]
-      .join("\n")
-      .trimEnd(),
+    text: textLines.join("\n").trimEnd(),
   };
 }
 

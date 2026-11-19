@@ -13,6 +13,7 @@ import {
 } from "@/modules/workflows/dependentParamCascade";
 import {
   applyInstagramCredentialChange,
+  applyInstagramInsightsPresetChange,
   applyInstagramPublishOperationChange,
   applyInstagramResourceChange,
 } from "@/modules/workflows/instagramDependentCascade";
@@ -478,7 +479,12 @@ function renderPrimitive(
       );
     case "multiOptions":
       return (
-        <MultiOptionsParamField param={param} value={value} onChange={onChange} />
+        <MultiOptionsParamField
+          param={param}
+          value={value}
+          onChange={onChange}
+          parentValues={parentValues}
+        />
       );
     case "collection":
       return (
@@ -560,8 +566,14 @@ export function NodeParameterRenderer({
         String(fieldValue ?? "")
       );
     }
+    if (name === "insightsPreset") {
+      patched = applyInstagramInsightsPresetChange(
+        patched,
+        String(fieldValue ?? "")
+      );
+    }
     const reconciled =
-      name === "resource" || name === "operation"
+      name === "resource" || name === "operation" || name === "insightsPreset"
         ? reconcileDependentOptionParams(schema, patched)
         : patched;
     onChange({ ...values, ...reconciled } as WorkflowNodeData);

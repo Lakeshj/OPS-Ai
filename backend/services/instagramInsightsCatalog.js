@@ -286,7 +286,30 @@ const resolveAccountPresetMetrics = (preset, customMetrics) => {
     if (!metrics.length) {
       throw catalogError("Select at least one account insights metric.");
     }
+    for (const name of metrics) {
+      if (getAccountMetric(name).supportsBreakdown) {
+        throw catalogError(
+          "Demographic metrics belong under the Demographics preset — not Custom performance metrics.",
+          "INSTAGRAM_INSIGHTS_METRIC_MIX_INVALID"
+        );
+      }
+    }
     return metrics;
+  }
+  if (key === "demographics") {
+    const selected = listOf(customMetrics);
+    if (selected.length) {
+      for (const name of selected) {
+        if (!getAccountMetric(name).supportsBreakdown) {
+          throw catalogError(
+            "Only audience demographic metrics are valid in the Demographics preset.",
+            "INSTAGRAM_INSIGHTS_METRIC_MIX_INVALID"
+          );
+        }
+      }
+      return selected;
+    }
+    return [...ACCOUNT_PRESETS.demographics];
   }
   return [...ACCOUNT_PRESETS[key]];
 };
@@ -485,6 +508,35 @@ const buildAccountInsightRequests = ({
   const breakdownValue = String(breakdown || "").trim();
   const metricTypeOverride = String(metricType || "").trim();
 
+  const demographicNames = names.filter(
+    (name) => getAccountMetric(name).supportsBreakdown
+  );
+  const performanceNames = names.filter(
+    (name) => !getAccountMetric(name).supportsBreakdown
+  );
+  if (demographicNames.length && performanceNames.length) {
+    throw catalogError(
+      "Audience demographic metrics cannot be combined with performance metrics in one request.",
+      "INSTAGRAM_INSIGHTS_METRIC_MIX_INVALID"
+    );
+  }
+  if (breakdownValue && performanceNames.length && !demographicNames.length) {
+    const label =
+      breakdownValue === "age"
+        ? "Age"
+        : breakdownValue === "gender"
+          ? "Gender"
+          : breakdownValue === "city"
+            ? "City"
+            : breakdownValue === "country"
+              ? "Country"
+              : breakdownValue;
+    throw catalogError(
+      `${label} breakdown is only available for audience demographic insights.`,
+      "INSTAGRAM_INSIGHTS_BREAKDOWN_INVALID"
+    );
+  }
+
   const wantsRange = Boolean(
     String(dateRange || "").trim() ||
       String(since || "").trim() ||
@@ -513,6 +565,23 @@ const buildAccountInsightRequests = ({
     }
     assertAccountMetricPeriod(name, periodForMetric);
 
+    if (breakdownValue && !metric.supportsBreakdown) {
+      const label =
+        breakdownValue === "age"
+          ? "Age"
+          : breakdownValue === "gender"
+            ? "Gender"
+            : breakdownValue === "city"
+              ? "City"
+              : breakdownValue === "country"
+                ? "Country"
+                : breakdownValue;
+      throw catalogError(
+        `${label} breakdown is only available for audience demographic insights.`,
+        "INSTAGRAM_INSIGHTS_BREAKDOWN_INVALID"
+      );
+    }
+
     if (metric.supportsBreakdown) {
       if (!breakdownValue) {
         throw catalogError(
@@ -527,7 +596,6 @@ const buildAccountInsightRequests = ({
         );
       }
     }
-    // Non-demographic metrics ignore breakdown; do not fail the whole request.
 
     const type =
       metricTypeOverride ||
