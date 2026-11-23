@@ -263,7 +263,7 @@ const AiLogsPage = () => {
               ) : filteredUsage.length === 0 ? (
                 <p className="text-sm text-muted-foreground">
                   {usage.length === 0
-                    ? "No usage logged yet. Send a chat message to record model + tokens."
+                    ? "No usage logged yet. Send a chat message or run an AI Agent to record model + tokens."
                     : "No results match the current filters."}
                 </p>
               ) : (
@@ -295,6 +295,16 @@ const AiLogsPage = () => {
                           <td className="p-3">
                             {row.assistantName ? (
                               row.assistantName
+                            ) : row.workflowNodeName ||
+                              row.source === "ai_agent" ? (
+                              <span title={row.workflowNodeId || undefined}>
+                                {row.workflowNodeName || "AI Agent"}
+                                {row.generationIndex != null ? (
+                                  <span className="ml-1 text-muted-foreground">
+                                    · gen {row.generationIndex}
+                                  </span>
+                                ) : null}
+                              </span>
                             ) : (
                               <span className="text-muted-foreground">
                                 default chat

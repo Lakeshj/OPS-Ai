@@ -356,7 +356,8 @@ async function main() {
     const mem = await executeGraphInMemory(def);
     const meta = mem.context.steps.agent?.agentMeta?.[0];
     assert.ok(meta?.toolCalls?.some((t) => t.status === "failed"));
-    assert.ok(meta?.toolsUsed?.includes("calculator"));
+    assert.ok(meta?.toolsRequested?.includes("calculator"));
+    assert.equal((meta?.toolsUsed || []).includes("calculator"), false);
     assert.match(
       String(mem.context.items.agent[0].json?.ai?.output || ""),
       /failed|division|zero/i

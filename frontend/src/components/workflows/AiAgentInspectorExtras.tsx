@@ -2,6 +2,7 @@
 
 import React, { useMemo } from "react";
 import {
+  extractAgentItemMeta,
   extractSafeToolCallsForItem,
   extractUsageForItem,
   getAiAgentReadiness,
@@ -69,6 +70,12 @@ export function AiAgentInspectorExtras({
     if (!showExecution || !isAiAgentType(nodeType) || stepOutput == null)
       return null;
     return summarizeAgentToolObservability(stepOutput, itemIndex);
+  }, [showExecution, nodeType, stepOutput, itemIndex]);
+
+  const agentItemMeta = useMemo(() => {
+    if (!showExecution || !isAiAgentType(nodeType) || stepOutput == null)
+      return null;
+    return extractAgentItemMeta(stepOutput, itemIndex);
   }, [showExecution, nodeType, stepOutput, itemIndex]);
 
   const usage = useMemo(() => {
@@ -163,11 +170,21 @@ export function AiAgentInspectorExtras({
             Tools (run)
           </div>
           <dl className="mt-2 grid grid-cols-[auto_1fr] gap-x-2 gap-y-1 text-[10px]">
+            <dt className="text-muted-foreground">Model requests</dt>
+            <dd className="text-foreground">
+              {agentItemMeta?.modelRequests ?? "—"}
+            </dd>
             <dt className="text-muted-foreground">Available</dt>
             <dd className="text-foreground">
               {toolObservability.availableCount === 0
                 ? "None"
                 : toolObservability.availableNames.join(", ")}
+            </dd>
+            <dt className="text-muted-foreground">Requested</dt>
+            <dd className="text-foreground">
+              {(agentItemMeta?.toolsRequested || []).length === 0
+                ? "—"
+                : (agentItemMeta?.toolsRequested || []).join(", ")}
             </dd>
             <dt className="text-muted-foreground">Used</dt>
             <dd className="text-foreground">
@@ -175,6 +192,19 @@ export function AiAgentInspectorExtras({
                 ? "—"
                 : toolObservability.usedNames.join(", ")}
             </dd>
+            {(agentItemMeta?.toolErrors || []).length > 0 ? (
+              <>
+                <dt className="text-muted-foreground">Errors</dt>
+                <dd className="text-destructive">
+                  {(agentItemMeta?.toolErrors || [])
+                    .map(
+                      (e) =>
+                        `${e.toolName || "tool"}: ${e.code || e.message || "failed"}`
+                    )
+                    .join("; ")}
+                </dd>
+              </>
+            ) : null}
             <dt className="text-muted-foreground">Status</dt>
             <dd
               className={
@@ -188,6 +218,18 @@ export function AiAgentInspectorExtras({
             >
               {toolObservability.label}
             </dd>
+            {agentItemMeta?.modelRequest?.toolCount != null ? (
+              <>
+                <dt className="text-muted-foreground">Sent to model</dt>
+                <dd className="text-foreground">
+                  {agentItemMeta.modelRequest.toolCount} tool
+                  {agentItemMeta.modelRequest.toolCount === 1 ? "" : "s"}
+                  {(agentItemMeta.modelRequest.toolNames || []).length
+                    ? `: ${(agentItemMeta.modelRequest.toolNames || []).join(", ")}`
+                    : ""}
+                </dd>
+              </>
+            ) : null}
           </dl>
         </div>
       )}

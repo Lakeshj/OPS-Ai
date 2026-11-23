@@ -1115,6 +1115,9 @@ const executeNodeStep = async (workflowId, nodeId, body, authUser) => {
     targetNodeId: nodeId,
     mode: "step",
     session,
+    workspaceId: workflow.workspaceId || workflow.workspace_id || null,
+    workflowId,
+    userId,
   });
 
   for (const [id, result] of Object.entries(partial.results)) {
@@ -1156,6 +1159,9 @@ const runToNode = async (workflowId, nodeId, body, authUser) => {
     targetNodeId: nodeId,
     mode: "run-to",
     session,
+    workspaceId: workflow.workspaceId || workflow.workspace_id || null,
+    workflowId,
+    userId,
   });
 
   for (const [id, result] of Object.entries(partial.results)) {
@@ -1197,6 +1203,9 @@ const executePrevious = async (workflowId, nodeId, body, authUser) => {
     targetNodeId: nodeId,
     mode: "upstream",
     session,
+    workspaceId: workflow.workspaceId || workflow.workspace_id || null,
+    workflowId,
+    userId,
   });
 
   for (const [id, result] of Object.entries(partial.results)) {

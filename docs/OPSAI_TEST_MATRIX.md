@@ -34,7 +34,7 @@ Run the **affected family**, not everything.
 | Instagram | M2: `node scripts/smoke-workflow-instagram-m2.js`; M2.1: `node scripts/smoke-workflow-instagram-m21.js`; M3: `node scripts/smoke-workflow-instagram-m3.js`; M4: `node scripts/smoke-workflow-instagram-m4.js`; M5: `node scripts/smoke-workflow-instagram-m5.js`; M6: `node scripts/smoke-workflow-instagram-m6.js`; M7: `node scripts/smoke-workflow-instagram-m7.js` + `plugins/instagram-mcp` smoke; M7.1 UX: `node scripts/smoke-workflow-instagram-m71.js` |
 | Inspector display | inspector smoke + `tsc --noEmit` |
 | Expressions / items / `$first` | engine file that owns the smoke; do not skip if item order changed |
-| AI Agent | `node scripts/smoke-workflow-ai-12b.js`; M8.15 reliability: `node scripts/smoke-workflow-ai-m815.js`; dataset Ads: `node scripts/smoke-workflow-ai-dataset-ads.js`; AI scope: `node scripts/smoke-workflow-ai-scope.js`; live AI scope: `node scripts/smoke-workflow-ai-live-scope.js` |
+| AI Agent | `node scripts/smoke-workflow-ai-12b.js`; M8.15 reliability: `node scripts/smoke-workflow-ai-m815.js`; M8.15.1 usage logging: `node scripts/smoke-workflow-ai-m8151.js`; dataset Ads: `node scripts/smoke-workflow-ai-dataset-ads.js`; AI scope: `node scripts/smoke-workflow-ai-scope.js`; live AI scope: `node scripts/smoke-workflow-ai-live-scope.js` |
 | Workflow engine core | targeted `smoke-workflow-engine.js` **only if** you changed scheduler/occurrences/edges — else Level 3 at milestone |
 
 If Copilot, connections, Wait, Loop, or credentials changed, include that family’s smoke.

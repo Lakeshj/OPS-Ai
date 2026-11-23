@@ -28,15 +28,35 @@ export type AiAvailableTool = {
   nodeId?: string;
 };
 
+export type AiToolErrorMeta = {
+  toolName?: string;
+  code?: string;
+  message?: string;
+};
+
+export type AiModelRequestDebug = {
+  provider?: string;
+  model?: string;
+  toolCount?: number;
+  toolNames?: string[];
+};
+
 export type AiAgentItemMeta = {
   kind?: string;
   itemIndex?: number;
   rounds?: number;
+  /** Number of model.invoke generations for this item. */
+  modelRequests?: number;
   /** Tools bound to the agent for this run (may be empty). */
   toolsAvailable?: AiAvailableTool[];
+  /** Unique tool names the model asked to call. */
+  toolsRequested?: string[];
   /** Unique tool names attempted (success or soft-fail). */
   toolsUsed?: string[];
+  toolErrors?: AiToolErrorMeta[];
   toolCalls?: AiSafeToolCall[];
+  /** Safe OpenAI request summary (no prompts/secrets). */
+  modelRequest?: AiModelRequestDebug;
   usage?: AiAgentUsage;
   modelNodeId?: string;
   modelProvider?: string;

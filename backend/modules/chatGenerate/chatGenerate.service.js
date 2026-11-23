@@ -1,5 +1,3 @@
-const { v4: uuidv4 } = require("uuid");
-const { pool } = require("../../config/database");
 const AppError = require("../../utils/AppError");
 const {
   assertThreadAccess,
@@ -13,53 +11,8 @@ const { upsertSessionMemory } = require("../../services/sessionMemory.service");
 const {
   shouldUseSessionMemory,
 } = require("../../utils/sessionMemoryPolicy");
-
-const logUsageEvent = async ({
-  workspaceId,
-  threadId,
-  userId,
-  assistantId,
-  model,
-  usage,
-  latencyMs,
-}) => {
-  try {
-    await pool.execute(
-      `
-      INSERT INTO ai_usage_events (
-        id,
-        workspace_id,
-        thread_id,
-        user_id,
-        assistant_id,
-        model,
-        input_tokens,
-        cached_tokens,
-        cache_write_tokens,
-        output_tokens,
-        total_tokens,
-        latency_ms
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `,
-      [
-        uuidv4(),
-        workspaceId,
-        threadId,
-        userId || null,
-        assistantId || null,
-        model,
-        Number(usage?.prompt_tokens || 0),
-        Number(usage?.prompt_tokens_details?.cached_tokens || 0),
-        Number(usage?.prompt_tokens_details?.cache_write_tokens || 0),
-        Number(usage?.completion_tokens || 0),
-        Number(usage?.total_tokens || 0),
-        latencyMs,
-      ]
-    );
-  } catch (error) {
-    console.error("[ai-usage] failed to log usage:", error.message);
-  }
-};
+const { recordAiUsageEvent } = require("../../services/aiUsageLog.service");
+const { inferProviderFromModel } = require("../../utils/aiProviders");
 
 const generate = async (
   { threadId, prompt, assistantId, workflowReferences: rawRefs },
@@ -139,14 +92,16 @@ const generate = async (
     const model = generated.model;
     const latencyMs = Date.now() - startedAt;
 
-    await logUsageEvent({
+    await recordAiUsageEvent({
       workspaceId,
       threadId,
       userId: authUser.userId,
       assistantId: assistant?.id || null,
       model,
+      provider: inferProviderFromModel(model),
       usage: generated.usage,
       latencyMs,
+      source: assistant?.id ? "bot_chat" : "default_chat",
     });
 
     // Session memory: always with a bot; without a bot only for important prompts.

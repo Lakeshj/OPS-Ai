@@ -883,6 +883,17 @@ const createOpenAiCompatAdapter = (descriptor) => {
             : responseFormat;
       }
 
+      const toolNames = Array.isArray(tools)
+        ? tools.map((t) => String(t?.name || "").trim()).filter(Boolean)
+        : [];
+      // Safe request summary only — never log messages/body/secrets.
+      const requestDebug = {
+        provider,
+        model,
+        toolCount: toolNames.length,
+        toolNames,
+      };
+
       const run = async () => {
         if (signal?.aborted) {
           throw new AiRuntimeError("Model aborted", AI_ERROR.MODEL_TIMEOUT);
@@ -907,9 +918,13 @@ const createOpenAiCompatAdapter = (descriptor) => {
           : [];
         const usage = completion.usage
           ? {
-              inputTokens: completion.usage.prompt_tokens,
-              outputTokens: completion.usage.completion_tokens,
-              totalTokens: completion.usage.total_tokens,
+              inputTokens: Number(completion.usage.prompt_tokens) || 0,
+              cachedInputTokens:
+                Number(
+                  completion.usage.prompt_tokens_details?.cached_tokens
+                ) || 0,
+              outputTokens: Number(completion.usage.completion_tokens) || 0,
+              totalTokens: Number(completion.usage.total_tokens) || 0,
             }
           : undefined;
         return {
@@ -919,6 +934,7 @@ const createOpenAiCompatAdapter = (descriptor) => {
           },
           toolCalls,
           usage,
+          requestDebug,
           finishReason: choice?.finish_reason || (toolCalls.length ? "tool_calls" : "stop"),
           providerMetadata: { id: completion.id },
         };

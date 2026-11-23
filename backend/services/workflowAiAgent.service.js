@@ -1,13 +1,11 @@
 /**
- * Part 12B / M8.15 — AI Agent runtime (per-item, bounded tool-call loop).
+ * Part 12B / M8.15 / M8.15.1 — AI Agent runtime (per-item, bounded tool-call loop).
  *
  * Agent is a normal WorkflowItem execution node.
  * Model/Tool providers remain auxiliary (non-scheduled).
  *
- * Root causes addressed in M8.15:
- * - weak tool descriptions / missing whenToUse → model skips tools
- * - hard tool failures aborted the agent into generic answers
- * - empty tool registry was hard to observe in Run Results
+ * M8.15.1: each model.invoke writes ai_usage_events (was bypassed before);
+ * agentMeta exposes modelRequests / toolsRequested / toolErrors for live diagnosis.
  */
 
 const {
@@ -23,6 +21,7 @@ const {
   withTimeout,
   stripSecrets,
 } = require("./workflowAiResources.service");
+const aiUsageLog = require("./aiUsageLog.service");
 
 const getItemPayload = (item) => {
   if (item == null) return item;
@@ -210,7 +209,16 @@ const runAgentForItem = async ({
 
   const toolTrace = [];
   const toolsUsed = [];
-  let usageAcc = { inputTokens: 0, outputTokens: 0, totalTokens: 0 };
+  const toolsRequested = [];
+  const toolErrors = [];
+  let usageAcc = {
+    inputTokens: 0,
+    cachedInputTokens: 0,
+    outputTokens: 0,
+    totalTokens: 0,
+  };
+  let modelRequests = 0;
+  let lastRequestDebug = null;
   let rounds = 0;
   let finalContent = "";
   let finishReason = "stop";
@@ -221,6 +229,15 @@ const runAgentForItem = async ({
     DEFAULT_MODEL_TIMEOUT_MS;
   const toolTimeout =
     Number(data.toolTimeoutMs) || DEFAULT_TOOL_TIMEOUT_MS;
+
+  const nodeName =
+    String(node.data?.label || node.data?.name || node.data?.title || "").trim() ||
+    "AI Agent";
+  const usageUserId =
+    context.userId ||
+    context.authUser?.userId ||
+    context.authUser?.id ||
+    null;
 
   const pushToolError = (tc, err, started) => {
     const code =
@@ -237,7 +254,12 @@ const runAgentForItem = async ({
       durationMs: Date.now() - started,
       errorCode: code,
     });
-    if (!toolsUsed.includes(tc.name)) toolsUsed.push(tc.name);
+    toolErrors.push({
+      toolName: tc.name,
+      code,
+      message,
+    });
+    // toolsUsed = successful executions only (toolsRequested covers attempts).
     messages.push({
       role: "tool",
       name: tc.name,
@@ -260,18 +282,61 @@ const runAgentForItem = async ({
       );
     }
     rounds += 1;
+    const invokeStarted = Date.now();
     const result = await runtime.model.invoke({
       messages,
       tools: toolDefs,
       timeoutMs: modelTimeout,
       signal: context.abortSignal,
     });
+    const invokeLatency = Date.now() - invokeStarted;
+    modelRequests += 1;
+    if (result.requestDebug && typeof result.requestDebug === "object") {
+      lastRequestDebug = {
+        provider: result.requestDebug.provider || runtime.model.provider,
+        model: result.requestDebug.model || runtime.model.model,
+        toolCount: Number(result.requestDebug.toolCount) || 0,
+        toolNames: Array.isArray(result.requestDebug.toolNames)
+          ? result.requestDebug.toolNames.map(String)
+          : [],
+      };
+    } else {
+      lastRequestDebug = {
+        provider: runtime.model.provider,
+        model: runtime.model.model,
+        toolCount: toolDefs.length,
+        toolNames: toolDefs.map((t) => t.name),
+      };
+    }
 
     if (result.usage) {
       usageAcc.inputTokens += Number(result.usage.inputTokens) || 0;
+      usageAcc.cachedInputTokens +=
+        Number(result.usage.cachedInputTokens) || 0;
       usageAcc.outputTokens += Number(result.usage.outputTokens) || 0;
       usageAcc.totalTokens += Number(result.usage.totalTokens) || 0;
     }
+
+    // One ai_usage_events row per model generation (not per agent item aggregate).
+    // Call via module object so tests can stub aiUsageLog.recordAiUsageEvent.
+    await aiUsageLog.recordAiUsageEvent({
+      workspaceId: context.workspaceId,
+      userId: usageUserId,
+      model: runtime.model.model,
+      provider: runtime.model.provider,
+      usage: {
+        inputTokens: Number(result.usage?.inputTokens) || 0,
+        cachedTokens: Number(result.usage?.cachedInputTokens) || 0,
+        outputTokens: Number(result.usage?.outputTokens) || 0,
+        totalTokens: Number(result.usage?.totalTokens) || 0,
+      },
+      latencyMs: invokeLatency,
+      source: "ai_agent",
+      workflowRunId: context.runId || null,
+      workflowNodeId: node.id,
+      workflowNodeName: nodeName,
+      generationIndex: modelRequests,
+    });
 
     const toolCalls = Array.isArray(result.toolCalls) ? result.toolCalls : [];
     if (toolCalls.length === 0) {
@@ -294,6 +359,7 @@ const runAgentForItem = async ({
           { toolName: tc.name }
         );
       }
+      if (!toolsRequested.includes(tc.name)) toolsRequested.push(tc.name);
     }
 
     messages.push({
@@ -325,7 +391,9 @@ const runAgentForItem = async ({
             nodeId: node.id,
             itemIndex,
             graph: context.graph,
-            authUser: context.authUser,
+            authUser: context.authUser || {
+              userId: usageUserId,
+            },
           }),
           toolTimeout,
           AI_ERROR.TOOL_TIMEOUT,
@@ -376,9 +444,13 @@ const runAgentForItem = async ({
     kind: "aiAgent",
     itemIndex,
     rounds,
+    modelRequests,
     toolsAvailable,
+    toolsRequested,
     toolsUsed,
+    toolErrors,
     toolCalls: toolTrace,
+    modelRequest: lastRequestDebug,
     usage: usageAcc.totalTokens ? usageAcc : undefined,
     modelNodeId: runtime.modelDescriptor.nodeId,
     modelProvider: runtime.modelDescriptor.provider,

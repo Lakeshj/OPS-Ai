@@ -43,6 +43,11 @@ export type AiUsageLogRow = {
   userName?: string | null;
   assistantId?: string | null;
   assistantName?: string | null;
+  source?: string | null;
+  workflowRunId?: string | null;
+  workflowNodeId?: string | null;
+  workflowNodeName?: string | null;
+  generationIndex?: number | null;
   inputTokens: number;
   cachedTokens: number;
   cacheWriteTokens: number;
