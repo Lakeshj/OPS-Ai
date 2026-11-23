@@ -81,6 +81,8 @@ const FORBIDDEN_PARAM_KEYS = new Set([
   "password",
   "token",
   "secret",
+  "appSecret",
+  "clientSecret",
   "authorization",
   "Authorization",
   "accessToken",

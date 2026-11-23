@@ -176,6 +176,7 @@ const buildPlanResponse = ({
   evidence,
   fixPlan,
   workflowReferences,
+  copilotMeta,
 }) => ({
   intent,
   assistantMessage: assistantMessage || summary || "",
@@ -198,7 +199,78 @@ const buildPlanResponse = ({
   evidence: evidence || undefined,
   fixPlan: fixPlan === undefined ? undefined : fixPlan,
   workflowReferences: workflowReferences || undefined,
+  copilotMeta: copilotMeta || undefined,
 });
+
+const recordCopilotUsage = async ({
+  workspaceId,
+  userId,
+  model,
+  provider,
+  usage,
+  latencyMs,
+  workflowId,
+}) => {
+  if (!workspaceId || !model) return;
+  // Deterministic/fixture planners must not write ai_usage_events (no real FK workspace).
+  if (
+    provider === "deterministic" ||
+    /fixture|deterministic/i.test(String(model || ""))
+  ) {
+    return;
+  }
+  try {
+    const { recordAiUsageEvent } = require("./aiUsageLog.service");
+    await recordAiUsageEvent({
+      workspaceId,
+      userId: userId || null,
+      model,
+      provider: provider || null,
+      usage: usage || null,
+      latencyMs: latencyMs ?? null,
+      source: "workflow_copilot",
+      workflowRunId: null,
+      workflowNodeId: null,
+      workflowNodeName: workflowId
+        ? `Workflow Copilot (${String(workflowId).slice(0, 8)})`
+        : "Workflow Copilot",
+      generationIndex: 1,
+    });
+  } catch (err) {
+    console.error("[copilot-usage] failed:", err.message);
+  }
+};
+
+const buildCopilotMetaFromContext = (ctx, extras = {}) => {
+  if (!ctx) {
+    return {
+      workflowId: extras.workflowId || null,
+      selectedNodeId: extras.selectedNodeId || null,
+      contextSource: null,
+      nodeCount: 0,
+      edgeCount: 0,
+      relationshipCount: 0,
+      latestRunAttached: false,
+      internalToolsAvailable: [],
+      internalToolsUsed: extras.internalToolsUsed || [],
+    };
+  }
+  const {
+    INTERNAL_TOOL_DEFS,
+  } = require("./workflowCopilotContextBridge.service");
+  return {
+    workflowId: ctx.workflow?.id || extras.workflowId || null,
+    selectedNodeId: ctx.selectedNode?.id || extras.selectedNodeId || null,
+    contextSource: ctx.contextSource || null,
+    nodeCount: ctx.counts?.nodeCount ?? (ctx.nodes || []).length,
+    edgeCount: ctx.counts?.edgeCount ?? (ctx.edges || []).length,
+    relationshipCount:
+      ctx.counts?.relationshipCount ?? (ctx.relationships || []).length,
+    latestRunAttached: Boolean(ctx.counts?.latestRunAttached),
+    internalToolsAvailable: INTERNAL_TOOL_DEFS.map((t) => t.name),
+    internalToolsUsed: extras.internalToolsUsed || [],
+  };
+};
 
 const buildCatalogBrief = () => {
   try {
@@ -539,9 +611,73 @@ const planCopilotTurn = async ({
       });
     }
   } else {
-    // No runId — ignore client-provided execution entirely in production
+    // No runId — ignore client-provided execution; optionally attach latest run.
     exec = null;
+    if (authUser && workflowId) {
+      try {
+        const workflowsService = require("../modules/workflows/workflows.service");
+        const runs = await workflowsService.listRuns(workflowId, authUser);
+        const latest = Array.isArray(runs) && runs.length ? runs[0] : null;
+        if (latest?.id) {
+          const persisted = await workflowsService.getRunById(
+            latest.id,
+            authUser,
+            { workflowId }
+          );
+          if (persisted) {
+            exec = hydration.hydrateExecutionFromPersistedRun(persisted);
+            // Keep raw persisted for agentMeta extraction when hydrate is thin
+            exec._persisted = persisted;
+          }
+        }
+      } catch {
+        /* best-effort latest run */
+      }
+    }
   }
+
+  // M8.16 — Workflow Context Bridge (full graph; never pruned).
+  const bridge = require("./workflowCopilotContextBridge.service");
+  let latestExecutionForBridge = null;
+  if (exec) {
+    const persisted = exec._persisted || null;
+    latestExecutionForBridge = {
+      id: persisted?.id || exec.runId || exec.id || null,
+      status: persisted?.status || exec.status || null,
+      error:
+        persisted?.error ||
+        exec.error ||
+        exec.safeError?.message ||
+        null,
+      steps:
+        persisted?.steps ||
+        persisted?.stepResults ||
+        exec.steps ||
+        exec.stepResults ||
+        {},
+      safeError: exec.safeError || null,
+    };
+  }
+
+  const workflowContext = bridge.buildWorkflowContext({
+    workflow: workflow || { id: workflowId },
+    editorDefinition: req.definition ? def : null,
+    persistedDefinition: workflow?.definition || null,
+    selectedNodeId: req.selectedNodeId,
+    latestExecution: latestExecutionForBridge,
+    workspaceId: workflow?.workspaceId || null,
+  });
+  const workflowContextPrompt =
+    bridge.formatWorkflowContextForPrompt(workflowContext);
+  const inspectionBrief = bridge.buildInspectionBrief(
+    workflowContext,
+    req.message
+  );
+  const baseCopilotMeta = buildCopilotMetaFromContext(workflowContext, {
+    workflowId,
+    selectedNodeId: req.selectedNodeId,
+    internalToolsUsed: inspectionBrief?.toolsUsed || [],
+  });
 
   // Conversational intents — production LLM; fixtures only when forceMode=deterministic
   if (CONVERSATIONAL_INTENTS.includes(intent)) {
@@ -556,6 +692,7 @@ const planCopilotTurn = async ({
       provider: "deterministic",
       model: "conversational-fixture",
     };
+    let internalToolsUsed = inspectionBrief?.toolsUsed || [];
 
     try {
       const conv = await generateConversationalReply({
@@ -569,11 +706,25 @@ const planCopilotTurn = async ({
         authUser,
         workspaceId: workflow?.workspaceId || null,
         safeUserContext: req.safeUserContext || null,
+        workflowContextPrompt,
+        inspectionBrief,
       });
       intent = conv.intent || intent;
       assistantMessage = conv.assistantMessage;
       clarifyingQuestions = conv.clarifyingQuestions || [];
       providerMeta = conv.providerMeta || providerMeta;
+      if (Array.isArray(conv.internalToolsUsed) && conv.internalToolsUsed.length) {
+        internalToolsUsed = conv.internalToolsUsed;
+      }
+      await recordCopilotUsage({
+        workspaceId: workflow?.workspaceId || null,
+        userId: authUser?.userId || authUser?.id || null,
+        model: providerMeta.model,
+        provider: providerMeta.provider,
+        usage: providerMeta.usage || null,
+        latencyMs: Date.now() - started,
+        workflowId,
+      });
     } catch (err) {
       // Never fall back to CREATE. Do not pretend success when the model fails.
       const code = err.code || PERR.PROVIDER_UNAVAILABLE;
@@ -615,6 +766,10 @@ const planCopilotTurn = async ({
         createdWorkflowRun: false,
         providerMeta,
         workflowReferences: refResponse,
+        copilotMeta: {
+          ...baseCopilotMeta,
+          internalToolsUsed,
+        },
       });
     }
 
@@ -653,6 +808,11 @@ const planCopilotTurn = async ({
       createdWorkflowRun: false,
       providerMeta,
       workflowReferences: refResponse,
+      contextBrief: workflowContextPrompt,
+      copilotMeta: {
+        ...baseCopilotMeta,
+        internalToolsUsed,
+      },
     });
   }
 
@@ -705,6 +865,8 @@ const planCopilotTurn = async ({
       evidence: diag.evidence,
       fixPlan: diag.fixPlan,
       workflowReferences: refResponse,
+      contextBrief: workflowContextPrompt,
+      copilotMeta: baseCopilotMeta,
     });
   }
 
@@ -724,6 +886,10 @@ const planCopilotTurn = async ({
     const askingCompare =
       /\b(compar|while|whereas|but|vs\.?|versus)\b/.test(msgLower) &&
       resolvedRefs.some((r) => r.available);
+    const askingConnections =
+      /\b(connected|connection|linked|wired|what.*(to|from))\b/.test(msgLower);
+    const askingAccount =
+      /\b(which|what).*(account|credential|instagram|ads|page)\b/.test(msgLower);
 
     let assistantMessage;
     if (askingResult) {
@@ -756,6 +922,74 @@ const planCopilotTurn = async ({
             `#${r.name || r.workflowId}: ${r.latestRun?.status || "never_run"}`
         );
       assistantMessage = `Current workflow run status: ${cur}. Referenced: ${refLines.join("; ") || "none"}. Compare using these statuses — open each workflow for deeper inspection.`;
+    } else if (askingAccount && workflowContext) {
+      const candidates = (workflowContext.nodes || []).filter(
+        (n) =>
+          n.username ||
+          n.accountName ||
+          n.instagramUserId ||
+          n.customerId ||
+          n.adAccountId ||
+          n.credentialConfigured
+      );
+      assistantMessage = candidates.length
+        ? candidates
+            .map((n) =>
+              [
+                n.label || n.type,
+                n.username ? `username=${n.username}` : null,
+                n.accountName ? `account=${n.accountName}` : null,
+                n.instagramUserId
+                  ? `instagramUserId=${n.instagramUserId}`
+                  : null,
+                n.customerId ? `customerId=${n.customerId}` : null,
+                n.adAccountId ? `adAccountId=${n.adAccountId}` : null,
+                n.credentialConfigured ? "credential=configured" : null,
+              ]
+                .filter(Boolean)
+                .join(" · ")
+            )
+            .join("\n")
+        : "I don't see a safe account label on the current canvas. Credentials/tokens are never exposed.";
+    } else if (askingConnections && workflowContext) {
+      const focus =
+        workflowContext.selectedNode ||
+        workflowContext.nodes.find((n) => n.type === "aiAgent") ||
+        null;
+      const labelOf = (id) => {
+        const n = workflowContext.nodes.find((x) => x.id === id);
+        return n ? `${n.label || n.type} (${n.id})` : id;
+      };
+      if (focus) {
+        const edges = workflowContext.edges || [];
+        const rels = (workflowContext.relationships || []).filter(
+          (r) => r.from === focus.id || r.to === focus.id
+        );
+        const inns = edges.filter(
+          (e) => e.target === focus.id && e.kind !== "auxiliary"
+        );
+        const outs = edges.filter(
+          (e) => e.source === focus.id && e.kind !== "auxiliary"
+        );
+        const tools = rels.filter((r) => r.type === "tool_binding");
+        const models = rels.filter((r) => r.type === "model_binding");
+        assistantMessage = [
+          `${labelOf(focus.id)} on the current canvas:`,
+          `MAIN in: ${inns.map((e) => labelOf(e.source)).join(", ") || "none"}`,
+          `MAIN out: ${outs.map((e) => labelOf(e.target)).join(", ") || "none"}`,
+          `Tool bindings: ${
+            tools.map((r) => `${labelOf(r.from)} → ${labelOf(r.to)}`).join("; ") ||
+            "none"
+          }`,
+          `Model bindings: ${
+            models.map((r) => `${labelOf(r.from)} → ${labelOf(r.to)}`).join("; ") ||
+            "none"
+          }`,
+        ].join("\n");
+      } else {
+        assistantMessage =
+          "No focus node is selected and no AI Agent was found on this canvas.";
+      }
     } else if (req.selectedNodeId && ctx.selectedNode) {
       const sn = ctx.selectedNode;
       const outs = (def.edges || [])
@@ -771,14 +1005,20 @@ const planCopilotTurn = async ({
         ? `${sn.nodeType} is an AI resource for an Agent — it does not execute as a normal workflow step. Connected from: ${inns.join(", ") || "none"}; into: ${outs.join(", ") || "none"}.`
         : `${sn.nodeType} (${sn.nodeId}) — incoming: ${inns.join(", ") || "none"}; outgoing: ${outs.join(", ") || "none"}. Key parameters: ${JSON.stringify(sn.parameters || {}).slice(0, 240)}`;
     } else {
-      const lines = (ctx.workflow?.skeleton || []).map((n) => {
-        const aux = ["aiChatModel", "aiCalculatorTool", "aiHttpTool"].includes(
-          n.type
-        );
-        return aux
-          ? `${n.label || n.type} (resource)`
-          : `${n.label || n.type} (${n.id})`;
-      });
+      const lines = (workflowContext?.nodes || ctx.workflow?.skeleton || []).map(
+        (n) => {
+          const type = n.type || n.nodeType;
+          const aux = [
+            "aiChatModel",
+            "aiCalculatorTool",
+            "aiHttpTool",
+            "instagramMcpTool",
+          ].includes(type);
+          return aux
+            ? `${n.label || type} (resource)`
+            : `${n.label || type} (${n.id})`;
+        }
+      );
       assistantMessage =
         lines.length > 0
           ? `This workflow has ${lines.length} nodes: ${lines.join(" → ")}.`
@@ -806,11 +1046,12 @@ const planCopilotTurn = async ({
       revisionHash: liveHash,
       needsClarification: false,
       createdWorkflowRun: false,
-      contextBrief: {
-        nodeCount: ctx.workflow?.nodeCount,
-        selectedNodeId: req.selectedNodeId,
-      },
+      contextBrief: workflowContextPrompt,
       workflowReferences: refResponse,
+      copilotMeta: {
+        ...baseCopilotMeta,
+        internalToolsUsed: inspectionBrief?.toolsUsed || [],
+      },
     });
   }
 
@@ -1448,6 +1689,8 @@ const planCopilotTurn = async ({
       createdWorkflowRun: false,
       providerMeta,
       workflowReferences: refResponse,
+      contextBrief: workflowContextPrompt,
+      copilotMeta: baseCopilotMeta,
     });
   }
   plan.operations = consistency.operations;
@@ -1459,6 +1702,16 @@ const planCopilotTurn = async ({
     durationMs: Date.now() - started,
     repairRounds,
     validationValid: validation?.valid !== false,
+  });
+
+  await recordCopilotUsage({
+    workspaceId: workflow?.workspaceId || null,
+    userId: authUser?.userId || authUser?.id || null,
+    model: providerMeta?.model,
+    provider: providerMeta?.provider,
+    usage: providerMeta?.usage || null,
+    latencyMs: Date.now() - started,
+    workflowId,
   });
 
   return buildPlanResponse({
@@ -1482,6 +1735,8 @@ const planCopilotTurn = async ({
     repairRounds,
     providerMeta,
     workflowReferences: refResponse,
+    contextBrief: workflowContextPrompt,
+    copilotMeta: baseCopilotMeta,
   });
 };
 

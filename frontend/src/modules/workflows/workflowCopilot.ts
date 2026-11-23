@@ -111,6 +111,19 @@ export interface CopilotPlanResponse {
     available?: boolean;
     latestRunStatus?: string | null;
   }>;
+  /** M8.16 — safe Workflow Context Bridge observability */
+  contextBrief?: unknown;
+  copilotMeta?: {
+    workflowId?: string | null;
+    selectedNodeId?: string | null;
+    contextSource?: "persisted" | "editor_draft" | null;
+    nodeCount?: number;
+    edgeCount?: number;
+    relationshipCount?: number;
+    latestRunAttached?: boolean;
+    internalToolsAvailable?: string[];
+    internalToolsUsed?: string[];
+  };
 }
 
 export interface WorkflowDraftDefinition {

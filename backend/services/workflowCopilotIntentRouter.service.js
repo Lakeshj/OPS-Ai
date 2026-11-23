@@ -274,7 +274,10 @@ const hasClearActionVerb = (text) =>
   /\b(can you add|please add|add a |add an |change .+ to|make .+ (like|similar))\b/.test(
     text
   ) ||
-  /\b(use\s+ai|let the ai|ai\s+agent|ai calculate|ai summary|generate an ai)\b/.test(text) ||
+  // Require an action around AI — bare "AI Agent" in questions is not a mutation.
+  /\b(use\s+ai|let the ai|ai calculate|ai summary|generate an ai)\b/.test(text) ||
+  (/\bai\s+agent\b/.test(text) &&
+    /\b(add|insert|create|build|use|let the)\b/.test(text)) ||
   /\bhttps?:\/\//.test(text);
 
 /**
@@ -318,6 +321,32 @@ const classifyPlanningIntent = (
     )
   ) {
     return "INFORMATION";
+  }
+
+  // Canvas inspection questions before mutation heuristics (M8.16).
+  // Prefer EXPLAIN/GENERAL (context bridge) over mutation; keep classic
+  // run-failure DEBUG for explicit fail/error wording with a runId.
+  if (
+    /^(what|why|which|how|who|where|when)\b/.test(text) &&
+    /\b(connected|connection|linked|wired|getting|using|account|credential|fail|broken|wrong|missing|not working|isn't|is not)\b/.test(
+      text
+    ) &&
+    !/\b(add|insert|create|build|change|update|remove|delete|rename|fix)\b/.test(
+      text
+    )
+  ) {
+    if (
+      runId &&
+      /\b(fail|failed|error|broke|wrong)\b/.test(text) &&
+      !/\b(connected|connection|account)\b/.test(text)
+    ) {
+      return "DEBUG";
+    }
+    if (hasGraph && /\b(connected|connection|linked|wired|using|account)\b/.test(text)) {
+      return "EXPLAIN";
+    }
+    // why isn't X getting Y → conversational with WorkflowContext
+    return "GENERAL";
   }
 
   // Mixed turns: clear workflow action verbs win over identity / soft EXPLAIN
@@ -441,12 +470,37 @@ const classifyPlanningIntent = (
     return "EXPLAIN";
   }
 
+  // Interrogative canvas questions (connections / why / which account) stay
+  // conversational or EXPLAIN — never mutate just because "AI Agent" is named.
+  if (
+    /^(what|why|which|how|who|where|when)\b/.test(text) &&
+    /\b(connected|connection|linked|wired|getting|using|account|credential|fail|broken|wrong|missing|not working|isn't|is not)\b/.test(
+      text
+    ) &&
+    !/\b(add|insert|create|build|change|update|remove|delete|rename|fix)\b/.test(
+      text
+    )
+  ) {
+    if (
+      /\b(why|fail|broken|wrong|missing|not working|isn't|is not|getting)\b/.test(
+        text
+      )
+    ) {
+      return runId || hasGraph ? "DEBUG" : "GENERAL";
+    }
+    if (hasGraph) return "EXPLAIN";
+    return "GENERAL";
+  }
+
   // Construction / mutation
   if (
     hasClearActionVerb(text) ||
-    /\b(use\s+ai|ai\s+agent|scaffold|new\s+workflow|schedule|wait\s+\d|batch|loop|only\s+continue|aftr|after this)\b/.test(
+    /\b(use\s+ai|scaffold|new\s+workflow|schedule|wait\s+\d|batch|loop|only\s+continue|aftr|after this)\b/.test(
       text
     ) ||
+    // "add/build an AI Agent" — not bare mentions in questions
+    (/\bai\s+agent\b/.test(text) &&
+      /\b(add|insert|create|build|use|let the)\b/.test(text)) ||
     /\b(make\s+this\s+(like|similar)|similar\s+to\s+#|make\s+same\s+as\s+#)\b/.test(
       text
     ) ||
