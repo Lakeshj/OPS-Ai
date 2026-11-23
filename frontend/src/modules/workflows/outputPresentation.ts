@@ -7,6 +7,7 @@
 import type { WorkflowItem } from "./types";
 import {
   buildInstagramInsightsCollection,
+  buildInstagramMediaListCollection,
   buildInstagramReadableBlock,
   getInstagramMeta,
   isInstagramOutputJson,
@@ -85,6 +86,14 @@ function buildResolved(
     );
   });
 
+  const allMediaList = items.every((row) => {
+    const meta = getInstagramMeta(row);
+    return (
+      String(meta?.resource || "").toLowerCase() === "media" &&
+      String(meta?.operation || "").toLowerCase() === "list_media"
+    );
+  });
+
   let blocks: InstagramReadableBlock[];
   let summary: string;
   if (allInsights) {
@@ -92,33 +101,26 @@ function buildResolved(
     if (!collection) return null;
     blocks = [collection];
     summary = collection.text;
+  } else if (allMediaList) {
+    // M8.14.1 — one compact list, not N full media cards.
+    const collection = buildInstagramMediaListCollection(items);
+    if (!collection) return null;
+    blocks = [collection];
+    summary = collection.title;
   } else {
     blocks = items
-      .map((row, index) => buildInstagramReadableBlock(row, index))
+      .map((row, index) =>
+        buildInstagramReadableBlock(
+          row,
+          items.length > 1 ? index : undefined
+        )
+      )
       .filter(Boolean) as InstagramReadableBlock[];
     if (!blocks.length) return null;
-    const allMediaList = items.every((row) => {
-      const meta = getInstagramMeta(row);
-      return String(meta?.operation || "").toLowerCase() === "list_media";
-    });
-    if (allMediaList) {
-      const meta0 = getInstagramMeta(items[0]) as
-        | {
-            truncated?: boolean;
-            paging?: { hasNext?: boolean; cursors?: { after?: string } };
-          }
-        | null;
-      const hasMore =
-        Boolean(meta0?.truncated) || Boolean(meta0?.paging?.hasNext);
-      summary = hasMore
-        ? `Instagram · ${items.length} media items · more available`
-        : `Instagram · ${items.length} media items`;
-    } else {
-      summary =
-        items.length === 1
-          ? summarizeInstagramOutput(items[0]) || blocks[0].text
-          : `Instagram · ${items.length} items`;
-    }
+    summary =
+      items.length === 1
+        ? summarizeInstagramOutput(items[0]) || blocks[0].text
+        : `Instagram · ${items.length} items`;
   }
 
   return {

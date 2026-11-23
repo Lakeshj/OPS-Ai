@@ -28,9 +28,31 @@ export type InstagramInsightBreakdownTable = {
   collapsible: boolean;
 };
 
+/** Compact row for Media → List (M8.14.1). */
+export type InstagramMediaListRow = {
+  id: string;
+  thumbnailUrl?: string;
+  mediaType?: string;
+  productType?: string;
+  captionPreview: string;
+  /** Full caption when longer than preview — enables expand. */
+  captionFull?: string;
+  timestamp?: string;
+  likeCount?: string;
+  commentsCount?: string;
+  permalink?: string;
+};
+
 export type InstagramReadableBlock = {
   title: string;
-  layout: "account" | "media" | "insights" | "comments" | "publish" | "generic";
+  layout:
+    | "account"
+    | "media"
+    | "media_list"
+    | "insights"
+    | "comments"
+    | "publish"
+    | "generic";
   lines: Array<{ label: string; value: string }>;
   imageUrl?: string;
   /** Plain-text fallback for previews / copy / Run Results. */
@@ -43,8 +65,14 @@ export type InstagramReadableBlock = {
   stats?: Array<{ label: string; value: string }>;
   /** Demographic breakdown tables for Insights (primary human view). */
   breakdownTables?: InstagramInsightBreakdownTable[];
+  /** Compact Media → List rows (one list presentation). */
+  mediaRows?: InstagramMediaListRow[];
+  /** list_media: more pages available via after cursor. */
+  hasMore?: boolean;
   biography?: string;
 };
+
+const MEDIA_CAPTION_PREVIEW_LEN = 80;
 
 const asRecord = (value: unknown): Record<string, unknown> | null =>
   value && typeof value === "object" && !Array.isArray(value)
@@ -209,6 +237,142 @@ function formatMediaBlock(
     text: [title, "", ...lines.map((row) => `${row.label}\n${row.value}`)]
       .join("\n")
       .trimEnd(),
+  };
+}
+
+function formatMediaTimestamp(raw: unknown): string {
+  const value = str(raw);
+  if (!value) return "";
+  const ms = Date.parse(value);
+  if (!Number.isFinite(ms)) return value;
+  try {
+    return new Date(ms).toLocaleDateString(undefined, {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+    });
+  } catch {
+    return value.slice(0, 10);
+  }
+}
+
+function truncateCaption(raw: unknown): {
+  preview: string;
+  full?: string;
+} {
+  const full = str(raw);
+  if (!full) return { preview: "" };
+  if (full.length <= MEDIA_CAPTION_PREVIEW_LEN) return { preview: full };
+  const cut = full.slice(0, MEDIA_CAPTION_PREVIEW_LEN).replace(/\s+\S*$/, "");
+  return {
+    preview: `${cut || full.slice(0, MEDIA_CAPTION_PREVIEW_LEN)}…`,
+    full,
+  };
+}
+
+function toMediaListRow(json: Record<string, unknown>): InstagramMediaListRow | null {
+  const id = str(json.mediaId || json.id);
+  if (!id) return null;
+  const mediaType = str(json.mediaType || json.media_type) || undefined;
+  const productType =
+    str(json.mediaProductType || json.media_product_type) || undefined;
+  const caption = truncateCaption(json.caption);
+  const thumbRaw =
+    json.thumbnailUrl || json.mediaUrl || json.thumbnail_url || json.media_url;
+  const thumbnailUrl = isSafeInstagramImageUrl(thumbRaw)
+    ? str(thumbRaw)
+    : undefined;
+  const permalink = str(json.permalink) || undefined;
+  const likeCount =
+    json.likeCount != null && json.likeCount !== ""
+      ? String(json.likeCount)
+      : json.like_count != null && json.like_count !== ""
+        ? String(json.like_count)
+        : undefined;
+  const commentsCount =
+    json.commentsCount != null && json.commentsCount !== ""
+      ? String(json.commentsCount)
+      : json.comments_count != null && json.comments_count !== ""
+        ? String(json.comments_count)
+        : undefined;
+  const timestamp = formatMediaTimestamp(json.timestamp) || undefined;
+  return {
+    id,
+    thumbnailUrl,
+    mediaType,
+    productType,
+    captionPreview: caption.preview,
+    captionFull: caption.full,
+    timestamp,
+    likeCount,
+    commentsCount,
+    permalink,
+  };
+}
+
+function isListMediaItem(json: Record<string, unknown>): boolean {
+  const meta = getInstagramMeta(json);
+  if (!meta) return false;
+  const resource = String(meta.resource || "").toLowerCase();
+  const operation = String(meta.operation || "").toLowerCase();
+  return resource === "media" && operation === "list_media";
+}
+
+function listMediaHasMore(items: Record<string, unknown>[]): boolean {
+  for (const row of items) {
+    const meta = asRecord(row._meta);
+    if (!meta) continue;
+    if (meta.truncated === true) return true;
+    const paging = asRecord(meta.paging);
+    if (paging?.hasNext === true) return true;
+  }
+  return false;
+}
+
+/**
+ * One compact list presentation for Media → List (display-only).
+ * Does not mutate WorkflowItems.
+ */
+export function buildInstagramMediaListCollection(
+  items: Record<string, unknown>[]
+): InstagramReadableBlock | null {
+  const rows = (items || []).filter(isListMediaItem);
+  if (!rows.length) return null;
+  const mediaRows = rows
+    .map((row) => toMediaListRow(row))
+    .filter(Boolean) as InstagramMediaListRow[];
+  if (!mediaRows.length) return null;
+
+  const hasMore = listMediaHasMore(rows);
+  const title = hasMore
+    ? `Instagram · ${mediaRows.length} media items · more available`
+    : `Instagram · ${mediaRows.length} media items`;
+
+  const textChunks: string[] = [title, ""];
+  for (const row of mediaRows) {
+    const typeBits = [row.mediaType, row.productType].filter(Boolean).join(" · ");
+    const stats = [
+      row.likeCount != null ? `${row.likeCount} likes` : null,
+      row.commentsCount != null ? `${row.commentsCount} comments` : null,
+      row.timestamp || null,
+    ]
+      .filter(Boolean)
+      .join(" · ");
+    textChunks.push(
+      [typeBits || "Media", stats].filter(Boolean).join(" · ")
+    );
+    if (row.captionPreview) textChunks.push(row.captionPreview);
+    if (row.permalink) textChunks.push(row.permalink);
+    textChunks.push("");
+  }
+
+  return {
+    title,
+    layout: "media_list",
+    lines: [{ label: "Count", value: String(mediaRows.length) }],
+    mediaRows,
+    hasMore,
+    text: textChunks.join("\n").trimEnd(),
   };
 }
 

@@ -7,6 +7,7 @@ import type { WorkflowItem } from "@/modules/workflows/types";
 import {
   buildInstagramReadableBlock,
   type InstagramInsightBreakdownTable,
+  type InstagramMediaListRow,
   type InstagramReadableBlock,
 } from "@/modules/workflows/instagramOutputPresentation";
 import { resolveOutputPresentation } from "@/modules/workflows/outputPresentation";
@@ -128,6 +129,9 @@ function InstagramBlockView({
   if (block.layout === "account") {
     return <AccountCard block={block} compact={compact} />;
   }
+  if (block.layout === "media_list") {
+    return <MediaListCard block={block} />;
+  }
   if (block.layout === "insights") {
     const period = block.lines.find((l) => l.label === "Period")?.value;
     const timeframe = block.lines.find((l) => l.label === "Timeframe")?.value;
@@ -206,6 +210,93 @@ function InstagramBlockView({
           </div>
         ))}
       </dl>
+    </div>
+  );
+}
+
+function MediaListCard({ block }: { block: InstagramReadableBlock }) {
+  const rows = block.mediaRows || [];
+  return (
+    <div className="space-y-2" data-instagram-media-list="true">
+      <div className="text-xs font-semibold text-foreground">{block.title}</div>
+      <ul className="divide-y divide-border/50 rounded-md border border-border/60">
+        {rows.map((row) => (
+          <li key={row.id}>
+            <MediaListRowView row={row} />
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+function MediaListRowView({ row }: { row: InstagramMediaListRow }) {
+  const [expanded, setExpanded] = React.useState(false);
+  const typeLabel = [row.mediaType, row.productType].filter(Boolean).join(" · ");
+  const metaBits = [
+    row.likeCount != null ? `${row.likeCount} likes` : null,
+    row.commentsCount != null ? `${row.commentsCount} comments` : null,
+    row.timestamp || null,
+  ].filter(Boolean);
+  const showExpand = Boolean(row.captionFull);
+
+  return (
+    <div className="flex gap-2.5 px-2 py-2" data-instagram-media-list-row={row.id}>
+      {row.thumbnailUrl ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={row.thumbnailUrl}
+          alt=""
+          className="h-12 w-12 shrink-0 rounded object-cover"
+          referrerPolicy="no-referrer"
+        />
+      ) : (
+        <div className="h-12 w-12 shrink-0 rounded bg-muted" aria-hidden />
+      )}
+      <div className="min-w-0 flex-1 space-y-0.5">
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+          {typeLabel ? (
+            <span className="text-[11px] font-medium text-foreground">
+              {typeLabel}
+            </span>
+          ) : (
+            <span className="text-[11px] font-medium text-foreground">Media</span>
+          )}
+          {row.permalink ? (
+            <a
+              href={row.permalink}
+              target="_blank"
+              rel="noreferrer noopener"
+              className="text-[11px] text-muted-foreground underline-offset-2 hover:underline"
+            >
+              Open
+            </a>
+          ) : null}
+        </div>
+        {metaBits.length ? (
+          <div className="text-[10px] text-muted-foreground">
+            {metaBits.join(" · ")}
+          </div>
+        ) : null}
+        {row.captionPreview || row.captionFull ? (
+          <div className="text-xs leading-snug text-foreground">
+            <span className="whitespace-pre-wrap">
+              {expanded && row.captionFull
+                ? row.captionFull
+                : row.captionPreview}
+            </span>
+            {showExpand ? (
+              <button
+                type="button"
+                className="ml-1 text-[10px] text-muted-foreground underline-offset-2 hover:underline"
+                onClick={() => setExpanded((v) => !v)}
+              >
+                {expanded ? "Less" : "More"}
+              </button>
+            ) : null}
+          </div>
+        ) : null}
+      </div>
     </div>
   );
 }

@@ -51,8 +51,10 @@ check("IG-M814-F1 human summary shows N media items", () => {
   assert.ok(resolved);
   assert.match(resolved!.summaryText || "", /25 media items/);
   assert.match(resolved!.summaryText || "", /more available/);
-  assert.equal(resolved!.blocks.length, 25);
-  assert.match(resolved!.blocks[0].title, /Instagram Media/);
+  // M8.14.1 — one list presentation, not 25 cards
+  assert.equal(resolved!.blocks.length, 1);
+  assert.equal(resolved!.blocks[0].layout, "media_list");
+  assert.match(resolved!.blocks[0].title, /25 media items/);
 });
 
 check("IG-M814-F2 exact page without more omits more available", () => {
@@ -70,6 +72,8 @@ check("IG-M814-F2 exact page without more omits more available", () => {
   const resolved = resolveOutputPresentation(items);
   assert.match(resolved!.summaryText || "", /3 media items/);
   assert.doesNotMatch(resolved!.summaryText || "", /more available/);
+  assert.equal(resolved!.blocks.length, 1);
+  assert.equal(resolved!.blocks[0].layout, "media_list");
 });
 
 check("IG-M814-F3 media renderer layout unchanged", () => {
