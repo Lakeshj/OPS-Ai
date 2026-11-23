@@ -502,12 +502,25 @@ const runAgentForItem = async ({
 /**
  * Full Agent node handler body.
  */
+/** Authoritative workflow graph for auxiliary tool/model binding (not pruned MAIN path). */
+const resolveAgentBindingDefinition = (context) => {
+  if (
+    context?.resourceDefinition &&
+    Array.isArray(context.resourceDefinition.nodes)
+  ) {
+    return context.resourceDefinition;
+  }
+  if (context?.graph?.definition && Array.isArray(context.graph.definition.nodes)) {
+    return context.graph.definition;
+  }
+  if (context?.graph && Array.isArray(context.graph.nodes)) {
+    return { nodes: context.graph.nodes, edges: context.graph.edges || [] };
+  }
+  return null;
+};
+
 const executeAiAgent = async (node, context, helpers) => {
-  const definition =
-    context.graph?.definition ||
-    (context.graph
-      ? { nodes: context.graph.nodes, edges: context.graph.edges }
-      : null);
+  const definition = resolveAgentBindingDefinition(context);
   if (!definition) {
     throw new AiRuntimeError(
       "AI Agent requires graph definition for resource binding.",
@@ -520,6 +533,17 @@ const executeAiAgent = async (node, context, helpers) => {
     definition,
   });
   const runtime = materializeAgentRuntime(resolved);
+  const graphDiagnostics = {
+    workflowId: context.workflowId || null,
+    nodeId: node.id,
+    toolEdgesFound: Number(resolved.diagnostics?.toolEdgesFound) || 0,
+    toolNodesResolved: Number(resolved.diagnostics?.toolNodesResolved) || 0,
+    toolResolutionErrors: Array.isArray(
+      resolved.diagnostics?.toolResolutionErrors
+    )
+      ? resolved.diagnostics.toolResolutionErrors
+      : [],
+  };
 
   const inputItems = Array.isArray(context.inputItems) ? context.inputItems : [];
   const items =
@@ -531,6 +555,10 @@ const executeAiAgent = async (node, context, helpers) => {
 
   const outItems = [];
   const perItemMeta = [];
+  const attachGraphDiag = (metadata) => ({
+    ...metadata,
+    ...graphDiagnostics,
+  });
 
   // Dataset scope: one Agent turn with the full input set — never N copies of the blob.
   if (contextScope === CONTEXT_SCOPE.DATASET) {
@@ -550,7 +578,7 @@ const executeAiAgent = async (node, context, helpers) => {
       json,
       pairedItem: { item: 0 },
     });
-    perItemMeta.push(metadata);
+    perItemMeta.push(attachGraphDiag(metadata));
   } else {
     for (let i = 0; i < items.length; i += 1) {
       // Isolation: each item gets a fresh conversation (runtime model may keep
@@ -569,7 +597,7 @@ const executeAiAgent = async (node, context, helpers) => {
         json,
         pairedItem: { item: i },
       });
-      perItemMeta.push(metadata);
+      perItemMeta.push(attachGraphDiag(metadata));
     }
   }
 
@@ -591,6 +619,8 @@ const executeAiAgent = async (node, context, helpers) => {
       itemCount: outItems.length,
       modelProvider: runtime.modelDescriptor.provider,
       toolNames: runtime.tools.map((t) => t.name),
+      toolEdgesFound: graphDiagnostics.toolEdgesFound,
+      toolNodesResolved: graphDiagnostics.toolNodesResolved,
       agentMeta: perItemMeta,
     },
   };

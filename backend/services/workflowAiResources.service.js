@@ -7,6 +7,8 @@
 
 const {
   resolveAuxiliaryBindings,
+  getEdgeConnectionMeta,
+  CONNECTION_KIND,
   DATA_TYPE,
   isAuxiliaryOnlyProvider,
   nodeTypeOf,
@@ -1294,13 +1296,38 @@ const attachToolExecutor = (descriptor) => {
 };
 
 /**
+ * Count candidate tool edges targeting an Agent (typed tools handle OR
+ * valid auxiliary AI_TOOL bindings). Used for Run Step diagnostics.
+ */
+const collectAgentToolEdgeDiagnostics = ({ nodeId, definition }) => {
+  const edges = Array.isArray(definition?.edges) ? definition.edges : [];
+  const byId = new Map((definition?.nodes || []).map((n) => [n.id, n]));
+  const candidateEdges = edges.filter((e) => {
+    if (e.target !== nodeId) return false;
+    if (String(e.targetHandle || "") === "tools") return true;
+    const meta = getEdgeConnectionMeta(e, byId);
+    return (
+      meta.connectionKind === CONNECTION_KIND.AUXILIARY &&
+      meta.dataType === DATA_TYPE.AI_TOOL
+    );
+  });
+  return {
+    toolEdgesFound: candidateEdges.length,
+    toolEdgeIds: candidateEdges.map((e) => e.id).filter(Boolean),
+  };
+};
+
+/**
  * Resolve Agent auxiliary bindings into serializable descriptors + readiness.
+ * Tool discovery always uses the workflow definition graph (auxiliary edges),
+ * never MAIN execution order / previously-run steps.
  */
 const resolveAgentResources = ({ nodeId, definition }) => {
   const bindings = resolveAuxiliaryBindings({ nodeId, definition });
   const byId = new Map(
     (definition.nodes || []).map((n) => [n.id, n])
   );
+  const edgeDiag = collectAgentToolEdgeDiagnostics({ nodeId, definition });
 
   if (bindings.memory.length > 0) {
     throw new AiRuntimeError(
@@ -1329,27 +1356,70 @@ const resolveAgentResources = ({ nodeId, definition }) => {
   const modelDescriptor = buildModelDescriptor(modelNode);
 
   const toolDescriptors = [];
+  const toolResolutionErrors = [];
   const names = new Set();
   for (const b of bindings.tools) {
     const toolNode = byId.get(b.sourceNodeId);
-    if (!toolNode) continue;
-    const desc = buildToolDescriptor(toolNode);
-    validateToolSchema(desc.inputSchema, desc.name);
-    if (names.has(desc.name)) {
-      throw new AiRuntimeError(
-        `Duplicate tool name "${desc.name}".`,
-        AI_ERROR.DUPLICATE_TOOL_NAME,
-        { toolName: desc.name }
-      );
+    if (!toolNode) {
+      toolResolutionErrors.push({
+        nodeId: b.sourceNodeId,
+        code: "TOOL_NODE_MISSING",
+        message: `Tool node "${b.sourceNodeId}" is missing from the workflow graph.`,
+      });
+      continue;
     }
-    names.add(desc.name);
-    toolDescriptors.push(desc);
+    try {
+      const desc = buildToolDescriptor(toolNode);
+      validateToolSchema(desc.inputSchema, desc.name);
+      if (names.has(desc.name)) {
+        throw new AiRuntimeError(
+          `Duplicate tool name "${desc.name}".`,
+          AI_ERROR.DUPLICATE_TOOL_NAME,
+          { toolName: desc.name }
+        );
+      }
+      names.add(desc.name);
+      toolDescriptors.push(desc);
+    } catch (err) {
+      const code =
+        err && typeof err === "object" && err.code
+          ? String(err.code)
+          : AI_ERROR.TOOL_SCHEMA_INVALID;
+      const message = stripSecrets(
+        err instanceof Error ? err.message : String(err || "Tool resolve failed")
+      );
+      // Soft-collect MCP bind/config gaps so Run Step can diagnose
+      // toolEdgesFound vs toolNodesResolved. Hard schema/duplicate still throw.
+      const softBind =
+        /requires a toolId/i.test(message) ||
+        /Unknown .+ MCP tool/i.test(message) ||
+        /missing from the workflow graph/i.test(message);
+      if (
+        code === AI_ERROR.DUPLICATE_TOOL_NAME ||
+        (code === AI_ERROR.TOOL_SCHEMA_INVALID && !softBind) ||
+        code === AI_ERROR.PROVIDER_UNSUPPORTED
+      ) {
+        throw err;
+      }
+      toolResolutionErrors.push({
+        nodeId: toolNode.id,
+        code,
+        message,
+      });
+    }
   }
 
   return {
     modelDescriptor,
     toolDescriptors,
     bindings,
+    diagnostics: {
+      toolEdgesFound: edgeDiag.toolEdgesFound,
+      toolNodesResolved: toolDescriptors.length,
+      toolEdgeIds: edgeDiag.toolEdgeIds,
+      toolResolutionErrors,
+      bindingToolCount: bindings.tools.length,
+    },
   };
 };
 

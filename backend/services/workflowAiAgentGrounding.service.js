@@ -11,7 +11,7 @@ const GROUNDING_RETRY_USER_MESSAGE = [
 
 /** Phrases that mean the model claimed it cannot access data that tools can fetch. */
 const GENERIC_ACCESS_DENIAL_RE =
-  /\b(i\s+(do\s+not|don't)\s+have\s+access|i\s+would\s+typically\s+need\s+access|i\s+need\s+access\s+to\s+your|if\s+you\s+have\s+access|if\s+you\s+(can\s+)?(provide|share|give)\s+(me\s+)?(access|data)|check\s+your\s+(account|dashboard|instagram|ads|analytics|crm)|you\s+can\s+manually|log\s+in\s+to\s+your|i\s+cannot\s+(access|retrieve|see)\s+(your|the)|i\s+can't\s+(access|retrieve|see)\s+(your|the)|without\s+access\s+to\s+your)\b/i;
+  /\b(i\s+(do\s+not|don't)\s+have\s+access|i\s+would(\s+typically)?\s+need\s+access|i\s+need\s+access\s+to\s+your|if\s+you\s+have\s+access|if\s+you\s+(can\s+)?(provide|share|give)\s+(me\s+)?(access|data)|check\s+your\s+(account|dashboard|instagram|ads|analytics|crm)|you\s+can\s+manually|log\s+in\s+to\s+your|i\s+cannot\s+(access|retrieve|see)\s+(your|the)|i\s+can't\s+(access|retrieve|see)\s+(your|the)|without\s+access\s+to\s+your)\b/i;
 
 const looksLikeGenericAccessDenial = (text) => {
   const raw = String(text || "").trim();

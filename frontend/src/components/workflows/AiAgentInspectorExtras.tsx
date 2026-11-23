@@ -174,6 +174,28 @@ export function AiAgentInspectorExtras({
             <dd className="text-foreground">
               {agentItemMeta?.modelRequests ?? "—"}
             </dd>
+            {agentItemMeta?.toolEdgesFound != null ? (
+              <>
+                <dt className="text-muted-foreground">Tool edges</dt>
+                <dd className="text-foreground">
+                  {agentItemMeta.toolEdgesFound} found ·{" "}
+                  {agentItemMeta.toolNodesResolved ?? 0} resolved
+                </dd>
+              </>
+            ) : null}
+            {(agentItemMeta?.toolResolutionErrors || []).length > 0 ? (
+              <>
+                <dt className="text-muted-foreground">Resolve errors</dt>
+                <dd className="text-destructive">
+                  {(agentItemMeta?.toolResolutionErrors || [])
+                    .map(
+                      (e) =>
+                        `${e.nodeId || "node"}: ${e.code || e.message || "failed"}`
+                    )
+                    .join("; ")}
+                </dd>
+              </>
+            ) : null}
             {agentItemMeta?.groundingRetryTriggered ? (
               <>
                 <dt className="text-muted-foreground">Grounding retry</dt>

@@ -139,13 +139,60 @@ const expandPartialIdsWithLoopBodies = (graph, seedIds) => {
   return ids;
 };
 
-const pruneDefinitionToNodeIds = (definition, ids) => ({
-  version: definition?.version ?? 1,
-  nodes: (definition?.nodes || []).filter((n) => ids.has(n.id)),
-  edges: (definition?.edges || []).filter(
-    (e) => ids.has(e.source) && ids.has(e.target)
-  ),
-});
+/**
+ * Keep auxiliary model/tool/memory providers (and their source-binding nodes)
+ * that feed any retained execution node. Required so Run Step / pruned graphs
+ * still resolve AI Agent tools from the workflow definition.
+ */
+const expandIdsWithAuxiliaryResources = (definition, seedIds) => {
+  const {
+    getAuxiliaryEdges,
+  } = require("./workflowConnection.service");
+  const ids = new Set(seedIds || []);
+  const byId = new Map(
+    (definition?.nodes || []).map((n) => [n.id, n])
+  );
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (const edge of getAuxiliaryEdges(definition)) {
+      if (!ids.has(edge.target)) continue;
+      if (edge.source && byId.has(edge.source) && !ids.has(edge.source)) {
+        ids.add(edge.source);
+        changed = true;
+      }
+    }
+    for (const id of [...ids]) {
+      const node = byId.get(id);
+      const data = node?.data || {};
+      for (const key of [
+        "instagramSourceNodeId",
+        "googleAdsSourceNodeId",
+        "metaAdsSourceNodeId",
+        "ga4SourceNodeId",
+        "gscSourceNodeId",
+      ]) {
+        const src = String(data[key] || "").trim();
+        if (src && byId.has(src) && !ids.has(src)) {
+          ids.add(src);
+          changed = true;
+        }
+      }
+    }
+  }
+  return ids;
+};
+
+const pruneDefinitionToNodeIds = (definition, ids) => {
+  const kept = expandIdsWithAuxiliaryResources(definition, ids);
+  return {
+    version: definition?.version ?? 1,
+    nodes: (definition?.nodes || []).filter((n) => kept.has(n.id)),
+    edges: (definition?.edges || []).filter(
+      (e) => kept.has(e.source) && kept.has(e.target)
+    ),
+  };
+};
 
 const resultsFromRunData = (runData, ids) => {
   const results = {};
@@ -840,6 +887,7 @@ const executeRun = async (runId, options = {}) => {
       authUser: run.created_by ? { userId: run.created_by } : null,
       editorMode: false,
       useProductionPins: isProductionRun,
+      resourceDefinition: definition,
       now,
     };
     applyLatestView(context);
@@ -950,6 +998,7 @@ const executeRun = async (runId, options = {}) => {
         authUser: run.created_by ? { userId: run.created_by } : null,
         editorMode: false,
         useProductionPins: isProductionRun,
+        resourceDefinition: definition,
         resumingWaitNodeId: snap.waitNodeId,
         waitResumeAt: waitRow.resume_at,
         waitResumeMechanism: waitRow.resume_mechanism || waitRow.resume_mode,
@@ -1075,6 +1124,7 @@ const executeRun = async (runId, options = {}) => {
         authUser: run.created_by ? { userId: run.created_by } : null,
         editorMode: false,
         useProductionPins: isProductionRun,
+        resourceDefinition: definition,
         now,
       };
       scheduler = createScheduler(graph);
@@ -1103,6 +1153,7 @@ const executeRun = async (runId, options = {}) => {
       authUser: run.created_by ? { userId: run.created_by } : null,
       editorMode: false,
       useProductionPins: isProductionRun,
+      resourceDefinition: definition,
       now,
     };
     scheduler = createScheduler(graph);
@@ -1816,7 +1867,14 @@ const executePartial = async ({
 
     const pruned = pruneDefinitionToNodeIds(definition, ids);
     const startMs = Date.now();
-    const mem = await executeGraphInMemory(pruned, { input });
+    const mem = await executeGraphInMemory(pruned, {
+      input,
+      workspaceId,
+      userId,
+      workflowId,
+      // Full unpruned definition for AI Agent auxiliary tool/model discovery.
+      resourceDefinition: definition,
+    });
     const resultIds =
       mode === "upstream"
         ? new Set([...ids].filter((id) => id !== targetNodeId))
@@ -1885,6 +1943,8 @@ const executePartial = async ({
     authUser: userId ? { userId } : null,
     editorMode: true,
     useProductionPins,
+    // Authoritative full workflow graph for auxiliary AI tool binding.
+    resourceDefinition: definition,
   };
 
   for (const node of definition?.nodes || []) {
@@ -2383,6 +2443,10 @@ const executeGraphInMemory = async (definition, options = {}) => {
     editorMode: false,
     useProductionPins: true,
     graph,
+    // Prefer explicit full definition for Agent tool discovery when the
+    // executed graph was pruned to a subset of nodes.
+    resourceDefinition:
+      options.resourceDefinition || graph.definition || null,
     now,
     webhookResponse: options.webhookResponse || null,
     rejectDurableWebhook: Boolean(options.rejectDurableWebhook),
@@ -2549,6 +2613,7 @@ module.exports = {
   executeRun,
   executePartial,
   executeGraphInMemory,
+  expandIdsWithAuxiliaryResources,
   getNodeInputPreview,
   buildExpressionPreviewContext,
   buildGraph,

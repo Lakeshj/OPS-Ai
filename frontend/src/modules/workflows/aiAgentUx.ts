@@ -61,6 +61,16 @@ export type AiAgentItemMeta = {
   /** True when a single guarded retry forced tool use after a generic skip. */
   groundingRetryTriggered?: boolean;
   groundingRetryReason?: string;
+  /** Graph / Run Step diagnostics (no secrets). */
+  workflowId?: string | null;
+  nodeId?: string;
+  toolEdgesFound?: number;
+  toolNodesResolved?: number;
+  toolResolutionErrors?: Array<{
+    nodeId?: string;
+    code?: string;
+    message?: string;
+  }>;
   usage?: AiAgentUsage;
   modelNodeId?: string;
   modelProvider?: string;
