@@ -24,10 +24,12 @@ const {
 } = require("./workflowInstagramAuth.service");
 const insightsCatalog = require("./instagramInsightsCatalog");
 
-const DEFAULT_LIMIT = 50;
+/** Default Media → List page size (M8.14). Do not exhaust Graph pages by default. */
+const DEFAULT_LIMIT = 25;
 const PAGE_SIZE = 50;
 const MAX_ROWS = 500;
 const MAX_PAGES = 20;
+const MAX_LIMIT = 100;
 
 /** Unified Login IGUser fields (graph.facebook.com). No user_id / account_type. */
 const PROFILE_FIELDS_REQUIRED = "id,username";
@@ -115,6 +117,14 @@ const sanitizeInstagramNodeData = (data) => {
   if (next.commentId != null) next.commentId = String(next.commentId).trim();
   if (next.message != null) next.message = String(next.message);
   if (next.replyMessage != null) next.replyMessage = String(next.replyMessage);
+  if (next.after != null) next.after = String(next.after).trim();
+  if (next.returnAll != null) {
+    next.returnAll = next.returnAll === true || next.returnAll === "true";
+  }
+  if (next.limit != null && next.limit !== "") {
+    const n = Number(next.limit);
+    if (Number.isFinite(n)) next.limit = Math.floor(n);
+  }
   return next;
 };
 
@@ -141,9 +151,37 @@ const rowLimits = ({ limit, returnAll }) => {
             : DEFAULT_LIMIT,
           1
         ),
-        MAX_ROWS
+        MAX_LIMIT
       );
   return { returnAll: all, maxRows, maxPages: MAX_PAGES, pageSize: PAGE_SIZE };
+};
+
+/** Opaque Meta paging cursor — never accept URLs or token-bearing strings. */
+const sanitizeAfterCursor = (raw) => {
+  const value = String(raw == null ? "" : raw).trim();
+  if (!value) return "";
+  if (
+    value.length > 512 ||
+    /https?:\/\//i.test(value) ||
+    /access_token|appsecret_proof/i.test(value)
+  ) {
+    throw igError(
+      "After cursor must be a Meta paging cursor, not a URL.",
+      "INSTAGRAM_PAGING_CURSOR_INVALID"
+    );
+  }
+  return value;
+};
+
+const buildPagingMeta = ({ after, hasNext }) => {
+  const cursor = String(after || "").trim();
+  const paging = {
+    hasNext: Boolean(hasNext && cursor),
+  };
+  if (cursor) {
+    paging.cursors = { after: cursor };
+  }
+  return paging;
 };
 
 const exprValue = (value, context, item) => {
@@ -213,6 +251,7 @@ const buildMeta = ({
   instagramUserId,
   mediaId,
   truncated,
+  paging,
 }) => {
   const meta = {
     provider: "instagram",
@@ -223,6 +262,14 @@ const buildMeta = ({
   };
   if (mediaId) meta.mediaId = String(mediaId);
   if (truncated === true) meta.truncated = true;
+  if (paging && typeof paging === "object") {
+    meta.paging = {
+      hasNext: Boolean(paging.hasNext),
+      ...(paging.cursors && paging.cursors.after
+        ? { cursors: { after: String(paging.cursors.after) } }
+        : {}),
+    };
+  }
   return meta;
 };
 
@@ -326,6 +373,7 @@ const normalizeMedia = (row, provenance = {}) => {
     instagramUserId: provenance.instagramUserId,
     mediaId: id,
     truncated: provenance.truncated,
+    paging: provenance.paging,
   });
   return assertNoSecretLeak(json);
 };
@@ -494,14 +542,20 @@ const collectMediaPages = async ({
   maxPages,
   pageSize,
   returnAll,
+  after: afterStart,
 }) => {
   const rows = [];
   const seen = new Set();
-  let after = "";
+  let after = sanitizeAfterCursor(afterStart);
   let pages = 0;
   let more = false;
 
-  while (rows.length < maxRows && pages < maxPages) {
+  // returnAll=false: only enough Graph pages to satisfy limit (never exhaust history).
+  const pageBudget = returnAll
+    ? maxPages
+    : Math.max(1, Math.ceil(maxRows / Math.max(pageSize, 1)));
+
+  while (rows.length < maxRows && pages < pageBudget && pages < maxPages) {
     const remaining = maxRows - rows.length;
     const size = Math.min(pageSize, remaining);
     pages += 1;
@@ -533,19 +587,31 @@ const collectMediaPages = async ({
       if (rows.length >= maxRows) break;
     }
     after = String(body?.paging?.cursors?.after || "").trim();
-    const hasNext = Boolean(
+    const hasNextUrl = Boolean(
       body?.paging && Object.prototype.hasOwnProperty.call(body.paging, "next")
     );
     // Never return paging.next downstream — only follow cursor server-side.
-    if (!after || data.length === 0) {
+    if (data.length === 0) {
       more = false;
+      after = "";
+      break;
+    }
+    if (!after) {
+      more = false;
+      break;
+    }
+    if (!returnAll && rows.length >= maxRows) {
+      // Filled the requested limit; keep cursor for workflow pagination.
+      more = true;
       break;
     }
     if (!returnAll && data.length < size) {
-      more = false;
+      // Short Graph page: honor Meta's next hint when present.
+      more = Boolean(hasNextUrl);
+      if (!more) after = "";
       break;
     }
-    if (returnAll && !hasNext && !after) {
+    if (returnAll && !hasNextUrl && !after) {
       more = false;
       break;
     }
@@ -553,8 +619,10 @@ const collectMediaPages = async ({
     if (rows.length >= maxRows) break;
   }
 
-  const truncated = Boolean(more && (rows.length >= maxRows || pages >= maxPages));
-  return { rows, truncated };
+  const hasNext = Boolean(more && after);
+  const truncated = hasNext;
+  const paging = buildPagingMeta({ after: hasNext ? after : "", hasNext });
+  return { rows, truncated, paging, after: hasNext ? after : "" };
 };
 
 const listMedia = async ({
@@ -563,6 +631,7 @@ const listMedia = async ({
   instagramUserId,
   limit,
   returnAll,
+  after,
 }) => {
   const limits = rowLimits({ limit, returnAll });
   const fetched = await collectMediaPages({
@@ -573,16 +642,21 @@ const listMedia = async ({
     maxPages: limits.maxPages,
     pageSize: limits.pageSize,
     returnAll: limits.returnAll,
+    after,
   });
+  const paging = fetched.paging;
   return {
     rows: fetched.rows.map((row) =>
       normalizeMedia(row, {
         operation: "list_media",
         instagramUserId,
         truncated: fetched.truncated,
+        paging,
       })
     ),
     truncated: fetched.truncated,
+    paging,
+    after: fetched.after || undefined,
   };
 };
 
@@ -1040,6 +1114,7 @@ const executeInstagramNode = async (node, context) => {
       instagramUserId,
       limit: exprValue(data.limit, context, first) ?? data.limit,
       returnAll: data.returnAll,
+      after: exprValue(data.after, context, first) ?? data.after,
     });
     const items = fetched.rows.map((json, index) => ({
       json,
@@ -1053,6 +1128,9 @@ const executeInstagramNode = async (node, context) => {
         instagramUserId,
         rowCount: items.length,
         truncated: fetched.truncated,
+        // Cursor only — never paging.next URL (token-bearing).
+        paging: fetched.paging,
+        after: fetched.after || undefined,
       },
     };
   }
@@ -1232,6 +1310,9 @@ module.exports = {
   PAGE_SIZE,
   MAX_ROWS,
   MAX_PAGES,
+  MAX_LIMIT,
+  sanitizeAfterCursor,
+  buildPagingMeta,
   PROFILE_FIELDS,
   PROFILE_FIELDS_REQUIRED,
   PROFILE_FIELDS_OPTIONAL,

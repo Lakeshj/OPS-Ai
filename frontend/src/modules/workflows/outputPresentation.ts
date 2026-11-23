@@ -97,10 +97,28 @@ function buildResolved(
       .map((row, index) => buildInstagramReadableBlock(row, index))
       .filter(Boolean) as InstagramReadableBlock[];
     if (!blocks.length) return null;
-    summary =
-      items.length === 1
-        ? summarizeInstagramOutput(items[0]) || blocks[0].text
-        : `Instagram · ${items.length} items`;
+    const allMediaList = items.every((row) => {
+      const meta = getInstagramMeta(row);
+      return String(meta?.operation || "").toLowerCase() === "list_media";
+    });
+    if (allMediaList) {
+      const meta0 = getInstagramMeta(items[0]) as
+        | {
+            truncated?: boolean;
+            paging?: { hasNext?: boolean; cursors?: { after?: string } };
+          }
+        | null;
+      const hasMore =
+        Boolean(meta0?.truncated) || Boolean(meta0?.paging?.hasNext);
+      summary = hasMore
+        ? `Instagram · ${items.length} media items · more available`
+        : `Instagram · ${items.length} media items`;
+    } else {
+      summary =
+        items.length === 1
+          ? summarizeInstagramOutput(items[0]) || blocks[0].text
+          : `Instagram · ${items.length} items`;
+    }
   }
 
   return {

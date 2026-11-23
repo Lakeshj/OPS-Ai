@@ -530,6 +530,8 @@ export interface WorkflowNodeData {
   filters?: Record<string, unknown>;
   returnAll?: boolean;
   limit?: number;
+  /** Instagram Media → List: Meta paging.cursors.after for the next page */
+  after?: string;
   campaignStatus?: string;
   campaignId?: string;
   campaignName?: string;

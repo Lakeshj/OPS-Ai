@@ -1749,7 +1749,8 @@ export const NODE_PARAMETER_SCHEMAS: Record<WorkflowNodeType, ParamDescriptor[]>
         displayName: "Return all",
         type: "boolean",
         default: false,
-        description: "Pages through results up to the safety ceiling.",
+        description:
+          "When off (default), returns only the Limit page. When on, pages through history up to the safety ceiling.",
         displayOptions: {
           show: {
             resource: ["media", "comments"],
@@ -1761,15 +1762,33 @@ export const NODE_PARAMETER_SCHEMAS: Record<WorkflowNodeType, ParamDescriptor[]>
         name: "limit",
         displayName: "Limit",
         type: "number",
-        default: 50,
+        default: 25,
         min: 1,
-        max: 500,
+        max: 100,
+        description: "Max media/comments to return in this run (default 25).",
         displayOptions: {
           show: {
             resource: ["media", "comments"],
             operation: ["list_media", "list_comments", "list_replies"],
           },
           hide: { returnAll: [true] },
+        },
+      },
+      {
+        name: "after",
+        displayName: "After cursor",
+        type: "string",
+        expression: true,
+        default: "",
+        placeholder: "From previous run output.paging.cursors.after",
+        description:
+          "Continue Media → List from a previous page cursor. Leave empty for the latest page.",
+        displayOptions: {
+          show: {
+            resource: ["media"],
+            operation: ["list_media"],
+            returnAll: [false],
+          },
         },
       },
       {

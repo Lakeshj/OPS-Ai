@@ -140,7 +140,13 @@ const formatCommentOption = (row) => {
   };
 };
 
-const listMediaOptions = async ({ credentialId, workspaceId, limit = 40 }) => {
+const PICKER_MEDIA_LIMIT = 25;
+
+const listMediaOptions = async ({
+  credentialId,
+  workspaceId,
+  limit = PICKER_MEDIA_LIMIT,
+}) => {
   const { cred, instagramUserId } = await resolveCredentialContext({
     credentialId,
     workspaceId,
@@ -150,13 +156,16 @@ const listMediaOptions = async ({ credentialId, workspaceId, limit = 40 }) => {
     workspaceId,
     instagramUserId,
     returnAll: false,
-    limit: Math.min(Math.max(Number(limit) || 40, 1), 100),
+    // Picker must stay bounded — never pull entire account history.
+    limit: Math.min(Math.max(Number(limit) || PICKER_MEDIA_LIMIT, 1), 50),
   });
   const rows = Array.isArray(result?.rows) ? result.rows : [];
   const options = rows.map((row) => formatMediaOption(row)).filter(Boolean);
   return {
     instagramUserId,
     options,
+    truncated: Boolean(result?.truncated),
+    paging: result?.paging,
   };
 };
 
