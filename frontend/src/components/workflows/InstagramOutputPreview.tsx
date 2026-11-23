@@ -214,18 +214,38 @@ function InstagramBlockView({
   );
 }
 
+const MEDIA_LIST_PREVIEW_ROWS = 10;
+
 function MediaListCard({ block }: { block: InstagramReadableBlock }) {
   const rows = block.mediaRows || [];
+  const [expanded, setExpanded] = React.useState(false);
+  const needsCollapse = rows.length > MEDIA_LIST_PREVIEW_ROWS;
+  const visible =
+    needsCollapse && !expanded
+      ? rows.slice(0, MEDIA_LIST_PREVIEW_ROWS)
+      : rows;
+  const hiddenCount = Math.max(0, rows.length - MEDIA_LIST_PREVIEW_ROWS);
+
   return (
     <div className="space-y-2" data-instagram-media-list="true">
       <div className="text-xs font-semibold text-foreground">{block.title}</div>
       <ul className="divide-y divide-border/50 rounded-md border border-border/60">
-        {rows.map((row) => (
+        {visible.map((row) => (
           <li key={row.id}>
             <MediaListRowView row={row} />
           </li>
         ))}
       </ul>
+      {needsCollapse ? (
+        <button
+          type="button"
+          className="text-[11px] text-muted-foreground underline-offset-2 hover:underline"
+          data-instagram-media-list-toggle="true"
+          onClick={() => setExpanded((v) => !v)}
+        >
+          {expanded ? "Show less" : `Show ${hiddenCount} more`}
+        </button>
+      ) : null}
     </div>
   );
 }

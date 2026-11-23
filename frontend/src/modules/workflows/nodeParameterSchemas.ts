@@ -1782,7 +1782,7 @@ export const NODE_PARAMETER_SCHEMAS: Record<WorkflowNodeType, ParamDescriptor[]>
         default: "",
         placeholder: "From previous run output.paging.cursors.after",
         description:
-          "Continue Media → List from a previous page cursor. Leave empty for the latest page.",
+          "Continue Media → List from a previous page cursor (output.paging.cursors.after / afterCursor). Leave empty for the latest page. Default list returns 25 items; Return all must be on to fetch full history.",
         displayOptions: {
           show: {
             resource: ["media"],

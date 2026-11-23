@@ -75,6 +75,39 @@ const stripSecretKeys = (value) => {
   return next;
 };
 
+/** Only explicit true/"true" enables full history — missing/undefined/false → false. */
+const isExplicitReturnAll = (value) =>
+  value === true || value === "true";
+
+/**
+ * Normalize Media → List pagination for Run Step / saved workflows.
+ * Legacy nodes often omit limit/returnAll/after — never treat missing returnAll as true.
+ */
+const normalizeListMediaExecutionParams = (data = {}) => {
+  const next =
+    data && typeof data === "object" && !Array.isArray(data) ? { ...data } : {};
+  next.resource = "media";
+  next.operation = "list_media";
+  next.returnAll = isExplicitReturnAll(next.returnAll);
+
+  const cursor = String(next.afterCursor || next.after || "").trim();
+  next.after = cursor;
+  if (Object.prototype.hasOwnProperty.call(next, "afterCursor")) {
+    next.afterCursor = cursor;
+  }
+
+  if (next.returnAll) {
+    return next;
+  }
+
+  const requested = Number(next.limit);
+  next.limit =
+    Number.isFinite(requested) && requested > 0
+      ? Math.min(Math.floor(requested), MAX_LIMIT)
+      : DEFAULT_LIMIT;
+  return next;
+};
+
 const sanitizeInstagramNodeData = (data) => {
   if (!data || typeof data !== "object" || Array.isArray(data)) return data;
   const next = stripSecretKeys(data);
@@ -117,13 +150,25 @@ const sanitizeInstagramNodeData = (data) => {
   if (next.commentId != null) next.commentId = String(next.commentId).trim();
   if (next.message != null) next.message = String(next.message);
   if (next.replyMessage != null) next.replyMessage = String(next.replyMessage);
-  if (next.after != null) next.after = String(next.after).trim();
-  if (next.returnAll != null) {
-    next.returnAll = next.returnAll === true || next.returnAll === "true";
+  if (next.afterCursor != null && next.after == null) {
+    next.after = next.afterCursor;
   }
-  if (next.limit != null && next.limit !== "") {
-    const n = Number(next.limit);
-    if (Number.isFinite(n)) next.limit = Math.floor(n);
+  if (next.after != null) next.after = String(next.after).trim();
+  if (next.afterCursor != null) next.afterCursor = String(next.afterCursor).trim();
+  // M8.14.2 — Media List defaults must apply on the execution path for legacy nodes.
+  if (
+    String(next.resource || "") === "media" &&
+    String(next.operation || "") === "list_media"
+  ) {
+    Object.assign(next, normalizeListMediaExecutionParams(next));
+  } else {
+    if (next.returnAll != null) {
+      next.returnAll = isExplicitReturnAll(next.returnAll);
+    }
+    if (next.limit != null && next.limit !== "") {
+      const n = Number(next.limit);
+      if (Number.isFinite(n)) next.limit = Math.floor(n);
+    }
   }
   return next;
 };
@@ -140,7 +185,7 @@ const assertNoSecretLeak = (value) => {
 };
 
 const rowLimits = ({ limit, returnAll }) => {
-  const all = returnAll === true || returnAll === "true";
+  const all = isExplicitReturnAll(returnAll);
   const requested = Number(limit);
   const maxRows = all
     ? MAX_ROWS
@@ -632,8 +677,20 @@ const listMedia = async ({
   limit,
   returnAll,
   after,
+  afterCursor,
 }) => {
-  const limits = rowLimits({ limit, returnAll });
+  const normalized = normalizeListMediaExecutionParams({
+    resource: "media",
+    operation: "list_media",
+    limit,
+    returnAll,
+    after,
+    afterCursor,
+  });
+  const limits = rowLimits({
+    limit: normalized.limit,
+    returnAll: normalized.returnAll,
+  });
   const fetched = await collectMediaPages({
     credentialId,
     workspaceId,
@@ -642,21 +699,40 @@ const listMedia = async ({
     maxPages: limits.maxPages,
     pageSize: limits.pageSize,
     returnAll: limits.returnAll,
-    after,
+    after: normalized.after,
   });
-  const paging = fetched.paging;
+  // Hard safety: never emit more than the bounded page when returnAll is off.
+  let rows = fetched.rows;
+  let paging = fetched.paging;
+  let truncated = fetched.truncated;
+  let nextAfter = fetched.after || "";
+  if (!limits.returnAll && rows.length > limits.maxRows) {
+    const overflow = rows.length > limits.maxRows;
+    rows = rows.slice(0, limits.maxRows);
+    if (overflow || nextAfter) {
+      truncated = true;
+      // Prefer Meta cursor; if Graph over-returned without cursor, mark hasNext.
+      paging = buildPagingMeta({
+        after: nextAfter,
+        hasNext: Boolean(nextAfter) || overflow,
+      });
+      if (!nextAfter) nextAfter = "";
+    }
+  }
   return {
-    rows: fetched.rows.map((row) =>
+    rows: rows.map((row) =>
       normalizeMedia(row, {
         operation: "list_media",
         instagramUserId,
-        truncated: fetched.truncated,
+        truncated,
         paging,
       })
     ),
-    truncated: fetched.truncated,
+    truncated,
     paging,
-    after: fetched.after || undefined,
+    after: paging?.hasNext ? nextAfter || undefined : undefined,
+    limit: limits.maxRows,
+    returnAll: limits.returnAll,
   };
 };
 
@@ -1108,13 +1184,23 @@ const executeInstagramNode = async (node, context) => {
   }
 
   if (resource === "media" && operation === "list_media") {
+    // Re-normalize after expression resolution (legacy nodes + Run Step entrypoint).
+    const listParams = normalizeListMediaExecutionParams({
+      ...data,
+      limit: exprValue(data.limit, context, first) ?? data.limit,
+      returnAll: data.returnAll,
+      after: exprValue(data.after, context, first) ?? data.after,
+      afterCursor:
+        exprValue(data.afterCursor, context, first) ?? data.afterCursor,
+    });
     const fetched = await listMedia({
       credentialId,
       workspaceId: context?.workspaceId,
       instagramUserId,
-      limit: exprValue(data.limit, context, first) ?? data.limit,
-      returnAll: data.returnAll,
-      after: exprValue(data.after, context, first) ?? data.after,
+      limit: listParams.limit,
+      returnAll: listParams.returnAll,
+      after: listParams.after,
+      afterCursor: listParams.afterCursor,
     });
     const items = fetched.rows.map((json, index) => ({
       json,
@@ -1127,8 +1213,10 @@ const executeInstagramNode = async (node, context) => {
         operation,
         instagramUserId,
         rowCount: items.length,
+        limit: fetched.limit,
+        returnAll: fetched.returnAll,
         truncated: fetched.truncated,
-        // Cursor only — never paging.next URL (token-bearing).
+        // Collection-level cursor only — never paging.next URL (token-bearing).
         paging: fetched.paging,
         after: fetched.after || undefined,
       },
@@ -1313,6 +1401,8 @@ module.exports = {
   MAX_LIMIT,
   sanitizeAfterCursor,
   buildPagingMeta,
+  isExplicitReturnAll,
+  normalizeListMediaExecutionParams,
   PROFILE_FIELDS,
   PROFILE_FIELDS_REQUIRED,
   PROFILE_FIELDS_OPTIONAL,
