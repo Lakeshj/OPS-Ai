@@ -3259,6 +3259,43 @@ const handlers = {
     const { executeInstagramMcpNode } = require("./mcpDynamicRegistry.service");
     return executeInstagramMcpNode(node, context);
   },
+  // M8.16.1 — local-only mock social fixture nodes (no external API)
+  mockSocialSource: async (node, context) => {
+    const data = node.data || {};
+    return {
+      items: [
+        {
+          json: {
+            accountName: data.accountName || data.username || "mock_account",
+            resource: data.resource || null,
+            operation: data.operation || null,
+            fixture: true,
+          },
+        },
+      ],
+      output: {
+        label: data.label || "Mock Social Source",
+        resource: data.resource || null,
+        operation: data.operation || null,
+      },
+    };
+  },
+  mockSocialMcpTool: async (node, context) => {
+    const fixture = require("./workflowMockSocialMcp.fixture");
+    const toolId = String(node.data?.toolId || "").trim();
+    const result = fixture.executeTool(toolId || fixture.TOOL_ID_LIST_POSTS, {
+      ...(node.data?.params || {}),
+    });
+    const posts = Array.isArray(result.posts) ? result.posts : [];
+    return {
+      items: posts.map((p) => ({ json: p })),
+      output: {
+        provider: fixture.PROVIDER_ID,
+        toolId,
+        itemCount: posts.length,
+      },
+    };
+  },
   gscMcp: async (node, context) => {
     const { executeGscMcpNode } = require("./mcpPluginHost.service");
     return executeGscMcpNode(node, context);

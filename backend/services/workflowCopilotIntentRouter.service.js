@@ -323,12 +323,12 @@ const classifyPlanningIntent = (
     return "INFORMATION";
   }
 
-  // Canvas inspection questions before mutation heuristics (M8.16).
+  // Canvas inspection questions before mutation heuristics (M8.16 / M8.16.1).
   // Prefer EXPLAIN/GENERAL (context bridge) over mutation; keep classic
   // run-failure DEBUG for explicit fail/error wording with a runId.
   if (
     /^(what|why|which|how|who|where|when)\b/.test(text) &&
-    /\b(connected|connection|linked|wired|getting|using|account|credential|fail|broken|wrong|missing|not working|isn't|is not)\b/.test(
+    /\b(connected|connection|linked|wired|getting|using|account|credential|fail|broken|wrong|missing|not working|isn't|is not|tools?|capability|capabilities|allow)\b/.test(
       text
     ) &&
     !/\b(add|insert|create|build|change|update|remove|delete|rename|fix)\b/.test(
@@ -338,11 +338,16 @@ const classifyPlanningIntent = (
     if (
       runId &&
       /\b(fail|failed|error|broke|wrong)\b/.test(text) &&
-      !/\b(connected|connection|account)\b/.test(text)
+      !/\b(connected|connection|account|tools?)\b/.test(text)
     ) {
       return "DEBUG";
     }
-    if (hasGraph && /\b(connected|connection|linked|wired|using|account)\b/.test(text)) {
+    if (
+      hasGraph &&
+      /\b(connected|connection|linked|wired|using|account|tools?|capability|allow)\b/.test(
+        text
+      )
+    ) {
       return "EXPLAIN";
     }
     // why isn't X getting Y → conversational with WorkflowContext

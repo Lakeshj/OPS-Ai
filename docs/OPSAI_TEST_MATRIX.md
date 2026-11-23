@@ -35,7 +35,7 @@ Run the **affected family**, not everything.
 | Inspector display | inspector smoke + `tsc --noEmit` |
 | Expressions / items / `$first` | engine file that owns the smoke; do not skip if item order changed |
 | AI Agent | `node scripts/smoke-workflow-ai-12b.js`; M8.15 reliability: `node scripts/smoke-workflow-ai-m815.js`; M8.15.1 usage logging: `node scripts/smoke-workflow-ai-m8151.js`; M8.15.2 grounding: `node scripts/smoke-workflow-ai-m8152.js`; M8.15.3 Run Step graph tools: `node scripts/smoke-workflow-ai-m8153.js`; dataset Ads: `node scripts/smoke-workflow-ai-dataset-ads.js`; AI scope: `node scripts/smoke-workflow-ai-scope.js`; live AI scope: `node scripts/smoke-workflow-ai-live-scope.js` |
-| Workflow Copilot context | M8.16 bridge: `node scripts/smoke-workflow-copilot-m816.js` (+ affected 14B/14D smokes if plan path changed) |
+| Workflow Copilot context | M8.16 bridge: `node scripts/smoke-workflow-copilot-m816.js`; M8.16.1 local mock MCP + Copilot: `node scripts/smoke-workflow-ai-m8161.js`, `node scripts/smoke-workflow-copilot-m8161.js`; M8.16.2 Instagram MCP structural (no Meta): `node scripts/smoke-workflow-instagram-m8162.js` (+ affected 14B/14D smokes if plan path changed) |
 | Workflow engine core | targeted `smoke-workflow-engine.js` **only if** you changed scheduler/occurrences/edges — else Level 3 at milestone |
 
 If Copilot, connections, Wait, Loop, or credentials changed, include that family’s smoke.

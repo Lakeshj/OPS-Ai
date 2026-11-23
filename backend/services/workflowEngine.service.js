@@ -171,6 +171,7 @@ const expandIdsWithAuxiliaryResources = (definition, seedIds) => {
         "metaAdsSourceNodeId",
         "ga4SourceNodeId",
         "gscSourceNodeId",
+        "mockSocialSourceNodeId",
       ]) {
         const src = String(data[key] || "").trim();
         if (src && byId.has(src) && !ids.has(src)) {

@@ -890,8 +890,48 @@ const planCopilotTurn = async ({
       /\b(connected|connection|linked|wired|what.*(to|from))\b/.test(msgLower);
     const askingAccount =
       /\b(which|what).*(account|credential|instagram|ads|page)\b/.test(msgLower);
+    const askingToolsOrWhy =
+      /\b(tools?|capability|capabilities|allow|use or not use|used|didn'?t use)\b/.test(
+        msgLower
+      ) ||
+      (/\bwhy\b/.test(msgLower) &&
+        /\b(agent|tool|mcp|mock|getting)\b/.test(msgLower));
 
     let assistantMessage;
+    // Prefer context-aware grounded replies for tool/capability/run questions.
+    if (askingToolsOrWhy && workflowContextPrompt) {
+      const {
+        buildContextAwareFixtureReply,
+      } = require("./workflowCopilotConversational.service");
+      const grounded = buildContextAwareFixtureReply({
+        message: req.message,
+        workflowContextPrompt,
+        inspectionBrief,
+        selectedNodeId: req.selectedNodeId,
+      });
+      if (grounded) {
+        return buildPlanResponse({
+          intent: "EXPLAIN",
+          assistantMessage: grounded,
+          summary: "Read-only explanation",
+          plan: emptyPlan("EXPLAIN", "No mutations"),
+          preview: null,
+          unresolvedInputs: [],
+          clarifyingQuestions: [],
+          assumptions: [],
+          warnings: [...refWarnings],
+          revisionHash: liveHash,
+          needsClarification: false,
+          createdWorkflowRun: false,
+          contextBrief: workflowContextPrompt,
+          workflowReferences: refResponse,
+          copilotMeta: {
+            ...baseCopilotMeta,
+            internalToolsUsed: inspectionBrief?.toolsUsed || [],
+          },
+        });
+      }
+    }
     if (askingResult) {
       const parts = resolvedRefs
         .filter((r) => r.available)

@@ -273,10 +273,61 @@ const buildToolDescriptor = (node) => {
       name: name || toolId,
       displayName: catalog.displayName || toolId,
       description: composeToolDescription(catalog, data),
+      // Safe catalog hint for Copilot / diagnostics (not an Instagram Graph call)
+      whenToUse: catalog.whenToUse || catalog.usage || null,
       inputSchema: stripInstagramAccountFieldsFromSchema(catalog.inputSchema),
       toolKind: "instagram_mcp",
       igToolId: toolId,
       instagramSourceNodeId: String(data.instagramSourceNodeId || "").trim() || null,
+      fixedParams,
+    };
+  }
+  // M8.16.1 — local-only mock social MCP (same descriptor path; no external API).
+  if (type === "mockSocialMcpTool") {
+    const fixture = require("./workflowMockSocialMcp.fixture");
+    const toolId = String(data.toolId || "").trim();
+    if (!toolId) {
+      throw new AiRuntimeError(
+        "Mock Social MCP tool node requires a toolId.",
+        AI_ERROR.TOOL_SCHEMA_INVALID,
+        { nodeId: node.id }
+      );
+    }
+    let catalog;
+    try {
+      catalog = fixture.getToolDefinition(toolId);
+    } catch (err) {
+      throw new AiRuntimeError(
+        err instanceof Error ? err.message : `Unknown Mock Social MCP tool: ${toolId}`,
+        AI_ERROR.TOOL_SCHEMA_INVALID,
+        { nodeId: node.id, toolId }
+      );
+    }
+    const name =
+      String(data.toolName || "").trim() ||
+      namespacedMcpToolName(fixture.PROVIDER_ID, toolId, null);
+    const fixedParams =
+      data.params && typeof data.params === "object" && !Array.isArray(data.params)
+        ? stripSecrets({ ...data.params })
+        : {};
+    for (const key of ["credentialId", "accessToken", "refreshToken", "appSecret"]) {
+      delete fixedParams[key];
+    }
+    return {
+      kind: DATA_TYPE.AI_TOOL,
+      nodeId: node.id,
+      name: name || fixture.PUBLIC_TOOL_NAME,
+      displayName: catalog.displayName || toolId,
+      description: composeToolDescription(catalog, data),
+      whenToUse: catalog.whenToUse || null,
+      inputSchema:
+        catalog.inputSchema && typeof catalog.inputSchema === "object"
+          ? catalog.inputSchema
+          : { type: "object", properties: {} },
+      toolKind: "mock_social_mcp",
+      mockToolId: toolId,
+      mockSocialSourceNodeId:
+        String(data.mockSocialSourceNodeId || "").trim() || null,
       fixedParams,
     };
   }
@@ -878,6 +929,67 @@ const createTestModelAdapter = (descriptor) => {
           };
         }
 
+        // M8.16.1 — deterministic mock social posts tool loop (local only).
+        if (script === "mock-list-posts-demo") {
+          const mockTool =
+            (tools || []).find((t) =>
+              String(t.name).includes("mock_list_posts")
+            ) ||
+            (tools || []).find((t) => String(t.name).includes("list_posts")) ||
+            (tools || [])[0];
+          const toolName = mockTool?.name || "mock_list_posts";
+          if (toolTurns === 0) {
+            return {
+              message: { role: "assistant", content: null },
+              toolCalls: [
+                {
+                  id: "call_mock_posts",
+                  name: toolName,
+                  arguments: { limit: 5 },
+                },
+              ],
+              finishReason: "tool_calls",
+            };
+          }
+          const lastTool = [...messages].reverse().find((m) => m.role === "tool");
+          let grounded =
+            "No mock posts returned from the connected tool.";
+          try {
+            const parsed = JSON.parse(String(lastTool?.content || "{}"));
+            const rows = Array.isArray(parsed?.posts) ? parsed.posts : [];
+            if (parsed?.ok === false) {
+              grounded = `Could not load mock posts: ${parsed.message || "error"}`;
+            } else if (rows.length) {
+              const lines = rows.map((row) => {
+                const likes = Number(row.likes) || 0;
+                const comments = Number(row.comments) || 0;
+                return `${row.id} ${row.date} ${row.type} ${likes} likes ${comments} comments`;
+              });
+              let best = rows[0];
+              let bestScore = -1;
+              for (const row of rows) {
+                const score =
+                  (Number(row.likes) || 0) + (Number(row.comments) || 0);
+                if (score > bestScore) {
+                  bestScore = score;
+                  best = row;
+                }
+              }
+              grounded = [
+                `Summary of the 5 most recent social posts: ${lines.join("; ")}.`,
+                `Strongest engagement: ${best.id} with ${best.likes} likes and ${best.comments} comments (${bestScore} total interactions).`,
+              ].join(" ");
+            }
+          } catch {
+            /* keep */
+          }
+          return {
+            message: { role: "assistant", content: grounded },
+            toolCalls: [],
+            finishReason: "stop",
+          };
+        }
+
         if (script === "force-max-rounds") {
           return {
             message: { role: "assistant", content: null },
@@ -1282,6 +1394,32 @@ const attachToolExecutor = (descriptor) => {
           itemCount: items.length,
           data,
         });
+        const text = JSON.stringify(payload);
+        return text.length > MAX_TOOL_RESULT_CHARS
+          ? `${text.slice(0, MAX_TOOL_RESULT_CHARS)}\n…[truncated]`
+          : text;
+      },
+    };
+  }
+  if (descriptor.toolKind === "mock_social_mcp") {
+    const fixture = require("./workflowMockSocialMcp.fixture");
+    return {
+      ...descriptor,
+      async execute(args, _ctx) {
+        const safeArgs =
+          args && typeof args === "object" && !Array.isArray(args)
+            ? { ...args }
+            : {};
+        delete safeArgs.credentialId;
+        delete safeArgs.accessToken;
+        delete safeArgs.refreshToken;
+        delete safeArgs.appSecret;
+        const payload = stripSecrets(
+          fixture.executeTool(descriptor.mockToolId, {
+            ...(descriptor.fixedParams || {}),
+            ...safeArgs,
+          })
+        );
         const text = JSON.stringify(payload);
         return text.length > MAX_TOOL_RESULT_CHARS
           ? `${text.slice(0, MAX_TOOL_RESULT_CHARS)}\n…[truncated]`

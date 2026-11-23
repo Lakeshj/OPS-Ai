@@ -59,6 +59,9 @@ const ALLOWED_NODE_TYPES = new Set([
   "googleAdsMcpTool",
   "metaAdsMcpTool",
   "instagramMcpTool",
+  // M8.16.1 — local-only mock social MCP fixture nodes (not a production integration)
+  "mockSocialSource",
+  "mockSocialMcpTool",
   "respondToWebhook",
   // Part 14D.5 — native Google / SEO / AI Generate / XLSX
   "googleSearchConsole",

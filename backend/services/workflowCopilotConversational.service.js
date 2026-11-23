@@ -42,6 +42,144 @@ const buildContextAwareFixtureReply = ({
     return n ? `${n.label || n.type} (${n.id})` : id;
   };
 
+  const wantsRunToolExplanation =
+    (/\b(why|isn't|is not|not working|fail|missing|getting)\b/.test(text) ||
+      /\b(use or not use|used|didn'?t use|did not use)\b/.test(text)) &&
+    /\b(agent|instagram|tool|data|mcp|mock)\b/.test(text);
+
+  // Latest-run tool usage before generic connection answers (M8.16.1).
+  if (wantsRunToolExplanation) {
+    const agent =
+      selected?.type === "aiAgent"
+        ? selected
+        : nodes.find((n) => n.type === "aiAgent");
+    const toolRels = relationships.filter(
+      (r) =>
+        r.type === "tool_binding" &&
+        (r.to === agent?.id || r.from === agent?.id)
+    );
+    const mcpNodes = nodes.filter((n) =>
+      /mcp/i.test(String(n.type || ""))
+    );
+    const run = ctx.latestExecution;
+    const agentRun =
+      run?.agents?.find((a) => a.nodeId === agent?.id) ||
+      (run?.selectedNode?.nodeId === agent?.id
+        ? run.selectedNode.agent || run.selectedNode
+        : null);
+    const parts = [];
+    if (agent) {
+      parts.push(
+        `${agent.label || "AI Agent"} (${agent.id}) has ${toolRels.length} tool binding(s) on the canvas.`
+      );
+    }
+    if (mcpNodes.length) {
+      parts.push(
+        `MCP/tool nodes present: ${mcpNodes
+          .map((n) => `${n.label || n.type} (${n.id})`)
+          .join(", ")}.`
+      );
+    }
+    if (agentRun) {
+      const available = (agentRun.toolsAvailable || []).map((t) =>
+        typeof t === "string" ? t : t?.name
+      );
+      const requested = agentRun.toolsRequested || [];
+      const used = agentRun.toolsUsed || [];
+      const errors = agentRun.toolErrors || [];
+      parts.push(
+        `Latest Agent run: toolsAvailable=[${available.join(", ")}], toolsRequested=[${requested.join(", ")}], toolsUsed=[${used.join(", ")}], toolErrors=${errors.length}, toolEdgesFound=${agentRun.toolEdgesFound ?? "n/a"}, toolNodesResolved=${agentRun.toolNodesResolved ?? "n/a"}, modelRequests=${agentRun.modelRequests ?? "n/a"}, groundingRetryTriggered=${Boolean(agentRun.groundingRetryTriggered)}.`
+      );
+      if (available.length === 0 && toolRels.length > 0) {
+        parts.push(
+          "The graph has tool edges, but the last run resolved zero tools — failure is between MCP tool publication and the Agent tool registry."
+        );
+      } else if (used.length > 0) {
+        parts.push(`The Agent requested and used: ${used.join(", ")}.`);
+      } else if (available.length > 0 && used.length === 0) {
+        parts.push(
+          `Tools were available (${available.slice(0, 8).join(", ")}) but none were used in the last run.`
+        );
+      }
+    } else {
+      parts.push(
+        "No compact Agent execution summary is attached yet — inspect the latest run for tool registry details."
+      );
+    }
+    if (inspectionBrief?.findings?.length) {
+      parts.push("Inspection tools were consulted for this answer.");
+    }
+    return parts.join(" ");
+  }
+
+  // Tool capability awareness (MCP public tools ≠ native node operation)
+  if (
+    /\b(what tools?|which tools?|tools? (can|does|available)|can my .+ use|what does this tool)\b/.test(
+      text
+    ) ||
+    (/\b(allow|capability|capabilities|expose|publish)\b/.test(text) &&
+      /\b(tool|agent|mcp)\b/.test(text))
+  ) {
+    const agent =
+      selected?.type === "aiAgent"
+        ? selected
+        : nodes.find((n) => n.type === "aiAgent");
+    const toolRels = relationships.filter(
+      (r) =>
+        r.type === "tool_binding" &&
+        (!agent || r.to === agent.id || r.from === agent.id)
+    );
+    const toolNodes = toolRels
+      .map((r) => nodes.find((n) => n.id === r.from || n.id === r.to))
+      .filter((n) => n && n.type !== "aiAgent");
+    const caps = toolNodes.flatMap((n) => n.toolCapabilities || []);
+    if (/\bwhat does this tool\b/.test(text) || selected?.toolCapabilities) {
+      const focus =
+        selected?.toolCapabilities?.length
+          ? selected
+          : toolNodes[0] || selected;
+      const focusCaps = focus?.toolCapabilities || caps;
+      if (focusCaps.length) {
+        return focusCaps
+          .map(
+            (c) =>
+              `${c.name}: ${c.description || "No description."}${
+                c.whenToUse ? ` When to use: ${c.whenToUse}` : ""
+              }`
+          )
+          .join("\n");
+      }
+    }
+    if (caps.length) {
+      const nativeOps = nodes
+        .filter((n) => n.resource || n.operation)
+        .map(
+          (n) =>
+            `${n.label || n.type}: native ${n.resource || "?"}/${n.operation || "?"}`
+        );
+      return [
+        `AI Agent can use these published tool capabilities: ${caps
+          .map((c) => c.name)
+          .join(", ")}.`,
+        ...caps.map(
+          (c) =>
+            `- ${c.name}: ${c.description || ""}${
+              c.whenToUse ? ` (${c.whenToUse})` : ""
+            }`
+        ),
+        nativeOps.length
+          ? `Note: native source node operations (${nativeOps.join("; ")}) do not redefine these MCP capabilities.`
+          : null,
+      ]
+        .filter(Boolean)
+        .join("\n");
+    }
+    if (toolRels.length) {
+      return `There are ${toolRels.length} tool binding(s) to the AI Agent, but no published toolCapabilities were resolved for those nodes.`;
+    }
+    return "No tool capabilities are published to the AI Agent on the current canvas.";
+  }
+
   if (
     /\b(connected|connection|linked|wired|what.*(to|from))\b/.test(text) &&
     /\b(agent|node|this|workflow)\b/.test(text)
@@ -102,70 +240,6 @@ const buildContextAwareFixtureReply = ({
       );
     }
     return lines.join("\n");
-  }
-
-  if (
-    /\b(why|isn't|is not|not working|fail|missing|getting)\b/.test(text) &&
-    /\b(agent|instagram|tool|data|mcp)\b/.test(text)
-  ) {
-    const agent =
-      selected?.type === "aiAgent"
-        ? selected
-        : nodes.find((n) => n.type === "aiAgent");
-    const toolRels = relationships.filter(
-      (r) =>
-        r.type === "tool_binding" &&
-        (r.to === agent?.id || r.from === agent?.id)
-    );
-    const mcpNodes = nodes.filter((n) =>
-      /mcp/i.test(String(n.type || ""))
-    );
-    const run = ctx.latestExecution;
-    const agentRun =
-      run?.agents?.find((a) => a.nodeId === agent?.id) ||
-      (run?.selectedNode?.nodeId === agent?.id ? run.selectedNode.agent : null);
-    const parts = [];
-    if (agent) {
-      parts.push(
-        `AI Agent ${agent.label || agent.id} has ${toolRels.length} tool binding(s) on the canvas.`
-      );
-    }
-    if (mcpNodes.length) {
-      parts.push(
-        `MCP/tool nodes present: ${mcpNodes
-          .map((n) => `${n.label || n.type} (${n.id})`)
-          .join(", ")}.`
-      );
-    }
-    if (agentRun) {
-      const available = agentRun.toolsAvailable || [];
-      const used = agentRun.toolsUsed || [];
-      const errors = agentRun.toolErrors || [];
-      parts.push(
-        `Latest Agent run: toolsAvailable=${available.length}, toolsUsed=${used.length}, toolErrors=${errors.length}, toolEdgesFound=${agentRun.toolEdgesFound ?? "n/a"}, toolNodesResolved=${agentRun.toolNodesResolved ?? "n/a"}.`
-      );
-      if (available.length === 0 && toolRels.length > 0) {
-        parts.push(
-          "The graph has tool edges, but the last run resolved zero tools — failure is between MCP tool publication and the Agent tool registry."
-        );
-      } else if (
-        available.length > 0 &&
-        used.length === 0 &&
-        /\binstagram\b/.test(text)
-      ) {
-        parts.push(
-          `Tools were available (${available.slice(0, 5).join(", ")}) but none were used for Instagram data in the last run.`
-        );
-      }
-    } else {
-      parts.push(
-        "No compact Agent execution summary is attached yet — inspect the latest run for tool registry details."
-      );
-    }
-    if (inspectionBrief?.findings?.length) {
-      parts.push("Inspection tools were consulted for this answer.");
-    }
-    return parts.join(" ");
   }
 
   if (/\b(which|what).*(account|credential|instagram|ads|page)\b/.test(text)) {

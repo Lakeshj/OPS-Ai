@@ -201,6 +201,15 @@ const NODE_PORT_CONTRACTS = {
       auxOut("tool", DATA_TYPE.AI_TOOL, "Tool"),
     ],
   },
+  // M8.16.1 — local-only mock social (fixture / smoke); mirrors MCP tool ports
+  mockSocialSource: { inputs: [mainIn()], outputs: [mainOut()] },
+  mockSocialMcpTool: {
+    inputs: [mainIn()],
+    outputs: [
+      mainOut(),
+      auxOut("tool", DATA_TYPE.AI_TOOL, "Tool"),
+    ],
+  },
   gscMcp: { inputs: [mainIn()], outputs: [mainOut()] },
   googleAnalytics: { inputs: [mainIn()], outputs: [mainOut()] },
   googleAds: { inputs: [mainIn()], outputs: [mainOut()] },

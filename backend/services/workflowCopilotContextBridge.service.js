@@ -26,6 +26,7 @@ const SOURCE_BINDING_KEYS = Object.freeze([
   "metaAdsSourceNodeId",
   "ga4SourceNodeId",
   "gscSourceNodeId",
+  "mockSocialSourceNodeId",
 ]);
 
 const MAX_NODES_IN_PROMPT = 40;
@@ -85,13 +86,38 @@ const sanitizeEditorDefinition = (raw) => {
   return def;
 };
 
+/**
+ * Safe public tool capabilities for Copilot (name/description/whenToUse only).
+ * Uses the same buildToolDescriptor path as the AI Agent registry.
+ */
+const resolveSafeToolCapabilities = (node) => {
+  try {
+    const {
+      buildToolDescriptor,
+    } = require("./workflowAiResources.service");
+    const desc = buildToolDescriptor(node);
+    if (!desc || !desc.name) return [];
+    return [
+      sanitizeValue({
+        name: desc.name,
+        description: desc.description || null,
+        whenToUse: desc.whenToUse || null,
+        displayName: desc.displayName || null,
+      }),
+    ];
+  } catch {
+    return [];
+  }
+};
+
 const compactNode = (node) => {
   const data = node.data || {};
   const params = sanitizeNodeParameters(data);
+  const type = nodeTypeOf(node);
   const out = {
     id: node.id,
-    type: nodeTypeOf(node),
-    label: String(data.label || nodeTypeOf(node)),
+    type,
+    label: String(data.label || type),
   };
   if (params.resource) out.resource = params.resource;
   if (params.operation) out.operation = params.operation;
@@ -109,6 +135,24 @@ const compactNode = (node) => {
   if (params.adAccountId) out.adAccountId = String(params.adAccountId);
   for (const key of SOURCE_BINDING_KEYS) {
     if (params[key]) out[key] = String(params[key]);
+  }
+  // MCP / tool providers: expose public capabilities (not native operation).
+  const toolish =
+    /McpTool$/i.test(type) ||
+    type === "aiCalculatorTool" ||
+    type === "aiHttpTool" ||
+    type === "aiToolProviderTest" ||
+    type === "gscMcpTool" ||
+    type === "ga4McpTool" ||
+    type === "mcpDynamicTool";
+  if (toolish) {
+    const caps = resolveSafeToolCapabilities(node);
+    if (caps.length) out.toolCapabilities = caps;
+  }
+  // Explicit note for Copilot: native resource/operation ≠ MCP capability
+  if (out.resource || out.operation) {
+    out.nativeConfigNote =
+      "resource/operation describe this native node's selected operation; they do not define MCP tool capabilities published to an AI Agent.";
   }
   return out;
 };
@@ -493,16 +537,24 @@ const buildInspectionBrief = (ctx, message = "") => {
       msg
     );
   const wantsWhy =
-    /\b(why|isn't|is not|not working|fail|broken|missing|getting)\b/i.test(msg);
+    /\b(why|isn't|is not|not working|fail|broken|missing|getting|use or not use|used|didn'?t use)\b/i.test(
+      msg
+    );
   const wantsAccount =
     /\b(which|what).*(account|credential|instagram|ads|page)\b/i.test(msg);
+  const wantsTools =
+    /\b(what tools?|which tools?|tools? (can|does|available)|capability|capabilities|what does this tool)\b/i.test(
+      msg
+    );
 
-  if (!wantsConnections && !wantsWhy && !wantsAccount) return null;
+  if (!wantsConnections && !wantsWhy && !wantsAccount && !wantsTools) {
+    return null;
+  }
 
   const toolsUsed = [];
   const parts = [];
 
-  if (wantsConnections || wantsWhy) {
+  if (wantsConnections || wantsWhy || wantsTools) {
     toolsUsed.push("workflow_get_connections");
     const focusId = ctx.selectedNode?.id || null;
     const conn = executeInternalWorkflowTool(ctx, "workflow_get_connections", {
@@ -517,13 +569,31 @@ const buildInspectionBrief = (ctx, message = "") => {
       result: executeInternalWorkflowTool(ctx, "workflow_get_latest_run", {}),
     });
   }
-  if (wantsAccount && ctx.selectedNode) {
+  if ((wantsAccount || wantsTools) && ctx.selectedNode) {
     toolsUsed.push("workflow_get_node");
     parts.push({
       tool: "workflow_get_node",
       result: executeInternalWorkflowTool(ctx, "workflow_get_node", {
         nodeId: ctx.selectedNode.id,
       }),
+    });
+  }
+  if (wantsTools) {
+    parts.push({
+      tool: "workflow_tool_capabilities",
+      result: {
+        ok: true,
+        data: (ctx.nodes || [])
+          .filter((n) => Array.isArray(n.toolCapabilities) && n.toolCapabilities.length)
+          .map((n) => ({
+            nodeId: n.id,
+            label: n.label,
+            type: n.type,
+            toolCapabilities: n.toolCapabilities,
+            nativeResource: n.resource || null,
+            nativeOperation: n.operation || null,
+          })),
+      },
     });
   }
 
