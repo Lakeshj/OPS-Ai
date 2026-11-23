@@ -12,6 +12,7 @@ import {
   parseAiErrorFromUnknown,
   providerResourceExplanation,
   sanitizeResourceSummaryForDisplay,
+  summarizeAgentToolObservability,
 } from "@/modules/workflows/aiAgentUx";
 import { workflowAlertCompact } from "@/modules/workflows/workflowAlertStyles";
 import { cn } from "@/lib/utils";
@@ -62,6 +63,12 @@ export function AiAgentInspectorExtras({
     return mapAiToolCallsToTrace(
       extractSafeToolCallsForItem(stepOutput, itemIndex)
     );
+  }, [showExecution, nodeType, stepOutput, itemIndex]);
+
+  const toolObservability = useMemo(() => {
+    if (!showExecution || !isAiAgentType(nodeType) || stepOutput == null)
+      return null;
+    return summarizeAgentToolObservability(stepOutput, itemIndex);
   }, [showExecution, nodeType, stepOutput, itemIndex]);
 
   const usage = useMemo(() => {
@@ -147,6 +154,41 @@ export function AiAgentInspectorExtras({
       {showExecution && aiError && (
         <div className={cn(workflowAlertCompact("error"), "p-3 text-[11px]")}>
           {aiError.message}
+        </div>
+      )}
+
+      {showExecution && toolObservability && (
+        <div className="rounded-md border border-border/70 bg-muted/20 p-3">
+          <div className="text-[11px] font-medium text-foreground">
+            Tools (run)
+          </div>
+          <dl className="mt-2 grid grid-cols-[auto_1fr] gap-x-2 gap-y-1 text-[10px]">
+            <dt className="text-muted-foreground">Available</dt>
+            <dd className="text-foreground">
+              {toolObservability.availableCount === 0
+                ? "None"
+                : toolObservability.availableNames.join(", ")}
+            </dd>
+            <dt className="text-muted-foreground">Used</dt>
+            <dd className="text-foreground">
+              {toolObservability.usedNames.length === 0
+                ? "—"
+                : toolObservability.usedNames.join(", ")}
+            </dd>
+            <dt className="text-muted-foreground">Status</dt>
+            <dd
+              className={
+                toolObservability.status === "failed"
+                  ? "text-destructive"
+                  : toolObservability.status === "none_connected" ||
+                      toolObservability.status === "skipped"
+                    ? "text-amber-700 dark:text-amber-300"
+                    : "text-foreground"
+              }
+            >
+              {toolObservability.label}
+            </dd>
+          </dl>
         </div>
       )}
 

@@ -1,8 +1,13 @@
 /**
- * Part 12B — AI Agent runtime (per-item, bounded tool-call loop).
+ * Part 12B / M8.15 — AI Agent runtime (per-item, bounded tool-call loop).
  *
  * Agent is a normal WorkflowItem execution node.
  * Model/Tool providers remain auxiliary (non-scheduled).
+ *
+ * Root causes addressed in M8.15:
+ * - weak tool descriptions / missing whenToUse → model skips tools
+ * - hard tool failures aborted the agent into generic answers
+ * - empty tool registry was hard to observe in Run Results
  */
 
 const {
@@ -164,6 +169,33 @@ const runAgentForItem = async ({
     );
   }
 
+  const toolsAvailable = (runtime.tools || []).map((t) => ({
+    name: t.name,
+    displayName: t.displayName || t.name,
+    nodeId: t.nodeId || undefined,
+  }));
+
+  // Generic tool inventory — not platform-specific. Only when tools are bound.
+  if (toolsAvailable.length > 0) {
+    const inventoryLines = toolsAvailable.map(
+      (t) =>
+        `- ${t.name}: ${
+          (runtime.toolsByName.get(t.name)?.description || t.displayName || "").slice(
+            0,
+            240
+          )
+        }`
+    );
+    const appendix = [
+      "## Available tools",
+      ...inventoryLines,
+      "",
+      "Use these tools to fetch live workflow or connected-account data when the user asks about that data.",
+      "Do not invent metrics or post contents. Do not call tools for pure writing, rewriting, or summarization of text the user already provided.",
+    ].join("\n");
+    systemText = systemText ? `${systemText}\n\n${appendix}` : appendix;
+  }
+
   const messages = [];
   if (systemText) {
     messages.push({ role: "system", content: systemText });
@@ -177,6 +209,7 @@ const runAgentForItem = async ({
   }));
 
   const toolTrace = [];
+  const toolsUsed = [];
   let usageAcc = { inputTokens: 0, outputTokens: 0, totalTokens: 0 };
   let rounds = 0;
   let finalContent = "";
@@ -188,6 +221,35 @@ const runAgentForItem = async ({
     DEFAULT_MODEL_TIMEOUT_MS;
   const toolTimeout =
     Number(data.toolTimeoutMs) || DEFAULT_TOOL_TIMEOUT_MS;
+
+  const pushToolError = (tc, err, started) => {
+    const code =
+      err && typeof err === "object" && err.code
+        ? String(err.code)
+        : AI_ERROR.TOOL_FAILED;
+    const message = stripSecrets(
+      err instanceof Error ? err.message : String(err || "Tool failed.")
+    );
+    toolTrace.push({
+      toolName: tc.name,
+      callId: tc.id,
+      status: "failed",
+      durationMs: Date.now() - started,
+      errorCode: code,
+    });
+    if (!toolsUsed.includes(tc.name)) toolsUsed.push(tc.name);
+    messages.push({
+      role: "tool",
+      name: tc.name,
+      toolCallId: tc.id,
+      content: JSON.stringify({
+        ok: false,
+        code,
+        message,
+        tool: tc.name,
+      }),
+    });
+  };
 
   for (;;) {
     if (rounds >= MAX_AGENT_TOOL_ROUNDS) {
@@ -246,9 +308,14 @@ const runAgentForItem = async ({
 
     for (const tc of toolCalls) {
       const tool = runtime.toolsByName.get(tc.name);
-      validateToolArgs(tool.inputSchema, tc.arguments || {}, tc.name);
       const started = Date.now();
-      let status = "succeeded";
+      try {
+        validateToolArgs(tool.inputSchema, tc.arguments || {}, tc.name);
+      } catch (err) {
+        // Soft-fail: feed validation error back so the model can explain / retry.
+        pushToolError(tc, err, started);
+        continue;
+      }
       let toolResult;
       try {
         toolResult = await withTimeout(
@@ -265,26 +332,16 @@ const runAgentForItem = async ({
           `Tool ${tc.name}`
         );
       } catch (err) {
-        status = "failed";
-        toolTrace.push({
-          toolName: tc.name,
-          callId: tc.id,
-          status,
-          durationMs: Date.now() - started,
-        });
-        if (err instanceof AiRuntimeError) throw err;
-        throw new AiRuntimeError(
-          err instanceof Error ? err.message : String(err),
-          AI_ERROR.TOOL_FAILED,
-          { toolName: tc.name }
-        );
+        pushToolError(tc, err, started);
+        continue;
       }
       toolTrace.push({
         toolName: tc.name,
         callId: tc.id,
-        status,
+        status: "succeeded",
         durationMs: Date.now() - started,
       });
+      if (!toolsUsed.includes(tc.name)) toolsUsed.push(tc.name);
       const content = normalizeToolResultForModel(toolResult);
       messages.push({
         role: "tool",
@@ -293,6 +350,14 @@ const runAgentForItem = async ({
         content,
       });
     }
+  }
+
+  if (!String(finalContent || "").trim()) {
+    throw new AiRuntimeError(
+      "AI Agent returned an empty response.",
+      AI_ERROR.TOOL_CALL_INVALID,
+      { rounds, toolsUsed }
+    );
   }
 
   const outputJson = {
@@ -311,6 +376,8 @@ const runAgentForItem = async ({
     kind: "aiAgent",
     itemIndex,
     rounds,
+    toolsAvailable,
+    toolsUsed,
     toolCalls: toolTrace,
     usage: usageAcc.totalTokens ? usageAcc : undefined,
     modelNodeId: runtime.modelDescriptor.nodeId,

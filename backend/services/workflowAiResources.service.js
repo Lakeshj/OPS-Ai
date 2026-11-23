@@ -45,14 +45,15 @@ const stripSecrets = (obj) => {
   if (!obj || typeof obj !== "object") return obj;
   const out = Array.isArray(obj) ? [...obj] : { ...obj };
   for (const key of Object.keys(out)) {
-    const lower = key.toLowerCase();
+    const lower = key.toLowerCase().replace(/[^a-z0-9]/g, "");
     if (
       lower.includes("secret") ||
       lower.includes("password") ||
       lower.includes("authorization") ||
       lower === "apikey" ||
-      lower === "api_key" ||
-      lower === "token"
+      lower.includes("accesstoken") ||
+      lower.includes("refreshtoken") ||
+      lower.endsWith("token")
     ) {
       delete out[key];
     } else if (out[key] && typeof out[key] === "object") {
@@ -111,6 +112,40 @@ const defaultCalculatorSchema = () => ({
   },
   required: ["a", "b", "operation"],
 });
+
+/**
+ * Stable MCP tool name for the model: provider_toolId unless author set toolName.
+ * Calculator/HTTP keep author names unchanged.
+ */
+const namespacedMcpToolName = (providerKey, toolId, authorName) => {
+  const custom = String(authorName || "").trim();
+  if (custom) {
+    return custom.replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 64);
+  }
+  const provider = String(providerKey || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_|_$/g, "");
+  const id = String(toolId || "")
+    .trim()
+    .replace(/[^a-zA-Z0-9_-]/g, "_");
+  const combined = provider ? `${provider}_${id}` : id;
+  return combined.slice(0, 64) || id || "tool";
+};
+
+/** Catalog description + optional whenToUse / usage (generic for all MCP tools). */
+const composeToolDescription = (catalog = {}, data = {}) => {
+  if (data.description && String(data.description).trim()) {
+    return String(data.description).trim();
+  }
+  const base = String(
+    catalog.description || catalog.displayName || ""
+  ).trim();
+  const when = String(catalog.whenToUse || catalog.usage || "").trim();
+  if (base && when) return `${base} ${when}`;
+  return base || when || "Workflow tool.";
+};
 
 /** Serializable tool descriptor — execute is attached only at runtime. */
 const buildToolDescriptor = (node) => {
@@ -181,10 +216,7 @@ const buildToolDescriptor = (node) => {
         { nodeId: node.id, toolId }
       );
     }
-    const name = String(data.toolName || toolId)
-      .trim()
-      .replace(/[^a-zA-Z0-9_-]/g, "_")
-      .slice(0, 64);
+    const name = namespacedMcpToolName("google_ads", toolId, data.toolName);
     const fixedParams =
       data.params && typeof data.params === "object" && !Array.isArray(data.params)
         ? stripSecrets({ ...data.params })
@@ -196,11 +228,8 @@ const buildToolDescriptor = (node) => {
       kind: DATA_TYPE.AI_TOOL,
       nodeId: node.id,
       name: name || toolId,
-      description:
-        data.description ||
-        catalog.description ||
-        catalog.displayName ||
-        `Google Ads MCP tool: ${toolId}`,
+      displayName: catalog.displayName || toolId,
+      description: composeToolDescription(catalog, data),
       inputSchema: stripGoogleAdsAccountFieldsFromSchema(catalog.inputSchema),
       toolKind: "google_ads_mcp",
       adsToolId: toolId,
@@ -228,10 +257,7 @@ const buildToolDescriptor = (node) => {
         { nodeId: node.id, toolId }
       );
     }
-    const name = String(data.toolName || toolId)
-      .trim()
-      .replace(/[^a-zA-Z0-9_-]/g, "_")
-      .slice(0, 64);
+    const name = namespacedMcpToolName("instagram", toolId, data.toolName);
     const fixedParams =
       data.params && typeof data.params === "object" && !Array.isArray(data.params)
         ? stripSecrets({ ...data.params })
@@ -243,11 +269,8 @@ const buildToolDescriptor = (node) => {
       kind: DATA_TYPE.AI_TOOL,
       nodeId: node.id,
       name: name || toolId,
-      description:
-        data.description ||
-        catalog.description ||
-        catalog.displayName ||
-        `Instagram MCP tool: ${toolId}`,
+      displayName: catalog.displayName || toolId,
+      description: composeToolDescription(catalog, data),
       inputSchema: stripInstagramAccountFieldsFromSchema(catalog.inputSchema),
       toolKind: "instagram_mcp",
       igToolId: toolId,
@@ -607,6 +630,44 @@ const createTestModelAdapter = (descriptor) => {
           };
         }
 
+        // Two sequential model rounds that each request a tool call, then finalize.
+        if (script === "sequential-tools") {
+          if (toolTurns === 0) {
+            return {
+              message: { role: "assistant", content: null },
+              toolCalls: [
+                {
+                  id: "call_seq_1",
+                  name: "calculator",
+                  arguments: { a: 2, b: 3, operation: "add" },
+                },
+              ],
+              finishReason: "tool_calls",
+            };
+          }
+          if (toolTurns === 1) {
+            return {
+              message: { role: "assistant", content: null },
+              toolCalls: [
+                {
+                  id: "call_seq_2",
+                  name: "calculator",
+                  arguments: { a: 10, b: 5, operation: "subtract" },
+                },
+              ],
+              finishReason: "tool_calls",
+            };
+          }
+          return {
+            message: {
+              role: "assistant",
+              content: "Completed two sequential tool rounds.",
+            },
+            toolCalls: [],
+            finishReason: "stop",
+          };
+        }
+
         if (script === "force-unknown-tool") {
           return {
             message: { role: "assistant", content: null },
@@ -618,16 +679,105 @@ const createTestModelAdapter = (descriptor) => {
         }
 
         if (script === "force-bad-args") {
+          // M8.15: first turn requests bad args; after soft tool error, finalize.
+          if (toolTurns === 0) {
+            return {
+              message: { role: "assistant", content: null },
+              toolCalls: [
+                {
+                  id: "call_bad",
+                  name: "calculator",
+                  arguments: { a: "x", b: 1, operation: "add" },
+                },
+              ],
+              finishReason: "tool_calls",
+            };
+          }
+          const lastTool = [...messages].reverse().find((m) => m.role === "tool");
+          let detail = "invalid arguments";
+          try {
+            const parsed = JSON.parse(String(lastTool?.content || "{}"));
+            detail = String(parsed?.message || detail);
+          } catch {
+            /* keep */
+          }
           return {
-            message: { role: "assistant", content: null },
-            toolCalls: [
-              {
-                id: "call_bad",
-                name: "calculator",
-                arguments: { a: "x", b: 1, operation: "add" },
-              },
-            ],
-            finishReason: "tool_calls",
+            message: {
+              role: "assistant",
+              content: `Tool call failed: ${detail}`,
+            },
+            toolCalls: [],
+            finishReason: "stop",
+          };
+        }
+
+        if (script === "tool-exec-fail") {
+          if (toolTurns === 0) {
+            return {
+              message: { role: "assistant", content: null },
+              toolCalls: [
+                {
+                  id: "call_fail_exec",
+                  name: "calculator",
+                  arguments: { a: 1, b: 0, operation: "divide" },
+                },
+              ],
+              finishReason: "tool_calls",
+            };
+          }
+          return {
+            message: {
+              role: "assistant",
+              content: "The calculator tool failed (division by zero).",
+            },
+            toolCalls: [],
+            finishReason: "stop",
+          };
+        }
+
+        if (script === "instagram-list-media-demo") {
+          const igTool =
+            (tools || []).find((t) => String(t.name).includes("list_media")) ||
+            (tools || [])[0];
+          const toolName = igTool?.name || "instagram_list_media";
+          if (toolTurns === 0) {
+            return {
+              message: { role: "assistant", content: null },
+              toolCalls: [
+                {
+                  id: "call_ig_media",
+                  name: toolName,
+                  arguments: { limit: 5 },
+                },
+              ],
+              finishReason: "tool_calls",
+            };
+          }
+          const lastTool = [...messages].reverse().find((m) => m.role === "tool");
+          let grounded = "No media returned.";
+          try {
+            const parsed = JSON.parse(String(lastTool?.content || "{}"));
+            const rows = Array.isArray(parsed?.data) ? parsed.data : [];
+            if (parsed?.ok === false) {
+              grounded = `Could not load Instagram media: ${parsed.message || "error"}`;
+            } else if (rows.length) {
+              const top = rows
+                .slice(0, 5)
+                .map((row, i) => {
+                  const likes = row.likeCount ?? row.like_count ?? 0;
+                  const comments = row.commentsCount ?? row.comments_count ?? 0;
+                  return `${i + 1}. ${row.mediaType || row.media_type || "post"} — ${likes} likes, ${comments} comments`;
+                })
+                .join("; ");
+              grounded = `Recent Instagram posts: ${top}. Strongest engagement is among these live counts.`;
+            }
+          } catch {
+            /* keep */
+          }
+          return {
+            message: { role: "assistant", content: grounded },
+            toolCalls: [],
+            finishReason: "stop",
           };
         }
 
@@ -1081,6 +1231,8 @@ module.exports = {
   stripSecrets,
   buildModelDescriptor,
   buildToolDescriptor,
+  namespacedMcpToolName,
+  composeToolDescription,
   validateToolSchema,
   validateToolArgs,
   normalizeToolResultForModel,

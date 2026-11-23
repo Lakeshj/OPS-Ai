@@ -423,6 +423,9 @@ function publicTool(tool) {
     id: tool.id,
     displayName: tool.displayName,
     description: tool.description,
+    // Generic agent catalog hints (M8.15) — optional on all MCP providers
+    whenToUse: tool.whenToUse || undefined,
+    usage: tool.usage || undefined,
     category: tool.category,
     inputSchema: tool.inputSchema,
     outputSchema: tool.outputSchema,

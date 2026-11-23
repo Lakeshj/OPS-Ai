@@ -107,7 +107,13 @@ const createExecutor = (runtime = {}) => {
       throw igError("Instagram media list is not available.", "MCP_EXECUTION_FAILED", 500);
     }
     const params = input.params || {};
-    const limit = params.limit ?? params.maxItems;
+    const rawLimit = params.limit ?? params.maxItems;
+    const parsed = Number(rawLimit);
+    // Bounded default — never exhaust account history for agent/tool use.
+    const limit =
+      Number.isFinite(parsed) && parsed > 0
+        ? Math.min(Math.floor(parsed), 100)
+        : 25;
     const fetched = await run({
       credentialId: input.credentialId,
       workspaceId: input.workspaceId,

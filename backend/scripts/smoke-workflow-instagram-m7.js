@@ -704,7 +704,8 @@ async function main() {
     };
     const resolved = resolveAgentResources({ nodeId: "agent", definition: def });
     const runtime = materializeAgentRuntime(resolved);
-    assert.equal(runtime.toolsByName.has("account_summary"), true);
+    // M8.15: MCP tools use stable namespaced names (provider_toolId).
+    assert.equal(runtime.toolsByName.has("instagram_account_summary"), true);
     const reg = registry();
     const prev = reg.executeInstagramMcpNode;
     reg.executeInstagramMcpNode = async () => ({
@@ -721,7 +722,7 @@ async function main() {
       ],
     });
     try {
-      const out = await runtime.toolsByName.get("account_summary").execute(
+      const out = await runtime.toolsByName.get("instagram_account_summary").execute(
         {},
         { graph: { nodes: def.nodes, edges: def.edges }, workspaceId: "ws-1" }
       );

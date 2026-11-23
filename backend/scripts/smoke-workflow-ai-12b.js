@@ -318,13 +318,15 @@ const registerPart12BTests = ({ check, section, assert: a }) => {
     );
   });
 
-  check("TEST 12B-17 Malformed tool arguments rejected", async () => {
+  check("TEST 12B-17 Malformed tool arguments soft-fail into tool result", async () => {
+    // M8.15: invalid args are fed back as tool errors; agent continues to a final answer.
     const def = agentFixture({ modelScript: "force-bad-args" });
-    await assertX.rejects(
-      () => executeGraphInMemory(def),
-      (err) =>
-        err.code === AI_ERROR.TOOL_ARGS_INVALID ||
-        /must be a number/i.test(err.message)
+    const mem = await executeGraphInMemory(def);
+    const meta = mem.context.steps.agent?.agentMeta?.[0];
+    assertX.ok(meta?.toolCalls?.some((t) => t.status === "failed"));
+    assertX.match(
+      String(mem.context.items.agent[0].json?.ai?.output || ""),
+      /Tool call failed|invalid|number/i
     );
   });
 
@@ -655,9 +657,14 @@ const registerPart12BTests = ({ check, section, assert: a }) => {
     assertX.equal(AI_ERROR.TOOL_TIMEOUT, "AI_TOOL_TIMEOUT");
   });
 
-  check("TEST 12B-48 Tool failure fails Agent according to V1 policy", async () => {
+  check("TEST 12B-48 Tool failure soft-fails into grounded Agent answer", async () => {
+    // M8.15 policy: tool failures return structured errors to the model (do not abort silently).
     const def = agentFixture({ modelScript: "force-bad-args" });
-    await assertX.rejects(() => executeGraphInMemory(def));
+    const mem = await executeGraphInMemory(def);
+    const meta = mem.context.steps.agent?.agentMeta?.[0];
+    assertX.ok(meta?.toolsAvailable);
+    assertX.ok(meta?.toolCalls?.some((t) => t.status === "failed"));
+    assertX.ok(String(mem.context.items.agent[0].json?.ai?.output || "").length > 0);
   });
 
   check("TEST 12B-49 Agent retry remains same execution occurrence", () => {

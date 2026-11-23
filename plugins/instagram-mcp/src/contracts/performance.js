@@ -91,7 +91,9 @@ const performanceToolDefinitions = (provider) =>
       id: "account_insights",
       displayName: "Account Insights",
       description:
-        "Retrieve Instagram account performance using the server-owned M4 metric catalog.",
+        "Retrieve Instagram account performance metrics (reach, views, engagement) using the server-owned insights catalog.",
+      whenToUse:
+        "Use when the user asks about account-level performance, reach, impressions/views, or engagement trends over a period — not for listing individual posts.",
       category: "insights",
       authType: provider.authType,
       access: "read",
@@ -150,7 +152,9 @@ const performanceToolDefinitions = (provider) =>
       id: "media_insights",
       displayName: "Media Insights",
       description:
-        "Retrieve performance for one media item using the M4 media-type catalog.",
+        "Retrieve performance metrics for one media item using the media-type insights catalog.",
+      whenToUse:
+        "Use when the user asks for insights on a specific post and you already have its media id.",
       category: "insights",
       authType: provider.authType,
       access: "read",

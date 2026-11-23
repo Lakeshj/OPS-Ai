@@ -22,14 +22,43 @@ export type AiAgentUsage = {
   totalTokens?: number;
 };
 
+export type AiAvailableTool = {
+  name?: string;
+  displayName?: string;
+  nodeId?: string;
+};
+
 export type AiAgentItemMeta = {
   kind?: string;
   itemIndex?: number;
   rounds?: number;
+  /** Tools bound to the agent for this run (may be empty). */
+  toolsAvailable?: AiAvailableTool[];
+  /** Unique tool names attempted (success or soft-fail). */
+  toolsUsed?: string[];
   toolCalls?: AiSafeToolCall[];
   usage?: AiAgentUsage;
   modelNodeId?: string;
   modelProvider?: string;
+};
+
+/** High-level tool-use diagnosis for Run Results / inspector (no secrets). */
+export type AiToolObservabilitySummary = {
+  availableCount: number;
+  availableNames: string[];
+  usedNames: string[];
+  callCount: number;
+  failedCount: number;
+  succeededCount: number;
+  /** Human-readable status: none_connected | skipped | failed | mixed | succeeded */
+  status:
+    | "none_connected"
+    | "skipped"
+    | "failed"
+    | "mixed"
+    | "succeeded"
+    | "unknown";
+  label: string;
 };
 
 export type AiAgentBusinessAi = {
@@ -314,6 +343,124 @@ export function extractSafeToolCallsForItem(
   const metas = extractAgentMetaFromStepOutput(output);
   const entry = metas[itemIndex] || metas[0];
   return Array.isArray(entry?.toolCalls) ? entry.toolCalls : [];
+}
+
+export function extractAgentItemMeta(
+  output: unknown,
+  itemIndex = 0
+): AiAgentItemMeta | null {
+  const metas = extractAgentMetaFromStepOutput(output);
+  const entry = metas[itemIndex] || metas[0];
+  return entry && typeof entry === "object" ? entry : null;
+}
+
+export function extractToolsAvailableForItem(
+  output: unknown,
+  itemIndex = 0
+): AiAvailableTool[] {
+  const entry = extractAgentItemMeta(output, itemIndex);
+  return Array.isArray(entry?.toolsAvailable) ? entry.toolsAvailable : [];
+}
+
+export function extractToolsUsedForItem(
+  output: unknown,
+  itemIndex = 0
+): string[] {
+  const entry = extractAgentItemMeta(output, itemIndex);
+  return Array.isArray(entry?.toolsUsed)
+    ? entry.toolsUsed.map((n) => String(n || "").trim()).filter(Boolean)
+    : [];
+}
+
+export function summarizeAgentToolObservability(
+  output: unknown,
+  itemIndex = 0
+): AiToolObservabilitySummary {
+  const available = extractToolsAvailableForItem(output, itemIndex);
+  const used = extractToolsUsedForItem(output, itemIndex);
+  const calls = extractSafeToolCallsForItem(output, itemIndex);
+  const availableNames = available
+    .map((t) => String(t?.name || t?.displayName || "").trim())
+    .filter(Boolean);
+  const failedCount = calls.filter(
+    (c) => String(c?.status || "").toLowerCase() === "failed"
+  ).length;
+  const succeededCount = calls.filter(
+    (c) => String(c?.status || "").toLowerCase() === "succeeded"
+  ).length;
+  const availableCount = availableNames.length;
+  const callCount = calls.length;
+
+  if (availableCount === 0) {
+    return {
+      availableCount: 0,
+      availableNames: [],
+      usedNames: used,
+      callCount,
+      failedCount,
+      succeededCount,
+      status: "none_connected",
+      label: "No tools connected",
+    };
+  }
+  if (callCount === 0) {
+    return {
+      availableCount,
+      availableNames,
+      usedNames: used,
+      callCount: 0,
+      failedCount: 0,
+      succeededCount: 0,
+      status: "skipped",
+      label: `${availableCount} tool(s) available — model did not call any`,
+    };
+  }
+  if (failedCount > 0 && succeededCount === 0) {
+    return {
+      availableCount,
+      availableNames,
+      usedNames: used,
+      callCount,
+      failedCount,
+      succeededCount,
+      status: "failed",
+      label: `Tool call(s) failed (${failedCount})`,
+    };
+  }
+  if (failedCount > 0 && succeededCount > 0) {
+    return {
+      availableCount,
+      availableNames,
+      usedNames: used,
+      callCount,
+      failedCount,
+      succeededCount,
+      status: "mixed",
+      label: `Tools used with mixed results (${succeededCount} ok, ${failedCount} failed)`,
+    };
+  }
+  if (succeededCount > 0) {
+    return {
+      availableCount,
+      availableNames,
+      usedNames: used,
+      callCount,
+      failedCount,
+      succeededCount,
+      status: "succeeded",
+      label: `Tools used (${used.join(", ") || String(succeededCount)})`,
+    };
+  }
+  return {
+    availableCount,
+    availableNames,
+    usedNames: used,
+    callCount,
+    failedCount,
+    succeededCount,
+    status: "unknown",
+    label: "Tool activity recorded",
+  };
 }
 
 export function extractUsageForItem(

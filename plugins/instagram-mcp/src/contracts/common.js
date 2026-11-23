@@ -31,7 +31,9 @@ const commonToolDefinitions = (provider) =>
       id: "account_summary",
       displayName: "Account Summary",
       description:
-        "Return the current Instagram professional account profile (username, counts, bio).",
+        "Return the current Instagram professional account profile (username, followers, following, media count, bio).",
+      whenToUse:
+        "Use when the user asks who the connected Instagram account is, follower counts, bio, or a high-level account overview.",
       category: "account",
       authType: provider.authType,
       access: "read",
@@ -49,7 +51,10 @@ const commonToolDefinitions = (provider) =>
       provider: provider.id,
       id: "list_media",
       displayName: "List Media",
-      description: "List recent Instagram media for the professional account.",
+      description:
+        "Retrieve recent media from the Instagram account connected to this workflow (captions, post types, timestamps, likes, comments).",
+      whenToUse:
+        "Use when the user asks about recent posts, captions, post types, publishing dates, likes, comments, engagement, or which posts performed best. Pass limit (default 25) when they want a specific count.",
       category: "media",
       authType: provider.authType,
       access: "read",
@@ -61,7 +66,7 @@ const commonToolDefinitions = (provider) =>
         limit: {
           type: "integer",
           title: "Limit",
-          description: "Max media rows (server caps apply).",
+          description: "Max media rows (default 25; server caps apply).",
           minimum: 1,
           maximum: 100,
         },
@@ -82,7 +87,10 @@ const commonToolDefinitions = (provider) =>
       provider: provider.id,
       id: "media_details",
       displayName: "Media Details",
-      description: "Retrieve one Instagram media object by id.",
+      description:
+        "Retrieve one Instagram media object by id (caption, type, permalink, engagement counts when present).",
+      whenToUse:
+        "Use when the user asks for details about a specific post and you already have its media id.",
       category: "media",
       authType: provider.authType,
       access: "read",
@@ -109,7 +117,9 @@ const commonToolDefinitions = (provider) =>
       id: "comments",
       displayName: "Comments",
       description:
-        "List comments for one media item (read-only). Does not reply.",
+        "List comments for one media item (read-only). Does not reply or publish.",
+      whenToUse:
+        "Use when the user asks what people commented on a specific post (requires media id).",
       category: "comments",
       authType: provider.authType,
       access: "read",
