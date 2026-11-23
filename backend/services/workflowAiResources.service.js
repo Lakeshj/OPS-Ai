@@ -496,7 +496,7 @@ const createTestModelAdapter = (descriptor) => {
   return {
     provider: "test",
     model: descriptor.config?.model || "deterministic-test-model",
-    async invoke({ messages, tools, timeoutMs, signal }) {
+    async invoke({ messages, tools, timeoutMs, signal, toolChoice }) {
       const timeout = timeoutMs || DEFAULT_MODEL_TIMEOUT_MS;
       if (script === "timeout") {
         return withTimeout(
@@ -516,6 +516,11 @@ const createTestModelAdapter = (descriptor) => {
       const assistantTurns = messages.filter((m) => m.role === "assistant").length;
       const toolTurns = messages.filter((m) => m.role === "tool").length;
       const round = assistantTurns;
+      const hasGroundingNudge = messages.some(
+        (m) =>
+          m.role === "user" &&
+          /Relevant connected tools are available/i.test(String(m.content || ""))
+      );
 
       const run = async () => {
         if (script === "echo") {
@@ -524,6 +529,96 @@ const createTestModelAdapter = (descriptor) => {
             message: { role: "assistant", content: String(lastUser?.content || "") },
             toolCalls: [],
             usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 },
+            finishReason: "stop",
+            requestDebug: {
+              provider: "test",
+              model: descriptor.config?.model || "deterministic-test-model",
+              toolCount: Array.isArray(tools) ? tools.length : 0,
+              toolNames: Array.isArray(tools)
+                ? tools.map((t) => t.name).filter(Boolean)
+                : [],
+              toolChoice: toolChoice || "auto",
+            },
+          };
+        }
+
+        // M8.15.2: first turn skips tools with access-denial boilerplate; after
+        // grounding nudge (+ optional tool_choice=required) calls a tool.
+        if (script === "grounding-skip-then-tool") {
+          if (!hasGroundingNudge && toolTurns === 0) {
+            return {
+              message: {
+                role: "assistant",
+                content:
+                  "I would typically need access to your account data to answer that. If you have access, check your dashboard.",
+              },
+              toolCalls: [],
+              usage: { inputTokens: 8, outputTokens: 20, totalTokens: 28 },
+              finishReason: "stop",
+              requestDebug: {
+                provider: "test",
+                toolChoice: toolChoice || "auto",
+                toolCount: Array.isArray(tools) ? tools.length : 0,
+                toolNames: (tools || []).map((t) => t.name),
+              },
+            };
+          }
+          if (toolTurns === 0) {
+            const pick =
+              (tools || []).find((t) => t.name === "calculator") ||
+              (tools || [])[0];
+            const toolName = pick?.name || "calculator";
+            const args =
+              toolName === "calculator"
+                ? { a: 12, b: 30, operation: "add" }
+                : { limit: 5 };
+            return {
+              message: { role: "assistant", content: null },
+              toolCalls: [
+                {
+                  id: "call_ground_1",
+                  name: toolName,
+                  arguments: args,
+                },
+              ],
+              usage: { inputTokens: 10, outputTokens: 5, totalTokens: 15 },
+              finishReason: "tool_calls",
+              requestDebug: {
+                provider: "test",
+                toolChoice: toolChoice || "auto",
+                toolCount: Array.isArray(tools) ? tools.length : 0,
+                toolNames: (tools || []).map((t) => t.name),
+              },
+            };
+          }
+          const lastTool = [...messages].reverse().find((m) => m.role === "tool");
+          let detail = "connected tool data";
+          try {
+            const parsed = JSON.parse(String(lastTool?.content || "{}"));
+            if (parsed?.ok === false) {
+              return {
+                message: {
+                  role: "assistant",
+                  content: `I couldn't retrieve the data because the connected tool returned an error: ${parsed.message || parsed.code || "unknown"}.`,
+                },
+                toolCalls: [],
+                finishReason: "stop",
+              };
+            }
+            detail =
+              parsed?.data?.result != null
+                ? String(parsed.data.result)
+                : JSON.stringify(parsed).slice(0, 120);
+          } catch {
+            /* keep */
+          }
+          return {
+            message: {
+              role: "assistant",
+              content: `Grounded summary from connected tools: ${detail}.`,
+            },
+            toolCalls: [],
+            usage: { inputTokens: 12, outputTokens: 16, totalTokens: 28 },
             finishReason: "stop",
           };
         }
@@ -824,7 +919,14 @@ const createOpenAiCompatAdapter = (descriptor) => {
   return {
     provider: descriptor.provider,
     model: descriptor.config?.model || "gpt-4o-mini",
-    async invoke({ messages, tools, timeoutMs, signal, responseFormat }) {
+    async invoke({
+      messages,
+      tools,
+      timeoutMs,
+      signal,
+      responseFormat,
+      toolChoice = null,
+    }) {
       const timeout = timeoutMs || DEFAULT_MODEL_TIMEOUT_MS;
       const provider = descriptor.provider || "openai";
       const model = descriptor.config?.model || "gpt-4o-mini";
@@ -870,6 +972,21 @@ const createOpenAiCompatAdapter = (descriptor) => {
             parameters: t.inputSchema || { type: "object", properties: {} },
           },
         }));
+        // Default auto; grounding retry may pass "required".
+        const choice = toolChoice == null ? "auto" : toolChoice;
+        if (choice === "required" || choice === "auto" || choice === "none") {
+          options.tool_choice = choice;
+        } else if (choice && typeof choice === "object") {
+          options.tool_choice = choice;
+        } else if (typeof choice === "string" && choice.trim()) {
+          // Named tool force (rare) — only when caller already resolved a single tool.
+          options.tool_choice = {
+            type: "function",
+            function: { name: choice.trim() },
+          };
+        } else {
+          options.tool_choice = "auto";
+        }
       }
 
       // Optional JSON mode for product planners (Copilot). Ignored when tools present.
@@ -892,13 +1009,15 @@ const createOpenAiCompatAdapter = (descriptor) => {
         model,
         toolCount: toolNames.length,
         toolNames,
+        toolChoice:
+          options.tool_choice == null
+            ? "auto"
+            : typeof options.tool_choice === "string"
+              ? options.tool_choice
+              : "custom",
       };
 
-      const run = async () => {
-        if (signal?.aborted) {
-          throw new AiRuntimeError("Model aborted", AI_ERROR.MODEL_TIMEOUT);
-        }
-        const completion = await client.chat.completions.create(options);
+      const parseCompletion = (completion) => {
         const choice = completion.choices?.[0];
         const msg = choice?.message || {};
         const toolCalls = Array.isArray(msg.tool_calls)
@@ -938,6 +1057,31 @@ const createOpenAiCompatAdapter = (descriptor) => {
           finishReason: choice?.finish_reason || (toolCalls.length ? "tool_calls" : "stop"),
           providerMetadata: { id: completion.id },
         };
+      };
+
+      const run = async () => {
+        if (signal?.aborted) {
+          throw new AiRuntimeError("Model aborted", AI_ERROR.MODEL_TIMEOUT);
+        }
+        try {
+          const completion = await client.chat.completions.create(options);
+          return parseCompletion(completion);
+        } catch (err) {
+          // Providers that reject tool_choice=required: retry once with auto.
+          const msg = err instanceof Error ? err.message : String(err || "");
+          if (
+            options.tool_choice &&
+            options.tool_choice !== "auto" &&
+            /tool_choice|unsupported|invalid/i.test(msg)
+          ) {
+            const fallback = { ...options, tool_choice: "auto" };
+            requestDebug.toolChoice = "auto";
+            requestDebug.toolChoiceFallback = true;
+            const completion = await client.chat.completions.create(fallback);
+            return parseCompletion(completion);
+          }
+          throw err;
+        }
       };
 
       return withTimeout(run(), timeout, AI_ERROR.MODEL_TIMEOUT, "Model");

@@ -1,11 +1,11 @@
 /**
- * Part 12B / M8.15 / M8.15.1 — AI Agent runtime (per-item, bounded tool-call loop).
+ * Part 12B / M8.15–M8.15.2 — AI Agent runtime (per-item, bounded tool-call loop).
  *
  * Agent is a normal WorkflowItem execution node.
  * Model/Tool providers remain auxiliary (non-scheduled).
  *
- * M8.15.1: each model.invoke writes ai_usage_events (was bypassed before);
- * agentMeta exposes modelRequests / toolsRequested / toolErrors for live diagnosis.
+ * M8.15.2: generic tool-grounding policy + one guarded retry when the model
+ * skips connected tools and returns access-denial boilerplate.
  */
 
 const {
@@ -22,6 +22,11 @@ const {
   stripSecrets,
 } = require("./workflowAiResources.service");
 const aiUsageLog = require("./aiUsageLog.service");
+const {
+  GROUNDING_RETRY_USER_MESSAGE,
+  buildToolsSystemAppendix,
+  shouldTriggerGroundingRetry,
+} = require("./workflowAiAgentGrounding.service");
 
 const getItemPayload = (item) => {
   if (item == null) return item;
@@ -176,23 +181,16 @@ const runAgentForItem = async ({
 
   // Generic tool inventory — not platform-specific. Only when tools are bound.
   if (toolsAvailable.length > 0) {
-    const inventoryLines = toolsAvailable.map(
-      (t) =>
-        `- ${t.name}: ${
-          (runtime.toolsByName.get(t.name)?.description || t.displayName || "").slice(
-            0,
-            240
-          )
-        }`
+    const appendix = buildToolsSystemAppendix(
+      (runtime.tools || []).map((t) => ({
+        name: t.name,
+        displayName: t.displayName || t.name,
+        description: t.description,
+      }))
     );
-    const appendix = [
-      "## Available tools",
-      ...inventoryLines,
-      "",
-      "Use these tools to fetch live workflow or connected-account data when the user asks about that data.",
-      "Do not invent metrics or post contents. Do not call tools for pure writing, rewriting, or summarization of text the user already provided.",
-    ].join("\n");
-    systemText = systemText ? `${systemText}\n\n${appendix}` : appendix;
+    if (appendix) {
+      systemText = systemText ? `${systemText}\n\n${appendix}` : appendix;
+    }
   }
 
   const messages = [];
@@ -222,6 +220,10 @@ const runAgentForItem = async ({
   let rounds = 0;
   let finalContent = "";
   let finishReason = "stop";
+  let groundingRetryTriggered = false;
+  let groundingRetryReason = undefined;
+  /** Next invoke may force tool_choice=required (OpenAI-compatible). */
+  let pendingToolChoice = null;
 
   const modelTimeout =
     Number(data.modelTimeoutMs) ||
@@ -283,11 +285,14 @@ const runAgentForItem = async ({
     }
     rounds += 1;
     const invokeStarted = Date.now();
+    const toolChoiceForTurn = pendingToolChoice;
+    pendingToolChoice = null;
     const result = await runtime.model.invoke({
       messages,
       tools: toolDefs,
       timeoutMs: modelTimeout,
       signal: context.abortSignal,
+      ...(toolChoiceForTurn ? { toolChoice: toolChoiceForTurn } : {}),
     });
     const invokeLatency = Date.now() - invokeStarted;
     modelRequests += 1;
@@ -299,6 +304,7 @@ const runAgentForItem = async ({
         toolNames: Array.isArray(result.requestDebug.toolNames)
           ? result.requestDebug.toolNames.map(String)
           : [],
+        toolChoice: result.requestDebug.toolChoice || toolChoiceForTurn || "auto",
       };
     } else {
       lastRequestDebug = {
@@ -306,6 +312,7 @@ const runAgentForItem = async ({
         model: runtime.model.model,
         toolCount: toolDefs.length,
         toolNames: toolDefs.map((t) => t.name),
+        toolChoice: toolChoiceForTurn || "auto",
       };
     }
 
@@ -340,7 +347,32 @@ const runAgentForItem = async ({
 
     const toolCalls = Array.isArray(result.toolCalls) ? result.toolCalls : [];
     if (toolCalls.length === 0) {
-      finalContent = String(result.message?.content ?? "");
+      const candidate = String(result.message?.content ?? "");
+      if (
+        shouldTriggerGroundingRetry({
+          toolsAvailableCount: toolsAvailable.length,
+          toolsRequestedCount: toolsRequested.length,
+          toolsUsedCount: toolsUsed.length,
+          groundingRetryTriggered,
+          assistantText: candidate,
+        })
+      ) {
+        groundingRetryTriggered = true;
+        groundingRetryReason =
+          "model_skipped_tools_with_generic_access_denial";
+        messages.push({
+          role: "assistant",
+          content: candidate || null,
+        });
+        messages.push({
+          role: "user",
+          content: GROUNDING_RETRY_USER_MESSAGE,
+        });
+        // Prefer requiring a tool call on the single retry when the provider supports it.
+        pendingToolChoice = "required";
+        continue;
+      }
+      finalContent = candidate;
       finishReason = result.finishReason || "stop";
       break;
     }
@@ -451,6 +483,10 @@ const runAgentForItem = async ({
     toolErrors,
     toolCalls: toolTrace,
     modelRequest: lastRequestDebug,
+    groundingRetryTriggered: Boolean(groundingRetryTriggered),
+    ...(groundingRetryTriggered
+      ? { groundingRetryReason: groundingRetryReason || "grounding_retry" }
+      : {}),
     usage: usageAcc.totalTokens ? usageAcc : undefined,
     modelNodeId: runtime.modelDescriptor.nodeId,
     modelProvider: runtime.modelDescriptor.provider,
@@ -569,5 +605,9 @@ module.exports = {
   resolveAiContextScope,
   promptTemplateReferencesItem,
   RUNTIME_DATA_MARKER,
+  // M8.15.2 grounding helpers (re-exported for smokes)
+  GROUNDING_RETRY_USER_MESSAGE,
+  buildToolsSystemAppendix,
+  shouldTriggerGroundingRetry,
   CONTEXT_SCOPE,
 };

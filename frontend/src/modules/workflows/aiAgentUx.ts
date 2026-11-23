@@ -39,6 +39,7 @@ export type AiModelRequestDebug = {
   model?: string;
   toolCount?: number;
   toolNames?: string[];
+  toolChoice?: string;
 };
 
 export type AiAgentItemMeta = {
@@ -57,6 +58,9 @@ export type AiAgentItemMeta = {
   toolCalls?: AiSafeToolCall[];
   /** Safe OpenAI request summary (no prompts/secrets). */
   modelRequest?: AiModelRequestDebug;
+  /** True when a single guarded retry forced tool use after a generic skip. */
+  groundingRetryTriggered?: boolean;
+  groundingRetryReason?: string;
   usage?: AiAgentUsage;
   modelNodeId?: string;
   modelProvider?: string;

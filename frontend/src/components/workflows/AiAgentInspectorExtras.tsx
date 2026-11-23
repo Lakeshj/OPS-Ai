@@ -174,6 +174,17 @@ export function AiAgentInspectorExtras({
             <dd className="text-foreground">
               {agentItemMeta?.modelRequests ?? "—"}
             </dd>
+            {agentItemMeta?.groundingRetryTriggered ? (
+              <>
+                <dt className="text-muted-foreground">Grounding retry</dt>
+                <dd className="text-amber-700 dark:text-amber-300">
+                  Triggered
+                  {agentItemMeta.groundingRetryReason
+                    ? ` — ${agentItemMeta.groundingRetryReason}`
+                    : ""}
+                </dd>
+              </>
+            ) : null}
             <dt className="text-muted-foreground">Available</dt>
             <dd className="text-foreground">
               {toolObservability.availableCount === 0
