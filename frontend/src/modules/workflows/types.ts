@@ -60,6 +60,7 @@ export type WorkflowNodeType =
   | "googleAds"
   | "metaAds"
   | "instagram"
+  | "facebookPage"
   | "gmail"
   | "gmailTrigger"
   | "googleSheets"
@@ -229,7 +230,8 @@ export type WorkflowCredentialType =
   | "google_ads"
   | "oauth2"
   | "meta_ads"
-  | "instagram";
+  | "instagram"
+  | "facebook_page";
 
 export interface WorkflowCredential {
   id: string;
@@ -252,6 +254,15 @@ export interface WorkflowCredential {
   reconnectRequired?: boolean;
   reconnectSoon?: boolean;
   selectedAdAccountId?: string;
+  /** Facebook Page Native — selected organic Page id */
+  selectedPageId?: string;
+  pages?: Array<{
+    pageId: string;
+    pageName?: string;
+    category?: string;
+    username?: string;
+    link?: string;
+  }>;
   instagramUserId?: string;
   username?: string;
   accountType?: string;
@@ -356,6 +367,14 @@ export const CREDENTIAL_TYPE_FIELDS: Record<
     accountLabel: "Instagram Account",
     connectAction: "Connect Instagram",
     connectAnotherAction: "Connect other account",
+    fields: [],
+    oauth: true,
+  },
+  facebook_page: {
+    label: "Facebook Page",
+    accountLabel: "Facebook Page Account",
+    connectAction: "Connect Facebook",
+    connectAnotherAction: "Connect Another",
     fields: [],
     oauth: true,
   },
@@ -492,9 +511,20 @@ export interface WorkflowNodeData {
     | "publish_story"
     | "list_comments"
     | "list_replies"
-    | "reply_comment";
-  /** Google Ads / Meta Ads / Instagram */
+    | "reply_comment"
+    | "get"
+    | "list"
+    | "page"
+    | "post"
+    | "create_text_post"
+    | "create_link_post";
+  /** Google Ads / Meta Ads / Instagram / Facebook Page */
   resource?: string;
+  pageId?: string;
+  postId?: string;
+  insightsLevel?: string;
+  insightsReport?: string;
+  link?: string;
   mediaId?: string;
   commentId?: string;
   message?: string;

@@ -38,6 +38,7 @@ import {
 } from "@/modules/workflows/inspectorTableSort";
 import { InstagramOutputPreview } from "@/components/workflows/InstagramOutputPreview";
 import { MetaAdsOutputPreview } from "@/components/workflows/MetaAdsOutputPreview";
+import { FacebookPageOutputPreview } from "@/components/workflows/FacebookPageOutputPreview";
 import { resolveOutputPresentation } from "@/modules/workflows/outputPresentation";
 import { toast } from "sonner";
 import {
@@ -815,8 +816,10 @@ export function ItemDataViewer({
   );
   const showInstagramPreview = selectedPresentation?.provider === "instagram";
   const showMetaAdsPreview = selectedPresentation?.provider === "meta_ads";
+  const showFacebookPagePreview =
+    selectedPresentation?.provider === "facebook_page";
   const prosePreview =
-    showInstagramPreview || showMetaAdsPreview
+    showInstagramPreview || showMetaAdsPreview || showFacebookPagePreview
       ? null
       : extractProseField(selectedJson);
 
@@ -889,6 +892,17 @@ export function ItemDataViewer({
           selectedPresentation &&
           (mode === "table" || mode === "schema") && (
             <MetaAdsOutputPreview
+              items={selectedPresentation.workflowItems}
+              value={
+                viewItems.length === 1 ? viewItems[0]?.json : viewItems
+              }
+            />
+          )}
+
+        {showFacebookPagePreview &&
+          selectedPresentation &&
+          (mode === "table" || mode === "schema") && (
+            <FacebookPageOutputPreview
               items={selectedPresentation.workflowItems}
               value={
                 viewItems.length === 1 ? viewItems[0]?.json : viewItems

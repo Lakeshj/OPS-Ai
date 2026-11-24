@@ -241,6 +241,7 @@ const nodeTypes = {
   googleAds: WorkflowNode,
   metaAds: WorkflowNode,
   instagram: WorkflowNode,
+  facebookPage: WorkflowNode,
   gmail: WorkflowNode,
   gmailTrigger: WorkflowNode,
   googleSheets: WorkflowNode,
@@ -718,6 +719,23 @@ const defaultDataForType = (type: WorkflowNodeType): WorkflowNodeData => {
         carouselItems: [],
         commentId: "",
         message: "",
+      };
+    case "facebookPage":
+      return {
+        label: "Facebook Page",
+        nodeType: "facebookPage",
+        credentialId: "",
+        resource: "page",
+        operation: "get",
+        pageId: "",
+        postId: "",
+        reportType: "page_overview",
+        period: "day",
+        message: "",
+        link: "",
+        returnAll: false,
+        limit: 25,
+        after: "",
       };
     case "mcpDynamicTool":
       return {

@@ -32,7 +32,9 @@ import {
 } from "./GoogleCredentialModal";
 import { MetaCredentialPanel } from "./MetaCredentialPanel";
 import { InstagramCredentialPanel } from "./InstagramCredentialPanel";
+import { FacebookPageCredentialPanel } from "./FacebookPageCredentialPanel";
 import { startInstagramOAuthPopup } from "@/modules/workflows/instagramOAuthPopup";
+import { startFacebookPageOAuthPopup } from "@/modules/workflows/facebookPageOAuthPopup";
 import { sanitizeInstagramOAuthError } from "@/modules/workflows/instagramOAuthError";
 import {
   formatInstagramPlatformConfigError,
@@ -108,6 +110,10 @@ export function CredentialPicker({
     Boolean(allowedTypes?.length) &&
     allowedTypes!.length === 1 &&
     allowedTypes![0] === "instagram";
+  const facebookPageOnly =
+    Boolean(allowedTypes?.length) &&
+    allowedTypes!.length === 1 &&
+    allowedTypes![0] === "facebook_page";
 
   /** One Instagram credential → select it automatically (picker pattern). */
   useEffect(() => {
@@ -115,6 +121,13 @@ export function CredentialPicker({
     const ig = credentials.filter((c) => c.type === "instagram");
     if (ig.length === 1) onChange(ig[0].id);
   }, [instagramOnly, value, credentials, onChange]);
+
+  /** One Facebook Page credential → select it automatically. */
+  useEffect(() => {
+    if (!facebookPageOnly || value) return;
+    const pages = credentials.filter((c) => c.type === "facebook_page");
+    if (pages.length === 1) onChange(pages[0].id);
+  }, [facebookPageOnly, value, credentials, onChange]);
 
   const googleProduct =
     googleOnly && allowedTypes!.length === 1 ? allowedTypes![0] : null;
@@ -350,13 +363,16 @@ export function CredentialPicker({
     label ||
     (metaOnly
       ? "Meta Ads Account"
-      : instagramOnly
-        ? CREDENTIAL_TYPE_FIELDS.instagram.accountLabel || "Instagram Account"
-        : googleMeta?.accountLabel
-          ? googleMeta.accountLabel
-          : googleOnly
-            ? "Google Account"
-            : "Authentication");
+      : facebookPageOnly
+        ? CREDENTIAL_TYPE_FIELDS.facebook_page.accountLabel ||
+          "Facebook Page Account"
+        : instagramOnly
+          ? CREDENTIAL_TYPE_FIELDS.instagram.accountLabel || "Instagram Account"
+          : googleMeta?.accountLabel
+            ? googleMeta.accountLabel
+            : googleOnly
+              ? "Google Account"
+              : "Authentication");
   const addHttpLabel =
     visibleTypes.length > 0 &&
     visibleTypes.every((t) => t === "api_key_header" || t === "query_param")
@@ -365,14 +381,22 @@ export function CredentialPicker({
   const instagramConnectAnother =
     CREDENTIAL_TYPE_FIELDS.instagram.connectAnotherAction ||
     "Connect another Instagram account";
+  const facebookConnectAnother =
+    CREDENTIAL_TYPE_FIELDS.facebook_page.connectAnotherAction ||
+    "Connect Another";
   const instagramCredentialCount = listed.filter(
     (c) => c.type === "instagram"
+  ).length;
+  const facebookPageCredentialCount = listed.filter(
+    (c) => c.type === "facebook_page"
   ).length;
   const showInstagramDropdown =
     instagramOnly &&
     shouldShowInstagramCredentialDropdown(instagramCredentialCount);
   const instagramFirstConnect =
     instagramOnly && isInstagramFirstConnectState(instagramCredentialCount);
+  const facebookFirstConnect =
+    facebookPageOnly && facebookPageCredentialCount === 0;
 
   /**
    * Connect other account — start a NEW Instagram OAuth transaction immediately.
@@ -424,6 +448,36 @@ export function CredentialPicker({
     }
   };
 
+  const connectOtherFacebookPageAccount = async () => {
+    if (!workspaceId) {
+      toast.error("Open this workflow in a workspace to connect Facebook.");
+      return;
+    }
+    const previousId = value || "";
+    setConnecting(true);
+    try {
+      const result = await startFacebookPageOAuthPopup({
+        workspaceId,
+        name: "Facebook Page",
+      });
+      if (!result.ok) {
+        if (previousId && value !== previousId) onChange(previousId);
+        toast.error(result.error);
+        return;
+      }
+      reload();
+      onChange(result.credentialId);
+      toast.success("Facebook connected");
+    } catch (err) {
+      if (previousId && value !== previousId) onChange(previousId);
+      toast.error(
+        err instanceof Error ? err.message : "Facebook Page connect failed"
+      );
+    } finally {
+      setConnecting(false);
+    }
+  };
+
   return (
     <div className="space-y-2 rounded-md border p-2.5">
       <Label className="text-xs font-semibold uppercase tracking-wide">
@@ -445,7 +499,15 @@ export function CredentialPicker({
           No Instagram account connected yet. Use Connect Instagram to authorize
           one — the account list appears after the first connection.
         </p>
-      ) : showInstagramDropdown || !instagramOnly ? (
+      ) : facebookFirstConnect ? (
+        <p
+          className="text-[11px] text-muted-foreground"
+          data-facebook-page-credential-dropdown="hidden"
+        >
+          No Facebook Page connected yet. Use Connect Facebook to authorize
+          one — the account list appears after the first connection.
+        </p>
+      ) : showInstagramDropdown || !instagramOnly || facebookPageOnly ? (
         <div
           data-instagram-credential-dropdown={
             instagramOnly ? "selection-only" : "generic"
@@ -600,7 +662,11 @@ export function CredentialPicker({
         </div>
       ) : null}
 
-      {!googleOnly && !metaOnly && !instagramOnly && !adding ? (
+      {!googleOnly &&
+      !metaOnly &&
+      !instagramOnly &&
+      !facebookPageOnly &&
+      !adding ? (
         <Button
           type="button"
           size="sm"
@@ -611,7 +677,7 @@ export function CredentialPicker({
         </Button>
       ) : null}
 
-      {!googleOnly && !metaOnly && adding ? (
+      {!googleOnly && !metaOnly && !facebookPageOnly && adding ? (
         <div className="space-y-2 rounded border bg-muted/30 p-2">
           <div>
             <Label className="text-[11px]">Name</Label>
@@ -662,6 +728,18 @@ export function CredentialPicker({
                 setName("");
               }}
             />
+          ) : type === "facebook_page" ? (
+            <FacebookPageCredentialPanel
+              workspaceId={workspaceId}
+              connectName={name.trim() || undefined}
+              forceNew
+              onConnected={(id) => {
+                reload();
+                onChange(id);
+                setAdding(false);
+                setName("");
+              }}
+            />
           ) : (
             CREDENTIAL_TYPE_FIELDS[type].fields.map((field) => (
             <div key={field.key}>
@@ -679,7 +757,9 @@ export function CredentialPicker({
             </div>
             ))
           )}
-          {type === "meta_ads" || type === "instagram" ? (
+          {type === "meta_ads" ||
+          type === "instagram" ||
+          type === "facebook_page" ? (
             <Button
               type="button"
               size="sm"
@@ -747,6 +827,37 @@ export function CredentialPicker({
               onClick={() => void connectOtherInstagramAccount()}
             >
               {connecting ? "Connecting…" : instagramConnectAnother}
+            </Button>
+          ) : null}
+        </div>
+      ) : null}
+
+      {!adding &&
+      (facebookPageOnly || selected?.type === "facebook_page") ? (
+        <div className="space-y-2">
+          <FacebookPageCredentialPanel
+            workspaceId={workspaceId}
+            credential={selected}
+            forceNew={facebookFirstConnect || !selected}
+            onConnected={(id) => {
+              reload();
+              onChange(id);
+            }}
+            onDisconnected={(removedId) => {
+              if (value === removedId) onChange("");
+              reload();
+            }}
+          />
+          {facebookPageOnly && facebookPageCredentialCount > 0 ? (
+            <Button
+              type="button"
+              size="sm"
+              variant="ghost"
+              disabled={connecting}
+              data-facebook-page-connect-other="true"
+              onClick={() => void connectOtherFacebookPageAccount()}
+            >
+              {connecting ? "Connecting…" : facebookConnectAnother}
             </Button>
           ) : null}
         </div>

@@ -2747,6 +2747,220 @@ export const NODE_PARAMETER_SCHEMAS: Record<WorkflowNodeType, ParamDescriptor[]>
       },
     ],
 
+    facebookPage: [
+      {
+        name: "credentialId",
+        displayName: "Facebook Page Account",
+        type: "credential",
+        customRenderer: "credential",
+        required: true,
+        credentialTypes: ["facebook_page"],
+      },
+      {
+        name: "resource",
+        displayName: "Resource",
+        type: "options",
+        default: "page",
+        options: [
+          { name: "Page", value: "page" },
+          { name: "Post", value: "post" },
+          { name: "Insights", value: "insights" },
+          { name: "Comments", value: "comments" },
+          { name: "Publish", value: "publish" },
+        ],
+      },
+      {
+        name: "operation",
+        displayName: "Operation",
+        type: "options",
+        default: "get",
+        options: [
+          {
+            name: "Get Page",
+            value: "get",
+            displayOptions: { show: { resource: ["page"] } },
+          },
+          {
+            name: "List Posts",
+            value: "list",
+            displayOptions: { show: { resource: ["post"] } },
+          },
+          {
+            name: "Get Post",
+            value: "get",
+            displayOptions: { show: { resource: ["post"] } },
+          },
+          {
+            name: "Page Insights",
+            value: "page",
+            displayOptions: { show: { resource: ["insights"] } },
+          },
+          {
+            name: "Post Insights",
+            value: "post",
+            displayOptions: { show: { resource: ["insights"] } },
+          },
+          {
+            name: "List Comments",
+            value: "list",
+            displayOptions: { show: { resource: ["comments"] } },
+          },
+          {
+            name: "Create Text Post",
+            value: "create_text_post",
+            displayOptions: { show: { resource: ["publish"] } },
+          },
+          {
+            name: "Create Link Post",
+            value: "create_link_post",
+            displayOptions: { show: { resource: ["publish"] } },
+          },
+        ],
+      },
+      {
+        name: "pageId",
+        displayName: "Page",
+        type: "string",
+        required: true,
+        customRenderer: "facebookPagePicker",
+        description: "Connected Facebook Pages for this login.",
+      },
+      {
+        name: "postId",
+        displayName: "Post",
+        type: "string",
+        required: true,
+        expression: true,
+        customRenderer: "facebookPagePostPicker",
+        displayOptions: {
+          showAny: [
+            { resource: ["post"], operation: ["get"] },
+            { resource: ["comments"], operation: ["list"] },
+            { resource: ["insights"], operation: ["post"] },
+          ],
+        },
+      },
+      {
+        name: "reportType",
+        displayName: "Report",
+        type: "options",
+        default: "page_overview",
+        options: [
+          {
+            name: "Page overview",
+            value: "page_overview",
+            displayOptions: { show: { resource: ["insights"], operation: ["page"] } },
+          },
+          {
+            name: "Page audience",
+            value: "page_audience",
+            displayOptions: { show: { resource: ["insights"], operation: ["page"] } },
+          },
+          {
+            name: "Page engagement",
+            value: "page_engagement",
+            displayOptions: { show: { resource: ["insights"], operation: ["page"] } },
+          },
+          {
+            name: "Post overview",
+            value: "post_overview",
+            displayOptions: { show: { resource: ["insights"], operation: ["post"] } },
+          },
+          {
+            name: "Post reactions",
+            value: "post_reactions",
+            displayOptions: { show: { resource: ["insights"], operation: ["post"] } },
+          },
+        ],
+        displayOptions: { show: { resource: ["insights"] } },
+      },
+      {
+        name: "period",
+        displayName: "Period",
+        type: "options",
+        default: "day",
+        options: [
+          { name: "Day", value: "day" },
+          { name: "Week", value: "week" },
+          { name: "28 days", value: "days_28" },
+        ],
+        displayOptions: {
+          show: { resource: ["insights"], operation: ["page"] },
+        },
+      },
+      {
+        name: "message",
+        displayName: "Message",
+        type: "string",
+        required: true,
+        expression: true,
+        multiline: true,
+        placeholder: "Post text",
+        displayOptions: {
+          show: {
+            resource: ["publish"],
+            operation: ["create_text_post", "create_link_post"],
+          },
+        },
+      },
+      {
+        name: "link",
+        displayName: "Link URL",
+        type: "string",
+        required: true,
+        expression: true,
+        placeholder: "https://example.com",
+        displayOptions: {
+          show: { resource: ["publish"], operation: ["create_link_post"] },
+        },
+      },
+      {
+        name: "returnAll",
+        displayName: "Return all",
+        type: "boolean",
+        default: false,
+        description:
+          "When off (default), returns only the Limit page. When on, pages up to the safety ceiling.",
+        displayOptions: {
+          show: {
+            resource: ["post", "comments"],
+            operation: ["list"],
+          },
+        },
+      },
+      {
+        name: "limit",
+        displayName: "Limit",
+        type: "number",
+        default: 25,
+        min: 1,
+        max: 100,
+        description: "Max posts/comments for this run (default 25).",
+        displayOptions: {
+          show: {
+            resource: ["post", "comments"],
+            operation: ["list"],
+          },
+          hide: { returnAll: [true] },
+        },
+      },
+      {
+        name: "after",
+        displayName: "After cursor",
+        type: "string",
+        expression: true,
+        default: "",
+        placeholder: "From previous run output.paging.cursors.after",
+        displayOptions: {
+          show: {
+            resource: ["post", "comments"],
+            operation: ["list"],
+            returnAll: [false],
+          },
+        },
+      },
+    ],
+
     googleAnalytics: [
       {
         name: "credentialId",

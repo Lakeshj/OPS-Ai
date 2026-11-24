@@ -232,6 +232,12 @@ const validateDefinition = (definition) => {
       } = require("../../services/workflowInstagram.service");
       node.data = sanitizeInstagramNodeData(node.data);
     }
+    if (type === "facebookPage" && node.data) {
+      const {
+        sanitizeFacebookPageNodeData,
+      } = require("../../services/workflowFacebookPage.service");
+      node.data = sanitizeFacebookPageNodeData(node.data);
+    }
   }
   const switchErrors = validateSwitchEdges(definition);
   if (switchErrors.length > 0) {

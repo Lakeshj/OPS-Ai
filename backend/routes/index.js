@@ -75,6 +75,7 @@ const {
   googleOAuthCallback,
   oauth2Callback,
   metaOAuthCallback,
+  facebookPageOAuthCallback,
   instagramOAuthCallback,
 } = require("../modules/workflows/workflows.controller");
 // Google redirects the browser at Express directly (not via Next /api rewrite).
@@ -85,6 +86,8 @@ router.get("/oauth2/callback", oauth2Callback);
 router.get("/api/oauth2/callback", oauth2Callback);
 router.get("/meta-oauth/callback", metaOAuthCallback);
 router.get("/api/meta-oauth/callback", metaOAuthCallback);
+router.get("/facebook-page-oauth/callback", facebookPageOAuthCallback);
+router.get("/api/facebook-page-oauth/callback", facebookPageOAuthCallback);
 router.get("/instagram-oauth/callback", instagramOAuthCallback);
 router.get("/api/instagram-oauth/callback", instagramOAuthCallback);
 

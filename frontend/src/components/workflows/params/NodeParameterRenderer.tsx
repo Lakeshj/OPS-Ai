@@ -54,6 +54,8 @@ import { Ga4FilterField } from "./Ga4FilterField";
 import { Ga4OrderByField } from "./Ga4OrderByField";
 import { DynamicMcpToolField } from "./DynamicMcpToolField";
 import { MetaAdAccountField } from "./MetaAdAccountField";
+import { FacebookPagePickerField } from "./FacebookPagePickerField";
+import { FacebookPagePostPickerField } from "./FacebookPagePostPickerField";
 import { MetaAdsFiltersField } from "./MetaAdsFiltersField";
 import type { KeywordAssistant, WorkspaceDocument } from "@/modules/shared/types";
 import type { GoogleAdsSourceNodeRef } from "@/modules/workflows/googleAdsMcpSource";
@@ -309,6 +311,24 @@ function renderSpecial(
     case "metaAdAccount":
       return (
         <MetaAdAccountField
+          key={param.name}
+          param={param}
+          values={values}
+          onChange={onChange}
+        />
+      );
+    case "facebookPagePicker":
+      return (
+        <FacebookPagePickerField
+          key={param.name}
+          param={param}
+          values={values}
+          onChange={onChange}
+        />
+      );
+    case "facebookPagePostPicker":
+      return (
+        <FacebookPagePostPickerField
           key={param.name}
           param={param}
           values={values}

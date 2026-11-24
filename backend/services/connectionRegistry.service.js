@@ -89,6 +89,7 @@ const {
 } = require("../config/googleNativeAuthPolicy");
 const metaGraph = require("../config/metaGraph");
 const instagramGraph = require("../config/instagramGraph");
+const facebookPageGraph = require("../config/facebookPageGraph");
 
 const googleOAuthDef = (product, scopes) => ({
   product,
@@ -239,6 +240,28 @@ const PREDEFINED = Object.freeze([
     },
     testConnection: { kind: "instagram" },
     search: ["instagram", "ig", "meta", "oauth"],
+  },
+  {
+    id: "facebook_page",
+    displayName: "Facebook Page",
+    provider: "Facebook",
+    category: "Meta",
+    authScheme: "oauth2_bearer",
+    kind: KIND.PREDEFINED,
+    status: STATUS.SUPPORTED,
+    dbType: "facebook_page",
+    allowedDomains: ["graph.facebook.com", "www.facebook.com"],
+    requestApplication: { type: "bearer" },
+    oauth: {
+      product: "facebook_page",
+      nativeAuthPolicy: "PLATFORM_MANAGED_ONLY",
+      authorizationUrl: facebookPageGraph.dialogUrl(),
+      tokenUrl: facebookPageGraph.tokenUrl(),
+      defaultScopes: [...facebookPageGraph.OAUTH_SCOPES],
+      refresh: "reconnect",
+    },
+    testConnection: { kind: "facebook_page" },
+    search: ["facebook", "page", "organic", "meta", "oauth"],
   },
 ]);
 

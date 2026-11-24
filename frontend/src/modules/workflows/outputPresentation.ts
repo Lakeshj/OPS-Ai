@@ -19,12 +19,21 @@ import {
   resolveMetaAdsOutputPresentation,
   type MetaAdsReadableBlock,
 } from "./metaAdsOutputPresentation";
+import {
+  isFacebookPageOutputJson,
+  resolveFacebookPageOutputPresentation,
+  type FacebookPageReadableBlock,
+} from "./facebookPageOutputPresentation";
 
-export type OutputPresentationProvider = "instagram" | "meta_ads";
+export type OutputPresentationProvider =
+  | "instagram"
+  | "meta_ads"
+  | "facebook_page";
 
 export type OutputReadableBlock =
   | InstagramReadableBlock
-  | MetaAdsReadableBlock;
+  | MetaAdsReadableBlock
+  | FacebookPageReadableBlock;
 
 type PresentationShape =
   | "root"
@@ -60,6 +69,10 @@ export type ResolvedOutputPresentation =
       blocks: MetaAdsReadableBlock[];
       /** Optional Meta Ads node `output` envelope (presentation/metrics). */
       metaAdsOutput?: Record<string, unknown> | null;
+    })
+  | (PresentationBase & {
+      provider: "facebook_page";
+      blocks: FacebookPageReadableBlock[];
     });
 
 const WRAPPER_KEYS = ["result", "data", "output", "items"] as const;
@@ -182,6 +195,27 @@ function buildMetaAdsResolved(
   };
 }
 
+function buildFacebookPageResolved(
+  items: Record<string, unknown>[],
+  shape: PresentationShape,
+  original: unknown
+): ResolvedOutputPresentation | null {
+  if (!items.length || !items.every((row) => isFacebookPageOutputJson(row))) {
+    return null;
+  }
+  const resolved = resolveFacebookPageOutputPresentation({ items });
+  if (!resolved?.blocks?.length) return null;
+  return {
+    provider: "facebook_page",
+    items,
+    workflowItems: toWorkflowItems(items),
+    shape,
+    original,
+    blocks: resolved.blocks,
+    summaryText: resolved.summaryText,
+  };
+}
+
 function buildResolved(
   items: Record<string, unknown>[],
   shape: PresentationShape,
@@ -190,7 +224,8 @@ function buildResolved(
 ): ResolvedOutputPresentation | null {
   return (
     buildInstagramResolved(items, shape, original) ||
-    buildMetaAdsResolved(items, shape, original, outputEnvelope)
+    buildMetaAdsResolved(items, shape, original, outputEnvelope) ||
+    buildFacebookPageResolved(items, shape, original)
   );
 }
 
@@ -263,7 +298,11 @@ export function resolveOutputPresentation(
   if (!json) return null;
 
   // Direct root item.
-  if (isInstagramOutputJson(json) || isMetaAdsOutputJson(json)) {
+  if (
+    isInstagramOutputJson(json) ||
+    isMetaAdsOutputJson(json) ||
+    isFacebookPageOutputJson(json)
+  ) {
     return buildResolved([json], "root", value);
   }
 
@@ -294,7 +333,9 @@ export function resolveOutputPresentation(
     const nestedJson = asPresentationJson(nested);
     if (
       nestedJson &&
-      (isInstagramOutputJson(nestedJson) || isMetaAdsOutputJson(nestedJson))
+      (isInstagramOutputJson(nestedJson) ||
+        isMetaAdsOutputJson(nestedJson) ||
+        isFacebookPageOutputJson(nestedJson))
     ) {
       return buildResolved([nestedJson], key, value);
     }
@@ -311,4 +352,9 @@ export function hasInstagramPresentation(value: unknown): boolean {
 /** True when value (or a safe wrapper) is Meta Ads presentation-eligible. */
 export function hasMetaAdsPresentation(value: unknown): boolean {
   return resolveOutputPresentation(value)?.provider === "meta_ads";
+}
+
+/** True when value (or a safe wrapper) is Facebook Page presentation-eligible. */
+export function hasFacebookPagePresentation(value: unknown): boolean {
+  return resolveOutputPresentation(value)?.provider === "facebook_page";
 }

@@ -742,6 +742,24 @@
       ]
     },
     {
+      "id": "facebook-page",
+      "name": "Facebook Page",
+      "category": "Marketing",
+      "type": "Action",
+      "description": "Organic Facebook Page: get Page, list/get posts, comments, insights, and text/link publishing.",
+      "icon": "share",
+      "provider": "Meta",
+      "available": true,
+      "engineType": "facebookPage",
+      "aliases": [
+        "facebook page",
+        "fb page",
+        "facebook posts",
+        "page insights",
+        "facebook organic"
+      ]
+    },
+    {
       "id": "instagram-mcp-tools",
       "name": "Instagram MCP Tools",
       "category": "Marketing",

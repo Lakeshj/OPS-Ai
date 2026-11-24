@@ -36,6 +36,11 @@ const {
   startMetaOAuth,
   listMetaAdAccounts,
   selectMetaAdAccount,
+  startFacebookPageOAuth,
+  getFacebookPageOAuthStatus,
+  listFacebookPages,
+  selectFacebookPage,
+  listFacebookPagePostOptions,
   startInstagramOAuth,
   getInstagramOAuthStatus,
   listInstagramAccounts,
@@ -90,6 +95,14 @@ router.get("/connection-types", listConnectionTypes);
 router.post("/google-oauth/start", startGoogleOAuth);
 router.post("/meta-oauth/start", startMetaOAuth);
 router.get("/meta-oauth/ad-accounts", listMetaAdAccounts);
+router.post("/facebook-page-oauth/start", startFacebookPageOAuth);
+router.get("/facebook-page-oauth/status", getFacebookPageOAuthStatus);
+router.get("/facebook-page-oauth/pages", listFacebookPages);
+router.get("/facebook-page/post-options", listFacebookPagePostOptions);
+router.post(
+  "/credentials/:credentialId/facebook-page",
+  selectFacebookPage
+);
 router.post("/instagram-oauth/start", startInstagramOAuth);
 router.get("/instagram-oauth/status", getInstagramOAuthStatus);
 router.get("/instagram-oauth/accounts", listInstagramAccounts);

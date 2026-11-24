@@ -3316,6 +3316,12 @@ const handlers = {
     const { executeInstagramNode } = require("./workflowInstagram.service");
     return executeInstagramNode(node, context);
   },
+  facebookPage: async (node, context) => {
+    const {
+      executeFacebookPageNode,
+    } = require("./workflowFacebookPage.service");
+    return executeFacebookPageNode(node, context);
+  },
   gmail: async (node, context) => {
     const { executeGoogleNode } = require("./workflowGoogleNodes.service");
     return executeGoogleNode(node, context);

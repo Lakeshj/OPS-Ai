@@ -166,7 +166,9 @@ export type ParamCustomRenderer =
   | "instagramMediaLocator"
   | "instagramCommentLocator"
   | "instagramPublishMedia"
-  | "instagramInsightsNotice";
+  | "instagramInsightsNotice"
+  | "facebookPagePicker"
+  | "facebookPagePostPicker";
 
 export interface DisplayOptions {
   show?: Record<string, Array<string | number | boolean>>;
@@ -2192,6 +2194,28 @@ export const NODE_CONTRACTS: Record<WorkflowNodeType, NodeContract> = {
       "Uses instagram credential and instagramUserId from OAuth",
       "Writes use Instagram-only POST path; never Meta Ads client",
       "Comment webhooks are not implemented in M6",
+    ],
+  },
+
+  facebookPage: {
+    type: "facebookPage",
+    version: 1,
+    category: "Marketing",
+    label: "Facebook Page",
+    inputs: [mainIn()],
+    outputs: [mainOut, errorOut],
+    cardinality: "1-to-N",
+    pairedItemPolicy: "fanOut",
+    settings: SETTINGS_ACTION,
+    capabilities: CAP_ACTION,
+    isSideEffecting: true,
+    params: [],
+    dirtyTriggers: ["params", "edges", "pin", "disabled"],
+    edgeCases: [
+      "Organic Facebook Page: Get Page, posts, comments, insights, text/link publish",
+      "Uses facebook_page credential and selected pageId from OAuth discovery",
+      "Independent of Instagram Native and Meta Ads Native",
+      "Facebook MCP is out of scope for M9.1",
     ],
   },
 };

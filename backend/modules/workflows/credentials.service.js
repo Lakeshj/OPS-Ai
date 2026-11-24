@@ -33,12 +33,14 @@ const GOOGLE_CREDENTIAL_TYPES = new Set([
 
 const META_CREDENTIAL_TYPES = new Set(["meta_ads"]);
 const INSTAGRAM_CREDENTIAL_TYPES = new Set(["instagram"]);
+const FACEBOOK_PAGE_CREDENTIAL_TYPES = new Set(["facebook_page"]);
 
 const CREDENTIAL_TYPES = new Set([
   ...HTTP_CREDENTIAL_TYPES,
   ...GOOGLE_CREDENTIAL_TYPES,
   ...META_CREDENTIAL_TYPES,
   ...INSTAGRAM_CREDENTIAL_TYPES,
+  ...FACEBOOK_PAGE_CREDENTIAL_TYPES,
 ]);
 
 const parseConfig = (raw) => oauth2.parseConfig(raw);
@@ -67,13 +69,19 @@ const formatCredential = (row) => {
   const isOauth2 = row.type === "oauth2";
   const isMetaAds = row.type === "meta_ads";
   const isInstagram = row.type === "instagram";
+  const isFacebookPage = row.type === "facebook_page";
   const sharingScope = normalizeSharingScope(cfg.sharingScope);
   const metaExpired =
     isMetaAds && cfg.expiresAt ? Date.parse(cfg.expiresAt) <= Date.now() : false;
   const igExpired =
     isInstagram && cfg.expiresAt ? Date.parse(cfg.expiresAt) <= Date.now() : false;
+  const fbExpired =
+    isFacebookPage && cfg.expiresAt
+      ? Date.parse(cfg.expiresAt) <= Date.now()
+      : false;
   const igReconnect =
     Boolean(cfg.reconnectRequired) || igExpired;
+  const fbReconnect = Boolean(cfg.reconnectRequired) || fbExpired;
   return {
     id: row.id,
     workspaceId: row.workspace_id,
@@ -96,14 +104,22 @@ const formatCredential = (row) => {
             : cfg.connected === undefined
               ? true
               : Boolean(cfg.connected)
-          : true,
+          : isFacebookPage
+            ? fbReconnect
+              ? false
+              : cfg.connected === undefined
+                ? true
+                : Boolean(cfg.connected)
+            : true,
     reconnectRequired: isGoogle
       ? Boolean(cfg.reconnectRequired)
       : isMetaAds
         ? Boolean(cfg.reconnectRequired) || metaExpired
         : isInstagram
           ? igReconnect
-          : undefined,
+          : isFacebookPage
+            ? fbReconnect
+            : undefined,
     reconnectSoon:
       isInstagram && cfg.expiresAt && !igReconnect
         ? Date.parse(cfg.expiresAt) - Date.now() <= 7 * 24 * 60 * 60 * 1000
@@ -121,19 +137,27 @@ const formatCredential = (row) => {
     workflowId:
       isGoogle && cfg.workflowId ? String(cfg.workflowId) : undefined,
     metaDisplayName:
-      isMetaAds && cfg.metaDisplayName
+      (isMetaAds || isFacebookPage) && cfg.metaDisplayName
         ? String(cfg.metaDisplayName)
         : undefined,
     metaUserId:
-      isMetaAds && cfg.metaUserId ? String(cfg.metaUserId) : undefined,
+      (isMetaAds || isFacebookPage) && cfg.metaUserId
+        ? String(cfg.metaUserId)
+        : undefined,
     expiresAt:
-      (isMetaAds || isInstagram) && cfg.expiresAt
+      (isMetaAds || isInstagram || isFacebookPage) && cfg.expiresAt
         ? String(cfg.expiresAt)
         : undefined,
     selectedAdAccountId:
       isMetaAds && cfg.selectedAdAccountId
         ? String(cfg.selectedAdAccountId)
         : undefined,
+    selectedPageId:
+      isFacebookPage && cfg.selectedPageId
+        ? String(cfg.selectedPageId)
+        : undefined,
+    pages:
+      isFacebookPage && Array.isArray(cfg.pages) ? cfg.pages : undefined,
     instagramUserId:
       isInstagram && cfg.instagramUserId
         ? String(cfg.instagramUserId)
@@ -681,6 +705,7 @@ module.exports = {
   GOOGLE_CREDENTIAL_TYPES,
   META_CREDENTIAL_TYPES,
   INSTAGRAM_CREDENTIAL_TYPES,
+  FACEBOOK_PAGE_CREDENTIAL_TYPES,
   formatCredential,
   OAUTH_APP_MODE,
   validateGoogleCreate,

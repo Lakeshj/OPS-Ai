@@ -93,8 +93,8 @@ const FILES_GOOGLE_EMAIL = new Set<string>([
  */
 const SOCIAL_MCP = new Set<string>(["instagramMcpTool"]);
 
-/** Native Instagram (and siblings) — strong contrast on dark canvas. */
-const MARKETING = new Set<string>(["instagram"]);
+/** Native Instagram / Facebook Page — strong contrast on dark canvas. */
+const MARKETING = new Set<string>(["instagram", "facebookPage"]);
 
 const AI = new Set<string>([
   "ai",
@@ -215,6 +215,7 @@ const ICON_BY_TYPE: Record<string, LucideIcon> = {
   googleAds: BarChart3,
   metaAds: BarChart3,
   instagram: Camera,
+  facebookPage: Image,
   googleSheets: Sheet,
   gmail: Mail,
   email: Mail,
@@ -269,6 +270,7 @@ const FALLBACK_BLURBS: Record<string, string> = {
   googleAds: "Run a read-only Ads report",
   metaAds: "Read Meta Ads accounts, delivery, and paid insights",
   instagram: "Read, publish, and reply to Instagram content",
+  facebookPage: "Organic Facebook Page posts, comments, and insights",
   googleSheets: "Read or write Sheets",
   gmail: "Send or read Gmail",
   email: "Send an email",

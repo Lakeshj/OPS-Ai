@@ -178,6 +178,71 @@ const startMetaOAuth = asyncHandler(async (req, res) => {
   );
 });
 
+const startFacebookPageOAuth = asyncHandler(async (req, res) => {
+  const facebookPageOAuth = require("../../services/facebookPageOAuth.service");
+  res.json(
+    await facebookPageOAuth.startFacebookPageOAuth(
+      {
+        workspaceId: req.body?.workspaceId,
+        name: req.body?.name,
+        credentialId: req.body?.credentialId,
+      },
+      req.user
+    )
+  );
+});
+
+const facebookPageOAuthCallback = asyncHandler(async (req, res) => {
+  const facebookPageOAuth = require("../../services/facebookPageOAuth.service");
+  const html = await facebookPageOAuth.handleFacebookPageOAuthCallback(
+    req.query || {}
+  );
+  res.setHeader("Content-Type", "text/html; charset=utf-8");
+  res.send(html);
+});
+
+const listFacebookPages = asyncHandler(async (req, res) => {
+  const facebookPageOAuth = require("../../services/facebookPageOAuth.service");
+  res.json(
+    await facebookPageOAuth.listFacebookPages(
+      req.query?.credentialId || req.query?.credential_id,
+      req.user
+    )
+  );
+});
+
+const selectFacebookPage = asyncHandler(async (req, res) => {
+  const facebookPageOAuth = require("../../services/facebookPageOAuth.service");
+  res.json(
+    await facebookPageOAuth.selectFacebookPage(
+      req.params.credentialId,
+      req.body?.pageId,
+      req.user
+    )
+  );
+});
+
+const listFacebookPagePostOptions = asyncHandler(async (req, res) => {
+  const {
+    listFacebookPagePostOptions: listPosts,
+  } = require("../../services/workflowFacebookPage.service");
+  res.json(
+    await listPosts(
+      req.query?.credentialId,
+      req.query?.pageId,
+      req.user,
+      { limit: req.query?.limit }
+    )
+  );
+});
+
+const getFacebookPageOAuthStatus = asyncHandler(async (req, res) => {
+  const {
+    getFacebookPageIntegrationStatus,
+  } = require("../../config/facebookPageGraph");
+  res.json(getFacebookPageIntegrationStatus());
+});
+
 const metaOAuthCallback = asyncHandler(async (req, res) => {
   const metaOAuth = require("../../services/metaOAuth.service");
   try {
@@ -1108,6 +1173,12 @@ module.exports = {
   startGoogleOAuth,
   startMetaOAuth,
   metaOAuthCallback,
+  startFacebookPageOAuth,
+  facebookPageOAuthCallback,
+  listFacebookPages,
+  selectFacebookPage,
+  listFacebookPagePostOptions,
+  getFacebookPageOAuthStatus,
   startInstagramOAuth,
   getInstagramOAuthStatus,
   instagramOAuthCallback,

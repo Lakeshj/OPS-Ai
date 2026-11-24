@@ -513,6 +513,76 @@ export const workflowCredentialsApi = {
       { adAccountId }
     ),
 
+  startFacebookPageOAuth: (payload: {
+    workspaceId: string;
+    name?: string;
+    credentialId?: string;
+  }) =>
+    apiClient.post<{
+      url: string;
+      callbackOrigin: string;
+      redirectUri?: string;
+      scopes?: string[];
+      apiVersion?: string;
+    }>("/workflows/facebook-page-oauth/start", payload),
+
+  getFacebookPageOAuthStatus: () =>
+    apiClient.get<{
+      facebookPageIntegrationConfigured: boolean;
+      missingConfigKeys: string[];
+      preferredEnvKeys?: string[];
+      sharedProviderFallbackKeys?: string[];
+      redirectUriConfigured?: boolean;
+      resolvedRedirectUri?: string;
+      oauthScopesConfigured?: string[];
+      apiVersion?: string;
+    }>("/workflows/facebook-page-oauth/status"),
+
+  listFacebookPages: (credentialId: string) =>
+    apiClient.get<{
+      apiVersion?: string;
+      metaUserId?: string;
+      metaDisplayName?: string;
+      selectedPageId?: string;
+      pages: Array<{
+        pageId: string;
+        pageName?: string;
+        category?: string;
+        username?: string;
+        link?: string;
+        fanCount?: number | null;
+        followersCount?: number | null;
+        pictureUrl?: string | null;
+        tasks?: string[];
+      }>;
+    }>(
+      `/workflows/facebook-page-oauth/pages?credentialId=${encodeURIComponent(credentialId)}`
+    ),
+
+  selectFacebookPage: (credentialId: string, pageId: string) =>
+    apiClient.post<{ pageId: string }>(
+      `/workflows/credentials/${credentialId}/facebook-page`,
+      { pageId }
+    ),
+
+  listFacebookPagePostOptions: (
+    credentialId: string,
+    pageId: string,
+    limit = 10
+  ) =>
+    apiClient.get<{
+      pageId: string;
+      posts: Array<{
+        postId: string;
+        label: string;
+        createdTime?: string | null;
+        permalinkUrl?: string;
+      }>;
+      paging?: unknown;
+    }>(
+      `/workflows/facebook-page/post-options?credentialId=${encodeURIComponent(credentialId)}&pageId=${encodeURIComponent(pageId)}&limit=${encodeURIComponent(String(limit))}`
+    ),
+
   startInstagramOAuth: (payload: {
     workspaceId: string;
     name?: string;
