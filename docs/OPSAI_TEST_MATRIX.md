@@ -30,7 +30,7 @@ Run the **affected family**, not everything.
 | GSC MCP | `test:gsc-mcp` + GSC-SORT if analytics order |
 | GA4 native/MCP | `test:ga4-mcp`; `smoke-workflow-ga4-ai-grounding.js` if grounding |
 | Google Ads | `smoke-workflow-google-ads-v1.js`, `smoke-workflow-google-ads-mcp.js`, `plugins/google-ads-mcp` smoke |
-| Meta Ads | `smoke-workflow-meta-ads-m2.js` … `m6.js`; M8.18 Native platformScope/resources: `node scripts/smoke-workflow-meta-ads-m818.js`; M8.18.1 presentation: `cd frontend && npx tsx scripts/smoke-meta-ads-m8181.ts`; `plugins/meta-ads-mcp` smoke |
+| Meta Ads | `smoke-workflow-meta-ads-m2.js` … `m6.js`; M8.18 Native: `node scripts/smoke-workflow-meta-ads-m818.js`; M8.18.1 presentation: `cd frontend && npx tsx scripts/smoke-meta-ads-m8181.ts`; M8.18.2 data-path: `node scripts/smoke-workflow-meta-ads-m8182.js` (+ optional live `node scripts/diagnose-meta-ads-m8182.js`); `plugins/meta-ads-mcp` smoke |
 | Instagram | M2: `node scripts/smoke-workflow-instagram-m2.js`; M2.1: `node scripts/smoke-workflow-instagram-m21.js`; M3: `node scripts/smoke-workflow-instagram-m3.js`; M4: `node scripts/smoke-workflow-instagram-m4.js`; M5: `node scripts/smoke-workflow-instagram-m5.js`; M6: `node scripts/smoke-workflow-instagram-m6.js`; M7: `node scripts/smoke-workflow-instagram-m7.js` + `plugins/instagram-mcp` smoke; M7.1 UX: `node scripts/smoke-workflow-instagram-m71.js` |
 | Inspector display | inspector smoke + `tsc --noEmit` |
 | Expressions / items / `$first` | engine file that owns the smoke; do not skip if item order changed |

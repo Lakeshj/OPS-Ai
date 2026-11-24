@@ -567,9 +567,17 @@ const buildInsightsQuery = ({
   const filtering = buildFiltering(reportType, normalized);
   const size = Math.min(Math.max(Number(pageSize) || PAGE_SIZE, 1), PAGE_SIZE);
   const fields = fieldsFor(reportType).slice();
+  // Breakdown dimensions are requested via `breakdowns=`, never as Insights fields.
+  // Meta rejects e.g. publisher_platform in the fields param (#100).
+  const breakdownSet = new Set(
+    (Array.isArray(breakdowns) ? breakdowns : []).map((entry) =>
+      String(entry || "").trim()
+    ).filter(Boolean)
+  );
   for (const extra of Array.isArray(extraFields) ? extraFields : []) {
     const name = String(extra || "").trim();
-    if (name && !fields.includes(name)) fields.push(name);
+    if (!name || breakdownSet.has(name)) continue;
+    if (!fields.includes(name)) fields.push(name);
   }
   const query = {
     level: report.level,

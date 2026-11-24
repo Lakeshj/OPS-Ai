@@ -100,7 +100,13 @@ const normalizeAdAccountId = (raw) => {
 
 const adAccountPath = (raw) => `act_${normalizeAdAccountId(raw)}`;
 
-const appSecretProof = (accessToken, nowMs = hooks.now()) => {
+/**
+ * Meta appsecret_proof for Graph calls.
+ * Use the classic untied proof (HMAC of access token only). Timed proofs
+ * (`token|appsecret_time`) fail when the local clock is ahead of Meta
+ * ("Invalid appsecret_time … future timestamp").
+ */
+const appSecretProof = (accessToken, _nowMs = hooks.now()) => {
   const { appSecret } = appCredentials();
   if (!appSecret) {
     throw metaError(
@@ -109,12 +115,11 @@ const appSecretProof = (accessToken, nowMs = hooks.now()) => {
       500
     );
   }
-  const appSecretTime = String(Math.floor(Number(nowMs) / 1000));
   const proof = crypto
     .createHmac("sha256", appSecret)
-    .update(`${accessToken}|${appSecretTime}`)
+    .update(String(accessToken || ""))
     .digest("hex");
-  return { appsecret_proof: proof, appsecret_time: appSecretTime };
+  return { appsecret_proof: proof };
 };
 
 const mapMetaError = (status, body) => {
@@ -296,7 +301,9 @@ const metaGraphRequest = async ({
   }
   params.set("access_token", token);
   params.set("appsecret_proof", proof.appsecret_proof);
-  params.set("appsecret_time", proof.appsecret_time);
+  if (proof.appsecret_time) {
+    params.set("appsecret_time", proof.appsecret_time);
+  }
   const url = `${graphBaseUrl()}/${String(path || "").replace(/^\//, "")}?${params.toString()}`;
   const transport = hooks.transport || defaultTransport;
   let res;
@@ -412,6 +419,14 @@ const normalizeInsightsRow = (row, provenance = {}) => {
   const allowed = new Set(fieldsFor(fieldReportType));
   for (const extra of Array.isArray(provenance.extraFields) ? provenance.extraFields : []) {
     const name = String(extra || "").trim();
+    if (name) allowed.add(name);
+  }
+  // Breakdown dimensions are returned by Meta when `breakdowns=` is set;
+  // they must not be requested as Insights `fields`, but we keep them here.
+  for (const breakdown of Array.isArray(provenance.breakdowns)
+    ? provenance.breakdowns
+    : []) {
+    const name = String(breakdown || "").trim();
     if (name) allowed.add(name);
   }
   const json = {};
@@ -1199,7 +1214,8 @@ const executeInsights = async ({
     pageSize: limits.pageSize,
     returnAll: limits.returnAll,
     breakdowns,
-    extraFields: breakdowns,
+    // Do not pass breakdown names as Insights fields — Meta rejects
+    // publisher_platform (and peers) in the fields param.
   });
   let rawRows = fetched.rows;
   if (!legacyReport && (platformScope === "facebook" || platformScope === "instagram")) {
@@ -1214,7 +1230,6 @@ const executeInsights = async ({
     until: range.until,
     timezone: range.timezone,
     breakdowns,
-    extraFields: breakdowns,
     truncated: fetched.truncated,
   };
   const normalized = rawRows.map((row) => normalizeInsightsRow(row, provenance));

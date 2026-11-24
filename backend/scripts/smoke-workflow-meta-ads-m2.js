@@ -422,12 +422,14 @@ const registerMetaAdsM2Tests = ({ check, section, assert: a }) => {
         }
       );
     });
+    // Untied proof (HMAC of access token only) — avoids Meta rejecting
+    // timed proofs when the local clock is ahead ("future timestamp").
     const expected = crypto
       .createHmac("sha256", APP_SECRET)
-      .update(`${LONG}|${proofTime}`)
+      .update(LONG)
       .digest("hex");
     assertX.equal(proof, expected);
-    assertX.equal(proofTime, "1700000000");
+    assertX.equal(proofTime, "");
     assertX.equal(proof.includes(LONG), false);
   });
 
