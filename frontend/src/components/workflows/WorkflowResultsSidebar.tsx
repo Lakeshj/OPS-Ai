@@ -23,6 +23,7 @@ import {
   WorkflowProseContent,
 } from "./WorkflowProseContent";
 import { InstagramOutputPreview } from "./InstagramOutputPreview";
+import { MetaAdsOutputPreview } from "./MetaAdsOutputPreview";
 import { resolveOutputPresentation } from "@/modules/workflows/outputPresentation";
 import { prettyJson } from "@/modules/workflows/inspectorViewModel";
 
@@ -139,8 +140,15 @@ function StepDetails({
   const incomingIds = Object.keys(incoming);
   const outputSummary =
     step.output != null ? formatStepOutput(step.output) : "";
+  const outputPresentation =
+    step.output != null ? resolveOutputPresentation(step.output) : null;
+  const showPresentedOutput =
+    outputPresentation?.provider === "instagram" ||
+    outputPresentation?.provider === "meta_ads";
   const showProseOutput =
-    Boolean(outputSummary) && looksLikeMarkdownProse(outputSummary);
+    Boolean(outputSummary) &&
+    !showPresentedOutput &&
+    looksLikeMarkdownProse(outputSummary);
 
   return (
     <div className="mt-2 border-t pt-2">
@@ -222,6 +230,28 @@ function StepDetails({
             </div>
             <JsonBlock value={input.contextInput ?? null} />
           </div>
+        </div>
+      ) : showPresentedOutput && outputPresentation ? (
+        <div className="space-y-2">
+          {outputPresentation.provider === "instagram" ? (
+            <InstagramOutputPreview
+              value={step.output}
+              items={outputPresentation.workflowItems}
+              showTechnicalHint={false}
+              className="rounded-md border border-border/60 bg-background/50 px-3 py-2"
+            />
+          ) : (
+            <MetaAdsOutputPreview
+              value={step.output}
+              items={outputPresentation.workflowItems}
+              showTechnicalHint={false}
+              className="rounded-md border border-border/60 bg-background/50 px-3 py-2"
+            />
+          )}
+          <details className="text-[10px] text-muted-foreground">
+            <summary className="cursor-pointer">Raw JSON</summary>
+            <JsonBlock value={step.output ?? null} />
+          </details>
         </div>
       ) : showProseOutput ? (
         <div className="space-y-2">
@@ -412,14 +442,24 @@ export function WorkflowResultsPanel({
                     label="final result"
                   />
                 </div>
-                {finalPresentation?.provider === "instagram" ? (
+                {finalPresentation?.provider === "instagram" ||
+                finalPresentation?.provider === "meta_ads" ? (
                   <div className="space-y-2">
-                    <InstagramOutputPreview
-                      value={latestRun?.output}
-                      items={finalPresentation.workflowItems}
-                      showTechnicalHint={false}
-                      className="rounded-md border border-border/60 bg-background/50 px-3 py-2"
-                    />
+                    {finalPresentation.provider === "instagram" ? (
+                      <InstagramOutputPreview
+                        value={latestRun?.output}
+                        items={finalPresentation.workflowItems}
+                        showTechnicalHint={false}
+                        className="rounded-md border border-border/60 bg-background/50 px-3 py-2"
+                      />
+                    ) : (
+                      <MetaAdsOutputPreview
+                        value={latestRun?.output}
+                        items={finalPresentation.workflowItems}
+                        showTechnicalHint={false}
+                        className="rounded-md border border-border/60 bg-background/50 px-3 py-2"
+                      />
+                    )}
                     {finalRawJson ? (
                       <details className="rounded-md border border-border/50 bg-muted/30">
                         <summary className="cursor-pointer px-2 py-1.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">

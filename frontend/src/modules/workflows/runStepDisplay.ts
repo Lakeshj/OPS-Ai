@@ -132,7 +132,7 @@ function unwrapMessageJson(value: string): string {
 
 function summarizeBusinessFields(obj: Record<string, unknown>): string | null {
   const presented = resolveOutputPresentation(obj);
-  if (presented?.provider === "instagram") {
+  if (presented?.provider === "instagram" || presented?.provider === "meta_ads") {
     return presented.summaryText;
   }
   const ig = summarizeInstagramOutput(obj);
@@ -258,7 +258,7 @@ export function formatStepOutput(output: unknown): string {
   if (typeof obj.text === "string" && obj.text.trim()) return obj.text;
 
   const presented = resolveOutputPresentation(obj);
-  if (presented?.provider === "instagram") {
+  if (presented?.provider === "instagram" || presented?.provider === "meta_ads") {
     return presented.summaryText;
   }
 

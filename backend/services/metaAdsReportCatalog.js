@@ -148,6 +148,131 @@ const MAX_PAGES = 20;
 const MAX_IDS_PER_FILTER = 50;
 const MAX_LOOKBACK_MONTHS = 37;
 
+/** Native entity list/get (campaigns / ad sets / ads) — bounded by default. */
+const DEFAULT_ENTITY_LIMIT = 25;
+const MAX_ENTITY_LIMIT = 200;
+const MAX_ENTITY_RETURN_ALL = 500;
+const ENTITY_PAGE_SIZE = 25;
+const MAX_ENTITY_PAGES = 20;
+
+const PLATFORM_SCOPE_OPTIONS = Object.freeze([
+  Object.freeze({ name: "All Meta", value: "all" }),
+  Object.freeze({ name: "Facebook", value: "facebook" }),
+  Object.freeze({ name: "Instagram", value: "instagram" }),
+]);
+
+const NATIVE_RESOURCES = Object.freeze([
+  Object.freeze({ name: "Ad Account", value: "adAccount" }),
+  Object.freeze({ name: "Campaign", value: "campaign" }),
+  Object.freeze({ name: "Ad Set", value: "adSet" }),
+  Object.freeze({ name: "Ad", value: "ad" }),
+  Object.freeze({ name: "Insights", value: "insights" }),
+  Object.freeze({ name: "Delivery", value: "delivery" }),
+  /** Legacy alias kept for saved workflows. */
+  Object.freeze({ name: "Report (legacy)", value: "report" }),
+]);
+
+const ENTITY_FIELDS = Object.freeze({
+  campaign: Object.freeze([
+    "id",
+    "name",
+    "objective",
+    "status",
+    "effective_status",
+    "created_time",
+    "updated_time",
+  ]),
+  adSet: Object.freeze([
+    "id",
+    "name",
+    "campaign_id",
+    "status",
+    "effective_status",
+    "optimization_goal",
+    "billing_event",
+    "daily_budget",
+    "lifetime_budget",
+    "start_time",
+    "end_time",
+  ]),
+  ad: Object.freeze([
+    "id",
+    "name",
+    "campaign_id",
+    "adset_id",
+    "status",
+    "effective_status",
+    "configured_status",
+    "issues_info",
+    "created_time",
+    "updated_time",
+  ]),
+  adAccount: Object.freeze([
+    "id",
+    "account_id",
+    "name",
+    "account_status",
+    "currency",
+    "timezone_name",
+    "business_name",
+    "amount_spent",
+    "balance",
+  ]),
+});
+
+const DELIVERY_STATUS_LABELS = Object.freeze({
+  ACTIVE: "Active",
+  PAUSED: "Paused",
+  DELETED: "Deleted",
+  ARCHIVED: "Archived",
+  IN_PROCESS: "In Review",
+  WITH_ISSUES: "With Issues",
+  PENDING_REVIEW: "In Review",
+  DISAPPROVED: "Disapproved",
+  PREAPPROVED: "Preapproved",
+  PENDING_BILLING_INFO: "Pending Billing",
+  CAMPAIGN_PAUSED: "Campaign Paused",
+  ADSET_PAUSED: "Ad Set Paused",
+  SCHEDULED: "Scheduled",
+  COMPLETED: "Completed",
+});
+
+const entityRowLimits = ({ limit, returnAll } = {}) => {
+  const all = returnAll === true || returnAll === "true";
+  const requested = Number(limit);
+  const ceiling = all ? MAX_ENTITY_RETURN_ALL : MAX_ENTITY_LIMIT;
+  const maxRows = all
+    ? ceiling
+    : Math.min(
+        Math.max(
+          Number.isFinite(requested) && requested > 0
+            ? Math.floor(requested)
+            : DEFAULT_ENTITY_LIMIT,
+          1
+        ),
+        ceiling
+      );
+  return {
+    returnAll: all,
+    maxRows,
+    maxPages: MAX_ENTITY_PAGES,
+    pageSize: ENTITY_PAGE_SIZE,
+  };
+};
+
+const deliveryStatusLabel = (raw) => {
+  const key = String(raw || "").trim().toUpperCase();
+  if (!key) return null;
+  if (Object.prototype.hasOwnProperty.call(DELIVERY_STATUS_LABELS, key)) {
+    return DELIVERY_STATUS_LABELS[key];
+  }
+  return key
+    .toLowerCase()
+    .split("_")
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+};
+
 const catalogError = (message, code) => new AppError(message, 400, code);
 
 const reportFor = (reportType) => {
@@ -485,6 +610,15 @@ module.exports = {
   MAX_ROWS,
   MAX_PAGES,
   MAX_LOOKBACK_MONTHS,
+  DEFAULT_ENTITY_LIMIT,
+  MAX_ENTITY_LIMIT,
+  MAX_ENTITY_RETURN_ALL,
+  ENTITY_PAGE_SIZE,
+  MAX_ENTITY_PAGES,
+  PLATFORM_SCOPE_OPTIONS,
+  NATIVE_RESOURCES,
+  ENTITY_FIELDS,
+  DELIVERY_STATUS_LABELS,
   ALLOWED_BREAKDOWNS,
   SCOPE_TO_REPORT,
   DEMOGRAPHIC_MODES,
@@ -500,4 +634,6 @@ module.exports = {
   resolveScopeReport,
   buildInsightsQuery,
   rowLimits,
+  entityRowLimits,
+  deliveryStatusLabel,
 };

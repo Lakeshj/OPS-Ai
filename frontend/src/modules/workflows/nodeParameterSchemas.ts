@@ -2423,39 +2423,205 @@ export const NODE_PARAMETER_SCHEMAS: Record<WorkflowNodeType, ParamDescriptor[]>
         credentialTypes: ["meta_ads"],
       },
       {
+        name: "platformScope",
+        displayName: "Platform",
+        type: "options",
+        default: "all",
+        description:
+          "Paid media reporting scope across Meta. Not an organic account selector.",
+        options: [
+          { name: "All Meta", value: "all" },
+          { name: "Facebook", value: "facebook" },
+          { name: "Instagram", value: "instagram" },
+        ],
+      },
+      {
         name: "adAccountId",
         displayName: "Ad Account",
         type: "string",
         required: true,
         customRenderer: "metaAdAccount",
         description: "Accessible ad accounts for the selected Meta login.",
+        displayOptions: {
+          showAny: [
+            {
+              resource: [
+                "campaign",
+                "adSet",
+                "ad",
+                "insights",
+                "report",
+                "delivery",
+              ],
+            },
+            { resource: ["adAccount"], operation: ["get"] },
+          ],
+        },
       },
       {
         name: "resource",
         displayName: "Resource",
         type: "options",
-        default: "report",
-        options: [{ name: "Report", value: "report" }],
+        default: "insights",
+        options: [
+          { name: "Ad Account", value: "adAccount" },
+          { name: "Campaign", value: "campaign" },
+          { name: "Ad Set", value: "adSet" },
+          { name: "Ad", value: "ad" },
+          { name: "Insights", value: "insights" },
+          { name: "Delivery", value: "delivery" },
+          { name: "Report (legacy)", value: "report" },
+        ],
       },
       {
         name: "operation",
         displayName: "Operation",
         type: "options",
         default: "runReport",
-        options: [{ name: "Run Report", value: "runReport" }],
+        options: [
+          {
+            name: "Get Account",
+            value: "get",
+            displayOptions: { show: { resource: ["adAccount"] } },
+          },
+          {
+            name: "List Accessible Accounts",
+            value: "listAccessible",
+            displayOptions: { show: { resource: ["adAccount"] } },
+          },
+          {
+            name: "List Campaigns",
+            value: "list",
+            displayOptions: { show: { resource: ["campaign"] } },
+          },
+          {
+            name: "Get Campaign",
+            value: "get",
+            displayOptions: { show: { resource: ["campaign"] } },
+          },
+          {
+            name: "List Ad Sets",
+            value: "list",
+            displayOptions: { show: { resource: ["adSet"] } },
+          },
+          {
+            name: "Get Ad Set",
+            value: "get",
+            displayOptions: { show: { resource: ["adSet"] } },
+          },
+          {
+            name: "List Ads",
+            value: "list",
+            displayOptions: { show: { resource: ["ad"] } },
+          },
+          {
+            name: "Get Ad",
+            value: "get",
+            displayOptions: { show: { resource: ["ad"] } },
+          },
+          {
+            name: "Run Report",
+            value: "runReport",
+            displayOptions: { show: { resource: ["insights", "report"] } },
+          },
+          {
+            name: "List Statuses",
+            value: "listStatuses",
+            displayOptions: { show: { resource: ["delivery"] } },
+          },
+        ],
+      },
+      {
+        name: "deliveryLevel",
+        displayName: "Level",
+        type: "options",
+        default: "campaign",
+        options: [
+          { name: "Campaign", value: "campaign" },
+          { name: "Ad Set", value: "adset" },
+          { name: "Ad", value: "ad" },
+        ],
+        displayOptions: { show: { resource: ["delivery"] } },
       },
       {
         name: "reportType",
-        displayName: "Report",
+        displayName: "Report / Level",
         type: "options",
         default: "campaign_performance",
-        required: true,
         options: [
           { name: "Account Performance", value: "account_performance" },
           { name: "Campaign Performance", value: "campaign_performance" },
           { name: "Ad Set Performance", value: "ad_set_performance" },
           { name: "Ad Performance", value: "ad_performance" },
         ],
+        displayOptions: { show: { resource: ["insights", "report"] } },
+      },
+      {
+        name: "campaignId",
+        displayName: "Campaign ID",
+        type: "string",
+        expression: true,
+        placeholder: "Numeric campaign id",
+        displayOptions: {
+          show: {
+            resource: ["campaign", "adSet", "ad", "delivery"],
+            operation: ["get", "list", "listStatuses"],
+          },
+        },
+      },
+      {
+        name: "adSetId",
+        displayName: "Ad Set ID",
+        type: "string",
+        expression: true,
+        placeholder: "Numeric ad set id",
+        displayOptions: {
+          show: {
+            resource: ["adSet", "ad"],
+            operation: ["get", "list"],
+          },
+        },
+      },
+      {
+        name: "adId",
+        displayName: "Ad ID",
+        type: "string",
+        expression: true,
+        placeholder: "Numeric ad id",
+        displayOptions: {
+          show: {
+            resource: ["ad"],
+            operation: ["get"],
+          },
+        },
+      },
+      {
+        name: "objective",
+        displayName: "Objective",
+        type: "string",
+        expression: true,
+        placeholder: "e.g. OUTCOME_LEADS",
+        description: "Optional Meta objective filter (list operations).",
+        displayOptions: {
+          show: {
+            resource: ["campaign", "delivery"],
+            operation: ["list", "listStatuses"],
+          },
+        },
+      },
+      {
+        name: "effectiveStatus",
+        displayName: "Status",
+        type: "string",
+        expression: true,
+        placeholder: "ACTIVE,PAUSED",
+        description: "Optional effective_status filter (comma-separated).",
+        displayOptions: {
+          show: {
+            resource: ["campaign", "adSet", "ad", "delivery"],
+            operation: ["list", "listStatuses"],
+          },
+        },
       },
       {
         name: "dateRange",
@@ -2472,6 +2638,7 @@ export const NODE_PARAMETER_SCHEMAS: Record<WorkflowNodeType, ParamDescriptor[]>
           { name: "Last month", value: "lastMonth" },
           { name: "Custom", value: "custom" },
         ],
+        displayOptions: { show: { resource: ["insights", "report"] } },
       },
       {
         name: "customStartDate",
@@ -2479,7 +2646,9 @@ export const NODE_PARAMETER_SCHEMAS: Record<WorkflowNodeType, ParamDescriptor[]>
         type: "string",
         expression: true,
         placeholder: "YYYY-MM-DD",
-        displayOptions: { show: { dateRange: ["custom"] } },
+        displayOptions: {
+          show: { resource: ["insights", "report"], dateRange: ["custom"] },
+        },
       },
       {
         name: "customEndDate",
@@ -2487,29 +2656,94 @@ export const NODE_PARAMETER_SCHEMAS: Record<WorkflowNodeType, ParamDescriptor[]>
         type: "string",
         expression: true,
         placeholder: "YYYY-MM-DD",
-        displayOptions: { show: { dateRange: ["custom"] } },
+        displayOptions: {
+          show: { resource: ["insights", "report"], dateRange: ["custom"] },
+        },
+      },
+      {
+        name: "platformBreakdown",
+        displayName: "Platform breakdown",
+        type: "boolean",
+        default: false,
+        description:
+          "When Platform is All Meta, break insights down by Facebook / Instagram publisher platform.",
+        displayOptions: {
+          show: {
+            resource: ["insights", "report"],
+            platformScope: ["all"],
+          },
+        },
       },
       {
         name: "filters",
         displayName: "Filters",
         type: "json",
         customRenderer: "metaAdsFilters",
+        displayOptions: { show: { resource: ["insights", "report"] } },
       },
       {
         name: "returnAll",
         displayName: "Return all",
         type: "boolean",
         default: false,
-        description: "Pages through results up to the safety ceiling.",
+        description:
+          "When off (default), returns only the Limit page. When on, pages up to the safety ceiling.",
+        displayOptions: {
+          showAny: [
+            { resource: ["insights", "report"] },
+            {
+              resource: ["adAccount"],
+              operation: ["listAccessible", "list"],
+            },
+            {
+              resource: ["campaign", "adSet", "ad", "delivery"],
+              operation: ["list", "listStatuses"],
+            },
+          ],
+        },
       },
       {
         name: "limit",
         displayName: "Limit",
         type: "number",
-        default: 100,
+        default: 25,
         min: 1,
         max: 2000,
-        displayOptions: { hide: { returnAll: [true] } },
+        description: "Max rows for this run (insights default 100 when legacy).",
+        displayOptions: {
+          showAny: [
+            { resource: ["insights", "report"] },
+            {
+              resource: ["adAccount"],
+              operation: ["listAccessible", "list"],
+            },
+            {
+              resource: ["campaign", "adSet", "ad", "delivery"],
+              operation: ["list", "listStatuses"],
+            },
+          ],
+          hide: { returnAll: [true] },
+        },
+      },
+      {
+        name: "after",
+        displayName: "After cursor",
+        type: "string",
+        expression: true,
+        placeholder: "Paging cursor from prior run",
+        displayOptions: {
+          showAny: [
+            {
+              resource: ["adAccount"],
+              operation: ["listAccessible", "list"],
+            },
+            {
+              resource: ["campaign", "adSet", "ad", "delivery"],
+              operation: ["list", "listStatuses"],
+            },
+          ],
+          hide: { returnAll: [true] },
+        },
       },
     ],
 

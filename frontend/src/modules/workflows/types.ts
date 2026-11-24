@@ -522,6 +522,14 @@ export interface WorkflowNodeData {
   customerId?: string;
   loginCustomerId?: string;
   adAccountId?: string;
+  /** Meta Ads paid media platform scope: all | facebook | instagram */
+  platformScope?: string;
+  platformBreakdown?: boolean;
+  deliveryLevel?: string;
+  objective?: string;
+  effectiveStatus?: string;
+  adSetId?: string;
+  adId?: string;
   dateRange?: string;
   startDate?: string;
   endDate?: string;

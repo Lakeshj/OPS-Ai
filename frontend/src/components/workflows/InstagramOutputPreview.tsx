@@ -101,11 +101,15 @@ function resolveBlocks(
 ): InstagramReadableBlock[] {
   if (value !== undefined) {
     const resolved = resolveOutputPresentation(value);
-    if (resolved?.blocks?.length) return resolved.blocks;
+    if (resolved?.provider === "instagram" && resolved.blocks?.length) {
+      return resolved.blocks;
+    }
   }
   if (items?.length) {
     const fromItems = resolveOutputPresentation(items);
-    if (fromItems?.blocks?.length) return fromItems.blocks;
+    if (fromItems?.provider === "instagram" && fromItems.blocks?.length) {
+      return fromItems.blocks;
+    }
     // Direct WorkflowItem.json fallback
     return items
       .map((item, index) =>

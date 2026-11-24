@@ -72,6 +72,8 @@ check("IG-M8142-F2 preview initially collapses after 10 rows", () => {
 check("IG-M8142-F3 <=10 rows has no show-more control logic requirement", () => {
   const items = Array.from({ length: 8 }, (_, i) => listItem(i));
   const resolved = resolveOutputPresentation(items)!;
+  assert.equal(resolved.provider, "instagram");
+  if (resolved.provider !== "instagram") return;
   assert.equal(resolved.blocks[0].mediaRows?.length, 8);
   assert.match(resolved.summaryText, /8 media items/);
 });

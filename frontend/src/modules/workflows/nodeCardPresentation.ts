@@ -267,7 +267,7 @@ const FALLBACK_BLURBS: Record<string, string> = {
   googleSearchConsole: "Pull Search Console data",
   googleAnalytics: "Pull Analytics reports",
   googleAds: "Run a read-only Ads report",
-  metaAds: "Run a read-only Meta Ads report",
+  metaAds: "Read Meta Ads accounts, delivery, and paid insights",
   instagram: "Read, publish, and reply to Instagram content",
   googleSheets: "Read or write Sheets",
   gmail: "Send or read Gmail",

@@ -628,9 +628,9 @@ const registerMetaAdsM2Tests = ({ check, section, assert: a }) => {
   check("META-M2-20 no Meta mutation endpoint exists", async () => {
     for (const rel of metaFiles) {
       const text = readMeta(rel);
-      assertX.equal(text.includes("/campaigns"), false);
-      assertX.equal(text.includes("/adsets"), false);
-      assertX.equal(text.includes("graph.facebook.com") && text.includes("POST"), false);
+      // M8.18 may GET list /campaigns|/adsets; Graph writes remain blocked.
+      assertX.equal(/\bmethod:\s*["']POST["']/.test(text), false, rel);
+      assertX.equal(text.includes("ads_management"), false, rel);
     }
     await assertX.rejects(
       () => ads().metaGraphRequest({ accessToken: LONG, path: "act_1/campaigns", method: "POST" }),

@@ -37,6 +37,7 @@ import {
   type TableSortState,
 } from "@/modules/workflows/inspectorTableSort";
 import { InstagramOutputPreview } from "@/components/workflows/InstagramOutputPreview";
+import { MetaAdsOutputPreview } from "@/components/workflows/MetaAdsOutputPreview";
 import { resolveOutputPresentation } from "@/modules/workflows/outputPresentation";
 import { toast } from "sonner";
 import {
@@ -774,10 +775,11 @@ export function ItemDataViewer({
       canonical.length > 1 && onSelectedItemIndexChange
         ? [canonical[Math.min(Math.max(0, selectedItemIndex), canonical.length - 1)]]
         : canonical;
-    // Display-only: when Result wraps Instagram under `result`, table the
+    // Display-only: when Result wraps Instagram/Meta Ads under `result`, table the
     // unwrapped item instead of one opaque `result` cell. JSON tab stays original.
     const source =
-      presentation?.provider === "instagram"
+      presentation?.provider === "instagram" ||
+      presentation?.provider === "meta_ads"
         ? presentation.workflowItems.map(withReadableReport)
         : base.map(withReadableReport);
     return buildDisplayTable(source);
@@ -812,9 +814,11 @@ export function ItemDataViewer({
     viewItems.length === 1 ? viewItems[0] : viewItems
   );
   const showInstagramPreview = selectedPresentation?.provider === "instagram";
-  const prosePreview = showInstagramPreview
-    ? null
-    : extractProseField(selectedJson);
+  const showMetaAdsPreview = selectedPresentation?.provider === "meta_ads";
+  const prosePreview =
+    showInstagramPreview || showMetaAdsPreview
+      ? null
+      : extractProseField(selectedJson);
 
   const dataViewer = (
     <div
@@ -874,6 +878,17 @@ export function ItemDataViewer({
           selectedPresentation &&
           (mode === "table" || mode === "schema") && (
             <InstagramOutputPreview
+              items={selectedPresentation.workflowItems}
+              value={
+                viewItems.length === 1 ? viewItems[0]?.json : viewItems
+              }
+            />
+          )}
+
+        {showMetaAdsPreview &&
+          selectedPresentation &&
+          (mode === "table" || mode === "schema") && (
+            <MetaAdsOutputPreview
               items={selectedPresentation.workflowItems}
               value={
                 viewItems.length === 1 ? viewItems[0]?.json : viewItems

@@ -22,6 +22,7 @@ const {
   tokenUrl,
   graphBaseUrl,
   appCredentials,
+  getMetaAdsIntegrationStatus,
 } = require("../config/metaGraph");
 const {
   metaGraphRequest,
@@ -110,8 +111,10 @@ const resetMetaOAuthNonceStore = () => consumed.clear();
 const requireApp = () => {
   const app = appCredentials();
   if (!app.appId || !app.appSecret) {
+    const status = getMetaAdsIntegrationStatus();
+    const missing = (status.missingConfigKeys || []).join(", ") || "META_APP_ID, META_APP_SECRET";
     throw new AppError(
-      "Meta app credentials are not configured on the server.",
+      `Meta app credentials are not configured on the server. Set ${missing} (or INSTAGRAM_APP_ID/INSTAGRAM_APP_SECRET when using the same Meta developer app).`,
       500,
       "META_APP_NOT_CONFIGURED"
     );
@@ -502,4 +505,5 @@ module.exports = {
   sanitizeCallbackError,
   oauthCallbackHtml,
   applyOAuthPopupResponseHeaders,
+  getMetaAdsIntegrationStatus,
 };

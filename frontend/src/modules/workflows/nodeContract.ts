@@ -2165,9 +2165,11 @@ export const NODE_CONTRACTS: Record<WorkflowNodeType, NodeContract> = {
     params: [],
     dirtyTriggers: ["params", "edges", "pin", "disabled"],
     edgeCases: [
-      "Read-only Meta Ads Insights reports",
+      "Read-only Meta Ads Native: ad accounts, campaigns, ad sets, ads, insights, delivery",
+      "platformScope is paid media reporting (all|facebook|instagram), not organic accounts",
       "Dates resolve in the ad account timezone",
       "The node stores credentialId and numeric adAccountId only",
+      "Independent of Instagram Native / Instagram MCP",
     ],
   },
 

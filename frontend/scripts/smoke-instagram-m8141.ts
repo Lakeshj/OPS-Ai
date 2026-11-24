@@ -78,6 +78,8 @@ check("IG-M8141-2 count shown as 25", () => {
 check("IG-M8141-3 more available when hasNext=true", () => {
   const items = Array.from({ length: 25 }, (_, i) => listItem(i));
   const resolved = resolveOutputPresentation(items)!;
+  assert.equal(resolved.provider, "instagram");
+  if (resolved.provider !== "instagram") return;
   assert.match(resolved.summaryText, /more available/);
   assert.match(resolved.blocks[0].title, /more available/);
   assert.equal(resolved.blocks[0].hasMore, true);
@@ -157,6 +159,8 @@ check("IG-M8141-8 no more available when hasNext false", () => {
     }),
   ];
   const resolved = resolveOutputPresentation(items)!;
+  assert.equal(resolved.provider, "instagram");
+  if (resolved.provider !== "instagram") return;
   assert.match(resolved.summaryText, /1 media items/);
   assert.doesNotMatch(resolved.summaryText, /more available/);
   assert.equal(resolved.blocks[0].hasMore, false);

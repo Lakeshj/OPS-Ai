@@ -30,12 +30,13 @@ Run the **affected family**, not everything.
 | GSC MCP | `test:gsc-mcp` + GSC-SORT if analytics order |
 | GA4 native/MCP | `test:ga4-mcp`; `smoke-workflow-ga4-ai-grounding.js` if grounding |
 | Google Ads | `smoke-workflow-google-ads-v1.js`, `smoke-workflow-google-ads-mcp.js`, `plugins/google-ads-mcp` smoke |
-| Meta Ads | `smoke-workflow-meta-ads-m2.js` … `m6.js`; `plugins/meta-ads-mcp` smoke |
+| Meta Ads | `smoke-workflow-meta-ads-m2.js` … `m6.js`; M8.18 Native platformScope/resources: `node scripts/smoke-workflow-meta-ads-m818.js`; M8.18.1 presentation: `cd frontend && npx tsx scripts/smoke-meta-ads-m8181.ts`; `plugins/meta-ads-mcp` smoke |
 | Instagram | M2: `node scripts/smoke-workflow-instagram-m2.js`; M2.1: `node scripts/smoke-workflow-instagram-m21.js`; M3: `node scripts/smoke-workflow-instagram-m3.js`; M4: `node scripts/smoke-workflow-instagram-m4.js`; M5: `node scripts/smoke-workflow-instagram-m5.js`; M6: `node scripts/smoke-workflow-instagram-m6.js`; M7: `node scripts/smoke-workflow-instagram-m7.js` + `plugins/instagram-mcp` smoke; M7.1 UX: `node scripts/smoke-workflow-instagram-m71.js` |
 | Inspector display | inspector smoke + `tsc --noEmit` |
 | Expressions / items / `$first` | engine file that owns the smoke; do not skip if item order changed |
 | AI Agent | `node scripts/smoke-workflow-ai-12b.js`; M8.15 reliability: `node scripts/smoke-workflow-ai-m815.js`; M8.15.1 usage logging: `node scripts/smoke-workflow-ai-m8151.js`; M8.15.2 grounding: `node scripts/smoke-workflow-ai-m8152.js`; M8.15.3 Run Step graph tools: `node scripts/smoke-workflow-ai-m8153.js`; dataset Ads: `node scripts/smoke-workflow-ai-dataset-ads.js`; AI scope: `node scripts/smoke-workflow-ai-scope.js`; live AI scope: `node scripts/smoke-workflow-ai-live-scope.js` |
 | Workflow Copilot context | M8.16 bridge: `node scripts/smoke-workflow-copilot-m816.js`; M8.16.1 local mock MCP + Copilot: `node scripts/smoke-workflow-ai-m8161.js`, `node scripts/smoke-workflow-copilot-m8161.js`; M8.16.2 Instagram MCP structural (no Meta): `node scripts/smoke-workflow-instagram-m8162.js` (+ affected 14B/14D smokes if plan path changed) |
+| Instagram / Meta Ads isolation | M8.17: `node scripts/smoke-workflow-isolation-m817.js` (do not touch GSC/GA4/AI/Copilot implementations) |
 | Workflow engine core | targeted `smoke-workflow-engine.js` **only if** you changed scheduler/occurrences/edges — else Level 3 at milestone |
 
 If Copilot, connections, Wait, Loop, or credentials changed, include that family’s smoke.

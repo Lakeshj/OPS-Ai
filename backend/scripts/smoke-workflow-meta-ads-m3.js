@@ -575,9 +575,9 @@ const registerMetaAdsM3Tests = ({ check, section, assert: a }) => {
   check("META-M3-29 no write endpoint reachable", async () => {
     for (const rel of newBackendFiles) {
       const text = read(rel);
-      assertX.equal(text.includes("POST"), false, rel);
-      assertX.equal(text.includes("/campaigns"), false, rel);
-      assertX.equal(text.includes("/adsets"), false, rel);
+      // Graph writes stay blocked. M8.18 may list /campaigns|/adsets via GET only.
+      assertX.equal(/\bmethod:\s*["']POST["']/.test(text), false, rel);
+      assertX.equal(text.includes("ads_management"), false, rel);
       assertX.equal(text.includes("paging.next}") || /fetch\([^)]*next/.test(text), false, rel);
     }
     await rejectsCode(() => runWith({ data: { resource: "campaign", operation: "update" } }), "META_PERMISSION_DENIED");
