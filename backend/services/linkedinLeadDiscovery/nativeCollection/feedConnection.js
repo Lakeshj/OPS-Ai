@@ -25,6 +25,65 @@ const resolveFeedToken = (credential) => {
   ).trim();
 };
 
+/**
+ * Detect LinkedIn *webpage* URLs that are not OpsAi authorized feed API bases.
+ * A post/search/profile/short link is not POST {base}/search contract.
+ */
+const classifyLinkedInWebpageUrl = (rawUrl) => {
+  let parsed;
+  try {
+    parsed = new URL(String(rawUrl || "").trim());
+  } catch (_) {
+    return null;
+  }
+  const host = parsed.hostname.toLowerCase();
+  const path = parsed.pathname.toLowerCase();
+  const isLinkedInHost =
+    host === "linkedin.com" ||
+    host.endsWith(".linkedin.com") ||
+    host === "lnkd.in" ||
+    host.endsWith(".lnkd.in");
+  if (!isLinkedInHost) return null;
+
+  if (host === "lnkd.in" || host.endsWith(".lnkd.in")) {
+    return {
+      kind: "short_link",
+      message:
+        "LinkedIn short links (lnkd.in) are not authorized feed API endpoints. Paste a licensed OpsAi/partner feed base URL that implements POST /search and POST /post, or use Get Post Details / User Dataset / Apify for post URLs.",
+    };
+  }
+  if (
+    path.includes("/posts/") ||
+    path.includes("/feed/update/") ||
+    path.includes("/pulse/")
+  ) {
+    return {
+      kind: "post_url",
+      message:
+        "A LinkedIn post webpage URL is not an authorized feed API endpoint. Use operation Get Post Details with Apify (or supply the post in a User Dataset / Previous Node), or configure a real feed API base URL — not linkedin.com/posts/…",
+    };
+  }
+  if (path.includes("/search/results/") || path.includes("/search/")) {
+    return {
+      kind: "search_url",
+      message:
+        "A LinkedIn search webpage URL is not an authorized feed API endpoint. Keyword discovery requires a licensed feed API or the optional Apify provider — not pasting linkedin.com/search URLs into Feed URL.",
+    };
+  }
+  if (path.includes("/in/") || path.includes("/company/")) {
+    return {
+      kind: "profile_url",
+      message:
+        "A LinkedIn profile/company webpage URL is not an authorized feed API endpoint.",
+    };
+  }
+  return {
+    kind: "linkedin_webpage",
+    message:
+      "LinkedIn website URLs are not OpsAi Native feed APIs. The Feed URL must be an authorized HTTP API base that implements POST /search and POST /post (or use User Dataset / Previous Node / Apify).",
+  };
+};
+
 const validateAndNormalizeFeedUrl = async (rawUrl) => {
   const feedUrl = normalizeFeedBaseUrl(rawUrl);
   if (!feedUrl) {
@@ -32,6 +91,14 @@ const validateAndNormalizeFeedUrl = async (rawUrl) => {
       "Authorized feed URL is required.",
       400,
       "LINKEDIN_LEAD_NATIVE_FEED_URL_REQUIRED"
+    );
+  }
+  const linkedInPage = classifyLinkedInWebpageUrl(feedUrl);
+  if (linkedInPage) {
+    throw new AppError(
+      linkedInPage.message,
+      400,
+      "LINKEDIN_LEAD_NATIVE_FEED_URL_IS_LINKEDIN_PAGE"
     );
   }
   try {
@@ -138,6 +205,7 @@ const testFeedConnection = async ({
 module.exports = {
   normalizeFeedBaseUrl,
   resolveFeedToken,
+  classifyLinkedInWebpageUrl,
   validateAndNormalizeFeedUrl,
   testFeedConnection,
 };

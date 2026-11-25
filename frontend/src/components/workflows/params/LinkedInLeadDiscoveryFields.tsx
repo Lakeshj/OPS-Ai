@@ -457,6 +457,11 @@ export function LinkedInLeadDiscoveryFields({
                     ? " · server default available"
                     : ""}
                 </p>
+                <p className="mt-1 text-[10px] text-muted-foreground">
+                  Feed URL must be an authorized HTTP API base (POST /search,
+                  POST /post). Do not paste linkedin.com post/search/profile or
+                  lnkd.in short links here — those are webpages, not feed APIs.
+                </p>
               </div>
               {workspaceId ? (
                 <CredentialPicker
@@ -467,6 +472,11 @@ export function LinkedInLeadDiscoveryFields({
                   allowedTypes={["bearer"]}
                 />
               ) : null}
+              <p className="text-[10px] text-muted-foreground">
+                Optional Bearer token is issued by your licensed feed provider
+                (or set via OPSAI_LINKEDIN_FEED_TOKEN). It is not a LinkedIn
+                OAuth token and not an Apify API token.
+              </p>
               <Button
                 type="button"
                 size="sm"

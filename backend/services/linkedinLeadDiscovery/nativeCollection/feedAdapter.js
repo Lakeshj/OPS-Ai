@@ -10,6 +10,9 @@
 
 const AppError = require("../../../utils/AppError");
 const { fetchJsonWithRetries } = require("./httpUtil");
+const {
+  validateAndNormalizeFeedUrl,
+} = require("./feedConnection");
 
 const mapFeedRow = (raw, matchedQueries = []) => {
   if (!raw || typeof raw !== "object") return null;
@@ -66,7 +69,8 @@ const searchBatch = async ({
       "LINKEDIN_LEAD_NATIVE_NOT_CONFIGURED"
     );
   }
-  const url = `${config.feedUrl}/search`;
+  const base = await validateAndNormalizeFeedUrl(config.feedUrl);
+  const url = `${base}/search`;
   const headers = {
     "content-type": "application/json",
     accept: "application/json",
@@ -104,7 +108,7 @@ const searchBatch = async ({
   }
   if (!res.ok) {
     throw new AppError(
-      `Authorized LinkedIn opportunity feed returned HTTP ${res.status}.`,
+      `Authorized opportunity feed returned HTTP ${res.status}. This is the feed API response (not a LinkedIn Graph API call). Confirm the Feed URL is a licensed OpsAi/partner API base implementing POST /search — not a linkedin.com webpage.`,
       res.status >= 400 && res.status < 600 ? res.status : 502,
       "LINKEDIN_LEAD_NATIVE_FEED_ERROR"
     );
@@ -142,7 +146,8 @@ const getPost = async ({
       "LINKEDIN_LEAD_NATIVE_NOT_CONFIGURED"
     );
   }
-  const url = `${config.feedUrl}/post`;
+  const base = await validateAndNormalizeFeedUrl(config.feedUrl);
+  const url = `${base}/post`;
   const headers = {
     "content-type": "application/json",
     accept: "application/json",
@@ -164,7 +169,7 @@ const getPost = async ({
   );
   if (!res.ok) {
     throw new AppError(
-      `Authorized LinkedIn opportunity feed returned HTTP ${res.status} for post details.`,
+      `Authorized opportunity feed returned HTTP ${res.status} for post details. Use a licensed feed API base, not a LinkedIn webpage URL.`,
       res.status >= 400 && res.status < 600 ? res.status : 502,
       "LINKEDIN_LEAD_NATIVE_FEED_ERROR"
     );
