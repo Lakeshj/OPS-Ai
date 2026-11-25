@@ -123,6 +123,12 @@ const mockTransport = (handlers) => async (url, options = {}) => {
     const creds = read("backend/modules/workflows/credentials.service.js");
     assert.match(creds, /FACEBOOK_PAGE_CREDENTIAL_TYPES/);
     assert.match(creds, /facebook_page/);
+    const workflows = require("../modules/workflows/workflows.service");
+    assert.equal(
+      workflows.ALLOWED_NODE_TYPES.has("facebookPage"),
+      true,
+      "facebookPage must be in ALLOWED_NODE_TYPES for autosave"
+    );
   });
 
   await check("M91-3 Scopes are Page-derived (not Instagram copy)", () => {

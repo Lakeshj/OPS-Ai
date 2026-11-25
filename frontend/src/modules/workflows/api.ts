@@ -536,6 +536,9 @@ export const workflowCredentialsApi = {
       resolvedRedirectUri?: string;
       oauthScopesConfigured?: string[];
       apiVersion?: string;
+      credentialSchemaReady?: boolean;
+      facebookPageTypeSupported?: boolean;
+      configJsonColumnPresent?: boolean;
     }>("/workflows/facebook-page-oauth/status"),
 
   listFacebookPages: (credentialId: string) =>

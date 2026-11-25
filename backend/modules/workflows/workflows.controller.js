@@ -237,10 +237,8 @@ const listFacebookPagePostOptions = asyncHandler(async (req, res) => {
 });
 
 const getFacebookPageOAuthStatus = asyncHandler(async (req, res) => {
-  const {
-    getFacebookPageIntegrationStatus,
-  } = require("../../config/facebookPageGraph");
-  res.json(getFacebookPageIntegrationStatus());
+  const facebookPageOAuth = require("../../services/facebookPageOAuth.service");
+  res.json(await facebookPageOAuth.getFacebookPageOAuthPublicStatus());
 });
 
 const metaOAuthCallback = asyncHandler(async (req, res) => {

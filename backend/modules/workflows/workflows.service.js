@@ -70,6 +70,7 @@ const ALLOWED_NODE_TYPES = new Set([
   "googleAds",
   "metaAds",
   "instagram",
+  "facebookPage",
   "gmail",
   "gmailTrigger",
   "googleSheets",

@@ -45,6 +45,7 @@ export function FacebookPageCredentialPanel({
   const [selectedId, setSelectedId] = useState("");
   const [loadingPages, setLoadingPages] = useState(false);
   const [platformReady, setPlatformReady] = useState<boolean | null>(null);
+  const [schemaReady, setSchemaReady] = useState<boolean | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -53,10 +54,18 @@ export function FacebookPageCredentialPanel({
       .then((status) => {
         if (!cancelled) {
           setPlatformReady(Boolean(status.facebookPageIntegrationConfigured));
+          setSchemaReady(
+            status.credentialSchemaReady == null
+              ? null
+              : Boolean(status.credentialSchemaReady)
+          );
         }
       })
       .catch(() => {
-        if (!cancelled) setPlatformReady(null);
+        if (!cancelled) {
+          setPlatformReady(null);
+          setSchemaReady(null);
+        }
       });
     return () => {
       cancelled = true;
@@ -163,7 +172,12 @@ export function FacebookPageCredentialPanel({
       <Button
         type="button"
         size="sm"
-        disabled={connecting || !workspaceId || platformReady === false}
+        disabled={
+          connecting ||
+          !workspaceId ||
+          platformReady === false ||
+          schemaReady === false
+        }
         onClick={() => void connect()}
       >
         {primaryLabel}
@@ -172,6 +186,12 @@ export function FacebookPageCredentialPanel({
         <p className="rounded-md border border-amber-500/40 bg-amber-500/10 px-2 py-1.5 text-[11px]">
           Facebook Page is not configured on the server. Set FACEBOOK_PAGE_APP_ID
           / SECRET (or META_APP_* fallback).
+        </p>
+      ) : null}
+      {schemaReady === false ? (
+        <p className="rounded-md border border-amber-500/40 bg-amber-500/10 px-2 py-1.5 text-[11px]">
+          Database is missing the facebook_page credential type. Apply migration
+          033_facebook_page_credential.sql on this environment.
         </p>
       ) : null}
       {credential?.metaDisplayName ? (
