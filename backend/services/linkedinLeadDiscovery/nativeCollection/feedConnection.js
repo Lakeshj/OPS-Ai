@@ -84,6 +84,49 @@ const classifyLinkedInWebpageUrl = (rawUrl) => {
   };
 };
 
+/**
+ * Detect third-party LinkedIn APIs that are not the OpsAi generic POST /search contract.
+ * Do not append /search to these endpoints.
+ */
+const classifyUnsupportedFeedApi = (rawUrl) => {
+  let parsed;
+  try {
+    parsed = new URL(String(rawUrl || "").trim());
+  } catch (_) {
+    return null;
+  }
+  const host = parsed.hostname.toLowerCase();
+  const path = parsed.pathname.toLowerCase().replace(/\/$/, "");
+
+  // Perigon Social API — GET /v1/social/linkedin/posts (not POST {base}/search).
+  if (
+    (host === "api.perigon.io" || host.endsWith(".perigon.io")) &&
+    (path.includes("/v1/social/linkedin") || path.includes("/social/linkedin"))
+  ) {
+    return {
+      kind: "perigon_linkedin_social_api",
+      provider: "perigon",
+      message:
+        "Perigon LinkedIn Social API is not compatible with the generic OpsAi feed contract (POST /search + POST /post). It uses GET /v1/social/linkedin/posts with an API key and requires LinkedIn social access enabled on the Perigon org. A dedicated Perigon adapter is required before live integration — do not paste this URL as a generic Feed URL.",
+      docsUrl: "https://perigon.io/docs/api/social-api-overview",
+      expectedMethod: "GET",
+      expectedPath: "/v1/social/linkedin/posts",
+    };
+  }
+
+  // Any full resource path that already looks like a vendor "posts" endpoint.
+  if (/\/v\d+\/.*\/posts$/i.test(path) || /\/linkedin\/posts$/i.test(path)) {
+    return {
+      kind: "vendor_posts_endpoint",
+      provider: host,
+      message:
+        "This URL looks like a vendor LinkedIn posts endpoint, not an OpsAi generic feed base. The generic adapter only supports a base URL that implements POST /search and POST /post. Use a compatible feed base or a dedicated vendor adapter.",
+      expectedMethod: "unknown",
+    };
+  }
+  return null;
+};
+
 const validateAndNormalizeFeedUrl = async (rawUrl) => {
   const feedUrl = normalizeFeedBaseUrl(rawUrl);
   if (!feedUrl) {
@@ -99,6 +142,14 @@ const validateAndNormalizeFeedUrl = async (rawUrl) => {
       linkedInPage.message,
       400,
       "LINKEDIN_LEAD_NATIVE_FEED_URL_IS_LINKEDIN_PAGE"
+    );
+  }
+  const unsupported = classifyUnsupportedFeedApi(feedUrl);
+  if (unsupported) {
+    throw new AppError(
+      unsupported.message,
+      400,
+      "LINKEDIN_LEAD_NATIVE_FEED_UNSUPPORTED_API"
     );
   }
   try {
@@ -127,8 +178,57 @@ const testFeedConnection = async ({
   fetchImpl,
   timeoutMs = 12000,
 } = {}) => {
-  const base = await validateAndNormalizeFeedUrl(feedUrl);
+  const raw = normalizeFeedBaseUrl(feedUrl);
+  if (!raw) {
+    return {
+      ok: false,
+      status: "not_configured",
+      code: "LINKEDIN_LEAD_NATIVE_FEED_URL_REQUIRED",
+      message: "Authorized feed URL is required.",
+    };
+  }
+
+  const unsupportedEarly = classifyUnsupportedFeedApi(raw);
+  if (unsupportedEarly) {
+    return {
+      ok: false,
+      status: "unsupported_api",
+      code: "LINKEDIN_LEAD_NATIVE_FEED_UNSUPPORTED_API",
+      message: unsupportedEarly.message,
+      provider: unsupportedEarly.provider || null,
+      docsUrl: unsupportedEarly.docsUrl || null,
+    };
+  }
+  const linkedInPage = classifyLinkedInWebpageUrl(raw);
+  if (linkedInPage) {
+    return {
+      ok: false,
+      status: "unsupported_api",
+      code: "LINKEDIN_LEAD_NATIVE_FEED_URL_IS_LINKEDIN_PAGE",
+      message: linkedInPage.message,
+    };
+  }
+
+  let base;
+  try {
+    base = await validateAndNormalizeFeedUrl(raw);
+  } catch (err) {
+    if (err instanceof AppError) {
+      const unsupported =
+        err.code === "LINKEDIN_LEAD_NATIVE_FEED_UNSUPPORTED_API" ||
+        err.code === "LINKEDIN_LEAD_NATIVE_FEED_URL_IS_LINKEDIN_PAGE";
+      return {
+        ok: false,
+        status: unsupported ? "unsupported_api" : "connection_failed",
+        code: err.code,
+        message: err.message,
+      };
+    }
+    throw err;
+  }
+
   const token = feedToken || resolveFeedToken(credential) || null;
+  // Generic OpsAi contract only — never invent vendor-specific paths.
   const url = `${base}/search`;
   const headers = {
     "content-type": "application/json",
@@ -160,7 +260,7 @@ const testFeedConnection = async ({
         status: "connection_failed",
         code: "LINKEDIN_LEAD_NATIVE_FEED_AUTH_FAILED",
         message:
-          "Feed rejected authentication. Check the optional feed credential / token.",
+          "Feed rejected authentication. Check the optional feed credential / token (feed provider Bearer — not LinkedIn OAuth / not Apify).",
         httpStatus: res.status,
       };
     }
@@ -170,7 +270,7 @@ const testFeedConnection = async ({
         status: "connection_failed",
         code: "LINKEDIN_LEAD_NATIVE_FEED_CONTRACT_MISSING",
         message:
-          "Feed /search endpoint was not found. The authorized feed must implement POST /search.",
+          "Feed POST /search was not found. The authorized feed base must implement POST /search (and POST /post). Do not paste vendor GET endpoints such as Perigon /v1/social/linkedin/posts.",
         httpStatus: res.status,
       };
     }
@@ -183,16 +283,22 @@ const testFeedConnection = async ({
         httpStatus: res.status,
       };
     }
-    // 200/4xx (other) still means the host is reachable and likely contract-shaped.
     return {
       ok: true,
       status: "connected",
-      message: "Authorized feed is reachable.",
+      message: "Authorized feed is reachable (generic POST /search contract).",
       httpStatus: res.status,
       feedUrl: base,
     };
   } catch (err) {
-    if (err instanceof AppError) throw err;
+    if (err instanceof AppError) {
+      return {
+        ok: false,
+        status: "connection_failed",
+        code: err.code,
+        message: err.message,
+      };
+    }
     return {
       ok: false,
       status: "connection_failed",
@@ -206,6 +312,7 @@ module.exports = {
   normalizeFeedBaseUrl,
   resolveFeedToken,
   classifyLinkedInWebpageUrl,
+  classifyUnsupportedFeedApi,
   validateAndNormalizeFeedUrl,
   testFeedConnection,
 };

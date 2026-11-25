@@ -199,18 +199,27 @@ const startMockFeed = async () => {
     require.resolve("../services/linkedinLeadDiscovery/nativeCollection/config")
   ];
 
+  // Local mock feed listens on 127.0.0.1 — allow loopback only inside this smoke.
+  const withLoopbackFeed = (fn) =>
+    require("../services/workflowHttpSecurity.service").withHttpSecurityTestPolicy(
+      { allowLoopback: true },
+      fn
+    );
+
   await check("M102-5 Live feed category discovery (mock authorized feed)", async () => {
-    const out = await service().executeLinkedInLeadDiscoveryNode(
-      {
-        data: {
-          operation: "discover_by_category",
-          dataProvider: "opsai_native",
-          categoryIds: ["seo", "digital_marketing"],
-          maxResults: 10,
-          live: true,
+    const out = await withLoopbackFeed(() =>
+      service().executeLinkedInLeadDiscoveryNode(
+        {
+          data: {
+            operation: "discover_by_category",
+            dataProvider: "opsai_native",
+            categoryIds: ["seo", "digital_marketing"],
+            maxResults: 10,
+            live: true,
+          },
         },
-      },
-      { inputItems: [{ json: {} }] }
+        { inputItems: [{ json: {} }] }
+      )
     );
     assert.ok(out.items.length >= 1);
     assert.equal(out.output.providerMeta.liveCollection, true);
@@ -221,49 +230,55 @@ const startMockFeed = async () => {
   });
 
   await check("M102-6 Custom keywords + intent expansion via feed", async () => {
-    const out = await service().executeLinkedInLeadDiscoveryNode(
-      {
-        data: {
-          operation: "discover_by_custom_keywords",
-          dataProvider: "opsai_native",
-          customKeywords: ["SEO agency"],
-          intentExpansion: true,
-          intentIds: ["looking_for", "required"],
-          maxResults: 10,
-          live: true,
+    const out = await withLoopbackFeed(() =>
+      service().executeLinkedInLeadDiscoveryNode(
+        {
+          data: {
+            operation: "discover_by_custom_keywords",
+            dataProvider: "opsai_native",
+            customKeywords: ["SEO agency"],
+            intentExpansion: true,
+            intentIds: ["looking_for", "required"],
+            maxResults: 10,
+            live: true,
+          },
         },
-      },
-      { inputItems: [{ json: {} }] }
+        { inputItems: [{ json: {} }] }
+      )
     );
     assert.equal(out.output.providerMeta.mode, "feed");
     assert.ok(out.output.queryCount >= 1);
   });
 
   await check("M102-7 Search posts + get post details via feed", async () => {
-    const search = await service().executeLinkedInLeadDiscoveryNode(
-      {
-        data: {
-          operation: "search_posts",
-          dataProvider: "opsai_native",
-          customKeywords: ["digital marketing partner"],
-          maxResults: 5,
-          live: true,
+    const search = await withLoopbackFeed(() =>
+      service().executeLinkedInLeadDiscoveryNode(
+        {
+          data: {
+            operation: "search_posts",
+            dataProvider: "opsai_native",
+            customKeywords: ["digital marketing partner"],
+            maxResults: 5,
+            live: true,
+          },
         },
-      },
-      { inputItems: [{ json: {} }] }
+        { inputItems: [{ json: {} }] }
+      )
     );
     assert.ok(search.items.length >= 1);
 
-    const details = await service().executeLinkedInLeadDiscoveryNode(
-      {
-        data: {
-          operation: "get_post_details",
-          dataProvider: "opsai_native",
-          postUrl: "https://www.linkedin.com/feed/update/urn:li:activity:live1",
-          live: true,
+    const details = await withLoopbackFeed(() =>
+      service().executeLinkedInLeadDiscoveryNode(
+        {
+          data: {
+            operation: "get_post_details",
+            dataProvider: "opsai_native",
+            postUrl: "https://www.linkedin.com/feed/update/urn:li:activity:live1",
+            live: true,
+          },
         },
-      },
-      { inputItems: [{ json: {} }] }
+        { inputItems: [{ json: {} }] }
+      )
     );
     assert.equal(details.items[0].json.sourcePostId, "live-seo-1");
     assert.equal(details.items[0].json.contentKind, "full");
@@ -326,15 +341,17 @@ const startMockFeed = async () => {
         rateLimited: false,
       };
     };
-    const out = await engine().search(
-      {
-        operation: "search_posts",
-        queries: ["Looking for SEO agency", "digital marketing partner"],
-        maxResults: 10,
-        live: true,
-        fetchImpl,
-      },
-      { feedUrl: mock.url, allowFixtures: false }
+    const out = await withLoopbackFeed(() =>
+      engine().search(
+        {
+          operation: "search_posts",
+          queries: ["Looking for SEO agency", "digital marketing partner"],
+          maxResults: 10,
+          live: true,
+          fetchImpl,
+        },
+        { feedUrl: mock.url, allowFixtures: false }
+      )
     );
     assert.ok(out.items.length >= 1);
     assert.ok(out.providerMeta.partialErrors.length >= 1);
@@ -347,16 +364,18 @@ const startMockFeed = async () => {
     delete require.cache[
       require.resolve("../services/linkedinLeadDiscovery/nativeCollection/config")
     ];
-    const out = await service().executeLinkedInLeadDiscoveryNode(
-      {
-        data: {
-          operation: "search_posts",
-          dataProvider: "opsai_native",
-          customKeywords: ["SEO agency"],
-          live: true,
+    const out = await withLoopbackFeed(() =>
+      service().executeLinkedInLeadDiscoveryNode(
+        {
+          data: {
+            operation: "search_posts",
+            dataProvider: "opsai_native",
+            customKeywords: ["SEO agency"],
+            live: true,
+          },
         },
-      },
-      { inputItems: [{ json: {} }] }
+        { inputItems: [{ json: {} }] }
+      )
     );
     assert.equal(out.output.dataProvider, "opsai_native");
     await assert.rejects(
@@ -376,14 +395,16 @@ const startMockFeed = async () => {
   });
 
   await check("M102-11 Empty results are valid (not fabricated)", async () => {
-    const out = await engine().search(
-      {
-        operation: "search_posts",
-        queries: ["zzzz-no-such-opportunity-phrase-999"],
-        maxResults: 5,
-        live: true,
-      },
-      { feedUrl: mock.url, allowFixtures: false }
+    const out = await withLoopbackFeed(() =>
+      engine().search(
+        {
+          operation: "search_posts",
+          queries: ["zzzz-no-such-opportunity-phrase-999"],
+          maxResults: 5,
+          live: true,
+        },
+        { feedUrl: mock.url, allowFixtures: false }
+      )
     );
     assert.equal(out.items.length, 0);
     assert.equal(out.providerMeta.mode, "feed");

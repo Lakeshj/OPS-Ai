@@ -163,6 +163,14 @@ export function LinkedInLeadDiscoveryFields({
   const [usage, setUsage] = useState<UsageStatus | null>(null);
   const [usageLoading, setUsageLoading] = useState(false);
   const [feedTestNote, setFeedTestNote] = useState("");
+  const [feedVerifyStatus, setFeedVerifyStatus] = useState<
+    | "idle"
+    | "not_configured"
+    | "configured_unverified"
+    | "connected"
+    | "connection_failed"
+    | "unsupported_api"
+  >("idle");
   const [feedTesting, setFeedTesting] = useState(false);
 
   useEffect(() => {
@@ -446,21 +454,36 @@ export function LinkedInLeadDiscoveryFields({
                       : "https://your-authorized-feed.example.com"
                   }
                   value={String(values.nativeFeedUrl || "")}
-                  onChange={(e) => patch({ nativeFeedUrl: e.target.value })}
+                  onChange={(e) => {
+                    setFeedVerifyStatus("idle");
+                    setFeedTestNote("");
+                    patch({ nativeFeedUrl: e.target.value });
+                  }}
                 />
                 <p className="mt-1 text-[10px] text-muted-foreground">
                   Status:{" "}
-                  {values.nativeFeedUrl || catalog?.envFeedConfigured
-                    ? "Configured"
-                    : "Not configured"}
+                  {(() => {
+                    const hasUrl =
+                      Boolean(String(values.nativeFeedUrl || "").trim()) ||
+                      Boolean(catalog?.envFeedConfigured);
+                    if (feedVerifyStatus === "connected") return "Connected";
+                    if (feedVerifyStatus === "unsupported_api")
+                      return "Unsupported API";
+                    if (feedVerifyStatus === "connection_failed")
+                      return "Connection failed";
+                    if (!hasUrl) return "Not configured";
+                    return "Configured — not verified";
+                  })()}
                   {catalog?.envFeedConfigured
                     ? " · server default available"
                     : ""}
                 </p>
                 <p className="mt-1 text-[10px] text-muted-foreground">
-                  Feed URL must be an authorized HTTP API base (POST /search,
-                  POST /post). Do not paste linkedin.com post/search/profile or
-                  lnkd.in short links here — those are webpages, not feed APIs.
+                  Feed URL must be an authorized HTTP API base that implements
+                  POST /search and POST /post. Do not paste linkedin.com
+                  webpages, lnkd.in links, or vendor GET endpoints (for example
+                  Perigon GET /v1/social/linkedin/posts) — those need a
+                  dedicated adapter.
                 </p>
               </div>
               {workspaceId ? (
@@ -494,23 +517,35 @@ export function LinkedInLeadDiscoveryFields({
                   setFeedTestNote("");
                   workflowCredentialsApi
                     .testLinkedInNativeFeed({
-                      feedUrl:
-                        String(values.nativeFeedUrl || "").trim() ||
-                        // server will still reject empty; env default is resolved server-side only when node URL empty via execute path
-                        String(values.nativeFeedUrl || "").trim(),
+                      feedUrl: String(values.nativeFeedUrl || "").trim(),
                       workspaceId: workspaceId || "",
                       credentialId: String(
                         values.nativeFeedCredentialId || ""
                       ),
                     })
                     .then((res) => {
-                      setFeedTestNote(
-                        res.ok
-                          ? `Connected — ${res.message || "OK"}`
-                          : `Connection failed — ${res.message || res.code || "error"}`
-                      );
+                      if (res.ok || res.status === "connected") {
+                        setFeedVerifyStatus("connected");
+                        setFeedTestNote(
+                          `Connected — ${res.message || "OK"}`
+                        );
+                      } else if (res.status === "unsupported_api") {
+                        setFeedVerifyStatus("unsupported_api");
+                        setFeedTestNote(
+                          `Unsupported API — ${res.message || res.code || ""}`
+                        );
+                      } else if (res.status === "not_configured") {
+                        setFeedVerifyStatus("not_configured");
+                        setFeedTestNote(res.message || "Not configured");
+                      } else {
+                        setFeedVerifyStatus("connection_failed");
+                        setFeedTestNote(
+                          `Connection failed — ${res.message || res.code || "error"}`
+                        );
+                      }
                     })
                     .catch((err) => {
+                      setFeedVerifyStatus("connection_failed");
                       setFeedTestNote(
                         `Connection failed — ${
                           err?.message || "Unable to test feed"

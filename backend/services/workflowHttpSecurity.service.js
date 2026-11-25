@@ -14,6 +14,7 @@
 const {
   hostMatchesAllowlist,
 } = require("./connectionDomainPolicy.service");
+const dns = require("node:dns/promises");
 const net = require("node:net");
 const { URL } = require("node:url");
 
