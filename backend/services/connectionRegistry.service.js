@@ -277,6 +277,20 @@ const PREDEFINED = Object.freeze([
     testConnection: { kind: "apify" },
     search: ["apify", "linkedin", "scraper", "actor"],
   },
+  {
+    id: "perigon",
+    displayName: "Perigon",
+    provider: "Perigon",
+    category: "Data",
+    authScheme: "api_key",
+    kind: KIND.PREDEFINED,
+    status: STATUS.SUPPORTED,
+    dbType: "perigon",
+    allowedDomains: ["api.perigon.io"],
+    requestApplication: { type: "api_key_header", headerName: "x-api-key" },
+    testConnection: { kind: "perigon" },
+    search: ["perigon", "linkedin", "social", "posts", "news"],
+  },
 ]);
 
 /** Searchable catalog only — no execute/create until a real contract exists. */

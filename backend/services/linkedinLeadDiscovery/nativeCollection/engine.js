@@ -17,6 +17,7 @@ const { dedupeRows } = require("./dedupe");
 const feedAdapter = require("./feedAdapter");
 const userDatasetAdapter = require("./userDatasetAdapter");
 const fixtureAdapter = require("./fixtureAdapter");
+const perigon = require("../perigon");
 const { FEASIBILITY_MATRIX, SELECTED_METHODS } = require("./feasibility");
 
 const enrichMatches = (rows, queries) =>
@@ -41,6 +42,7 @@ const normalizeNativeSource = (raw) => {
     .trim()
     .toLowerCase();
   if (
+    value === "perigon" ||
     value === "authorized_feed" ||
     value === "feed" ||
     value === "user_dataset" ||
@@ -91,7 +93,18 @@ const resolveSourceMode = (spec = {}, config) => {
     );
   };
 
+  const requirePerigon = () => {
+    const key = perigon.extractApiKey(spec.perigonCredential || spec.credential);
+    if (key) return "perigon";
+    throw new AppError(
+      "Perigon is selected but not connected. Add a Perigon API key credential and select it on this node, then use Test connection.",
+      501,
+      "LINKEDIN_LEAD_PERIGON_NOT_CONNECTED"
+    );
+  };
+
   // Explicit native source selection from the UI.
+  if (nativeSource === "perigon") return requirePerigon();
   if (nativeSource === "authorized_feed") return requireFeed();
   if (nativeSource === "user_dataset") return requireDataset("user_dataset");
   if (nativeSource === "previous_node") return requireDataset("previous_node");
@@ -147,6 +160,29 @@ const resolveSourceMode = (spec = {}, config) => {
     501,
     "LINKEDIN_LEAD_NATIVE_NOT_CONFIGURED"
   );
+};
+
+const collectViaPerigon = async (spec) => {
+  const out = await perigon.search({
+    queries: spec.queries,
+    maxResults: spec.maxResults,
+    publicationPeriod: spec.publicationPeriod,
+    sortBy: spec.sortBy,
+    contentType: spec.contentType,
+    authorTitle: spec.authorTitle,
+    credential: spec.perigonCredential || spec.credential,
+    perigonClient: spec.perigonClient,
+    fetchImpl: spec.fetchImpl || spec.perigonFetchImpl,
+    signal: spec.signal,
+    timeoutMs: spec.timeoutMs,
+    orGroupSize: spec.orGroupSize,
+  });
+  return {
+    rawRows: out.rows || [],
+    coverage: out.coverage,
+    partialErrors: out.partialErrors || [],
+    cancelled: Boolean(out.cancelled),
+  };
 };
 
 const collectViaFeed = async (spec, config) => {
@@ -252,7 +288,8 @@ const search = async (spec = {}, configOverrides = {}) => {
   const collectedAt = new Date().toISOString();
 
   let collected;
-  if (mode === "feed") collected = await collectViaFeed(spec, config);
+  if (mode === "perigon") collected = await collectViaPerigon(spec);
+  else if (mode === "feed") collected = await collectViaFeed(spec, config);
   else if (mode === "user_dataset") collected = collectViaDataset(spec);
   else collected = collectViaFixtures(spec);
 
@@ -295,13 +332,15 @@ const search = async (spec = {}, configOverrides = {}) => {
     providerMeta: {
       provider: "opsai_native",
       mode,
-      liveCollection: mode === "feed",
+      liveCollection: mode === "feed" || mode === "perigon",
       sourceAdapter:
-        mode === "feed"
-          ? feedAdapter.id
-          : mode === "user_dataset"
-            ? userDatasetAdapter.id
-            : fixtureAdapter.id,
+        mode === "perigon"
+          ? perigon.id
+          : mode === "feed"
+            ? feedAdapter.id
+            : mode === "user_dataset"
+              ? userDatasetAdapter.id
+              : fixtureAdapter.id,
       coverage: collected.coverage,
       duplicateMerges: deduped.duplicateMerges,
       partialErrors: collected.partialErrors || [],
@@ -311,7 +350,9 @@ const search = async (spec = {}, configOverrides = {}) => {
           ? "Deterministic fixture results. Not live LinkedIn data."
           : mode === "user_dataset"
             ? "Matched against user-provided LinkedIn dataset (no remote LinkedIn fetch)."
-            : "Results from the configured authorized OpsAi LinkedIn opportunity feed.",
+            : mode === "perigon"
+              ? "Results from Perigon LinkedIn Social API (public posts). Confirm your Perigon license permits internal discovery/CRM use before production prospecting."
+              : "Results from the configured authorized OpsAi LinkedIn opportunity feed.",
       feasibility: SELECTED_METHODS,
     },
   };
@@ -334,6 +375,9 @@ const getPostDetails = async (spec = {}, configOverrides = {}) => {
           : undefined,
   });
   const mode = resolveSourceMode(spec, config);
+  if (mode === "perigon") {
+    return perigon.getPostDetailsUnsupported();
+  }
   const collectedAt = new Date().toISOString();
 
   let rows = [];
@@ -419,6 +463,7 @@ const getNativeStatus = (configOverrides = {}) => {
     queryBatchSize: config.queryBatchSize,
     concurrency: config.concurrency,
     sources: {
+      perigon: "requires_credential",
       authorized_feed: config.feedConfigured ? "configured" : "not_configured",
       user_dataset: "requires_node_input",
       previous_node: "requires_incoming_items",

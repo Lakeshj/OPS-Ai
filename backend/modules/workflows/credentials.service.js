@@ -35,6 +35,7 @@ const META_CREDENTIAL_TYPES = new Set(["meta_ads"]);
 const INSTAGRAM_CREDENTIAL_TYPES = new Set(["instagram"]);
 const FACEBOOK_PAGE_CREDENTIAL_TYPES = new Set(["facebook_page"]);
 const APIFY_CREDENTIAL_TYPES = new Set(["apify"]);
+const PERIGON_CREDENTIAL_TYPES = new Set(["perigon"]);
 
 const CREDENTIAL_TYPES = new Set([
   ...HTTP_CREDENTIAL_TYPES,
@@ -43,6 +44,7 @@ const CREDENTIAL_TYPES = new Set([
   ...INSTAGRAM_CREDENTIAL_TYPES,
   ...FACEBOOK_PAGE_CREDENTIAL_TYPES,
   ...APIFY_CREDENTIAL_TYPES,
+  ...PERIGON_CREDENTIAL_TYPES,
 ]);
 
 const parseConfig = (raw) => oauth2.parseConfig(raw);
@@ -72,6 +74,7 @@ const formatCredential = (row) => {
   const isMetaAds = row.type === "meta_ads";
   const isInstagram = row.type === "instagram";
   const isFacebookPage = row.type === "facebook_page";
+  const isPerigon = row.type === "perigon";
   const sharingScope = normalizeSharingScope(cfg.sharingScope);
   const metaExpired =
     isMetaAds && cfg.expiresAt ? Date.parse(cfg.expiresAt) <= Date.now() : false;
@@ -112,7 +115,9 @@ const formatCredential = (row) => {
               : cfg.connected === undefined
                 ? true
                 : Boolean(cfg.connected)
-            : true,
+            : isPerigon
+              ? Boolean(cfg.connected)
+              : true,
     reconnectRequired: isGoogle
       ? Boolean(cfg.reconnectRequired)
       : isMetaAds
@@ -313,6 +318,25 @@ const create = async ({ workspaceId, name, type, secret, config }, authUser) => 
     configJson = JSON.stringify({
       connected: true,
       provider: "apify",
+      sharingScope: normalizeSharingScope(config?.sharingScope),
+    });
+  } else if (PERIGON_CREDENTIAL_TYPES.has(type)) {
+    const apiKey = String(
+      secret?.apiKey || secret?.api_key || secret?.token || secret?.accessToken || ""
+    ).trim();
+    if (!apiKey) {
+      throw new AppError(
+        "Perigon API key is required.",
+        400,
+        "VALIDATION_ERROR"
+      );
+    }
+    secretPayload = { apiKey };
+    // Do not mark Connected until Test connection succeeds against LinkedIn Social.
+    configJson = JSON.stringify({
+      connected: false,
+      verified: false,
+      provider: "perigon",
       sharingScope: normalizeSharingScope(config?.sharingScope),
     });
   } else if (!HTTP_CREDENTIAL_TYPES.has(type)) {
@@ -709,6 +733,28 @@ const getSecretForWorkspace = async (credentialId, workspaceId) => {
   };
 };
 
+/**
+ * Persist Perigon LinkedIn Social verification result (never stores the API key in config).
+ */
+const markPerigonConnectionStatus = async (credentialId, workspaceId, statusPatch = {}) => {
+  const cred = await getForWorkspace(credentialId, workspaceId);
+  if (!cred || cred.type !== "perigon") {
+    throw new AppError("Perigon credential not found", 404, "NOT_FOUND");
+  }
+  const nextConfig = {
+    ...(cred.config || {}),
+    connected: Boolean(statusPatch.connected),
+    verified: Boolean(statusPatch.connected),
+    lastTestStatus: statusPatch.status || null,
+    lastTestAt: new Date().toISOString(),
+    lastTestCode: statusPatch.code || null,
+    linkedInAccess: statusPatch.linkedInAccess ?? null,
+    provider: "perigon",
+  };
+  await saveSecretAndConfig(credentialId, cred.secret, nextConfig);
+  return { id: credentialId, connected: nextConfig.connected, config: nextConfig };
+};
+
 module.exports = {
   listByWorkspace,
   create,
@@ -719,10 +765,12 @@ module.exports = {
   getForWorkspace,
   saveSecretAndConfig,
   getSecretForWorkspace,
+  markPerigonConnectionStatus,
   CREDENTIAL_TYPES,
   HTTP_CREDENTIAL_TYPES,
   GOOGLE_CREDENTIAL_TYPES,
   META_CREDENTIAL_TYPES,
+  PERIGON_CREDENTIAL_TYPES,
   INSTAGRAM_CREDENTIAL_TYPES,
   FACEBOOK_PAGE_CREDENTIAL_TYPES,
   APIFY_CREDENTIAL_TYPES,

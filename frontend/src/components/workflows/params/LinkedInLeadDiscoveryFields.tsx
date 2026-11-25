@@ -46,6 +46,9 @@ type UsageBucket = {
   infinite?: boolean;
   periodStart?: string | null;
   periodEnd?: string | null;
+  requestsUsed?: number | null;
+  requestsRemaining?: number | null;
+  requestLimit?: number | null;
 } | null;
 
 type UsageStatus = {
@@ -55,6 +58,13 @@ type UsageStatus = {
   allowanceNote?: string;
   refreshedAt?: string;
   sharedAllowance?: boolean;
+  provider?: string;
+  social?: {
+    requestsUsed?: number;
+    requestLimit?: number | null;
+    since?: string | null;
+    resetAt?: string | null;
+  } | null;
   free: UsageBucket;
   paid: UsageBucket;
 };
@@ -96,17 +106,23 @@ function UsageProgressBar({
       </div>
     );
   }
+  const isRequests =
+    bucket.requestsUsed != null ||
+    bucket.requestLimit != null ||
+    (bucket.label || "").toLowerCase().includes("social");
   if (bucket.infinite) {
     return (
       <div className="space-y-1">
         <div className="text-[11px] font-medium">{title}</div>
         <p className="text-[10px] text-muted-foreground">
-          Used ${Number(bucket.usedUsd || 0).toFixed(2)} — no finite limit
-          reported.
+          {isRequests
+            ? `Used ${Number(bucket.requestsUsed ?? bucket.usedUsd ?? 0)} requests — no finite limit reported.`
+            : `Used $${Number(bucket.usedUsd || 0).toFixed(2)} — no finite limit reported.`}
         </p>
         {bucket.periodStart || bucket.periodEnd ? (
           <p className="text-[10px] text-muted-foreground">
-            Period: {bucket.periodStart || "?"} → {bucket.periodEnd || "?"}
+            {isRequests ? "Reset" : "Period"}: {bucket.periodStart || "?"} →{" "}
+            {bucket.periodEnd || "?"}
           </p>
         ) : null}
       </div>
@@ -138,13 +154,20 @@ function UsageProgressBar({
       </div>
       <p className="text-[10px] text-muted-foreground">
         {used}% used / {remaining}% remaining
-        {bucket.usedUsd != null && bucket.limitUsd != null
-          ? ` · $${Number(bucket.usedUsd).toFixed(2)} / $${Number(bucket.limitUsd).toFixed(2)}`
-          : ""}
+        {isRequests && bucket.requestsUsed != null
+          ? ` · ${bucket.requestsUsed} consumed${
+              bucket.requestsRemaining != null
+                ? ` / ${bucket.requestsRemaining} remaining`
+                : ""
+            }`
+          : bucket.usedUsd != null && bucket.limitUsd != null
+            ? ` · $${Number(bucket.usedUsd).toFixed(2)} / $${Number(bucket.limitUsd).toFixed(2)}`
+            : ""}
       </p>
       {bucket.periodStart || bucket.periodEnd ? (
         <p className="text-[10px] text-muted-foreground">
-          Period: {bucket.periodStart || "?"} → {bucket.periodEnd || "?"}
+          {isRequests ? "Reset" : "Period"}: {bucket.periodStart || "?"} →{" "}
+          {bucket.periodEnd || "?"}
         </p>
       ) : null}
     </div>
@@ -172,6 +195,19 @@ export function LinkedInLeadDiscoveryFields({
     | "unsupported_api"
   >("idle");
   const [feedTesting, setFeedTesting] = useState(false);
+  const [perigonTestNote, setPerigonTestNote] = useState("");
+  const [perigonVerifyStatus, setPerigonVerifyStatus] = useState<
+    | "idle"
+    | "not_configured"
+    | "configured_unverified"
+    | "connected"
+    | "invalid_api_key"
+    | "linkedin_not_enabled"
+    | "quota_exhausted"
+    | "connection_failed"
+  >("idle");
+  const [perigonTesting, setPerigonTesting] = useState(false);
+  const nativeSource = String(values.nativeSource || "perigon");
 
   useEffect(() => {
     let cancelled = false;
@@ -197,7 +233,10 @@ export function LinkedInLeadDiscoveryFields({
   }, []);
 
   useEffect(() => {
-    if (dataProvider !== "apify") {
+    const wantApify = dataProvider === "apify";
+    const wantPerigon =
+      dataProvider === "opsai_native" && nativeSource === "perigon";
+    if (!wantApify && !wantPerigon) {
       setUsage(null);
       return;
     }
@@ -205,8 +244,10 @@ export function LinkedInLeadDiscoveryFields({
     setUsageLoading(true);
     workflowCredentialsApi
       .getLinkedInLeadDiscoveryUsage({
-        provider: "apify",
-        credentialId: String(values.apifyCredentialId || ""),
+        provider: wantPerigon ? "perigon" : "apify",
+        credentialId: wantPerigon
+          ? String(values.perigonCredentialId || "")
+          : String(values.apifyCredentialId || ""),
         workspaceId: workspaceId || "",
       })
       .then((res) => {
@@ -218,6 +259,8 @@ export function LinkedInLeadDiscoveryFields({
           allowanceNote: res.allowanceNote,
           refreshedAt: res.refreshedAt,
           sharedAllowance: res.sharedAllowance,
+          provider: res.provider,
+          social: res.social || null,
           free: res.free || null,
           paid: res.paid || null,
         });
@@ -238,7 +281,13 @@ export function LinkedInLeadDiscoveryFields({
     return () => {
       cancelled = true;
     };
-  }, [dataProvider, values.apifyCredentialId, workspaceId]);
+  }, [
+    dataProvider,
+    nativeSource,
+    values.apifyCredentialId,
+    values.perigonCredentialId,
+    workspaceId,
+  ]);
 
   const selectedCategories = useMemo(
     () =>
@@ -295,13 +344,17 @@ export function LinkedInLeadDiscoveryFields({
     operation === "discover_by_category" ||
     operation === "discover_by_custom_keywords";
   const showSearchFilters = operation !== "get_post_details";
-  const getPostSupported = dataProvider === "opsai_native" || dataProvider === "apify";
+  const getPostSupported =
+    dataProvider === "apify" ||
+    (dataProvider === "opsai_native" && nativeSource !== "perigon");
 
   return (
     <div className="space-y-3" data-linkedin-lead-discovery-fields="true">
       {showPostDetails && !getPostSupported ? (
         <p className="rounded-md border border-amber-500/40 bg-amber-500/10 px-2 py-1.5 text-[11px]">
-          Get Post Details is not available for the selected provider.
+          {nativeSource === "perigon"
+            ? "Get Post Details is not supported for Perigon (no documented individual-post lookup). Switch Native source or use Apify."
+            : "Get Post Details is not available for the selected provider."}
         </p>
       ) : null}
 
@@ -426,13 +479,22 @@ export function LinkedInLeadDiscoveryFields({
             permitted source below. Fixtures stay local/dev-only.
           </p>
           <Select
-            value={String(values.nativeSource || "authorized_feed")}
-            onValueChange={(v) => patch({ nativeSource: v })}
+            value={nativeSource}
+            onValueChange={(v) => {
+              setPerigonVerifyStatus("idle");
+              setPerigonTestNote("");
+              setFeedVerifyStatus("idle");
+              setFeedTestNote("");
+              patch({ nativeSource: v });
+            }}
           >
             <SelectTrigger>
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
+              <SelectItem value="perigon">
+                Perigon — LinkedIn Social API
+              </SelectItem>
               <SelectItem value="authorized_feed">
                 Authorized Data Feed
               </SelectItem>
@@ -441,8 +503,253 @@ export function LinkedInLeadDiscoveryFields({
             </SelectContent>
           </Select>
 
-          {String(values.nativeSource || "authorized_feed") ===
-          "authorized_feed" ? (
+          {nativeSource === "perigon" ? (
+            <div className="space-y-2">
+              <p className="text-[11px] text-muted-foreground">
+                Uses Perigon{" "}
+                <code className="text-[10px]">
+                  GET /v1/social/linkedin/posts
+                </code>{" "}
+                with your API key. LinkedIn Social access must be enabled on the
+                Perigon organization. Endpoint is managed internally — no Feed
+                URL. Confirm your Perigon license permits internal discovery /
+                CRM use before production prospecting.
+              </p>
+              {workspaceId ? (
+                <CredentialPicker
+                  workspaceId={workspaceId}
+                  value={String(values.perigonCredentialId || "")}
+                  onChange={(id) => {
+                    setPerigonVerifyStatus("configured_unverified");
+                    setPerigonTestNote("");
+                    patch({ perigonCredentialId: id });
+                  }}
+                  label="Perigon connection"
+                  allowedTypes={["perigon"]}
+                />
+              ) : (
+                <p className="text-[11px] text-muted-foreground">
+                  Open this workflow in a workspace to manage Perigon
+                  credentials.
+                </p>
+              )}
+              <p className="text-[10px] text-muted-foreground">
+                Status:{" "}
+                {(() => {
+                  const hasCred = Boolean(
+                    String(values.perigonCredentialId || "").trim()
+                  );
+                  if (perigonVerifyStatus === "connected") return "Connected";
+                  if (perigonVerifyStatus === "invalid_api_key")
+                    return "Connection failed — invalid API key";
+                  if (perigonVerifyStatus === "linkedin_not_enabled")
+                    return "LinkedIn Social API access not enabled";
+                  if (perigonVerifyStatus === "quota_exhausted")
+                    return "Social request quota exhausted";
+                  if (perigonVerifyStatus === "connection_failed")
+                    return "Connection failed";
+                  if (!hasCred) return "Not configured";
+                  return "Configured — not verified";
+                })()}
+              </p>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className="h-8"
+                disabled={
+                  perigonTesting ||
+                  !String(values.perigonCredentialId || "").trim() ||
+                  !workspaceId
+                }
+                onClick={() => {
+                  setPerigonTesting(true);
+                  setPerigonTestNote("");
+                  workflowCredentialsApi
+                    .testLinkedInPerigon({
+                      workspaceId: workspaceId || "",
+                      credentialId: String(values.perigonCredentialId || ""),
+                    })
+                    .then((res) => {
+                      if (res.ok || res.status === "connected") {
+                        setPerigonVerifyStatus("connected");
+                        setPerigonTestNote(
+                          `Connected — ${res.message || "OK"}`
+                        );
+                      } else if (res.status === "invalid_api_key") {
+                        setPerigonVerifyStatus("invalid_api_key");
+                        setPerigonTestNote(res.message || "Invalid API key");
+                      } else if (res.status === "linkedin_not_enabled") {
+                        setPerigonVerifyStatus("linkedin_not_enabled");
+                        setPerigonTestNote(
+                          res.message || "LinkedIn access not enabled"
+                        );
+                      } else if (res.status === "quota_exhausted") {
+                        setPerigonVerifyStatus("quota_exhausted");
+                        setPerigonTestNote(
+                          res.message || "Social quota exhausted"
+                        );
+                      } else if (res.status === "not_configured") {
+                        setPerigonVerifyStatus("not_configured");
+                        setPerigonTestNote(res.message || "Not configured");
+                      } else {
+                        setPerigonVerifyStatus("connection_failed");
+                        setPerigonTestNote(
+                          `Connection failed — ${res.message || res.code || "error"}`
+                        );
+                      }
+                      if (res.usage) {
+                        setUsage((prev) => ({
+                          available: Boolean(res.usage?.available),
+                          connected: Boolean(res.ok),
+                          reason: res.usage?.reason || prev?.reason,
+                          refreshedAt:
+                            res.usage?.refreshedAt || prev?.refreshedAt,
+                          social: res.usage?.social || null,
+                          free: prev?.free || null,
+                          paid: null,
+                          provider: "perigon",
+                        }));
+                      }
+                    })
+                    .catch((err) => {
+                      setPerigonVerifyStatus("connection_failed");
+                      setPerigonTestNote(
+                        `Connection failed — ${
+                          err?.message || "Unable to test Perigon"
+                        }`
+                      );
+                    })
+                    .finally(() => setPerigonTesting(false));
+                }}
+              >
+                {perigonTesting ? "Testing… (may take up to 60s)" : "Test connection"}
+              </Button>
+              {perigonTestNote ? (
+                <p className="text-[11px] text-muted-foreground">
+                  {perigonTestNote}
+                </p>
+              ) : null}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between gap-2">
+                  <Label className="text-[11px]">Social usage</Label>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="ghost"
+                    className="h-7 px-2 text-[11px]"
+                    disabled={usageLoading}
+                    onClick={() => {
+                      setUsage(null);
+                      setUsageLoading(true);
+                      workflowCredentialsApi
+                        .getLinkedInLeadDiscoveryUsage({
+                          provider: "perigon",
+                          credentialId: String(
+                            values.perigonCredentialId || ""
+                          ),
+                          workspaceId: workspaceId || "",
+                          refresh: true,
+                        })
+                        .then((res) =>
+                          setUsage({
+                            available: Boolean(res.available),
+                            connected: res.connected,
+                            reason: res.reason,
+                            allowanceNote: res.allowanceNote,
+                            refreshedAt: res.refreshedAt,
+                            provider: res.provider,
+                            social: res.social || null,
+                            free: res.free || null,
+                            paid: null,
+                          })
+                        )
+                        .catch(() =>
+                          setUsage({
+                            available: false,
+                            reason: "Usage status unavailable.",
+                            free: null,
+                            paid: null,
+                          })
+                        )
+                        .finally(() => setUsageLoading(false));
+                    }}
+                  >
+                    Refresh usage
+                  </Button>
+                </div>
+                {usageLoading ? (
+                  <p className="text-[11px] text-muted-foreground">
+                    Loading usage…
+                  </p>
+                ) : (
+                  <>
+                    {usage?.allowanceNote ? (
+                      <p className="text-[10px] text-muted-foreground">
+                        {usage.allowanceNote}
+                      </p>
+                    ) : null}
+                    {usage?.reason && !usage.available ? (
+                      <p className="text-[11px] text-muted-foreground">
+                        {usage.reason}
+                      </p>
+                    ) : null}
+                    <UsageProgressBar
+                      title="Perigon social requests"
+                      bucket={usage?.free || null}
+                    />
+                    {usage?.refreshedAt ? (
+                      <p className="text-[10px] text-muted-foreground">
+                        Last refreshed: {usage.refreshedAt}
+                      </p>
+                    ) : null}
+                  </>
+                )}
+              </div>
+              {showSearchFilters ? (
+                <div className="space-y-2">
+                  <div>
+                    <Label className="text-[11px]">
+                      Content type (optional)
+                    </Label>
+                    <Select
+                      value={String(values.contentType || "any")}
+                      onValueChange={(v) =>
+                        patch({ contentType: v === "any" ? "" : v })
+                      }
+                    >
+                      <SelectTrigger className="mt-1">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="any">Any</SelectItem>
+                        <SelectItem value="PHOTOS">Photos</SelectItem>
+                        <SelectItem value="VIDEOS">Videos</SelectItem>
+                        <SelectItem value="JOBS">Jobs</SelectItem>
+                        <SelectItem value="LIVE_VIDEOS">Live videos</SelectItem>
+                        <SelectItem value="DOCUMENTS">Documents</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label className="text-[11px]">
+                      Author title (optional)
+                    </Label>
+                    <Input
+                      className="mt-1"
+                      placeholder="e.g. CTO"
+                      value={String(values.authorTitle || "")}
+                      onChange={(e) =>
+                        patch({ authorTitle: e.target.value })
+                      }
+                    />
+                  </div>
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+
+          {nativeSource === "authorized_feed" ? (
             <div className="space-y-2">
               <div>
                 <Label className="text-[11px]">Feed URL</Label>
@@ -563,7 +870,7 @@ export function LinkedInLeadDiscoveryFields({
             </div>
           ) : null}
 
-          {String(values.nativeSource) === "user_dataset" ? (
+          {nativeSource === "user_dataset" ? (
             <div>
               <Label className="text-[11px]">Dataset JSON</Label>
               <textarea
@@ -591,7 +898,7 @@ export function LinkedInLeadDiscoveryFields({
             </div>
           ) : null}
 
-          {String(values.nativeSource) === "previous_node" ? (
+          {nativeSource === "previous_node" ? (
             <p className="text-[11px] text-muted-foreground">
               Uses LinkedIn-shaped items from the connected previous node
               (`sourcePostUrl` / `content`). No remote LinkedIn fetch.
@@ -779,7 +1086,9 @@ export function LinkedInLeadDiscoveryFields({
                 <SelectItem value="past-24h">Past 24 hours</SelectItem>
                 <SelectItem value="past-week">Past week</SelectItem>
                 <SelectItem value="past-month">Past month</SelectItem>
-                <SelectItem value="past-year">Past year</SelectItem>
+                {dataProvider === "apify" || nativeSource !== "perigon" ? (
+                  <SelectItem value="past-year">Past year</SelectItem>
+                ) : null}
               </SelectContent>
             </Select>
           </div>

@@ -18,7 +18,7 @@ const PROVIDERS = Object.freeze({
     }),
     collectionStatus: "native_engine_ready",
     notes:
-      "Primary provider. Live path: authorized OpsAi opportunity feed (OPSAI_LINKEDIN_FEED_URL) or user-provided dataset. Fixtures are opt-in for development only.",
+      "Primary provider. Live sources: Perigon LinkedIn Social API, authorized OpsAi opportunity feed, user-provided dataset, or previous-node input. Fixtures are opt-in for development only. Get Post Details is not available for Perigon.",
   }),
   apify: Object.freeze({
     id: "apify",

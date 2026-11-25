@@ -67,6 +67,19 @@ const validateCredential = (req) => {
     }
     return errors;
   }
+  if (type === "perigon") {
+    if (!secret || typeof secret !== "object") {
+      errors.push("secret is required");
+      return errors;
+    }
+    const apiKey = String(
+      secret.apiKey || secret.api_key || secret.token || secret.accessToken || ""
+    ).trim();
+    if (!apiKey) {
+      errors.push("secret.apiKey is required for perigon credentials");
+    }
+    return errors;
+  }
 
   if (googleTypes.has(type)) {
     if (!secret || typeof secret !== "object") {
@@ -92,6 +105,7 @@ const validateCredential = (req) => {
         ...Object.keys(CREDENTIAL_SECRET_FIELDS),
         ...googleTypes,
         "apify",
+        "perigon",
       ].join(", ")}`
     );
     return errors;

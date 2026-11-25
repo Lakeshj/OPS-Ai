@@ -233,7 +233,8 @@ export type WorkflowCredentialType =
   | "meta_ads"
   | "instagram"
   | "facebook_page"
-  | "apify";
+  | "apify"
+  | "perigon";
 
 export interface WorkflowCredential {
   id: string;
@@ -385,6 +386,12 @@ export const CREDENTIAL_TYPE_FIELDS: Record<
     accountLabel: "Apify Account",
     connectAction: "Add Apify API token",
     fields: [{ key: "apiToken", label: "API token", secret: true }],
+  },
+  perigon: {
+    label: "Perigon",
+    accountLabel: "Perigon Account",
+    connectAction: "Add Perigon API key",
+    fields: [{ key: "apiKey", label: "API key", secret: true }],
   },
 };
 
@@ -555,6 +562,7 @@ export interface WorkflowNodeData {
   apifyBillingMode?: string;
   /** OpsAi Native collection source */
   nativeSource?:
+    | "perigon"
     | "authorized_feed"
     | "user_dataset"
     | "previous_node"
@@ -563,6 +571,9 @@ export interface WorkflowNodeData {
   nativeFeedCredentialId?: string;
   nativeDatasetJson?: string;
   datasetPosts?: Array<Record<string, unknown>>;
+  perigonCredentialId?: string;
+  contentType?: string;
+  authorTitle?: string;
   mediaId?: string;
   commentId?: string;
   message?: string;

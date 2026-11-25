@@ -128,7 +128,11 @@ const startMockFeed = async () => {
   await check("M102-1 Feasibility matrix rejects unauthorized sources", () => {
     const { FEASIBILITY_MATRIX, SELECTED_METHODS } = feasibility();
     assert.ok(FEASIBILITY_MATRIX.length >= 6);
-    assert.equal(SELECTED_METHODS.primaryLive, "opsai_authorized_opportunity_feed");
+    assert.equal(SELECTED_METHODS.primaryLive, "perigon_linkedin_social_api");
+    assert.equal(
+      SELECTED_METHODS.secondaryLive,
+      "opsai_authorized_opportunity_feed"
+    );
     const scrape = FEASIBILITY_MATRIX.find(
       (r) => r.id === "linkedin_html_session_scrape"
     );

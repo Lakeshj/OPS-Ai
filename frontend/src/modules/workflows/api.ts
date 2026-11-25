@@ -632,6 +632,31 @@ export const workflowCredentialsApi = {
       feedUrl?: string;
     }>("/workflows/linkedin-lead-discovery/test-feed", args),
 
+  testLinkedInPerigon: (args: {
+    workspaceId: string;
+    credentialId: string;
+  }) =>
+    apiClient.post<{
+      ok: boolean;
+      status: string;
+      message?: string;
+      code?: string;
+      linkedInAccess?: boolean | null;
+      socialQuotaPresent?: boolean | null;
+      probeNumResults?: number | null;
+      usage?: {
+        available?: boolean;
+        social?: {
+          requestsUsed?: number;
+          requestLimit?: number | null;
+          since?: string | null;
+          resetAt?: string | null;
+        } | null;
+        refreshedAt?: string | null;
+        reason?: string | null;
+      };
+    }>("/workflows/linkedin-lead-discovery/test-perigon", args),
+
   getLinkedInLeadDiscoveryUsage: (args: {
     provider?: string;
     credentialId?: string;
@@ -650,6 +675,14 @@ export const workflowCredentialsApi = {
       allowanceNote?: string;
       refreshedAt?: string;
       sharedAllowance?: boolean;
+      provider?: string;
+      social?: {
+        requestsUsed?: number;
+        requestLimit?: number | null;
+        since?: string | null;
+        resetAt?: string | null;
+        lastMadeAt?: string | null;
+      } | null;
       free: null | {
         usedPercent?: number | null;
         remainingPercent?: number | null;
@@ -661,6 +694,10 @@ export const workflowCredentialsApi = {
         available?: boolean;
         infinite?: boolean;
         reason?: string;
+        requestsUsed?: number | null;
+        requestsRemaining?: number | null;
+        requestLimit?: number | null;
+        label?: string;
       };
       paid: null | {
         usedPercent?: number | null;

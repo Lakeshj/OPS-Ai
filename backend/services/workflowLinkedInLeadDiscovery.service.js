@@ -93,6 +93,15 @@ const sanitizeLinkedInLeadDiscoveryNodeData = (data) => {
       (row) => row && typeof row === "object"
     );
   }
+  if (next.perigonCredentialId != null) {
+    next.perigonCredentialId = String(next.perigonCredentialId).trim();
+  }
+  if (next.contentType != null) {
+    next.contentType = String(next.contentType).trim();
+  }
+  if (next.authorTitle != null) {
+    next.authorTitle = String(next.authorTitle).trim();
+  }
   // Clear incompatible stale params by operation.
   const op = next.operation || "discover_by_category";
   if (op === "get_post_details") {
@@ -117,6 +126,28 @@ const sanitizeLinkedInLeadDiscoveryNodeData = (data) => {
     delete next.nativeFeedCredentialId;
     delete next.nativeDatasetJson;
     delete next.datasetPosts;
+    delete next.perigonCredentialId;
+    delete next.contentType;
+    delete next.authorTitle;
+  } else {
+    const src = String(next.nativeSource || "").trim().toLowerCase();
+    if (src !== "perigon") {
+      // Keep credential id for reload when switching back; do not clear silently.
+    }
+    if (src === "perigon") {
+      delete next.nativeFeedUrl;
+      delete next.nativeFeedCredentialId;
+      delete next.nativeDatasetJson;
+      delete next.datasetPosts;
+    }
+    if (src === "authorized_feed" || src === "feed") {
+      delete next.nativeDatasetJson;
+      delete next.datasetPosts;
+    }
+    if (src === "user_dataset" || src === "previous_node") {
+      delete next.nativeFeedUrl;
+      delete next.nativeFeedCredentialId;
+    }
   }
   return next;
 };
@@ -196,6 +227,39 @@ const resolveApifyCredential = async (data, context) => {
   return credential;
 };
 
+const resolvePerigonCredential = async (data, context) => {
+  if (normalizeProviderId(data.dataProvider) !== "opsai_native") return null;
+  const nativeSource = String(data.nativeSource || "").trim().toLowerCase();
+  if (nativeSource !== "perigon") return null;
+  if (context?.perigonCredential) return context.perigonCredential;
+  const credentialId = String(data.perigonCredentialId || "").trim();
+  if (!credentialId) {
+    throw leadError(
+      "Select a Perigon API key credential before running with the Perigon Native source.",
+      "LINKEDIN_LEAD_PERIGON_NOT_CONNECTED"
+    );
+  }
+  const workspaceId = String(
+    context?.workspaceId || context?.workspace?.id || ""
+  ).trim();
+  if (!workspaceId) {
+    throw leadError(
+      "Workspace context is required to resolve the Perigon credential.",
+      "LINKEDIN_LEAD_PERIGON_NOT_CONNECTED"
+    );
+  }
+  const credentials = require("../modules/workflows/credentials.service");
+  const credential = await credentials.getForWorkspace(credentialId, workspaceId);
+  if (!credential || credential.type !== "perigon") {
+    throw leadError(
+      "Perigon credential not found for this workspace.",
+      "LINKEDIN_LEAD_PERIGON_NOT_CONNECTED",
+      404
+    );
+  }
+  return credential;
+};
+
 const executeLinkedInLeadDiscoveryNode = async (node, context) => {
   const data = sanitizeLinkedInLeadDiscoveryNodeData(node?.data || {});
   const operation = String(data.operation || "discover_by_category").trim();
@@ -229,6 +293,10 @@ const executeLinkedInLeadDiscoveryNode = async (node, context) => {
     providerId === "apify"
       ? await resolveApifyCredential(data, context)
       : null;
+  const perigonCredential =
+    providerId === "opsai_native"
+      ? await resolvePerigonCredential(data, context)
+      : null;
 
   let nativeFeedUrl = "";
   let nativeFeedToken = "";
@@ -247,7 +315,23 @@ const executeLinkedInLeadDiscoveryNode = async (node, context) => {
     nativeSource: data.nativeSource,
     feedUrl: nativeFeedUrl || undefined,
     feedToken: nativeFeedToken || undefined,
+    perigonCredential: perigonCredential || undefined,
+    contentType: data.contentType || undefined,
+    authorTitle: data.authorTitle || undefined,
+    perigonClient: context?.perigonClient,
+    perigonFetchImpl: context?.perigonFetchImpl,
   };
+
+  // Capability gate: Perigon does not support Get Post Details.
+  if (
+    operation === "get_post_details" &&
+    String(data.nativeSource || "").trim().toLowerCase() === "perigon"
+  ) {
+    throw leadError(
+      "Get Post Details is not supported for Perigon. Perigon does not document a direct individual-post URL lookup. Switch Native source or use Apify.",
+      "LINKEDIN_LEAD_PERIGON_UNSUPPORTED_OPERATION"
+    );
+  }
 
   if (operation === "get_post_details") {
     const result = await provider.getPostDetails({
@@ -361,6 +445,12 @@ const getLinkedInLeadDiscoveryCatalog = () => {
     nativeStatus,
     nativeSources: [
       {
+        id: "perigon",
+        label: "Perigon — LinkedIn Social API",
+        description:
+          "Authorized Perigon GET /v1/social/linkedin/posts keyword search. Requires org LinkedIn Social access.",
+      },
+      {
         id: "authorized_feed",
         label: "Authorized Data Feed",
         description:
@@ -378,6 +468,18 @@ const getLinkedInLeadDiscoveryCatalog = () => {
           "Match keywords against LinkedIn posts arriving from upstream workflow nodes.",
       },
     ],
+    perigon: {
+      endpoint: "GET https://api.perigon.io/v1/social/linkedin/posts",
+      auth: "x-api-key",
+      supportsGetPostDetails: false,
+      docs: [
+        "https://perigon.io/docs/api/social-linkedin-api",
+        "https://perigon.io/docs/api/social-api-overview",
+        "https://perigon.io/docs/api/authentication",
+      ],
+      sortBy: ["DATE_POSTED", "RELEVANCE"],
+      datePosted: ["PAST_24H", "PAST_WEEK", "PAST_MONTH"],
+    },
   };
 };
 
@@ -388,12 +490,27 @@ const testNativeFeedConnection = async (args = {}) => {
   return testFeedConnection(args);
 };
 
+const testPerigonConnection = async (args = {}) => {
+  const perigon = require("./linkedinLeadDiscovery/perigon");
+  return perigon.testPerigonConnection(args);
+};
+
 const getProviderUsageStatus = async (
   providerId,
   credential,
-  { forceRefresh = false, apifyClient, fetchImpl } = {}
+  { forceRefresh = false, apifyClient, fetchImpl, perigonClient } = {}
 ) => {
-  const id = normalizeProviderId(providerId);
+  const raw = String(providerId || "apify").trim().toLowerCase();
+  if (raw === "perigon") {
+    const perigon = require("./linkedinLeadDiscovery/perigon");
+    return perigon.getUsageStatus({
+      credential,
+      forceRefresh,
+      fetchImpl,
+      perigonClient,
+    });
+  }
+  const id = normalizeProviderId(raw);
   const provider = resolveProvider(id);
   if (typeof provider.getUsageStatus !== "function") {
     return {
@@ -418,6 +535,7 @@ module.exports = {
   getLinkedInLeadDiscoveryCatalog,
   getProviderUsageStatus,
   testNativeFeedConnection,
+  testPerigonConnection,
   getPublicLibrary,
   buildSearchQueries,
   PROVIDERS,

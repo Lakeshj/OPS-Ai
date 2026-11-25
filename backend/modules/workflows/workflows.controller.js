@@ -293,6 +293,57 @@ const testLinkedInNativeFeed = asyncHandler(async (req, res) => {
   );
 });
 
+const testLinkedInPerigon = asyncHandler(async (req, res) => {
+  const {
+    testPerigonConnection,
+  } = require("../../services/workflowLinkedInLeadDiscovery.service");
+  const credentials = require("./credentials.service");
+  const credentialId = String(req.body?.credentialId || "").trim();
+  const workspaceId = String(req.body?.workspaceId || "").trim();
+  // Never accept raw API keys from the client body — vault only.
+  if (!credentialId || !workspaceId) {
+    return res.json({
+      ok: false,
+      status: "not_configured",
+      code: "LINKEDIN_LEAD_PERIGON_KEY_MISSING",
+      message:
+        "Select a saved Perigon connection (API key is never sent from the browser).",
+    });
+  }
+  const credential = await credentials.getForWorkspace(credentialId, workspaceId);
+  const result = await testPerigonConnection({ credential });
+  if (credentialId && workspaceId) {
+    try {
+      await credentials.markPerigonConnectionStatus(credentialId, workspaceId, {
+        connected: Boolean(result.ok),
+        status: result.status,
+        code: result.code,
+        linkedInAccess: result.linkedInAccess,
+      });
+    } catch (_) {
+      // Non-fatal — test result still returned.
+    }
+  }
+  // Strip nested usage secrets if any; never echo keys.
+  res.json({
+    ok: Boolean(result.ok),
+    status: result.status,
+    code: result.code,
+    message: result.message,
+    linkedInAccess: result.linkedInAccess ?? null,
+    socialQuotaPresent: result.socialQuotaPresent ?? null,
+    probeNumResults: result.probeNumResults ?? null,
+    usage: result.usage
+      ? {
+          available: result.usage.available,
+          social: result.usage.social || null,
+          refreshedAt: result.usage.refreshedAt || null,
+          reason: result.usage.reason || null,
+        }
+      : undefined,
+  });
+});
+
 const metaOAuthCallback = asyncHandler(async (req, res) => {
   const metaOAuth = require("../../services/metaOAuth.service");
   try {
@@ -1232,6 +1283,7 @@ module.exports = {
   getLinkedInLeadDiscoveryCatalog,
   getLinkedInLeadDiscoveryUsage,
   testLinkedInNativeFeed,
+  testLinkedInPerigon,
   startInstagramOAuth,
   getInstagramOAuthStatus,
   instagramOAuthCallback,

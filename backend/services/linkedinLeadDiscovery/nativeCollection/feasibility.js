@@ -51,6 +51,18 @@ const FEASIBILITY_MATRIX = Object.freeze([
       "Publicly indexed snippets ≠ license for unrestricted CRM collection. LinkedIn ToS and indexer ToS typically restrict bulk reuse. Not enabled without legal/partner approval.",
   }),
   Object.freeze({
+    id: "perigon_linkedin_social_api",
+    label: "Perigon LinkedIn Social API",
+    capability:
+      "GET /v1/social/linkedin/posts keyword search over public LinkedIn posts via Perigon (x-api-key; org LinkedIn Social entitlement required).",
+    keywordSearch: true,
+    publicProspecting: true,
+    crmLeadUse: "when_perigon_license_allows",
+    status: "selected_primary",
+    reason:
+      "M10.3.4 dedicated Native source. Confirm Perigon org license permits internal discovery/CRM use before production prospecting. Get Post Details is not supported.",
+  }),
+  Object.freeze({
     id: "opsai_authorized_opportunity_feed",
     label: "OpsAi authorized opportunity feed (HTTP)",
     capability:
@@ -58,9 +70,9 @@ const FEASIBILITY_MATRIX = Object.freeze([
     keywordSearch: true,
     publicProspecting: true,
     crmLeadUse: "when_feed_license_allows",
-    status: "selected_primary",
+    status: "selected_secondary",
     reason:
-      "Primary M10.2 live path. Requires OPSAI_LINKEDIN_FEED_URL (and optional token). Feed operator must ensure rights for prospecting/CRM use.",
+      "Authorized feed path. Requires OPSAI_LINKEDIN_FEED_URL (and optional token). Feed operator must ensure rights for prospecting/CRM use.",
   }),
   Object.freeze({
     id: "user_provided_dataset",
@@ -88,7 +100,8 @@ const FEASIBILITY_MATRIX = Object.freeze([
 ]);
 
 const SELECTED_METHODS = Object.freeze({
-  primaryLive: "opsai_authorized_opportunity_feed",
+  primaryLive: "perigon_linkedin_social_api",
+  secondaryLive: "opsai_authorized_opportunity_feed",
   secondary: "user_provided_dataset",
   testOnly: "deterministic_fixtures",
   explicitlyRejected: [

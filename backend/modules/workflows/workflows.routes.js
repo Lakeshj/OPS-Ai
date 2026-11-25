@@ -44,6 +44,7 @@ const {
   getLinkedInLeadDiscoveryCatalog,
   getLinkedInLeadDiscoveryUsage,
   testLinkedInNativeFeed,
+  testLinkedInPerigon,
   startInstagramOAuth,
   getInstagramOAuthStatus,
   listInstagramAccounts,
@@ -117,6 +118,10 @@ router.get(
 router.post(
   "/linkedin-lead-discovery/test-feed",
   testLinkedInNativeFeed
+);
+router.post(
+  "/linkedin-lead-discovery/test-perigon",
+  testLinkedInPerigon
 );
 router.post("/instagram-oauth/start", startInstagramOAuth);
 router.get("/instagram-oauth/status", getInstagramOAuthStatus);
