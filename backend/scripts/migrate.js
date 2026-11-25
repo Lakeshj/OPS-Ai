@@ -78,7 +78,20 @@ const migrate = async () => {
               "Apply 031_instagram_credential_type_repair.sql (schema history drift)."
           );
         }
-        console.log("Verified workflow_credentials.type includes 'instagram'");
+        if (!/'apify'/.test(typeDef) || !/'perigon'/.test(typeDef)) {
+          throw new Error(
+            "workflow_credentials.type is missing 'apify' and/or 'perigon' after migrations. " +
+              "Apply 036_perigon_apify_credential_type_repair.sql (schema history drift)."
+          );
+        }
+        if (!/'facebook_page'/.test(typeDef)) {
+          throw new Error(
+            "workflow_credentials.type is missing 'facebook_page' after migrations."
+          );
+        }
+        console.log(
+          "Verified workflow_credentials.type includes 'instagram', 'facebook_page', 'apify', 'perigon'"
+        );
       }
     }
   } finally {

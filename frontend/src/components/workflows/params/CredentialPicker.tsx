@@ -95,6 +95,17 @@ export function CredentialPicker({
       : "bearer";
   const [type, setType] = useState<WorkflowCredentialType>(defaultType);
   const [secret, setSecret] = useState<Record<string, string>>({});
+  const [editingApiKey, setEditingApiKey] = useState(false);
+  const [editName, setEditName] = useState("");
+  const [editSecret, setEditSecret] = useState<Record<string, string>>({});
+
+  // Keep type aligned when the picker is scoped to a single allowed type
+  // (e.g. Perigon / Apify / bearer feed) — avoids stale state from remount reuse.
+  useEffect(() => {
+    if (allowedTypes && allowedTypes.length === 1) {
+      setType(allowedTypes[0]);
+    }
+  }, [allowedTypes]);
 
   const visibleTypes = (
     Object.keys(CREDENTIAL_TYPE_FIELDS) as WorkflowCredentialType[]
@@ -327,21 +338,63 @@ export function CredentialPicker({
       (selected.connected === false || selected.reconnectRequired === true)
   );
 
+  const disconnectSelected = () => {
+    if (!selected) return;
+    onChange("");
+    setEditingApiKey(false);
+    toast.success("Disconnected from this node (saved connection kept)");
+  };
+
   const removeSelected = async () => {
     if (!selected) return;
-    const ok = window.confirm(
-      `Remove "${selected.name}"? Workflows using this account will need another connection.`
-    );
-    if (!ok) return;
     setRemoving(true);
     try {
-      await workflowCredentialsApi.remove(selected.id);
+      let usageNote = "";
+      try {
+        const usage = await workflowCredentialsApi.getCredentialUsage(
+          selected.id
+        );
+        if (usage.workflowCount > 0) {
+          const names = (usage.workflows || [])
+            .map((w) => w.name)
+            .filter(Boolean)
+            .join(", ");
+          usageNote =
+            `\n\nUsed by ${usage.workflowCount} workflow(s)` +
+            (names ? `: ${names}` : "") +
+            ".";
+        }
+      } catch {
+        // Usage lookup is best-effort; still allow confirm.
+      }
+      const ok = window.confirm(
+        `Permanently delete saved connection "${selected.name}"?` +
+          usageNote +
+          "\n\nThis cannot be undone. Prefer Disconnect if you only want to clear this node."
+      );
+      if (!ok) return;
+
+      try {
+        await workflowCredentialsApi.remove(selected.id);
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        if (/still used|CREDENTIAL_IN_USE|409/i.test(msg)) {
+          const forceOk = window.confirm(
+            `${msg}\n\nForce delete anyway? Other workflows will lose this connection.`
+          );
+          if (!forceOk) return;
+          await workflowCredentialsApi.remove(selected.id, { force: true });
+        } else {
+          throw err;
+        }
+      }
       if (value === selected.id) onChange("");
+      setEditingApiKey(false);
       reload();
       toast.success(
         selected.type === "instagram"
           ? "Instagram disconnected from OpsAi"
-          : "Google connection removed"
+          : "Connection deleted"
       );
     } catch (err) {
       toast.error(
@@ -349,6 +402,39 @@ export function CredentialPicker({
       );
     } finally {
       setRemoving(false);
+    }
+  };
+
+  const saveApiKeyEdit = async () => {
+    if (!selected) return;
+    if (!editName.trim()) {
+      toast.error("Connection name is required");
+      return;
+    }
+    setSaving(true);
+    try {
+      const fields = CREDENTIAL_TYPE_FIELDS[selected.type]?.fields || [];
+      const secretPayload: Record<string, string> = {};
+      for (const field of fields) {
+        const next = String(editSecret[field.key] || "").trim();
+        if (next) secretPayload[field.key] = next;
+      }
+      await workflowCredentialsApi.update(selected.id, {
+        name: editName.trim(),
+        ...(Object.keys(secretPayload).length
+          ? { secret: secretPayload }
+          : {}),
+      });
+      setEditingApiKey(false);
+      setEditSecret({});
+      reload();
+      toast.success("Connection updated");
+    } catch (err) {
+      toast.error(
+        err instanceof Error ? err.message : "Could not update connection"
+      );
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -666,15 +752,117 @@ export function CredentialPicker({
       !metaOnly &&
       !instagramOnly &&
       !facebookPageOnly &&
-      !adding ? (
-        <Button
-          type="button"
-          size="sm"
-          variant="outline"
-          onClick={() => setAdding(true)}
-        >
-          {addHttpLabel}
-        </Button>
+      !adding &&
+      !editingApiKey ? (
+        <div className="flex flex-wrap gap-2">
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            onClick={() => setAdding(true)}
+          >
+            {addHttpLabel}
+          </Button>
+          {selected ? (
+            <>
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                onClick={() => disconnectSelected()}
+              >
+                Disconnect
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={() => {
+                  setEditName(selected.name || "");
+                  setEditSecret({});
+                  setEditingApiKey(true);
+                  setAdding(false);
+                }}
+              >
+                Edit
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant="destructive"
+                disabled={removing}
+                onClick={() => void removeSelected()}
+              >
+                {removing ? "Deleting…" : "Delete"}
+              </Button>
+            </>
+          ) : null}
+        </div>
+      ) : null}
+
+      {!googleOnly &&
+      !metaOnly &&
+      !instagramOnly &&
+      !facebookPageOnly &&
+      editingApiKey &&
+      selected ? (
+        <div className="space-y-2 rounded border bg-muted/30 p-2">
+          <p className="text-[10px] text-muted-foreground">
+            Stored secrets are never shown. Leave secret fields blank to keep
+            the existing value.
+          </p>
+          <div>
+            <Label className="text-[11px]">Name</Label>
+            <Input
+              value={editName}
+              onChange={(e) => setEditName(e.target.value)}
+              placeholder="Connection name"
+            />
+          </div>
+          {(CREDENTIAL_TYPE_FIELDS[selected.type]?.fields || []).map(
+            (field) => (
+              <div key={field.key}>
+                <Label className="text-[11px]">
+                  {field.label}
+                  {field.secret ? " (leave blank to keep)" : ""}
+                </Label>
+                <Input
+                  type={field.secret ? "password" : "text"}
+                  value={editSecret[field.key] || ""}
+                  autoComplete="new-password"
+                  placeholder={field.secret ? "••••••••" : undefined}
+                  onChange={(e) =>
+                    setEditSecret((prev) => ({
+                      ...prev,
+                      [field.key]: e.target.value,
+                    }))
+                  }
+                />
+              </div>
+            )
+          )}
+          <div className="flex gap-2">
+            <Button
+              type="button"
+              size="sm"
+              disabled={saving || !editName.trim()}
+              onClick={() => void saveApiKeyEdit()}
+            >
+              {saving ? "Saving…" : "Save changes"}
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="ghost"
+              onClick={() => {
+                setEditingApiKey(false);
+                setEditSecret({});
+              }}
+            >
+              Cancel
+            </Button>
+          </div>
+        </div>
       ) : null}
 
       {!googleOnly && !metaOnly && !facebookPageOnly && adding ? (

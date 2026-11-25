@@ -395,6 +395,12 @@ const create = async ({ workspaceId, name, type, secret, config }, authUser) => 
   return formatCredential(rows[0]);
 };
 
+const API_KEY_EDITABLE_TYPES = new Set([
+  ...HTTP_CREDENTIAL_TYPES,
+  ...APIFY_CREDENTIAL_TYPES,
+  ...PERIGON_CREDENTIAL_TYPES,
+]);
+
 const update = async (credentialId, { name, secret, config }, authUser) => {
   const [rows] = await pool.execute(
     `SELECT * FROM workflow_credentials WHERE id = ?`,
@@ -405,6 +411,113 @@ const update = async (credentialId, { name, secret, config }, authUser) => {
   const row = rows[0];
   const existingSecret = decryptSecret(row.secret_json) || {};
   const existingConfig = parseConfig(row.config_json);
+
+  // API-key style credentials (Perigon / Apify / HTTP): name + optional secret rotate.
+  // Never return the previous secret to the client.
+  if (API_KEY_EDITABLE_TYPES.has(row.type) && !GOOGLE_CREDENTIAL_TYPES.has(row.type)) {
+    const nextName =
+      name !== undefined ? String(name || "").trim() : String(row.name || "");
+    if (!nextName) {
+      throw new AppError("name cannot be empty", 400, "VALIDATION_ERROR");
+    }
+    let nextSecret = { ...existingSecret };
+    let nextConfig = { ...existingConfig };
+    if (secret && typeof secret === "object") {
+      if (row.type === "perigon") {
+        const apiKey = String(
+          secret.apiKey || secret.api_key || secret.token || secret.accessToken || ""
+        ).trim();
+        if (apiKey) {
+          nextSecret = { apiKey };
+          // Rotating the key invalidates prior LinkedIn verification.
+          nextConfig = {
+            ...nextConfig,
+            connected: false,
+            verified: false,
+            lastTestStatus: null,
+            lastTestAt: null,
+            lastTestCode: null,
+            linkedInAccess: null,
+            provider: "perigon",
+          };
+        }
+      } else if (row.type === "apify") {
+        const apiToken = String(
+          secret.apiToken || secret.token || secret.accessToken || ""
+        ).trim();
+        if (apiToken) {
+          nextSecret = { apiToken };
+          nextConfig = { ...nextConfig, connected: true, provider: "apify" };
+        }
+      } else if (row.type === "bearer") {
+        const token = String(secret.token || "").trim();
+        if (token) nextSecret = { token };
+      } else if (row.type === "api_key_header") {
+        const headerName = String(
+          secret.headerName || existingSecret.headerName || ""
+        ).trim();
+        const value = String(secret.value || existingSecret.value || "").trim();
+        if (secret.value != null && !value) {
+          throw new AppError("secret.value is required", 400, "VALIDATION_ERROR");
+        }
+        if (headerName || value) {
+          nextSecret = {
+            headerName: headerName || existingSecret.headerName,
+            value: value || existingSecret.value,
+          };
+        }
+      } else if (row.type === "basic") {
+        const username = String(
+          secret.username != null ? secret.username : existingSecret.username || ""
+        ).trim();
+        const password =
+          secret.password != null
+            ? String(secret.password)
+            : String(existingSecret.password || "");
+        if (secret.password != null && !String(secret.password).length) {
+          throw new AppError("secret.password is required", 400, "VALIDATION_ERROR");
+        }
+        nextSecret = { username, password };
+      } else if (row.type === "query_param") {
+        const paramName = String(
+          secret.paramName || existingSecret.paramName || ""
+        ).trim();
+        const value = String(secret.value || existingSecret.value || "").trim();
+        if (secret.value != null && !value) {
+          throw new AppError("secret.value is required", 400, "VALIDATION_ERROR");
+        }
+        nextSecret = {
+          paramName: paramName || existingSecret.paramName,
+          value: value || existingSecret.value,
+        };
+      } else if (row.type === "oauth2") {
+        throw new AppError(
+          "Updating oauth2 secrets here is not supported. Reconnect OAuth instead.",
+          400,
+          "VALIDATION_ERROR"
+        );
+      }
+    }
+    if (config && typeof config === "object" && config.sharingScope != null) {
+      nextConfig.sharingScope = normalizeSharingScope(config.sharingScope);
+    }
+    await pool.execute(
+      `UPDATE workflow_credentials
+       SET name = ?, secret_json = ?, config_json = ?
+       WHERE id = ?`,
+      [
+        nextName,
+        encryptSecret(nextSecret),
+        JSON.stringify(nextConfig),
+        credentialId,
+      ]
+    );
+    const [updated] = await pool.execute(
+      `SELECT * FROM workflow_credentials WHERE id = ?`,
+      [credentialId]
+    );
+    return formatCredential(updated[0]);
+  }
 
   if (!GOOGLE_CREDENTIAL_TYPES.has(row.type)) {
     throw new AppError(
@@ -509,21 +622,32 @@ const update = async (credentialId, { name, secret, config }, authUser) => {
   return formatCredential(updated[0]);
 };
 
-const remove = async (id, authUser) => {
-  const [rows] = await pool.execute(
-    `SELECT * FROM workflow_credentials WHERE id = ?`,
-    [id]
-  );
-  if (rows.length === 0) {
-    throw new AppError("Credential not found", 404, "NOT_FOUND");
+/** Node data keys that may hold a workspace credential id. */
+const CREDENTIAL_ID_KEYS = Object.freeze([
+  "credentialId",
+  "apifyCredentialId",
+  "perigonCredentialId",
+  "nativeFeedCredentialId",
+  "httpCredentialId",
+  "authCredentialId",
+]);
+
+const nodeReferencesCredential = (nodeData, credentialId) => {
+  if (!nodeData || typeof nodeData !== "object") return false;
+  const id = String(credentialId);
+  for (const key of CREDENTIAL_ID_KEYS) {
+    if (String(nodeData[key] || "").trim() === id) return true;
   }
-  await assertWorkspaceAccess(authUser, rows[0].workspace_id);
-  await pool.execute(`DELETE FROM workflow_credentials WHERE id = ?`, [id]);
+  for (const [key, value] of Object.entries(nodeData)) {
+    if (!/credentialid$/i.test(key)) continue;
+    if (String(value || "").trim() === id) return true;
+  }
+  return false;
 };
 
 /**
  * List workflows in the credential's workspace that reference credentialId
- * on any node. Used for disconnect confirmation warnings only.
+ * on any node (including Perigon / Apify / feed credential fields).
  */
 const listCredentialUsage = async (credentialId, authUser) => {
   const [rows] = await pool.execute(
@@ -536,7 +660,8 @@ const listCredentialUsage = async (credentialId, authUser) => {
   const workspaceId = rows[0].workspace_id;
   await assertWorkspaceAccess(authUser, workspaceId);
   const [workflows] = await pool.execute(
-    `SELECT id, name, definition_json FROM workflows WHERE workspace_id = ?`,
+    `SELECT id, name, definition_json FROM workflows
+     WHERE workspace_id = ? AND deleted_at IS NULL`,
     [workspaceId]
   );
   const id = String(credentialId);
@@ -552,8 +677,8 @@ const listCredentialUsage = async (credentialId, authUser) => {
       definition = { nodes: [] };
     }
     const nodes = Array.isArray(definition.nodes) ? definition.nodes : [];
-    const uses = nodes.some(
-      (node) => String(node?.data?.credentialId || "").trim() === id
+    const uses = nodes.some((node) =>
+      nodeReferencesCredential(node?.data, id)
     );
     if (uses) {
       matches.push({ id: wf.id, name: String(wf.name || "Untitled workflow") });
@@ -565,6 +690,36 @@ const listCredentialUsage = async (credentialId, authUser) => {
     workflowCount: matches.length,
     workflows: matches.slice(0, 20),
   };
+};
+
+/**
+ * Permanently delete a credential.
+ * When other workflows still reference it, requires `{ force: true }` after UI confirmation.
+ */
+const remove = async (id, authUser, { force = false } = {}) => {
+  const [rows] = await pool.execute(
+    `SELECT * FROM workflow_credentials WHERE id = ?`,
+    [id]
+  );
+  if (rows.length === 0) {
+    throw new AppError("Credential not found", 404, "NOT_FOUND");
+  }
+  await assertWorkspaceAccess(authUser, rows[0].workspace_id);
+  const usage = await listCredentialUsage(id, authUser);
+  if (usage.workflowCount > 0 && !force) {
+    const names = usage.workflows.map((w) => w.name).join(", ");
+    const err = new AppError(
+      `This connection is still used by ${usage.workflowCount} workflow(s)` +
+        (names ? `: ${names}` : "") +
+        `. Disconnect it from those workflows first, or confirm force delete.`,
+      409,
+      "CREDENTIAL_IN_USE"
+    );
+    err.details = { usage };
+    throw err;
+  }
+  await pool.execute(`DELETE FROM workflow_credentials WHERE id = ?`, [id]);
+  return { success: true, forced: Boolean(force), previousUsage: usage };
 };
 
 const getEditorView = async (id, authUser) => {

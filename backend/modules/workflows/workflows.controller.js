@@ -143,8 +143,16 @@ const createCredential = asyncHandler(async (req, res) => {
 });
 
 const removeCredential = asyncHandler(async (req, res) => {
-  await credentialsService.remove(req.params.credentialId, req.user);
-  res.json({ success: true });
+  const force =
+    String(req.query?.force || "").trim() === "1" ||
+    req.body?.force === true ||
+    String(req.body?.force || "").trim() === "1";
+  const result = await credentialsService.remove(
+    req.params.credentialId,
+    req.user,
+    { force }
+  );
+  res.json({ success: true, ...(result || {}) });
 });
 
 const startGoogleOAuth = asyncHandler(async (req, res) => {

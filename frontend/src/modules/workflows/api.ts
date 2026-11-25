@@ -343,9 +343,11 @@ export const workflowCredentialsApi = {
       payload
     ),
 
-  remove: (credentialId: string) =>
+  remove: (credentialId: string, opts?: { force?: boolean }) =>
     apiClient.delete<{ success: boolean }>(
-      `/workflows/credentials/${credentialId}`
+      `/workflows/credentials/${credentialId}${
+        opts?.force ? "?force=1" : ""
+      }`
     ),
 
   getCredentialUsage: (credentialId: string) =>
