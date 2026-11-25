@@ -62,11 +62,19 @@ const createApifyClient = ({
       } catch (_) {
         parsed = text;
       }
-      if (res.status === 401 || res.status === 403) {
+      if (res.status === 401) {
+        // HTTP 400 (not 401): OpsAi session 401 must stay reserved for JWT auth.
         throw new AppError(
-          "Apify credentials are invalid or revoked. Reconnect your Apify API token.",
-          401,
+          "Apify credentials are invalid or revoked. Edit or reconnect your Apify API token.",
+          400,
           "LINKEDIN_LEAD_APIFY_CREDENTIAL_INVALID"
+        );
+      }
+      if (res.status === 403) {
+        throw new AppError(
+          "Apify denied this request (permission or plan). Check the token scopes and Apify account access.",
+          403,
+          "LINKEDIN_LEAD_APIFY_PERMISSION_DENIED"
         );
       }
       if (res.status === 429) {

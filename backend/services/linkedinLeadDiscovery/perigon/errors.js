@@ -37,10 +37,11 @@ const classifyHttpError = (status, body, { context = "request" } = {}) => {
   const lower = raw.toLowerCase();
 
   if (status === 401) {
+    // Use 400 — never OpsAi HTTP 401 (SPA treats 401 as session expiry).
     return new AppError(
       raw ||
         "Perigon API key is invalid or missing. Reconnect with a valid key from the Perigon Developers section.",
-      401,
+      400,
       CODE.KEY_INVALID
     );
   }

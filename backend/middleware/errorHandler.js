@@ -4,7 +4,20 @@ const errorHandler = (err, req, res, next) => {
   console.error(`[${req.method} ${req.originalUrl}]`, err.message);
 
   if (err.isOperational) {
-    return res.status(err.statusCode).json({
+    let status = err.statusCode;
+    const code = typeof err.code === "string" ? err.code : "";
+    // External provider auth failures must never use HTTP 401 — the SPA
+    // interceptor treats 401 as OpsAi session expiry and logs the user out.
+    if (
+      status === 401 &&
+      code &&
+      code !== "UNAUTHORIZED" &&
+      code !== "INVALID_CREDENTIALS" &&
+      code !== "TOKEN_EXPIRED"
+    ) {
+      status = 400;
+    }
+    return res.status(status).json({
       error: err.message,
       code: err.code,
     });

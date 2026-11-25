@@ -267,14 +267,28 @@ const getLinkedInLeadDiscoveryUsage = asyncHandler(async (req, res) => {
   const forceRefresh =
     String(req.query?.refresh || "").trim() === "1" ||
     String(req.query?.forceRefresh || "").trim() === "1";
+  const provider = String(req.query?.provider || "apify").trim().toLowerCase();
   if (credentialId && workspaceId) {
     credential = await credentials.getForWorkspace(credentialId, workspaceId);
   }
-  res.json(
-    await getProviderUsageStatus(req.query?.provider || "apify", credential, {
+  try {
+    // Usage/status is read-only panel data. Provider failures must return 200
+    // with available:false — never OpsAi HTTP 401 (SPA logout).
+    const status = await getProviderUsageStatus(provider, credential, {
       forceRefresh,
-    })
-  );
+    });
+    res.json(status);
+  } catch (err) {
+    res.status(200).json({
+      available: false,
+      connected: false,
+      reason: err?.message || "Usage status unavailable.",
+      code: err?.code || null,
+      free: null,
+      paid: null,
+      provider: provider || null,
+    });
+  }
 });
 
 const testLinkedInNativeFeed = asyncHandler(async (req, res) => {

@@ -618,7 +618,9 @@ export const workflowCredentialsApi = {
         label: string;
         description?: string;
       }>;
-    }>("/workflows/linkedin-lead-discovery/catalog"),
+    }>("/workflows/linkedin-lead-discovery/catalog", {
+      skipUnauthorizedHandler: true,
+    }),
 
   testLinkedInNativeFeed: (args: {
     feedUrl: string;
@@ -632,7 +634,11 @@ export const workflowCredentialsApi = {
       code?: string;
       httpStatus?: number;
       feedUrl?: string;
-    }>("/workflows/linkedin-lead-discovery/test-feed", args),
+    }>(
+      "/workflows/linkedin-lead-discovery/test-feed",
+      args,
+      { skipUnauthorizedHandler: true }
+    ),
 
   testLinkedInPerigon: (args: {
     workspaceId: string;
@@ -657,7 +663,11 @@ export const workflowCredentialsApi = {
         refreshedAt?: string | null;
         reason?: string | null;
       };
-    }>("/workflows/linkedin-lead-discovery/test-perigon", args),
+    }>(
+      "/workflows/linkedin-lead-discovery/test-perigon",
+      args,
+      { skipUnauthorizedHandler: true }
+    ),
 
   getLinkedInLeadDiscoveryUsage: (args: {
     provider?: string;
@@ -674,10 +684,12 @@ export const workflowCredentialsApi = {
       available: boolean;
       connected?: boolean;
       reason?: string;
+      code?: string;
       allowanceNote?: string;
       refreshedAt?: string;
       sharedAllowance?: boolean;
       provider?: string;
+      credentialInvalid?: boolean;
       social?: {
         requestsUsed?: number;
         requestLimit?: number | null;
@@ -713,7 +725,9 @@ export const workflowCredentialsApi = {
         infinite?: boolean;
         reason?: string;
       };
-    }>(`/workflows/linkedin-lead-discovery/usage?${params.toString()}`);
+    }>(`/workflows/linkedin-lead-discovery/usage?${params.toString()}`, {
+      skipUnauthorizedHandler: true,
+    });
   },
 
   startInstagramOAuth: (payload: {

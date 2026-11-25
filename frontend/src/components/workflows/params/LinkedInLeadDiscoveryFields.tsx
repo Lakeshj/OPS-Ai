@@ -55,10 +55,12 @@ type UsageStatus = {
   available: boolean;
   connected?: boolean;
   reason?: string;
+  code?: string;
   allowanceNote?: string;
   refreshedAt?: string;
   sharedAllowance?: boolean;
   provider?: string;
+  credentialInvalid?: boolean;
   social?: {
     requestsUsed?: number;
     requestLimit?: number | null;
@@ -240,46 +242,75 @@ export function LinkedInLeadDiscoveryFields({
       setUsage(null);
       return;
     }
+    const credentialId = wantPerigon
+      ? String(values.perigonCredentialId || "")
+      : String(values.apifyCredentialId || "");
+    // No credential selected → do not call the provider (avoids empty probes).
+    if (!credentialId || !workspaceId) {
+      setUsage({
+        available: false,
+        connected: false,
+        reason: wantPerigon
+          ? "Select a Perigon connection to load social usage."
+          : "Select an Apify connection to load usage.",
+        free: null,
+        paid: null,
+      });
+      setUsageLoading(false);
+      return;
+    }
     let cancelled = false;
+    let timer: ReturnType<typeof setTimeout> | null = null;
     setUsageLoading(true);
-    workflowCredentialsApi
-      .getLinkedInLeadDiscoveryUsage({
-        provider: wantPerigon ? "perigon" : "apify",
-        credentialId: wantPerigon
-          ? String(values.perigonCredentialId || "")
-          : String(values.apifyCredentialId || ""),
-        workspaceId: workspaceId || "",
-      })
-      .then((res) => {
-        if (cancelled) return;
-        setUsage({
-          available: Boolean(res.available),
-          connected: res.connected,
-          reason: res.reason,
-          allowanceNote: res.allowanceNote,
-          refreshedAt: res.refreshedAt,
-          sharedAllowance: res.sharedAllowance,
-          provider: res.provider,
-          social: res.social || null,
-          free: res.free || null,
-          paid: res.paid || null,
-        });
-      })
-      .catch(() => {
-        if (!cancelled) {
+    // Debounce mount/restore storms from React Strict Mode + autosave patches.
+    timer = setTimeout(() => {
+      workflowCredentialsApi
+        .getLinkedInLeadDiscoveryUsage({
+          provider: wantPerigon ? "perigon" : "apify",
+          credentialId,
+          workspaceId,
+        })
+        .then((res) => {
+          if (cancelled) return;
+          setUsage({
+            available: Boolean(res.available),
+            connected: res.connected,
+            reason: res.reason,
+            code: res.code,
+            allowanceNote: res.allowanceNote,
+            refreshedAt: res.refreshedAt,
+            sharedAllowance: res.sharedAllowance,
+            provider: res.provider,
+            credentialInvalid: res.credentialInvalid,
+            social: res.social || null,
+            free: res.free || null,
+            paid: res.paid || null,
+          });
+        })
+        .catch((err) => {
+          if (cancelled) return;
           setUsage({
             available: false,
-            reason: "Usage status unavailable.",
+            connected: false,
+            reason:
+              err instanceof Error
+                ? err.message
+                : "Usage status unavailable.",
+            code:
+              err && typeof err === "object" && "code" in err
+                ? String((err as { code?: string }).code || "")
+                : undefined,
             free: null,
             paid: null,
           });
-        }
-      })
-      .finally(() => {
-        if (!cancelled) setUsageLoading(false);
-      });
+        })
+        .finally(() => {
+          if (!cancelled) setUsageLoading(false);
+        });
+    }, 150);
     return () => {
       cancelled = true;
+      if (timer) clearTimeout(timer);
     };
   }, [
     dataProvider,
@@ -450,12 +481,22 @@ export function LinkedInLeadDiscoveryFields({
               <p className="text-[11px] text-muted-foreground">Loading usage…</p>
             ) : (
               <>
+                {usage?.credentialInvalid ||
+                usage?.code === "LINKEDIN_LEAD_APIFY_CREDENTIAL_INVALID" ||
+                usage?.code === "LINKEDIN_LEAD_APIFY_PERMISSION_DENIED" ? (
+                  <p className="rounded-md border border-amber-500/40 bg-amber-500/10 px-2 py-1.5 text-[11px]">
+                    {usage.reason ||
+                      "Apify connection is invalid. Edit or replace the API token. Your OpsAi session stays signed in."}
+                  </p>
+                ) : null}
                 {usage?.allowanceNote ? (
                   <p className="text-[10px] text-muted-foreground">
                     {usage.allowanceNote}
                   </p>
                 ) : null}
-                {usage?.reason ? (
+                {usage?.reason &&
+                !usage.credentialInvalid &&
+                usage.code !== "LINKEDIN_LEAD_APIFY_CREDENTIAL_INVALID" ? (
                   <p className="text-[11px] text-muted-foreground">
                     {usage.reason}
                   </p>

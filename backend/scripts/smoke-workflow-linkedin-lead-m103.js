@@ -48,12 +48,10 @@ const makeMockClient = ({
     actorId: "kfiWbq3boy3dWKbiL",
     getMe: async () => {
       if (invalidToken) {
-        const err = new Error("unauthorized");
-        err.status = 401;
         const AppError = require("../utils/AppError");
         throw new AppError(
-          "Apify credentials are invalid or revoked. Reconnect your Apify API token.",
-          401,
+          "Apify credentials are invalid or revoked. Edit or reconnect your Apify API token.",
+          400,
           "LINKEDIN_LEAD_APIFY_CREDENTIAL_INVALID"
         );
       }

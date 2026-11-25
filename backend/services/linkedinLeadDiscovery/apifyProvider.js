@@ -95,18 +95,21 @@ const getUsageStatus = async ({
       apifyClient ||
       createApifyClient({ token: extractToken(credential), fetchImpl });
     const cacheKey = credential?.id || "anon";
-    return fetchUsageStatus(client, { forceRefresh, cacheKey });
+    // Must await — a bare `return fetchUsageStatus(...)` lets async 401
+    // rejections escape the try/catch and surface as OpsAi HTTP 401 → logout.
+    return await fetchUsageStatus(client, { forceRefresh, cacheKey });
   } catch (err) {
     if (err instanceof AppError) {
       return {
         available: false,
-        connected: hasToken,
+        connected: false,
         reason: err.message,
         code: err.code,
         free: null,
         paid: null,
         actorId: ACTOR_ID,
         actorUrl: ACTOR_URL,
+        provider: "apify",
       };
     }
     return {
@@ -117,6 +120,7 @@ const getUsageStatus = async ({
       paid: null,
       actorId: ACTOR_ID,
       actorUrl: ACTOR_URL,
+      provider: "apify",
     };
   }
 };

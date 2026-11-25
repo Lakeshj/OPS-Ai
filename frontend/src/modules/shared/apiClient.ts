@@ -91,13 +91,28 @@ class ApiClient {
           unauthorizedHandler &&
           !skipUnauthorizedHandler
         ) {
-          // Provider/credential failures must not clear the OpsAi login session.
+          // Only genuine OpsAi session failures should log the user out.
+          // External provider auth codes (Apify/Perigon/Google/Meta/…) must not.
+          const opsAiSessionFailure =
+            !code ||
+            code === "UNAUTHORIZED" ||
+            code === "INVALID_CREDENTIALS" ||
+            code === "TOKEN_EXPIRED" ||
+            code === "AUTH_REQUIRED" ||
+            code === "SESSION_EXPIRED";
           const providerAuthFailure =
             typeof code === "string" &&
             (code.startsWith("GOOGLE_") ||
               code.startsWith("OAUTH") ||
-              code === "UPSTREAM_ERROR");
-          if (!providerAuthFailure) {
+              code.startsWith("LINKEDIN_LEAD_") ||
+              code.startsWith("APIFY_") ||
+              code.startsWith("PERIGON_") ||
+              code.startsWith("META_") ||
+              code.startsWith("INSTAGRAM_") ||
+              code.startsWith("FACEBOOK_") ||
+              code === "UPSTREAM_ERROR" ||
+              code === "CREDENTIAL_IN_USE");
+          if (opsAiSessionFailure && !providerAuthFailure) {
             unauthorizedHandler();
           }
         }
@@ -145,36 +160,56 @@ class ApiClient {
     return this.request<T>(endpoint, { ...options, method: "GET" });
   }
 
-  async post<T>(endpoint: string, data?: unknown): Promise<T> {
+  async post<T>(
+    endpoint: string,
+    data?: unknown,
+    options?: RequestOptions
+  ): Promise<T> {
     return this.request<T>(endpoint, {
+      ...options,
       method: "POST",
       body: data ? JSON.stringify(data) : undefined,
     });
   }
 
-  async postForm<T>(endpoint: string, data: FormData): Promise<T> {
+  async postForm<T>(
+    endpoint: string,
+    data: FormData,
+    options?: RequestOptions
+  ): Promise<T> {
     return this.request<T>(endpoint, {
+      ...options,
       method: "POST",
       body: data,
     });
   }
 
-  async put<T>(endpoint: string, data?: unknown): Promise<T> {
+  async put<T>(
+    endpoint: string,
+    data?: unknown,
+    options?: RequestOptions
+  ): Promise<T> {
     return this.request<T>(endpoint, {
+      ...options,
       method: "PUT",
       body: data ? JSON.stringify(data) : undefined,
     });
   }
 
-  async patch<T>(endpoint: string, data?: unknown): Promise<T> {
+  async patch<T>(
+    endpoint: string,
+    data?: unknown,
+    options?: RequestOptions
+  ): Promise<T> {
     return this.request<T>(endpoint, {
+      ...options,
       method: "PATCH",
       body: data ? JSON.stringify(data) : undefined,
     });
   }
 
-  async delete<T>(endpoint: string): Promise<T> {
-    return this.request<T>(endpoint, { method: "DELETE" });
+  async delete<T>(endpoint: string, options?: RequestOptions): Promise<T> {
+    return this.request<T>(endpoint, { ...options, method: "DELETE" });
   }
 }
 

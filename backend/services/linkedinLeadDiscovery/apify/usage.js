@@ -170,20 +170,27 @@ const fetchUsageStatus = async (client, { forceRefresh = false, cacheKey } = {})
     setCachedUsage(key, snapshot);
     return { ...snapshot, fromCache: false };
   } catch (err) {
-    if (err instanceof AppError && err.code === "LINKEDIN_LEAD_APIFY_CREDENTIAL_INVALID") {
-      throw err;
-    }
+    // Never throw provider auth failures from usage polling — callers open
+    // node panels on mount; HTTP 401 would incorrectly log the user out of OpsAi.
+    const invalid =
+      err instanceof AppError &&
+      (err.code === "LINKEDIN_LEAD_APIFY_CREDENTIAL_INVALID" ||
+        err.code === "LINKEDIN_LEAD_APIFY_PERMISSION_DENIED" ||
+        err.code === "LINKEDIN_LEAD_APIFY_NOT_CONNECTED");
     return {
       available: false,
-      connected: true,
+      connected: false,
       reason:
         err?.message ||
         "Apify usage APIs are temporarily unavailable. Progress bars are not fabricated.",
+      code: err?.code || null,
       free: null,
       paid: null,
       actorId: ACTOR_ID,
       actorUrl: ACTOR_URL,
       refreshedAt: new Date().toISOString(),
+      provider: "apify",
+      credentialInvalid: Boolean(invalid),
     };
   }
 };
