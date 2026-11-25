@@ -61,6 +61,7 @@ export type WorkflowNodeType =
   | "metaAds"
   | "instagram"
   | "facebookPage"
+  | "linkedinLeadDiscovery"
   | "gmail"
   | "gmailTrigger"
   | "googleSheets"
@@ -231,7 +232,8 @@ export type WorkflowCredentialType =
   | "oauth2"
   | "meta_ads"
   | "instagram"
-  | "facebook_page";
+  | "facebook_page"
+  | "apify";
 
 export interface WorkflowCredential {
   id: string;
@@ -378,6 +380,12 @@ export const CREDENTIAL_TYPE_FIELDS: Record<
     fields: [],
     oauth: true,
   },
+  apify: {
+    label: "Apify",
+    accountLabel: "Apify Account",
+    connectAction: "Add Apify API token",
+    fields: [{ key: "apiToken", label: "API token", secret: true }],
+  },
 };
 
 export type WorkflowOperator =
@@ -517,7 +525,11 @@ export interface WorkflowNodeData {
     | "page"
     | "post"
     | "create_text_post"
-    | "create_link_post";
+    | "create_link_post"
+    | "discover_by_category"
+    | "discover_by_custom_keywords"
+    | "search_posts"
+    | "get_post_details";
   /** Google Ads / Meta Ads / Instagram / Facebook Page */
   resource?: string;
   pageId?: string;
@@ -525,6 +537,22 @@ export interface WorkflowNodeData {
   insightsLevel?: string;
   insightsReport?: string;
   link?: string;
+  /** LinkedIn Lead Discovery */
+  dataProvider?: string;
+  categoryIds?: string[];
+  customKeywords?: string[];
+  searchKeywords?: string[];
+  additionalKeywords?: string[];
+  intentExpansion?: boolean;
+  intentIds?: string[];
+  keywordOverrides?: Record<string, string[]>;
+  publicationPeriod?: string;
+  sortBy?: string;
+  maxResults?: number;
+  maxQueries?: number;
+  postUrl?: string;
+  apifyCredentialId?: string;
+  apifyBillingMode?: string;
   mediaId?: string;
   commentId?: string;
   message?: string;

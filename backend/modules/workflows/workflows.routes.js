@@ -41,6 +41,8 @@ const {
   listFacebookPages,
   selectFacebookPage,
   listFacebookPagePostOptions,
+  getLinkedInLeadDiscoveryCatalog,
+  getLinkedInLeadDiscoveryUsage,
   startInstagramOAuth,
   getInstagramOAuthStatus,
   listInstagramAccounts,
@@ -102,6 +104,14 @@ router.get("/facebook-page/post-options", listFacebookPagePostOptions);
 router.post(
   "/credentials/:credentialId/facebook-page",
   selectFacebookPage
+);
+router.get(
+  "/linkedin-lead-discovery/catalog",
+  getLinkedInLeadDiscoveryCatalog
+);
+router.get(
+  "/linkedin-lead-discovery/usage",
+  getLinkedInLeadDiscoveryUsage
 );
 router.post("/instagram-oauth/start", startInstagramOAuth);
 router.get("/instagram-oauth/status", getInstagramOAuthStatus);

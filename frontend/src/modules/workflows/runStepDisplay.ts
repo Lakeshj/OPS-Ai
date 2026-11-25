@@ -135,7 +135,8 @@ function summarizeBusinessFields(obj: Record<string, unknown>): string | null {
   if (
     presented?.provider === "instagram" ||
     presented?.provider === "meta_ads" ||
-    presented?.provider === "facebook_page"
+    presented?.provider === "facebook_page" ||
+    presented?.provider === "linkedin_lead_discovery"
   ) {
     return presented.summaryText;
   }
@@ -265,7 +266,8 @@ export function formatStepOutput(output: unknown): string {
   if (
     presented?.provider === "instagram" ||
     presented?.provider === "meta_ads" ||
-    presented?.provider === "facebook_page"
+    presented?.provider === "facebook_page" ||
+    presented?.provider === "linkedin_lead_discovery"
   ) {
     return presented.summaryText;
   }

@@ -25,6 +25,7 @@ import {
 import { InstagramOutputPreview } from "./InstagramOutputPreview";
 import { MetaAdsOutputPreview } from "./MetaAdsOutputPreview";
 import { FacebookPageOutputPreview } from "./FacebookPageOutputPreview";
+import { LinkedInLeadOutputPreview } from "./LinkedInLeadOutputPreview";
 import { resolveOutputPresentation } from "@/modules/workflows/outputPresentation";
 import { prettyJson } from "@/modules/workflows/inspectorViewModel";
 
@@ -146,7 +147,8 @@ function StepDetails({
   const showPresentedOutput =
     outputPresentation?.provider === "instagram" ||
     outputPresentation?.provider === "meta_ads" ||
-    outputPresentation?.provider === "facebook_page";
+    outputPresentation?.provider === "facebook_page" ||
+    outputPresentation?.provider === "linkedin_lead_discovery";
   const showProseOutput =
     Boolean(outputSummary) &&
     !showPresentedOutput &&
@@ -249,8 +251,15 @@ function StepDetails({
               showTechnicalHint={false}
               className="rounded-md border border-border/60 bg-background/50 px-3 py-2"
             />
-          ) : (
+          ) : outputPresentation.provider === "facebook_page" ? (
             <FacebookPageOutputPreview
+              value={step.output}
+              items={outputPresentation.workflowItems}
+              showTechnicalHint={false}
+              className="rounded-md border border-border/60 bg-background/50 px-3 py-2"
+            />
+          ) : (
+            <LinkedInLeadOutputPreview
               value={step.output}
               items={outputPresentation.workflowItems}
               showTechnicalHint={false}
@@ -453,7 +462,8 @@ export function WorkflowResultsPanel({
                 </div>
                 {finalPresentation?.provider === "instagram" ||
                 finalPresentation?.provider === "meta_ads" ||
-                finalPresentation?.provider === "facebook_page" ? (
+                finalPresentation?.provider === "facebook_page" ||
+                finalPresentation?.provider === "linkedin_lead_discovery" ? (
                   <div className="space-y-2">
                     {finalPresentation.provider === "instagram" ? (
                       <InstagramOutputPreview
@@ -469,8 +479,15 @@ export function WorkflowResultsPanel({
                         showTechnicalHint={false}
                         className="rounded-md border border-border/60 bg-background/50 px-3 py-2"
                       />
-                    ) : (
+                    ) : finalPresentation.provider === "facebook_page" ? (
                       <FacebookPageOutputPreview
+                        value={latestRun?.output}
+                        items={finalPresentation.workflowItems}
+                        showTechnicalHint={false}
+                        className="rounded-md border border-border/60 bg-background/50 px-3 py-2"
+                      />
+                    ) : (
+                      <LinkedInLeadOutputPreview
                         value={latestRun?.output}
                         items={finalPresentation.workflowItems}
                         showTechnicalHint={false}

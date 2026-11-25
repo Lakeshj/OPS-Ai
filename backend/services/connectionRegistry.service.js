@@ -263,6 +263,20 @@ const PREDEFINED = Object.freeze([
     testConnection: { kind: "facebook_page" },
     search: ["facebook", "page", "organic", "meta", "oauth"],
   },
+  {
+    id: "apify",
+    displayName: "Apify",
+    provider: "Apify",
+    category: "Data",
+    authScheme: "api_key",
+    kind: KIND.PREDEFINED,
+    status: STATUS.SUPPORTED,
+    dbType: "apify",
+    allowedDomains: ["api.apify.com"],
+    requestApplication: { type: "bearer" },
+    testConnection: { kind: "apify" },
+    search: ["apify", "linkedin", "scraper", "actor"],
+  },
 ]);
 
 /** Searchable catalog only — no execute/create until a real contract exists. */

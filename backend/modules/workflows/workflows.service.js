@@ -71,6 +71,7 @@ const ALLOWED_NODE_TYPES = new Set([
   "metaAds",
   "instagram",
   "facebookPage",
+  "linkedinLeadDiscovery",
   "gmail",
   "gmailTrigger",
   "googleSheets",
@@ -238,6 +239,12 @@ const validateDefinition = (definition) => {
         sanitizeFacebookPageNodeData,
       } = require("../../services/workflowFacebookPage.service");
       node.data = sanitizeFacebookPageNodeData(node.data);
+    }
+    if (type === "linkedinLeadDiscovery" && node.data) {
+      const {
+        sanitizeLinkedInLeadDiscoveryNodeData,
+      } = require("../../services/workflowLinkedInLeadDiscovery.service");
+      node.data = sanitizeLinkedInLeadDiscoveryNodeData(node.data);
     }
   }
   const switchErrors = validateSwitchEdges(definition);

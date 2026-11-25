@@ -94,7 +94,11 @@ const FILES_GOOGLE_EMAIL = new Set<string>([
 const SOCIAL_MCP = new Set<string>(["instagramMcpTool"]);
 
 /** Native Instagram / Facebook Page — strong contrast on dark canvas. */
-const MARKETING = new Set<string>(["instagram", "facebookPage"]);
+const MARKETING = new Set<string>([
+  "instagram",
+  "facebookPage",
+  "linkedinLeadDiscovery",
+]);
 
 const AI = new Set<string>([
   "ai",
@@ -216,6 +220,7 @@ const ICON_BY_TYPE: Record<string, LucideIcon> = {
   metaAds: BarChart3,
   instagram: Camera,
   facebookPage: Image,
+  linkedinLeadDiscovery: Search,
   googleSheets: Sheet,
   gmail: Mail,
   email: Mail,
@@ -271,6 +276,7 @@ const FALLBACK_BLURBS: Record<string, string> = {
   metaAds: "Read Meta Ads accounts, delivery, and paid insights",
   instagram: "Read, publish, and reply to Instagram content",
   facebookPage: "Organic Facebook Page posts, comments, and insights",
+  linkedinLeadDiscovery: "Discover public LinkedIn opportunity posts",
   googleSheets: "Read or write Sheets",
   gmail: "Send or read Gmail",
   email: "Send an email",

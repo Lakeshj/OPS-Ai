@@ -39,6 +39,7 @@ import {
 import { InstagramOutputPreview } from "@/components/workflows/InstagramOutputPreview";
 import { MetaAdsOutputPreview } from "@/components/workflows/MetaAdsOutputPreview";
 import { FacebookPageOutputPreview } from "@/components/workflows/FacebookPageOutputPreview";
+import { LinkedInLeadOutputPreview } from "@/components/workflows/LinkedInLeadOutputPreview";
 import { resolveOutputPresentation } from "@/modules/workflows/outputPresentation";
 import { toast } from "sonner";
 import {
@@ -818,8 +819,13 @@ export function ItemDataViewer({
   const showMetaAdsPreview = selectedPresentation?.provider === "meta_ads";
   const showFacebookPagePreview =
     selectedPresentation?.provider === "facebook_page";
+  const showLinkedInLeadPreview =
+    selectedPresentation?.provider === "linkedin_lead_discovery";
   const prosePreview =
-    showInstagramPreview || showMetaAdsPreview || showFacebookPagePreview
+    showInstagramPreview ||
+    showMetaAdsPreview ||
+    showFacebookPagePreview ||
+    showLinkedInLeadPreview
       ? null
       : extractProseField(selectedJson);
 
@@ -903,6 +909,17 @@ export function ItemDataViewer({
           selectedPresentation &&
           (mode === "table" || mode === "schema") && (
             <FacebookPageOutputPreview
+              items={selectedPresentation.workflowItems}
+              value={
+                viewItems.length === 1 ? viewItems[0]?.json : viewItems
+              }
+            />
+          )}
+
+        {showLinkedInLeadPreview &&
+          selectedPresentation &&
+          (mode === "table" || mode === "schema") && (
+            <LinkedInLeadOutputPreview
               items={selectedPresentation.workflowItems}
               value={
                 viewItems.length === 1 ? viewItems[0]?.json : viewItems

@@ -3322,6 +3322,12 @@ const handlers = {
     } = require("./workflowFacebookPage.service");
     return executeFacebookPageNode(node, context);
   },
+  linkedinLeadDiscovery: async (node, context) => {
+    const {
+      executeLinkedInLeadDiscoveryNode,
+    } = require("./workflowLinkedInLeadDiscovery.service");
+    return executeLinkedInLeadDiscoveryNode(node, context);
+  },
   gmail: async (node, context) => {
     const { executeGoogleNode } = require("./workflowGoogleNodes.service");
     return executeGoogleNode(node, context);

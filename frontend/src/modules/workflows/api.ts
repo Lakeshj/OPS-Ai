@@ -586,6 +586,76 @@ export const workflowCredentialsApi = {
       `/workflows/facebook-page/post-options?credentialId=${encodeURIComponent(credentialId)}&pageId=${encodeURIComponent(pageId)}&limit=${encodeURIComponent(String(limit))}`
     ),
 
+  getLinkedInLeadDiscoveryCatalog: () =>
+    apiClient.get<{
+      operations: Array<{ id: string; label: string }>;
+      providers: Array<{ id: string; label: string }>;
+      library: {
+        version: number;
+        categoryCount: number;
+        originalKeywordCount: number;
+        intentVariationCount: number;
+        categories: Array<{
+          id: string;
+          label: string;
+          keywordCount: number;
+          keywords: string[];
+        }>;
+        intentVariations: Array<{ id: string; label: string }>;
+      };
+      nativeStatus?: {
+        feedConfigured?: boolean;
+        allowFixtures?: boolean;
+        queryBatchSize?: number;
+        concurrency?: number;
+      };
+    }>("/workflows/linkedin-lead-discovery/catalog"),
+
+  getLinkedInLeadDiscoveryUsage: (args: {
+    provider?: string;
+    credentialId?: string;
+    workspaceId?: string;
+    refresh?: boolean;
+  }) => {
+    const params = new URLSearchParams();
+    if (args.provider) params.set("provider", args.provider);
+    if (args.credentialId) params.set("credentialId", args.credentialId);
+    if (args.workspaceId) params.set("workspaceId", args.workspaceId);
+    if (args.refresh) params.set("refresh", "1");
+    return apiClient.get<{
+      available: boolean;
+      connected?: boolean;
+      reason?: string;
+      allowanceNote?: string;
+      refreshedAt?: string;
+      sharedAllowance?: boolean;
+      free: null | {
+        usedPercent?: number | null;
+        remainingPercent?: number | null;
+        usedUsd?: number | null;
+        remainingUsd?: number | null;
+        limitUsd?: number | null;
+        periodStart?: string | null;
+        periodEnd?: string | null;
+        available?: boolean;
+        infinite?: boolean;
+        reason?: string;
+      };
+      paid: null | {
+        usedPercent?: number | null;
+        remainingPercent?: number | null;
+        usedUsd?: number | null;
+        remainingUsd?: number | null;
+        limitUsd?: number | null;
+        periodStart?: string | null;
+        periodEnd?: string | null;
+        available?: boolean;
+        infinite?: boolean;
+        reason?: string;
+      };
+    }>(`/workflows/linkedin-lead-discovery/usage?${params.toString()}`);
+  },
+
   startInstagramOAuth: (payload: {
     workspaceId: string;
     name?: string;

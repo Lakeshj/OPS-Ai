@@ -2747,6 +2747,50 @@ export const NODE_PARAMETER_SCHEMAS: Record<WorkflowNodeType, ParamDescriptor[]>
       },
     ],
 
+    linkedinLeadDiscovery: [
+      {
+        name: "operation",
+        displayName: "Operation",
+        type: "options",
+        default: "discover_by_category",
+        required: true,
+        options: [
+          {
+            name: "Discover Leads by Service Category",
+            value: "discover_by_category",
+          },
+          {
+            name: "Discover Leads by Custom Keywords",
+            value: "discover_by_custom_keywords",
+          },
+          {
+            name: "Search LinkedIn Posts",
+            value: "search_posts",
+          },
+          {
+            name: "Get Post Details",
+            value: "get_post_details",
+          },
+        ],
+      },
+      {
+        name: "dataProvider",
+        displayName: "Data Provider",
+        type: "options",
+        default: "opsai_native",
+        options: [
+          { name: "OpsAi Native (primary)", value: "opsai_native" },
+          { name: "Apify (optional)", value: "apify" },
+        ],
+      },
+      {
+        name: "linkedinLeadConfig",
+        displayName: "Lead Discovery",
+        type: "json",
+        customRenderer: "linkedinLeadDiscoveryFields",
+      },
+    ],
+
     facebookPage: [
       {
         name: "credentialId",

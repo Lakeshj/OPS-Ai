@@ -168,7 +168,8 @@ export type ParamCustomRenderer =
   | "instagramPublishMedia"
   | "instagramInsightsNotice"
   | "facebookPagePicker"
-  | "facebookPagePostPicker";
+  | "facebookPagePostPicker"
+  | "linkedinLeadDiscoveryFields";
 
 export interface DisplayOptions {
   show?: Record<string, Array<string | number | boolean>>;
@@ -2216,6 +2217,29 @@ export const NODE_CONTRACTS: Record<WorkflowNodeType, NodeContract> = {
       "Uses facebook_page credential and selected pageId from OAuth discovery",
       "Independent of Instagram Native and Meta Ads Native",
       "Facebook MCP is out of scope for M9.1",
+    ],
+  },
+
+  linkedinLeadDiscovery: {
+    type: "linkedinLeadDiscovery",
+    version: 1,
+    category: "Marketing",
+    label: "LinkedIn Lead Discovery",
+    inputs: [mainIn()],
+    outputs: [mainOut, errorOut],
+    cardinality: "1-to-N",
+    pairedItemPolicy: "fanOut",
+    settings: SETTINGS_ACTION,
+    capabilities: CAP_ACTION,
+    isSideEffecting: true,
+    params: [],
+    dirtyTriggers: ["params", "edges", "pin", "disabled"],
+    edgeCases: [
+      "Discover public LinkedIn opportunity posts by category or custom keywords",
+      "OpsAi Native is primary (fixtures in M10.1; live collection M10.2)",
+      "Apify is optional (adapter boundary in M10.1; live M10.3)",
+      "Independent of LinkedIn Page Native and LinkedIn Ads Native",
+      "Does not qualify leads or send outreach",
     ],
   },
 };

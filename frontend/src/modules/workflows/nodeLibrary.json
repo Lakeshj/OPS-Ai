@@ -760,6 +760,24 @@
       ]
     },
     {
+      "id": "linkedin-lead-discovery",
+      "name": "LinkedIn Lead Discovery",
+      "category": "Marketing",
+      "type": "Action",
+      "description": "Discover public LinkedIn opportunity posts by service category or custom keywords.",
+      "icon": "search",
+      "provider": "LinkedIn",
+      "available": true,
+      "engineType": "linkedinLeadDiscovery",
+      "aliases": [
+        "linkedin leads",
+        "linkedin discovery",
+        "lead generation linkedin",
+        "linkedin posts search",
+        "agency leads"
+      ]
+    },
+    {
       "id": "instagram-mcp-tools",
       "name": "Instagram MCP Tools",
       "category": "Marketing",

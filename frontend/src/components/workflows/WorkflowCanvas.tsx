@@ -242,6 +242,7 @@ const nodeTypes = {
   metaAds: WorkflowNode,
   instagram: WorkflowNode,
   facebookPage: WorkflowNode,
+  linkedinLeadDiscovery: WorkflowNode,
   gmail: WorkflowNode,
   gmailTrigger: WorkflowNode,
   googleSheets: WorkflowNode,
@@ -736,6 +737,24 @@ const defaultDataForType = (type: WorkflowNodeType): WorkflowNodeData => {
         returnAll: false,
         limit: 25,
         after: "",
+      };
+    case "linkedinLeadDiscovery":
+      return {
+        label: "LinkedIn Lead Discovery",
+        nodeType: "linkedinLeadDiscovery",
+        operation: "discover_by_category",
+        dataProvider: "opsai_native",
+        categoryIds: [],
+        customKeywords: [],
+        additionalKeywords: [],
+        intentExpansion: false,
+        intentIds: [],
+        publicationPeriod: "past-week",
+        sortBy: "recent",
+        maxResults: 25,
+        postUrl: "",
+        apifyBillingMode: "free",
+        apifyCredentialId: "",
       };
     case "mcpDynamicTool":
       return {

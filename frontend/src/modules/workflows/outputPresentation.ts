@@ -24,16 +24,23 @@ import {
   resolveFacebookPageOutputPresentation,
   type FacebookPageReadableBlock,
 } from "./facebookPageOutputPresentation";
+import {
+  isLinkedInLeadOutputJson,
+  resolveLinkedInLeadOutputPresentation,
+  type LinkedInLeadReadableBlock,
+} from "./linkedinLeadOutputPresentation";
 
 export type OutputPresentationProvider =
   | "instagram"
   | "meta_ads"
-  | "facebook_page";
+  | "facebook_page"
+  | "linkedin_lead_discovery";
 
 export type OutputReadableBlock =
   | InstagramReadableBlock
   | MetaAdsReadableBlock
-  | FacebookPageReadableBlock;
+  | FacebookPageReadableBlock
+  | LinkedInLeadReadableBlock;
 
 type PresentationShape =
   | "root"
@@ -73,6 +80,10 @@ export type ResolvedOutputPresentation =
   | (PresentationBase & {
       provider: "facebook_page";
       blocks: FacebookPageReadableBlock[];
+    })
+  | (PresentationBase & {
+      provider: "linkedin_lead_discovery";
+      blocks: LinkedInLeadReadableBlock[];
     });
 
 const WRAPPER_KEYS = ["result", "data", "output", "items"] as const;
@@ -216,6 +227,27 @@ function buildFacebookPageResolved(
   };
 }
 
+function buildLinkedInLeadResolved(
+  items: Record<string, unknown>[],
+  shape: PresentationShape,
+  original: unknown
+): ResolvedOutputPresentation | null {
+  if (!items.length || !items.every((row) => isLinkedInLeadOutputJson(row))) {
+    return null;
+  }
+  const resolved = resolveLinkedInLeadOutputPresentation({ items });
+  if (!resolved?.blocks?.length) return null;
+  return {
+    provider: "linkedin_lead_discovery",
+    items,
+    workflowItems: toWorkflowItems(items),
+    shape,
+    original,
+    blocks: resolved.blocks,
+    summaryText: resolved.summaryText,
+  };
+}
+
 function buildResolved(
   items: Record<string, unknown>[],
   shape: PresentationShape,
@@ -225,7 +257,8 @@ function buildResolved(
   return (
     buildInstagramResolved(items, shape, original) ||
     buildMetaAdsResolved(items, shape, original, outputEnvelope) ||
-    buildFacebookPageResolved(items, shape, original)
+    buildFacebookPageResolved(items, shape, original) ||
+    buildLinkedInLeadResolved(items, shape, original)
   );
 }
 
@@ -301,7 +334,8 @@ export function resolveOutputPresentation(
   if (
     isInstagramOutputJson(json) ||
     isMetaAdsOutputJson(json) ||
-    isFacebookPageOutputJson(json)
+    isFacebookPageOutputJson(json) ||
+    isLinkedInLeadOutputJson(json)
   ) {
     return buildResolved([json], "root", value);
   }
@@ -335,7 +369,8 @@ export function resolveOutputPresentation(
       nestedJson &&
       (isInstagramOutputJson(nestedJson) ||
         isMetaAdsOutputJson(nestedJson) ||
-        isFacebookPageOutputJson(nestedJson))
+        isFacebookPageOutputJson(nestedJson) ||
+        isLinkedInLeadOutputJson(nestedJson))
     ) {
       return buildResolved([nestedJson], key, value);
     }

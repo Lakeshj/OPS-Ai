@@ -241,6 +241,34 @@ const getFacebookPageOAuthStatus = asyncHandler(async (req, res) => {
   res.json(await facebookPageOAuth.getFacebookPageOAuthPublicStatus());
 });
 
+const getLinkedInLeadDiscoveryCatalog = asyncHandler(async (req, res) => {
+  const {
+    getLinkedInLeadDiscoveryCatalog: getCatalog,
+  } = require("../../services/workflowLinkedInLeadDiscovery.service");
+  res.json(getCatalog());
+});
+
+const getLinkedInLeadDiscoveryUsage = asyncHandler(async (req, res) => {
+  const {
+    getProviderUsageStatus,
+  } = require("../../services/workflowLinkedInLeadDiscovery.service");
+  const credentials = require("./credentials.service");
+  let credential = null;
+  const credentialId = String(req.query?.credentialId || "").trim();
+  const workspaceId = String(req.query?.workspaceId || "").trim();
+  const forceRefresh =
+    String(req.query?.refresh || "").trim() === "1" ||
+    String(req.query?.forceRefresh || "").trim() === "1";
+  if (credentialId && workspaceId) {
+    credential = await credentials.getForWorkspace(credentialId, workspaceId);
+  }
+  res.json(
+    await getProviderUsageStatus(req.query?.provider || "apify", credential, {
+      forceRefresh,
+    })
+  );
+});
+
 const metaOAuthCallback = asyncHandler(async (req, res) => {
   const metaOAuth = require("../../services/metaOAuth.service");
   try {
@@ -1177,6 +1205,8 @@ module.exports = {
   selectFacebookPage,
   listFacebookPagePostOptions,
   getFacebookPageOAuthStatus,
+  getLinkedInLeadDiscoveryCatalog,
+  getLinkedInLeadDiscoveryUsage,
   startInstagramOAuth,
   getInstagramOAuthStatus,
   instagramOAuthCallback,

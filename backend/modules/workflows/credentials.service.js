@@ -34,6 +34,7 @@ const GOOGLE_CREDENTIAL_TYPES = new Set([
 const META_CREDENTIAL_TYPES = new Set(["meta_ads"]);
 const INSTAGRAM_CREDENTIAL_TYPES = new Set(["instagram"]);
 const FACEBOOK_PAGE_CREDENTIAL_TYPES = new Set(["facebook_page"]);
+const APIFY_CREDENTIAL_TYPES = new Set(["apify"]);
 
 const CREDENTIAL_TYPES = new Set([
   ...HTTP_CREDENTIAL_TYPES,
@@ -41,6 +42,7 @@ const CREDENTIAL_TYPES = new Set([
   ...META_CREDENTIAL_TYPES,
   ...INSTAGRAM_CREDENTIAL_TYPES,
   ...FACEBOOK_PAGE_CREDENTIAL_TYPES,
+  ...APIFY_CREDENTIAL_TYPES,
 ]);
 
 const parseConfig = (raw) => oauth2.parseConfig(raw);
@@ -295,6 +297,23 @@ const create = async ({ workspaceId, name, type, secret, config }, authUser) => 
       type,
       mode: checked.mode,
       secret,
+    });
+  } else if (APIFY_CREDENTIAL_TYPES.has(type)) {
+    const apiToken = String(
+      secret?.apiToken || secret?.token || secret?.accessToken || ""
+    ).trim();
+    if (!apiToken) {
+      throw new AppError(
+        "Apify API token is required.",
+        400,
+        "VALIDATION_ERROR"
+      );
+    }
+    secretPayload = { apiToken };
+    configJson = JSON.stringify({
+      connected: true,
+      provider: "apify",
+      sharingScope: normalizeSharingScope(config?.sharingScope),
     });
   } else if (!HTTP_CREDENTIAL_TYPES.has(type)) {
     throw new AppError(
@@ -706,6 +725,7 @@ module.exports = {
   META_CREDENTIAL_TYPES,
   INSTAGRAM_CREDENTIAL_TYPES,
   FACEBOOK_PAGE_CREDENTIAL_TYPES,
+  APIFY_CREDENTIAL_TYPES,
   formatCredential,
   OAUTH_APP_MODE,
   validateGoogleCreate,

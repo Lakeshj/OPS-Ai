@@ -56,6 +56,7 @@ import { DynamicMcpToolField } from "./DynamicMcpToolField";
 import { MetaAdAccountField } from "./MetaAdAccountField";
 import { FacebookPagePickerField } from "./FacebookPagePickerField";
 import { FacebookPagePostPickerField } from "./FacebookPagePostPickerField";
+import { LinkedInLeadDiscoveryFields } from "./LinkedInLeadDiscoveryFields";
 import { MetaAdsFiltersField } from "./MetaAdsFiltersField";
 import type { KeywordAssistant, WorkspaceDocument } from "@/modules/shared/types";
 import type { GoogleAdsSourceNodeRef } from "@/modules/workflows/googleAdsMcpSource";
@@ -333,6 +334,16 @@ function renderSpecial(
           param={param}
           values={values}
           onChange={onChange}
+        />
+      );
+    case "linkedinLeadDiscoveryFields":
+      return (
+        <LinkedInLeadDiscoveryFields
+          key={param.name}
+          param={param}
+          values={values}
+          onChange={onChange}
+          workspaceId={context.workspaceId}
         />
       );
     case "metaAdsFilters":
