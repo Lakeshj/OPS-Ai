@@ -50,6 +50,23 @@ const validateCredential = (req) => {
     errors.push("Use Connect Instagram. Do not paste an Instagram access token.");
     return errors;
   }
+  if (type === "facebook_page") {
+    errors.push("Use Connect Facebook. Do not paste a Facebook Page access token.");
+    return errors;
+  }
+  if (type === "apify") {
+    if (!secret || typeof secret !== "object") {
+      errors.push("secret is required");
+      return errors;
+    }
+    const apiToken = String(
+      secret.apiToken || secret.token || secret.accessToken || ""
+    ).trim();
+    if (!apiToken) {
+      errors.push("secret.apiToken is required for apify credentials");
+    }
+    return errors;
+  }
 
   if (googleTypes.has(type)) {
     if (!secret || typeof secret !== "object") {
@@ -74,6 +91,7 @@ const validateCredential = (req) => {
       `type must be one of: ${[
         ...Object.keys(CREDENTIAL_SECRET_FIELDS),
         ...googleTypes,
+        "apify",
       ].join(", ")}`
     );
     return errors;

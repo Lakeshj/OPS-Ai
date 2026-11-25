@@ -553,6 +553,16 @@ export interface WorkflowNodeData {
   postUrl?: string;
   apifyCredentialId?: string;
   apifyBillingMode?: string;
+  /** OpsAi Native collection source */
+  nativeSource?:
+    | "authorized_feed"
+    | "user_dataset"
+    | "previous_node"
+    | string;
+  nativeFeedUrl?: string;
+  nativeFeedCredentialId?: string;
+  nativeDatasetJson?: string;
+  datasetPosts?: Array<Record<string, unknown>>;
   mediaId?: string;
   commentId?: string;
   message?: string;

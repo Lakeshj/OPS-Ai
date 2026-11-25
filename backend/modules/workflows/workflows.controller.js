@@ -269,6 +269,30 @@ const getLinkedInLeadDiscoveryUsage = asyncHandler(async (req, res) => {
   );
 });
 
+const testLinkedInNativeFeed = asyncHandler(async (req, res) => {
+  const {
+    testNativeFeedConnection,
+  } = require("../../services/workflowLinkedInLeadDiscovery.service");
+  const credentials = require("./credentials.service");
+  const feedUrl =
+    String(req.body?.feedUrl || "").trim() ||
+    String(process.env.OPSAI_LINKEDIN_FEED_URL || "").trim();
+  const credentialId = String(req.body?.credentialId || "").trim();
+  const workspaceId = String(req.body?.workspaceId || "").trim();
+  let credential = null;
+  if (credentialId && workspaceId) {
+    credential = await credentials.getForWorkspace(credentialId, workspaceId);
+  }
+  // Auth secrets come only from the credential vault / server env — never raw client tokens.
+  res.json(
+    await testNativeFeedConnection({
+      feedUrl,
+      credential,
+      feedToken: String(process.env.OPSAI_LINKEDIN_FEED_TOKEN || "").trim() || undefined,
+    })
+  );
+});
+
 const metaOAuthCallback = asyncHandler(async (req, res) => {
   const metaOAuth = require("../../services/metaOAuth.service");
   try {
@@ -1207,6 +1231,7 @@ module.exports = {
   getFacebookPageOAuthStatus,
   getLinkedInLeadDiscoveryCatalog,
   getLinkedInLeadDiscoveryUsage,
+  testLinkedInNativeFeed,
   startInstagramOAuth,
   getInstagramOAuthStatus,
   instagramOAuthCallback,

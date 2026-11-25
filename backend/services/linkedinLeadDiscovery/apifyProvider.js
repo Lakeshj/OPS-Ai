@@ -154,27 +154,53 @@ const search = async (spec = {}) => {
   const plan = chunkQueries(queries, batchSize);
   const maxResults = Math.min(Math.max(Number(spec.maxResults) || 25, 1), 100);
 
+  // Free mode: serialize batches and decrement shared maxTotalChargeUsd so
+  // concurrent runs cannot collectively exceed the included allowance.
+  const freeMode = gate.mode === "free";
+  let remainingChargeUsd =
+    gate.maxTotalChargeUsd != null && Number.isFinite(gate.maxTotalChargeUsd)
+      ? Number(gate.maxTotalChargeUsd)
+      : null;
+  const minCharge =
+    ACTOR_PRICING.events.actorStartUsd + ACTOR_PRICING.events.datasetItemUsd;
+
   const batchRun = await runBatches({
     batches: plan.batches,
-    concurrency: Math.min(Number(spec.concurrency) || 1, 2),
+    concurrency: freeMode ? 1 : Math.min(Number(spec.concurrency) || 1, 2),
     signal: spec.signal,
     onBatch: async (batch) => {
+      if (remainingChargeUsd != null && remainingChargeUsd < minCharge) {
+        throw new AppError(
+          "Free Apify allowance would be exceeded by additional query batches. Remaining queries were not executed.",
+          402,
+          "LINKEDIN_LEAD_APIFY_FREE_EXHAUSTED"
+        );
+      }
       const mapped = buildActorInput({
         ...spec,
         queries: batch.queries,
         operation: spec.operation,
         linkedinCookies: spec.credential?.secret?.linkedinCookies,
       });
+      const batchCap =
+        remainingChargeUsd != null ? remainingChargeUsd : gate.maxTotalChargeUsd;
       const collected = await runActorAndCollect(client, {
         input: mapped.input,
         maxItems: maxResults,
-        maxTotalChargeUsd: gate.maxTotalChargeUsd,
+        maxTotalChargeUsd: batchCap,
         signal: spec.signal,
         timeoutSecs: DEFAULT_RUN.timeoutSecs,
         idempotencyKey: spec.idempotencyKey
           ? `${spec.idempotencyKey}:${batch.batchIndex}`
           : undefined,
       });
+      if (remainingChargeUsd != null) {
+        const estimated =
+          ACTOR_PRICING.events.actorStartUsd +
+          Math.max(1, collected.items?.length || 0) *
+            ACTOR_PRICING.events.datasetItemUsd;
+        remainingChargeUsd = Math.max(0, remainingChargeUsd - estimated);
+      }
       return {
         queryCount: batch.queries.length,
         rows: mapApifyItems(collected.items),

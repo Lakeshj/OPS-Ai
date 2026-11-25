@@ -76,6 +76,23 @@ const sanitizeLinkedInLeadDiscoveryNodeData = (data) => {
   }
   if (next.postUrl != null) next.postUrl = String(next.postUrl).trim();
   if (next.postId != null) next.postId = String(next.postId).trim();
+  if (next.nativeSource != null) {
+    next.nativeSource = String(next.nativeSource).trim();
+  }
+  if (next.nativeFeedUrl != null) {
+    next.nativeFeedUrl = String(next.nativeFeedUrl).trim();
+  }
+  if (next.nativeFeedCredentialId != null) {
+    next.nativeFeedCredentialId = String(next.nativeFeedCredentialId).trim();
+  }
+  if (next.nativeDatasetJson != null) {
+    next.nativeDatasetJson = String(next.nativeDatasetJson);
+  }
+  if (Array.isArray(next.datasetPosts)) {
+    next.datasetPosts = next.datasetPosts.filter(
+      (row) => row && typeof row === "object"
+    );
+  }
   // Clear incompatible stale params by operation.
   const op = next.operation || "discover_by_category";
   if (op === "get_post_details") {
@@ -94,6 +111,13 @@ const sanitizeLinkedInLeadDiscoveryNodeData = (data) => {
     delete next.apifyBillingMode;
     delete next.apifyCredentialId;
   }
+  if (normalizeProviderId(next.dataProvider) !== "opsai_native") {
+    delete next.nativeSource;
+    delete next.nativeFeedUrl;
+    delete next.nativeFeedCredentialId;
+    delete next.nativeDatasetJson;
+    delete next.datasetPosts;
+  }
   return next;
 };
 
@@ -105,6 +129,41 @@ const resolveProvider = (providerId) => {
 
 const leadError = (message, code, status = 400) =>
   new AppError(message, status, code);
+
+const parseDatasetPosts = (data) => {
+  if (Array.isArray(data.datasetPosts) && data.datasetPosts.length) {
+    return data.datasetPosts;
+  }
+  const raw = String(data.nativeDatasetJson || "").trim();
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed)) return parsed;
+    if (parsed && typeof parsed === "object") {
+      if (Array.isArray(parsed.posts)) return parsed.posts;
+      if (Array.isArray(parsed.items)) return parsed.items;
+      return [parsed];
+    }
+  } catch (_) {
+    throw leadError(
+      "User-provided Dataset JSON is invalid. Provide a JSON array of posts.",
+      "LINKEDIN_LEAD_NATIVE_DATASET_INVALID"
+    );
+  }
+  return [];
+};
+
+const resolveNativeFeedCredential = async (data, context) => {
+  if (context?.nativeFeedCredential) return context.nativeFeedCredential;
+  const credentialId = String(data.nativeFeedCredentialId || "").trim();
+  if (!credentialId) return null;
+  const workspaceId = String(
+    context?.workspaceId || context?.workspace?.id || ""
+  ).trim();
+  if (!workspaceId) return null;
+  const credentials = require("../modules/workflows/credentials.service");
+  return credentials.getForWorkspace(credentialId, workspaceId);
+};
 
 const resolveApifyCredential = async (data, context) => {
   if (normalizeProviderId(data.dataProvider) !== "apify") return null;
@@ -162,13 +221,33 @@ const executeLinkedInLeadDiscoveryNode = async (node, context) => {
     : Array.isArray(context?.items)
       ? context.items
       : [];
-  const datasetPosts = Array.isArray(data.datasetPosts) ? data.datasetPosts : [];
+  const datasetPosts =
+    providerId === "opsai_native" ? parseDatasetPosts(data) : [];
   const useFixtures = data.useFixtures === true;
   const signal = context?.signal || context?.abortSignal || undefined;
   const apifyCredential =
     providerId === "apify"
       ? await resolveApifyCredential(data, context)
       : null;
+
+  let nativeFeedUrl = "";
+  let nativeFeedToken = "";
+  if (providerId === "opsai_native") {
+    nativeFeedUrl = String(data.nativeFeedUrl || "").trim();
+    const feedCred = await resolveNativeFeedCredential(data, context);
+    if (feedCred) {
+      const {
+        resolveFeedToken,
+      } = require("./linkedinLeadDiscovery/nativeCollection/feedConnection");
+      nativeFeedToken = resolveFeedToken(feedCred);
+    }
+  }
+
+  const nativeSpec = {
+    nativeSource: data.nativeSource,
+    feedUrl: nativeFeedUrl || undefined,
+    feedToken: nativeFeedToken || undefined,
+  };
 
   if (operation === "get_post_details") {
     const result = await provider.getPostDetails({
@@ -183,7 +262,8 @@ const executeLinkedInLeadDiscoveryNode = async (node, context) => {
       credential: apifyCredential,
       billingMode: data.apifyBillingMode || "free",
       apifyClient: context?.apifyClient,
-      fetchImpl: context?.apifyFetchImpl,
+      fetchImpl: context?.apifyFetchImpl || context?.fetchImpl,
+      ...nativeSpec,
     });
     return wrapResult(result, {
       operation,
@@ -228,7 +308,8 @@ const executeLinkedInLeadDiscoveryNode = async (node, context) => {
     credential: apifyCredential,
     billingMode: data.apifyBillingMode || "free",
     apifyClient: context?.apifyClient,
-    fetchImpl: context?.apifyFetchImpl,
+    fetchImpl: context?.apifyFetchImpl || context?.fetchImpl,
+    ...nativeSpec,
   });
 
   return wrapResult(result, {
@@ -278,7 +359,33 @@ const getLinkedInLeadDiscoveryCatalog = () => {
     providers: Object.values(PROVIDERS),
     library: getPublicLibrary(),
     nativeStatus,
+    nativeSources: [
+      {
+        id: "authorized_feed",
+        label: "Authorized Data Feed",
+        description:
+          "Query an OpsAi-operated or contractually licensed opportunity feed.",
+      },
+      {
+        id: "user_dataset",
+        label: "User-provided Dataset",
+        description: "Paste or supply LinkedIn posts you already have rights to use.",
+      },
+      {
+        id: "previous_node",
+        label: "Previous Node Input",
+        description:
+          "Match keywords against LinkedIn posts arriving from upstream workflow nodes.",
+      },
+    ],
   };
+};
+
+const testNativeFeedConnection = async (args = {}) => {
+  const {
+    testFeedConnection,
+  } = require("./linkedinLeadDiscovery/nativeCollection/feedConnection");
+  return testFeedConnection(args);
 };
 
 const getProviderUsageStatus = async (
@@ -310,6 +417,7 @@ module.exports = {
   executeLinkedInLeadDiscoveryNode,
   getLinkedInLeadDiscoveryCatalog,
   getProviderUsageStatus,
+  testNativeFeedConnection,
   getPublicLibrary,
   buildSearchQueries,
   PROVIDERS,

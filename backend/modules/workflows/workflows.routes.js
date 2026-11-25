@@ -43,6 +43,7 @@ const {
   listFacebookPagePostOptions,
   getLinkedInLeadDiscoveryCatalog,
   getLinkedInLeadDiscoveryUsage,
+  testLinkedInNativeFeed,
   startInstagramOAuth,
   getInstagramOAuthStatus,
   listInstagramAccounts,
@@ -112,6 +113,10 @@ router.get(
 router.get(
   "/linkedin-lead-discovery/usage",
   getLinkedInLeadDiscoveryUsage
+);
+router.post(
+  "/linkedin-lead-discovery/test-feed",
+  testLinkedInNativeFeed
 );
 router.post("/instagram-oauth/start", startInstagramOAuth);
 router.get("/instagram-oauth/status", getInstagramOAuthStatus);

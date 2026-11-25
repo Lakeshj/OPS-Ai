@@ -755,6 +755,10 @@ const defaultDataForType = (type: WorkflowNodeType): WorkflowNodeData => {
         postUrl: "",
         apifyBillingMode: "free",
         apifyCredentialId: "",
+        nativeSource: "authorized_feed",
+        nativeFeedUrl: "",
+        nativeFeedCredentialId: "",
+        nativeDatasetJson: "",
       };
     case "mcpDynamicTool":
       return {

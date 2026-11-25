@@ -30,6 +30,8 @@ type Catalog = {
   intentVariations: Intent[];
   originalKeywordCount?: number;
   nativeFeedConfigured?: boolean;
+  envFeedConfigured?: boolean;
+  nativeSources?: Array<{ id: string; label: string; description?: string }>;
 };
 
 type UsageBucket = {
@@ -160,6 +162,8 @@ export function LinkedInLeadDiscoveryFields({
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [usage, setUsage] = useState<UsageStatus | null>(null);
   const [usageLoading, setUsageLoading] = useState(false);
+  const [feedTestNote, setFeedTestNote] = useState("");
+  const [feedTesting, setFeedTesting] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -172,6 +176,8 @@ export function LinkedInLeadDiscoveryFields({
           intentVariations: res.library?.intentVariations || [],
           originalKeywordCount: res.library?.originalKeywordCount,
           nativeFeedConfigured: Boolean(res.nativeStatus?.feedConfigured),
+          envFeedConfigured: Boolean(res.nativeStatus?.envFeedConfigured),
+          nativeSources: res.nativeSources || [],
         });
       })
       .catch(() => {
@@ -405,22 +411,145 @@ export function LinkedInLeadDiscoveryFields({
           </div>
         </div>
       ) : (
-        <div className="space-y-1 rounded-md border border-border/60 p-2">
+        <div className="space-y-2 rounded-md border border-border/60 p-2">
+          <Label className="text-[11px]">Native data source</Label>
           <p className="text-[11px] text-muted-foreground">
-            OpsAi Native is the primary provider. Live collection uses an
-            authorized OpsAi opportunity feed (
-            <code className="text-[10px]">OPSAI_LINKEDIN_FEED_URL</code>) or a
-            user-provided LinkedIn dataset. Fixtures are development-only and
-            never return silently in production.
+            OpsAi Native is not a standalone LinkedIn scraper. Choose a
+            permitted source below. Fixtures stay local/dev-only.
           </p>
-          {catalog?.nativeFeedConfigured === true ? (
-            <p className="text-[11px] text-foreground">
-              Authorized feed: configured
-            </p>
-          ) : catalog?.nativeFeedConfigured === false ? (
-            <p className="text-[11px] text-amber-700 dark:text-amber-400">
-              Authorized feed: not configured — Run Step needs feed URL, user
-              dataset, or local fixtures env.
+          <Select
+            value={String(values.nativeSource || "authorized_feed")}
+            onValueChange={(v) => patch({ nativeSource: v })}
+          >
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="authorized_feed">
+                Authorized Data Feed
+              </SelectItem>
+              <SelectItem value="user_dataset">User-provided Dataset</SelectItem>
+              <SelectItem value="previous_node">Previous Node Input</SelectItem>
+            </SelectContent>
+          </Select>
+
+          {String(values.nativeSource || "authorized_feed") ===
+          "authorized_feed" ? (
+            <div className="space-y-2">
+              <div>
+                <Label className="text-[11px]">Feed URL</Label>
+                <Input
+                  className="mt-1"
+                  placeholder={
+                    catalog?.envFeedConfigured
+                      ? "Optional override (server OPSAI_LINKEDIN_FEED_URL is set)"
+                      : "https://your-authorized-feed.example.com"
+                  }
+                  value={String(values.nativeFeedUrl || "")}
+                  onChange={(e) => patch({ nativeFeedUrl: e.target.value })}
+                />
+                <p className="mt-1 text-[10px] text-muted-foreground">
+                  Status:{" "}
+                  {values.nativeFeedUrl || catalog?.envFeedConfigured
+                    ? "Configured"
+                    : "Not configured"}
+                  {catalog?.envFeedConfigured
+                    ? " · server default available"
+                    : ""}
+                </p>
+              </div>
+              {workspaceId ? (
+                <CredentialPicker
+                  workspaceId={workspaceId}
+                  value={String(values.nativeFeedCredentialId || "")}
+                  onChange={(id) => patch({ nativeFeedCredentialId: id })}
+                  label="Optional feed auth (Bearer)"
+                  allowedTypes={["bearer"]}
+                />
+              ) : null}
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className="h-8"
+                disabled={
+                  feedTesting ||
+                  !(
+                    String(values.nativeFeedUrl || "").trim() ||
+                    catalog?.envFeedConfigured
+                  )
+                }
+                onClick={() => {
+                  setFeedTesting(true);
+                  setFeedTestNote("");
+                  workflowCredentialsApi
+                    .testLinkedInNativeFeed({
+                      feedUrl:
+                        String(values.nativeFeedUrl || "").trim() ||
+                        // server will still reject empty; env default is resolved server-side only when node URL empty via execute path
+                        String(values.nativeFeedUrl || "").trim(),
+                      workspaceId: workspaceId || "",
+                      credentialId: String(
+                        values.nativeFeedCredentialId || ""
+                      ),
+                    })
+                    .then((res) => {
+                      setFeedTestNote(
+                        res.ok
+                          ? `Connected — ${res.message || "OK"}`
+                          : `Connection failed — ${res.message || res.code || "error"}`
+                      );
+                    })
+                    .catch((err) => {
+                      setFeedTestNote(
+                        `Connection failed — ${
+                          err?.message || "Unable to test feed"
+                        }`
+                      );
+                    })
+                    .finally(() => setFeedTesting(false));
+                }}
+              >
+                {feedTesting ? "Testing…" : "Test connection"}
+              </Button>
+              {feedTestNote ? (
+                <p className="text-[11px] text-muted-foreground">{feedTestNote}</p>
+              ) : null}
+            </div>
+          ) : null}
+
+          {String(values.nativeSource) === "user_dataset" ? (
+            <div>
+              <Label className="text-[11px]">Dataset JSON</Label>
+              <textarea
+                className="mt-1 min-h-[120px] w-full rounded-md border border-input bg-background px-2 py-1.5 text-xs font-mono"
+                placeholder='[{"sourcePostUrl":"https://www.linkedin.com/...","content":"..."}]'
+                value={String(values.nativeDatasetJson || "")}
+                onChange={(e) => patch({ nativeDatasetJson: e.target.value })}
+              />
+              <p className="mt-1 text-[10px] text-muted-foreground">
+                Preview count:{" "}
+                {(() => {
+                  try {
+                    const parsed = JSON.parse(
+                      String(values.nativeDatasetJson || "[]")
+                    );
+                    if (Array.isArray(parsed)) return parsed.length;
+                    if (Array.isArray(parsed?.posts)) return parsed.posts.length;
+                    if (Array.isArray(parsed?.items)) return parsed.items.length;
+                    return parsed && typeof parsed === "object" ? 1 : 0;
+                  } catch {
+                    return "invalid JSON";
+                  }
+                })()}
+              </p>
+            </div>
+          ) : null}
+
+          {String(values.nativeSource) === "previous_node" ? (
+            <p className="text-[11px] text-muted-foreground">
+              Uses LinkedIn-shaped items from the connected previous node
+              (`sourcePostUrl` / `content`). No remote LinkedIn fetch.
             </p>
           ) : null}
         </div>

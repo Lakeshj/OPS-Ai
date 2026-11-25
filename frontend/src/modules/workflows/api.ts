@@ -608,8 +608,29 @@ export const workflowCredentialsApi = {
         allowFixtures?: boolean;
         queryBatchSize?: number;
         concurrency?: number;
+        envFeedConfigured?: boolean;
+        sources?: Record<string, string>;
       };
+      nativeSources?: Array<{
+        id: string;
+        label: string;
+        description?: string;
+      }>;
     }>("/workflows/linkedin-lead-discovery/catalog"),
+
+  testLinkedInNativeFeed: (args: {
+    feedUrl: string;
+    workspaceId?: string;
+    credentialId?: string;
+  }) =>
+    apiClient.post<{
+      ok: boolean;
+      status: string;
+      message?: string;
+      code?: string;
+      httpStatus?: number;
+      feedUrl?: string;
+    }>("/workflows/linkedin-lead-discovery/test-feed", args),
 
   getLinkedInLeadDiscoveryUsage: (args: {
     provider?: string;

@@ -36,6 +36,27 @@ const enrichMatches = (rows, queries) =>
     };
   });
 
+const normalizeNativeSource = (raw) => {
+  const value = String(raw || "")
+    .trim()
+    .toLowerCase();
+  if (
+    value === "authorized_feed" ||
+    value === "feed" ||
+    value === "user_dataset" ||
+    value === "dataset" ||
+    value === "previous_node" ||
+    value === "previous" ||
+    value === "fixture"
+  ) {
+    if (value === "feed") return "authorized_feed";
+    if (value === "dataset") return "user_dataset";
+    if (value === "previous") return "previous_node";
+    return value;
+  }
+  return "";
+};
+
 /**
  * Resolve which permitted source to use. Production never falls back to fixtures.
  */
@@ -44,17 +65,60 @@ const resolveSourceMode = (spec = {}, config) => {
     spec.useFixtures === true ||
     spec.mode === "fixture" ||
     String(spec.collectionMode || "").toLowerCase() === "fixture";
+  const nativeSource = normalizeNativeSource(spec.nativeSource);
+
+  const datasetSize = () =>
+    userDatasetAdapter.collectDatasetRows(spec.inputItems, spec.datasetPosts)
+      .length;
+
+  const requireFeed = () => {
+    if (config.feedConfigured) return "feed";
+    throw new AppError(
+      "Authorized Data Feed is selected but not configured. Set a Feed URL in the node (or OPSAI_LINKEDIN_FEED_URL server default) and optionally attach a feed credential.",
+      501,
+      "LINKEDIN_LEAD_NATIVE_NOT_CONFIGURED"
+    );
+  };
+
+  const requireDataset = (label) => {
+    if (datasetSize() > 0) return "user_dataset";
+    throw new AppError(
+      label === "previous_node"
+        ? "Previous Node Input is selected but no LinkedIn post items were found on the incoming workflow items. Connect a prior node that outputs LinkedIn posts (sourcePostUrl/content)."
+        : "User-provided Dataset is selected but empty. Paste a JSON array of posts or upload a compatible dataset.",
+      501,
+      "LINKEDIN_LEAD_NATIVE_NOT_CONFIGURED"
+    );
+  };
+
+  // Explicit native source selection from the UI.
+  if (nativeSource === "authorized_feed") return requireFeed();
+  if (nativeSource === "user_dataset") return requireDataset("user_dataset");
+  if (nativeSource === "previous_node") return requireDataset("previous_node");
+  if (nativeSource === "fixture") {
+    if (config.isProduction && !config.allowFixtures) {
+      throw new AppError(
+        "Fixture mode is not allowed in production.",
+        400,
+        "LINKEDIN_LEAD_FIXTURES_FORBIDDEN"
+      );
+    }
+    if (!config.allowFixtures && config.isProduction) {
+      throw new AppError(
+        "Fixture mode is not allowed in production.",
+        400,
+        "LINKEDIN_LEAD_FIXTURES_FORBIDDEN"
+      );
+    }
+    return "fixture";
+  }
 
   // live:true never uses fixtures — require feed or dataset.
   if (spec.live === true) {
     if (config.feedConfigured) return "feed";
-    const datasetSize = userDatasetAdapter.collectDatasetRows(
-      spec.inputItems,
-      spec.datasetPosts
-    ).length;
-    if (datasetSize > 0) return "user_dataset";
+    if (datasetSize() > 0) return "user_dataset";
     throw new AppError(
-      "OpsAi Native live collection requires OPSAI_LINKEDIN_FEED_URL or a user-provided LinkedIn dataset. Fixtures are not used when live execution is requested.",
+      "OpsAi Native live collection requires an authorized feed or a user-provided / previous-node LinkedIn dataset. Fixtures are not used when live execution is requested.",
       501,
       "LINKEDIN_LEAD_NATIVE_NOT_CONFIGURED"
     );
@@ -63,7 +127,7 @@ const resolveSourceMode = (spec = {}, config) => {
   if (explicitFixtures) {
     if (config.isProduction && !config.allowFixtures) {
       throw new AppError(
-        "Fixture mode is not allowed in production. Configure OPSAI_LINKEDIN_FEED_URL or supply a user dataset.",
+        "Fixture mode is not allowed in production. Configure an authorized feed or supply a user dataset.",
         400,
         "LINKEDIN_LEAD_FIXTURES_FORBIDDEN"
       );
@@ -72,19 +136,14 @@ const resolveSourceMode = (spec = {}, config) => {
   }
 
   if (config.feedConfigured) return "feed";
-
-  const datasetSize = userDatasetAdapter.collectDatasetRows(
-    spec.inputItems,
-    spec.datasetPosts
-  ).length;
-  if (datasetSize > 0) return "user_dataset";
+  if (datasetSize() > 0) return "user_dataset";
 
   if (config.allowFixtures && !config.isProduction) {
     return "fixture";
   }
 
   throw new AppError(
-    "OpsAi Native LinkedIn collection has no permitted live source configured. Set OPSAI_LINKEDIN_FEED_URL to an authorized opportunity feed, pin/supply a user dataset of LinkedIn posts, or set OPSAI_LINKEDIN_ALLOW_FIXTURES=1 for local development fixtures only.",
+    "OpsAi Native has no live source configured. In the node settings choose Authorized Data Feed, User-provided Dataset, or Previous Node Input — or set OPSAI_LINKEDIN_ALLOW_FIXTURES=1 for local development fixtures only.",
     501,
     "LINKEDIN_LEAD_NATIVE_NOT_CONFIGURED"
   );
@@ -174,7 +233,21 @@ const collectViaFixtures = (spec) => {
 };
 
 const search = async (spec = {}, configOverrides = {}) => {
-  const config = getNativeCollectionConfig(configOverrides);
+  const config = getNativeCollectionConfig({
+    ...configOverrides,
+    feedUrl:
+      configOverrides.feedUrl != null
+        ? configOverrides.feedUrl
+        : spec.feedUrl != null
+          ? spec.feedUrl
+          : undefined,
+    feedToken:
+      configOverrides.feedToken != null
+        ? configOverrides.feedToken
+        : spec.feedToken != null
+          ? spec.feedToken
+          : undefined,
+  });
   const mode = resolveSourceMode(spec, config);
   const collectedAt = new Date().toISOString();
 
@@ -245,7 +318,21 @@ const search = async (spec = {}, configOverrides = {}) => {
 };
 
 const getPostDetails = async (spec = {}, configOverrides = {}) => {
-  const config = getNativeCollectionConfig(configOverrides);
+  const config = getNativeCollectionConfig({
+    ...configOverrides,
+    feedUrl:
+      configOverrides.feedUrl != null
+        ? configOverrides.feedUrl
+        : spec.feedUrl != null
+          ? spec.feedUrl
+          : undefined,
+    feedToken:
+      configOverrides.feedToken != null
+        ? configOverrides.feedToken
+        : spec.feedToken != null
+          ? spec.feedToken
+          : undefined,
+  });
   const mode = resolveSourceMode(spec, config);
   const collectedAt = new Date().toISOString();
 
@@ -321,12 +408,25 @@ const getNativeStatus = (configOverrides = {}) => {
   return {
     provider: "opsai_native",
     feedConfigured: config.feedConfigured,
+    feedUrlConfigured: Boolean(config.feedUrl),
+    envFeedConfigured: Boolean(
+      String(process.env.OPSAI_LINKEDIN_FEED_URL || "").trim()
+    ),
     allowFixtures: config.allowFixtures,
     isProduction: config.isProduction,
     selectedMethods: SELECTED_METHODS,
     feasibility: FEASIBILITY_MATRIX,
     queryBatchSize: config.queryBatchSize,
     concurrency: config.concurrency,
+    sources: {
+      authorized_feed: config.feedConfigured ? "configured" : "not_configured",
+      user_dataset: "requires_node_input",
+      previous_node: "requires_incoming_items",
+      fixture:
+        config.allowFixtures && !config.isProduction
+          ? "dev_only"
+          : "disabled",
+    },
   };
 };
 
@@ -334,6 +434,7 @@ module.exports = {
   search,
   getPostDetails,
   resolveSourceMode,
+  normalizeNativeSource,
   getNativeStatus,
   FEASIBILITY_MATRIX,
   SELECTED_METHODS,
