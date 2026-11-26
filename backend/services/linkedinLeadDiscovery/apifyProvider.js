@@ -1,8 +1,8 @@
 /**
- * Optional Apify provider for LinkedIn Lead Discovery (M10.3).
+ * Optional Apify provider for LinkedIn Lead Discovery (M10.3 / M10.3.9).
  * Independent of OpsAi Native feed. Reuses shared keyword batching + normalize + dedupe.
  *
- * Actor: curious_coder/linkedin-post-search-scraper (id kfiWbq3boy3dWKbiL)
+ * Actor: scrapeforge/linkedin-all-in-one (id kTfhD8wSCMRXlhNmE) — no LinkedIn cookies.
  */
 
 const AppError = require("../../utils/AppError");
@@ -61,12 +61,14 @@ const buildActorInputPreview = (spec = {}) => {
     actorId: ACTOR_ID,
     actorUrl: ACTOR_URL,
     inputPreview: {
-      urls: mapped.input.urls,
-      deepScrape: mapped.input.deepScrape,
-      rawData: false,
-      limitPerSource: mapped.input.limitPerSource,
+      mode: mapped.input.mode,
+      search: mapped.input.search || null,
+      postUrls: mapped.input.postUrls || null,
+      postedLimit: mapped.input.postedLimit || null,
+      sortBy: mapped.input.sortBy || null,
+      maxPosts: mapped.input.maxPosts || null,
     },
-    note: "Preview of Actor input mapping.",
+    note: "Preview of Actor input mapping (no LinkedIn cookies).",
   };
 };
 
@@ -184,7 +186,6 @@ const search = async (spec = {}) => {
         ...spec,
         queries: batch.queries,
         operation: spec.operation,
-        linkedinCookies: spec.credential?.secret?.linkedinCookies,
       });
       const batchCap =
         remainingChargeUsd != null ? remainingChargeUsd : gate.maxTotalChargeUsd;
@@ -297,7 +298,6 @@ const getPostDetails = async (spec = {}) => {
     postUrl: spec.postUrl,
     postId: spec.postId,
     maxResults: 1,
-    linkedinCookies: spec.credential?.secret?.linkedinCookies,
   });
   const collected = await runActorAndCollect(client, {
     input: mapped.input,

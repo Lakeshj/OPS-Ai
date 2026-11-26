@@ -89,10 +89,22 @@ const createApifyClient = ({
           (parsed && parsed.error && parsed.error.message) ||
           (parsed && parsed.message) ||
           `Apify API returned HTTP ${res.status}.`;
+        const inputInvalid = /input is not valid|field input\./i.test(
+          String(message || "")
+        );
+        // Never surface as OpsAi 401 — reserved for JWT session expiry.
+        const status =
+          res.status === 401
+            ? 400
+            : res.status >= 400 && res.status < 600
+              ? res.status
+              : 502;
         throw new AppError(
           message,
-          res.status >= 400 && res.status < 600 ? res.status : 502,
-          "LINKEDIN_LEAD_APIFY_API_ERROR"
+          status,
+          inputInvalid
+            ? "LINKEDIN_LEAD_APIFY_INPUT_INVALID"
+            : "LINKEDIN_LEAD_APIFY_API_ERROR"
         );
       }
       return { status: res.status, body: parsed, headers: res.headers };

@@ -6,6 +6,7 @@
 const crypto = require("node:crypto");
 const AppError = require("../../../utils/AppError");
 const { DEFAULT_RUN } = require("./constants");
+const { validateActorInput } = require("./inputMapper");
 
 const recentRuns = new Map();
 const IDEMPOTENCY_TTL_MS = 2 * 60 * 1000;
@@ -66,13 +67,8 @@ const runActorAndCollect = async (
     idempotencyKey,
   } = {}
 ) => {
-  if (!input?.urls?.length) {
-    throw new AppError(
-      "No LinkedIn source URLs were mapped for the Apify Actor.",
-      400,
-      "LINKEDIN_LEAD_APIFY_INPUT_INVALID"
-    );
-  }
+  // Fail locally before Apify accepts/charges an invalid payload.
+  validateActorInput(input);
 
   const key =
     idempotencyKey ||

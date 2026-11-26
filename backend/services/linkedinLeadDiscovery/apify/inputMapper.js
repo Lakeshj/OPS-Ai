@@ -1,34 +1,96 @@
 /**
  * Map OpsAi LinkedIn Lead Discovery queries → Apify actor input.
- * Actor input schema (verified): urls[], cookie?, deepScrape, rawData, minDelay,
- * maxDelay, limitPerSource, scrapeUntilDate, proxy, userAgent.
+ *
+ * Actor: scrapeforge/linkedin-all-in-one (M10.3.9)
+ * Required by OpenAPI: mode
+ * Search: search, postedLimit, sortBy, maxPosts
+ * Post details: mode=post-detail, postUrls[]
+ *
+ * Never sends LinkedIn session cookies or fabricated auth values.
  */
 
-const datePostedFacet = (publicationPeriod) => {
+const AppError = require("../../../utils/AppError");
+
+const postedLimitFacet = (publicationPeriod) => {
   const period = String(publicationPeriod || "past-week");
-  if (period === "past-24h") return "past-24h";
-  if (period === "past-month") return "past-month";
-  if (period === "past-year") return "past-year";
-  return "past-week";
+  if (period === "past-24h") return "24h";
+  if (period === "past-month") return "month";
+  if (period === "past-year") return ""; // Actor has no year facet
+  return "week";
 };
 
-const buildSearchUrl = (keyword, publicationPeriod, sortBy) => {
-  const q = encodeURIComponent(String(keyword || "").trim());
-  const datePosted = encodeURIComponent(`"${datePostedFacet(publicationPeriod)}"`);
-  const sort =
-    String(sortBy || "recent") === "relevant"
-      ? ""
-      : "&sortBy=%22date_posted%22";
-  return `https://www.linkedin.com/search/results/content/?keywords=${q}&datePosted=${datePosted}&origin=FACETED_SEARCH${sort}`;
+const sortFacet = (sortBy) =>
+  String(sortBy || "recent") === "relevant" ? "relevance" : "date";
+
+const buildSearchQuery = (queries) => {
+  const parts = (Array.isArray(queries) ? queries : [])
+    .map((q) => String(q || "").trim())
+    .filter(Boolean);
+  if (!parts.length) return "";
+  if (parts.length === 1) return parts[0];
+  // Boolean OR keeps multi-keyword batches in one authorized Actor run.
+  return parts.map((q) => (/\s/.test(q) ? `"${q}"` : q)).join(" OR ");
+};
+
+/**
+ * Validate mapped input before calling Apify (avoid repeated invalid runs).
+ */
+const validateActorInput = (input, { operation } = {}) => {
+  const body = input && typeof input === "object" ? input : {};
+  if (Object.prototype.hasOwnProperty.call(body, "cookie")) {
+    throw new AppError(
+      "LinkedIn session cookies are not supported. OpsAi uses a no-cookie Apify Actor. Remove any cookie configuration and retry.",
+      400,
+      "LINKEDIN_LEAD_APIFY_INPUT_INVALID"
+    );
+  }
+  const mode = String(body.mode || "").trim();
+  if (!mode) {
+    throw new AppError(
+      "Apify Actor input is incomplete: mode is required.",
+      400,
+      "LINKEDIN_LEAD_APIFY_INPUT_INVALID"
+    );
+  }
+  if (mode === "post-search") {
+    if (!String(body.search || "").trim()) {
+      throw new AppError(
+        "Apify Actor input is incomplete: search keywords are required for post discovery. Select service categories or enter custom keywords.",
+        400,
+        "LINKEDIN_LEAD_APIFY_INPUT_INVALID"
+      );
+    }
+  } else if (mode === "post-detail") {
+    const urls = Array.isArray(body.postUrls) ? body.postUrls.filter(Boolean) : [];
+    if (!urls.length) {
+      throw new AppError(
+        "Apify Actor input is incomplete: a LinkedIn post URL is required for Get Post Details.",
+        400,
+        "LINKEDIN_LEAD_APIFY_INPUT_INVALID"
+      );
+    }
+  } else if (operation === "get_post_details") {
+    throw new AppError(
+      `Apify Actor mode "${mode}" cannot load post details. Use post-detail.`,
+      400,
+      "LINKEDIN_LEAD_APIFY_INPUT_INVALID"
+    );
+  }
+  return true;
 };
 
 const buildActorInput = (spec = {}) => {
   const queries = Array.isArray(spec.queries) ? spec.queries.map(String) : [];
-  const urls = [];
+  const maxPosts = Math.min(
+    Math.max(Number(spec.limitPerSource || spec.maxResults || 25), 1),
+    100
+  );
 
+  let input;
   if (spec.operation === "get_post_details") {
     const postUrl = String(spec.postUrl || "").trim();
     const postId = String(spec.postId || "").trim();
+    const urls = [];
     if (postUrl) urls.push(postUrl);
     else if (postId) {
       urls.push(
@@ -37,58 +99,36 @@ const buildActorInput = (spec = {}) => {
           : `https://www.linkedin.com/feed/update/${postId}`
       );
     }
+    input = {
+      mode: "post-detail",
+      postUrls: urls,
+      maxPosts: Math.min(Math.max(urls.length, 1), 100),
+    };
   } else {
-    for (const kw of queries) {
-      if (!String(kw || "").trim()) continue;
-      urls.push(
-        buildSearchUrl(kw, spec.publicationPeriod, spec.sortBy)
-      );
-    }
+    const search = buildSearchQuery(queries);
+    input = {
+      mode: "post-search",
+      search,
+      postedLimit: postedLimitFacet(spec.publicationPeriod),
+      sortBy: sortFacet(spec.sortBy),
+      maxPosts,
+    };
   }
 
-  const limitPerSource = Math.min(
-    Math.max(Number(spec.limitPerSource || spec.maxResults || 25), 1),
-    100
-  );
-
-  const input = {
-    urls,
-    deepScrape: spec.deepScrape === true,
-    rawData: false,
-    minDelay: 2,
-    maxDelay: 4,
-    limitPerSource,
-    proxy: {
-      useApifyProxy: true,
-    },
-  };
-
-  // Optional LinkedIn session cookies from encrypted credential — never from node JSON.
-  const cookies = spec.linkedinCookies;
-  if (Array.isArray(cookies) && cookies.length) {
-    input.cookie = cookies;
-  } else if (typeof cookies === "string" && cookies.trim()) {
-    try {
-      const parsed = JSON.parse(cookies);
-      if (Array.isArray(parsed)) input.cookie = parsed;
-    } catch (_) {
-      // ignore malformed optional cookies
-    }
-  }
-
-  if (spec.scrapeUntilDate) {
-    input.scrapeUntilDate = String(spec.scrapeUntilDate);
-  }
+  validateActorInput(input, { operation: spec.operation });
 
   return {
     input,
-    urlCount: urls.length,
+    urlCount: Array.isArray(input.postUrls) ? input.postUrls.length : 0,
     queriesMapped: queries.length,
+    search: input.search || null,
   };
 };
 
 module.exports = {
   buildActorInput,
-  buildSearchUrl,
-  datePostedFacet,
+  validateActorInput,
+  buildSearchQuery,
+  postedLimitFacet,
+  sortFacet,
 };

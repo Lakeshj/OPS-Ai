@@ -172,7 +172,7 @@ const check = async (name, fn) => {
     const { ACTOR_PRICING } = require("../services/linkedinLeadDiscovery/apify/constants");
     let startCalls = 0;
     const client = {
-      actorId: "kfiWbq3boy3dWKbiL",
+      actorId: "kTfhD8wSCMRXlhNmE",
       getMe: async () => ({
         status: 200,
         body: {
@@ -207,7 +207,7 @@ const check = async (name, fn) => {
           },
         },
       }),
-      getActor: async () => ({ status: 200, body: { data: { id: "kfiWbq3boy3dWKbiL" } } }),
+      getActor: async () => ({ status: 200, body: { data: { id: "kTfhD8wSCMRXlhNmE" } } }),
       startRun: async (_input, options) => {
         startCalls += 1;
         assert.ok(options.maxTotalChargeUsd != null);

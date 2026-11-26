@@ -395,10 +395,10 @@ export function LinkedInLeadDiscoveryFields({
           <p className="text-[11px] text-muted-foreground">
             Optional provider. Uses Apify Actor{" "}
             <code className="text-[10px]">
-              curious_coder/linkedin-post-search-scraper
-            </code>
-            . OpsAi Native does not require Apify. Free/Paid share one Apify
-            monthly allowance (not separate quotas).
+              scrapeforge/linkedin-all-in-one
+            </code>{" "}
+            (no LinkedIn session cookies). OpsAi Native does not require Apify.
+            Free/Paid share one Apify monthly allowance (not separate quotas).
           </p>
           {workspaceId ? (
             <CredentialPicker

@@ -45,7 +45,7 @@ const makeMockClient = ({
     ];
 
   return {
-    actorId: "kfiWbq3boy3dWKbiL",
+    actorId: "kTfhD8wSCMRXlhNmE",
     getMe: async () => {
       if (invalidToken) {
         const AppError = require("../utils/AppError");
@@ -84,7 +84,7 @@ const makeMockClient = ({
     getMonthlyUsage: async () => ({ status: 200, body: { data: {} } }),
     getActor: async () => ({
       status: 200,
-      body: { data: { id: "kfiWbq3boy3dWKbiL", name: "linkedin-post-search-scraper" } },
+      body: { data: { id: "kTfhD8wSCMRXlhNmE", name: "linkedin-all-in-one" } },
     }),
     startRun: async () => {
       runCounter += 1;
@@ -136,7 +136,7 @@ const makeMockClient = ({
 
   await check("M103-1 Actor constants + input mapping", () => {
     const { ACTOR_ID, ACTOR_PRICING } = require("../services/linkedinLeadDiscovery/apify/constants");
-    assert.equal(ACTOR_ID, "kfiWbq3boy3dWKbiL");
+    assert.equal(ACTOR_ID, "kTfhD8wSCMRXlhNmE");
     assert.equal(ACTOR_PRICING.model, "PAY_PER_EVENT");
     const mapped = mapper().buildActorInput({
       queries: ["Looking for SEO agency"],
@@ -144,9 +144,12 @@ const makeMockClient = ({
       sortBy: "recent",
       maxResults: 10,
     });
-    assert.equal(mapped.urls?.length || mapped.input.urls.length, 1);
-    assert.match(mapped.input.urls[0], /linkedin\.com\/search\/results\/content/);
-    assert.match(mapped.input.urls[0], /date_posted|datePosted/);
+    assert.equal(mapped.input.mode, "post-search");
+    assert.equal(mapped.input.search, "Looking for SEO agency");
+    assert.equal(mapped.input.postedLimit, "week");
+    assert.equal(mapped.input.sortBy, "date");
+    assert.equal(mapped.input.maxPosts, 10);
+    assert.equal(mapped.input.cookie, undefined);
   });
 
   await check("M103-2 Keyword library unchanged (10/140/15)", () => {
