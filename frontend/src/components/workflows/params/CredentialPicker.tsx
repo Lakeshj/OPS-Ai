@@ -57,6 +57,16 @@ type Props = {
 const isGoogleType = (type: WorkflowCredentialType) =>
   Boolean(CREDENTIAL_TYPE_FIELDS[type]?.oauth);
 
+/** Vault types that can be edited/deleted from the filtered picker manage panel. */
+const MANAGEABLE_API_KEY_TYPES = new Set<WorkflowCredentialType>([
+  "bearer",
+  "api_key_header",
+  "basic",
+  "query_param",
+  "apify",
+  "perigon",
+]);
+
 export function CredentialPicker({
   workspaceId,
   workflowId,
@@ -101,6 +111,9 @@ export function CredentialPicker({
   const [editingApiKey, setEditingApiKey] = useState(false);
   const [editName, setEditName] = useState("");
   const [editSecret, setEditSecret] = useState<Record<string, string>>({});
+  /** Edit target may be outside the filtered picker (workspace manage panel). */
+  const [editTargetId, setEditTargetId] = useState<string | null>(null);
+  const [manageWorkspaceOpen, setManageWorkspaceOpen] = useState(false);
 
   // Keep type aligned when the picker is scoped to a single allowed type
   // (e.g. Perigon / Apify / bearer feed) — avoids stale state from remount reuse.
@@ -180,6 +193,13 @@ export function CredentialPicker({
       return Boolean(value) && c.id === value;
     }
     return true;
+  });
+
+  /** API-key vault rows hidden by this picker's type filter (still manageable). */
+  const otherWorkspaceApiKeys = credentials.filter((c) => {
+    if (!MANAGEABLE_API_KEY_TYPES.has(c.type)) return false;
+    if (!allowedTypes || allowedTypes.length === 0) return false;
+    return !allowedTypes.includes(c.type);
   });
 
   // After delete / vault refresh: drop node refs that no longer exist in the DB.
@@ -356,6 +376,10 @@ export function CredentialPicker({
   };
 
   const selected = listed.find((c) => c.id === value);
+  const editTarget =
+    (editTargetId
+      ? credentials.find((c) => c.id === editTargetId)
+      : undefined) || selected;
   const selectedAppMode = String(
     (selected as { oauthAppMode?: string } | undefined)?.oauthAppMode || ""
   );
@@ -371,18 +395,16 @@ export function CredentialPicker({
     if (!selected) return;
     onChange("");
     setEditingApiKey(false);
+    setEditTargetId(null);
     toast.success("Disconnected from this node (saved connection kept)");
   };
 
-  const removeSelected = async () => {
-    if (!selected) return;
+  const removeCredential = async (cred: WorkflowCredential) => {
     setRemoving(true);
     try {
       let usageNote = "";
       try {
-        const usage = await workflowCredentialsApi.getCredentialUsage(
-          selected.id
-        );
+        const usage = await workflowCredentialsApi.getCredentialUsage(cred.id);
         if (usage.workflowCount > 0) {
           const names = (usage.workflows || [])
             .map((w) => w.name)
@@ -397,14 +419,14 @@ export function CredentialPicker({
         // Usage lookup is best-effort; still allow confirm.
       }
       const ok = window.confirm(
-        `Permanently delete saved connection "${selected.name}"?` +
+        `Permanently delete saved connection "${cred.name}"?` +
           usageNote +
           "\n\nThis cannot be undone. Prefer Disconnect if you only want to clear this node."
       );
       if (!ok) return;
 
       try {
-        await workflowCredentialsApi.remove(selected.id);
+        await workflowCredentialsApi.remove(cred.id);
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         if (/still used|CREDENTIAL_IN_USE|409/i.test(msg)) {
@@ -412,16 +434,19 @@ export function CredentialPicker({
             `${msg}\n\nForce delete anyway? Other workflows will lose this connection.`
           );
           if (!forceOk) return;
-          await workflowCredentialsApi.remove(selected.id, { force: true });
+          await workflowCredentialsApi.remove(cred.id, { force: true });
         } else {
           throw err;
         }
       }
-      if (value === selected.id) onChange("");
-      setEditingApiKey(false);
+      if (value === cred.id) onChange("");
+      if (editTargetId === cred.id) {
+        setEditingApiKey(false);
+        setEditTargetId(null);
+      }
       reload();
       toast.success(
-        selected.type === "instagram"
+        cred.type === "instagram"
           ? "Instagram disconnected from OpsAi"
           : "Connection deleted"
       );
@@ -434,8 +459,21 @@ export function CredentialPicker({
     }
   };
 
-  const saveApiKeyEdit = async () => {
+  const removeSelected = async () => {
     if (!selected) return;
+    await removeCredential(selected);
+  };
+
+  const beginEditCredential = (cred: WorkflowCredential) => {
+    setEditTargetId(cred.id);
+    setEditName(cred.name || "");
+    setEditSecret({});
+    setEditingApiKey(true);
+    setAdding(false);
+  };
+
+  const saveApiKeyEdit = async () => {
+    if (!editTarget) return;
     if (!editName.trim()) {
       toast.error("Connection name is required");
       return;
@@ -444,19 +482,20 @@ export function CredentialPicker({
     savingLockRef.current = true;
     setSaving(true);
     try {
-      const fields = CREDENTIAL_TYPE_FIELDS[selected.type]?.fields || [];
+      const fields = CREDENTIAL_TYPE_FIELDS[editTarget.type]?.fields || [];
       const secretPayload: Record<string, string> = {};
       for (const field of fields) {
         const next = String(editSecret[field.key] || "").trim();
         if (next) secretPayload[field.key] = next;
       }
-      await workflowCredentialsApi.update(selected.id, {
+      await workflowCredentialsApi.update(editTarget.id, {
         name: editName.trim(),
         ...(Object.keys(secretPayload).length
           ? { secret: secretPayload }
           : {}),
       });
       setEditingApiKey(false);
+      setEditTargetId(null);
       setEditSecret({});
       reload();
       toast.success("Connection updated");
@@ -816,12 +855,7 @@ export function CredentialPicker({
                 type="button"
                 size="sm"
                 variant="outline"
-                onClick={() => {
-                  setEditName(selected.name || "");
-                  setEditSecret({});
-                  setEditingApiKey(true);
-                  setAdding(false);
-                }}
+                onClick={() => beginEditCredential(selected)}
               >
                 Edit
               </Button>
@@ -843,12 +877,74 @@ export function CredentialPicker({
       !metaOnly &&
       !instagramOnly &&
       !facebookPageOnly &&
+      otherWorkspaceApiKeys.length > 0 ? (
+        <div className="space-y-2 rounded border border-dashed bg-muted/20 p-2">
+          <button
+            type="button"
+            className="text-[11px] text-muted-foreground underline-offset-2 hover:underline"
+            onClick={() => setManageWorkspaceOpen((open) => !open)}
+          >
+            {manageWorkspaceOpen ? "Hide" : "Manage"} other workspace
+            connections ({otherWorkspaceApiKeys.length})
+          </button>
+          {manageWorkspaceOpen ? (
+            <ul className="space-y-1.5">
+              {otherWorkspaceApiKeys.map((cred) => (
+                <li
+                  key={cred.id}
+                  className="flex flex-wrap items-center justify-between gap-2 text-[11px]"
+                >
+                  <span className="min-w-0 truncate">
+                    <span className="text-muted-foreground">
+                      {CREDENTIAL_TYPE_FIELDS[cred.type]?.label || cred.type}
+                    </span>
+                    {": "}
+                    {cred.name}
+                  </span>
+                  <span className="flex shrink-0 gap-1">
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="ghost"
+                      className="h-7 px-2"
+                      onClick={() => beginEditCredential(cred)}
+                    >
+                      Edit
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="destructive"
+                      className="h-7 px-2"
+                      disabled={removing}
+                      onClick={() => void removeCredential(cred)}
+                    >
+                      Delete
+                    </Button>
+                  </span>
+                </li>
+              ))}
+            </ul>
+          ) : null}
+          <p className="text-[10px] text-muted-foreground">
+            Same display names are allowed across different connection types.
+            Edit or delete connections that are not shown in the picker above.
+          </p>
+        </div>
+      ) : null}
+
+      {!googleOnly &&
+      !metaOnly &&
+      !instagramOnly &&
+      !facebookPageOnly &&
       editingApiKey &&
-      selected ? (
+      editTarget ? (
         <div className="space-y-2 rounded border bg-muted/30 p-2">
           <p className="text-[10px] text-muted-foreground">
-            Stored secrets are never shown. Leave secret fields blank to keep
-            the existing value.
+            Editing{" "}
+            {CREDENTIAL_TYPE_FIELDS[editTarget.type]?.label || editTarget.type}{" "}
+            connection. Stored secrets are never shown. Leave secret fields blank
+            to keep the existing value.
           </p>
           <div>
             <Label className="text-[11px]">Name</Label>
@@ -858,7 +954,7 @@ export function CredentialPicker({
               placeholder="Connection name"
             />
           </div>
-          {(CREDENTIAL_TYPE_FIELDS[selected.type]?.fields || []).map(
+          {(CREDENTIAL_TYPE_FIELDS[editTarget.type]?.fields || []).map(
             (field) => (
               <div key={field.key}>
                 <Label className="text-[11px]">
@@ -895,6 +991,7 @@ export function CredentialPicker({
               variant="ghost"
               onClick={() => {
                 setEditingApiKey(false);
+                setEditTargetId(null);
                 setEditSecret({});
               }}
             >

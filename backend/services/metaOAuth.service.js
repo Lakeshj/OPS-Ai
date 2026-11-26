@@ -248,7 +248,11 @@ const saveConnectedCredential = async ({ parsed, secret }) => {
   const id = uuidv4();
   const name = hooks.insertCredential
     ? parsed.name || "Meta Ads"
-    : await allocateUniqueCredentialName(parsed.workspaceId, parsed.name || "Meta Ads");
+    : await allocateUniqueCredentialName(
+        parsed.workspaceId,
+        parsed.name || "Meta Ads",
+        { type: "meta_ads" }
+      );
   if (hooks.insertCredential) {
     await hooks.insertCredential({ id, name, secret, config: configJson, parsed });
     return id;

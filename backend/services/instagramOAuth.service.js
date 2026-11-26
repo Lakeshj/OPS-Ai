@@ -511,7 +511,8 @@ const saveConnectedCredential = async ({ parsed, secret, account, missingScopes 
   let id = uuidv4();
   let name = await allocateUniqueCredentialName(
     parsed.workspaceId,
-    parsed.name || "Instagram"
+    parsed.name || "Instagram",
+    { type: "instagram" }
   );
 
   try {
@@ -531,7 +532,8 @@ const saveConnectedCredential = async ({ parsed, secret, account, missingScopes 
         id = uuidv4();
         name = await allocateUniqueCredentialName(
           parsed.workspaceId,
-          parsed.name || "Instagram"
+          parsed.name || "Instagram",
+          { type: "instagram" }
         );
         await insertInstagramCredentialRow({
           id,

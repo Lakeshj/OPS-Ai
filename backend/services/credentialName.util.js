@@ -1,8 +1,9 @@
 /**
- * workflow_credentials has UNIQUE(workspace_id, name) with a case-insensitive
- * collation (utf8mb4_0900_ai_ci). Name checks must match that behaviour or
- * INSERT races / case variants surface as generic ER_DUP_ENTRY
- * ("Resource already exists").
+ * workflow_credentials UNIQUE(workspace_id, type, name) with case-insensitive
+ * collation (utf8mb4_0900_ai_ci). Name checks must be type-scoped and match
+ * that collation or INSERT races / case variants surface as ER_DUP_ENTRY.
+ *
+ * Credential runtime resolution uses IDs (never ambiguous names).
  */
 const { v4: uuidv4 } = require("uuid");
 const { pool } = require("../config/database");
@@ -15,19 +16,29 @@ const normalizeCredentialNameKey = (value) =>
     .toLocaleLowerCase("en");
 
 /**
- * Find an existing credential whose name collides under MySQL CI rules.
+ * Find an existing credential whose name collides under MySQL CI rules
+ * within the same workspace + type.
  * @returns {Promise<{id:string,name:string,type:string}|null>}
  */
 const findCredentialNameConflict = async (
   workspaceId,
   desiredName,
-  { excludeId } = {}
+  { excludeId, type } = {}
 ) => {
   const wanted = normalizeCredentialNameKey(desiredName);
   if (!wanted) return null;
+  const credType = String(type || "").trim();
+  if (!credType) {
+    throw new AppError(
+      "credential type is required for name conflict checks",
+      500,
+      "INTERNAL_ERROR"
+    );
+  }
   const [rows] = await pool.execute(
-    `SELECT id, name, type FROM workflow_credentials WHERE workspace_id = ?`,
-    [workspaceId]
+    `SELECT id, name, type FROM workflow_credentials
+     WHERE workspace_id = ? AND type = ?`,
+    [workspaceId, credType]
   );
   for (const row of rows || []) {
     if (excludeId && String(row.id) === String(excludeId)) continue;
@@ -54,27 +65,38 @@ const duplicateCredentialNameError = (desiredName, conflict) => {
     "CREDENTIAL_NAME_EXISTS"
   );
   err.details = conflict
-    ? { conflictId: conflict.id, conflictName: conflict.name, conflictType: conflict.type }
+    ? {
+        conflictId: conflict.id,
+        conflictName: conflict.name,
+        conflictType: conflict.type,
+      }
     : undefined;
   return err;
 };
 
 /**
- * Allocate a free display name (Google / OAuth multi-account paths).
- * Uses case-insensitive matching so we never race MySQL's CI unique index.
+ * Allocate a free display name within the same workspace + type
+ * (Google / OAuth multi-account paths).
  */
 const allocateUniqueCredentialName = async (
   workspaceId,
   desiredName,
-  { excludeId } = {}
+  { excludeId, type } = {}
 ) => {
   const base =
     String(desiredName || "Google account").trim().slice(0, 160) ||
     "Google account";
-  const [rows] = await pool.execute(
-    `SELECT id, name FROM workflow_credentials WHERE workspace_id = ?`,
-    [workspaceId]
-  );
+  const credType = String(type || "").trim();
+  const [rows] = credType
+    ? await pool.execute(
+        `SELECT id, name FROM workflow_credentials
+         WHERE workspace_id = ? AND type = ?`,
+        [workspaceId, credType]
+      )
+    : await pool.execute(
+        `SELECT id, name FROM workflow_credentials WHERE workspace_id = ?`,
+        [workspaceId]
+      );
   const taken = new Set(
     (rows || [])
       .filter((r) => !excludeId || String(r.id) !== String(excludeId))
@@ -90,14 +112,12 @@ const allocateUniqueCredentialName = async (
 };
 
 /**
- * API-key style credentials (Apify / Perigon / Bearer / HTTP headers):
- * keep the exact name the user typed. Reject collisions with a clear error
- * so the picker can show the existing connection instead of silent rename.
+ * API-key style credentials: keep the typed name or reject same-type duplicates.
  */
 const assertCredentialNameAvailable = async (
   workspaceId,
   desiredName,
-  { excludeId } = {}
+  { excludeId, type } = {}
 ) => {
   const name = String(desiredName || "").trim();
   if (!name) {
@@ -105,6 +125,7 @@ const assertCredentialNameAvailable = async (
   }
   const conflict = await findCredentialNameConflict(workspaceId, name, {
     excludeId,
+    type,
   });
   if (conflict) {
     throw duplicateCredentialNameError(name, conflict);

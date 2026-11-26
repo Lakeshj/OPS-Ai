@@ -389,9 +389,14 @@ const create = async ({ workspaceId, name, type, secret, config }, authUser) => 
   let uniqueName;
   if (STRICT_CREDENTIAL_NAME_TYPES.has(type)) {
     // Apify / Perigon / Bearer / HTTP keys: keep the typed name or fail clearly.
-    uniqueName = await assertCredentialNameAvailable(workspaceId, desiredName);
+    // Uniqueness is per workspace + type (not across types).
+    uniqueName = await assertCredentialNameAvailable(workspaceId, desiredName, {
+      type,
+    });
   } else {
-    uniqueName = await allocateUniqueCredentialName(workspaceId, desiredName);
+    uniqueName = await allocateUniqueCredentialName(workspaceId, desiredName, {
+      type,
+    });
   }
 
   try {
@@ -411,10 +416,11 @@ const create = async ({ workspaceId, name, type, secret, config }, authUser) => 
     );
   } catch (err) {
     if (err && err.code === "ER_DUP_ENTRY") {
-      // Race: two creates allocated/asserted the same free name.
+      // Race: two creates allocated/asserted the same free name within type.
       const conflict = await findCredentialNameConflict(
         workspaceId,
-        uniqueName
+        uniqueName,
+        { type }
       );
       if (STRICT_CREDENTIAL_NAME_TYPES.has(type) || conflict) {
         throw duplicateCredentialNameError(uniqueName, conflict);
@@ -422,7 +428,8 @@ const create = async ({ workspaceId, name, type, secret, config }, authUser) => 
       // OAuth / Google: retry once with a freshly allocated unique name.
       uniqueName = await allocateUniqueCredentialName(
         workspaceId,
-        `${desiredName || uniqueName}`
+        `${desiredName || uniqueName}`,
+        { type }
       );
       await pool.execute(
         `INSERT INTO workflow_credentials
@@ -478,6 +485,7 @@ const update = async (credentialId, { name, secret, config }, authUser) => {
     if (STRICT_CREDENTIAL_NAME_TYPES.has(row.type)) {
       await assertCredentialNameAvailable(row.workspace_id, nextName, {
         excludeId: credentialId,
+        type: row.type,
       });
     }
     let nextSecret = { ...existingSecret };
@@ -578,7 +586,7 @@ const update = async (credentialId, { name, secret, config }, authUser) => {
         const conflict = await findCredentialNameConflict(
           row.workspace_id,
           nextName,
-          { excludeId: credentialId }
+          { excludeId: credentialId, type: row.type }
         );
         throw duplicateCredentialNameError(nextName, conflict);
       }
@@ -678,7 +686,7 @@ const update = async (credentialId, { name, secret, config }, authUser) => {
         ? await allocateUniqueCredentialName(
             row.workspace_id,
             String(name).trim(),
-            { excludeId: credentialId }
+            { excludeId: credentialId, type: row.type }
           )
         : row.name,
       encryptSecret(nextSecretObj),

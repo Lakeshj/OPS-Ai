@@ -1329,7 +1329,7 @@ const finishGoogleOAuth = async (code, state) => {
       const nextName = await allocateUniqueCredentialName(
         parsed.workspaceId,
         `${GOOGLE_PRODUCTS[parsed.product].label} (${accountEmail})`,
-        { excludeId: existing.id }
+        { excludeId: existing.id, type: existing.type || parsed.product }
       );
       try {
         await pool.execute(
@@ -1360,7 +1360,8 @@ const finishGoogleOAuth = async (code, state) => {
     parsed.workspaceId,
     accountEmail
       ? `${GOOGLE_PRODUCTS[parsed.product].label} (${accountEmail})`
-      : parsed.name || GOOGLE_PRODUCTS[parsed.product].label
+      : parsed.name || GOOGLE_PRODUCTS[parsed.product].label,
+    { type: parsed.product }
   );
   await pool.execute(
     `INSERT INTO workflow_credentials

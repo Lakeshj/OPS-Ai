@@ -148,15 +148,16 @@ const startEphemeralApi = async () => {
     );
   });
 
-  await check("M1037-5 Cross-type name still conflicts + listable", async () => {
+  await check("M1037-5 Same-type duplicate still rejected; listable", async () => {
+    // Cross-type same names are allowed after M10.3.8; same-type remains blocked.
     await assert.rejects(
       () =>
         credentials.create(
           {
             workspaceId,
             name: "SocialChamps Apify",
-            type: "bearer",
-            secret: { token: "bearer_should_conflict" },
+            type: "apify",
+            secret: { apiToken: "apify_same_type_dup" },
           },
           authUser
         ),
@@ -525,9 +526,13 @@ const startEphemeralApi = async () => {
     );
     assert.equal(cols.length, 0, "hard delete only — no soft-delete column");
     const [idx] = await pool.query(
-      "SHOW INDEX FROM workflow_credentials WHERE Key_name = 'uq_workflow_credentials_name'"
+      `SHOW INDEX FROM workflow_credentials
+       WHERE Key_name IN (
+         'uq_workflow_credentials_name',
+         'uq_workflow_credentials_workspace_type_name'
+       )`
     );
-    assert.ok(idx.length >= 2);
+    assert.ok(idx.length >= 2, "unique name index must exist");
   });
 
   // Cleanup probe credentials

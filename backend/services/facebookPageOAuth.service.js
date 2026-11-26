@@ -564,7 +564,7 @@ const finishFacebookPageOAuth = async (code, state) => {
       name = await allocateUniqueCredentialName(
         parsed.workspaceId,
         parsed.name || "Facebook Page",
-        { excludeId: parsed.credentialId || null }
+        { excludeId: parsed.credentialId || null, type: "facebook_page" }
       );
     } catch (err) {
       throw classifyCredentialSaveError(err);
