@@ -1,6 +1,9 @@
 "use client";
 
 import React from "react";
+import { toast } from "sonner";
+import { Check, Copy } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import type { WorkflowItem } from "@/modules/workflows/types";
 import {
   LINKEDIN_LEAD_LIST_PREVIEW_ROWS,
@@ -15,6 +18,20 @@ type Props = {
   showTechnicalHint?: boolean;
 };
 
+function buildCopyJson(items: WorkflowItem[] | undefined, value: unknown) {
+  if (value != null && typeof value === "object") {
+    return JSON.stringify(value, null, 2);
+  }
+  if (Array.isArray(items) && items.length) {
+    return JSON.stringify(
+      items.map((row) => row?.json ?? row),
+      null,
+      2
+    );
+  }
+  return "[]";
+}
+
 export function LinkedInLeadOutputPreview({
   items,
   value,
@@ -26,12 +43,23 @@ export function LinkedInLeadOutputPreview({
   const block = blocks[0]!;
   const rows = block.listRows || [];
   const [expanded, setExpanded] = React.useState(false);
+  const [copied, setCopied] = React.useState(false);
   const needsCollapse = rows.length > LINKEDIN_LEAD_LIST_PREVIEW_ROWS;
   const visible =
     needsCollapse && !expanded
       ? rows.slice(0, LINKEDIN_LEAD_LIST_PREVIEW_ROWS)
       : rows;
   const hidden = Math.max(0, rows.length - LINKEDIN_LEAD_LIST_PREVIEW_ROWS);
+
+  const copyJson = async () => {
+    try {
+      await navigator.clipboard.writeText(buildCopyJson(items, value));
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1500);
+    } catch {
+      toast.error("Clipboard not available");
+    }
+  };
 
   return (
     <div
@@ -41,8 +69,22 @@ export function LinkedInLeadOutputPreview({
       }
       data-linkedin-lead-output-preview="true"
     >
-      <div className="mb-2 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-        LinkedIn Lead Discovery
+      <div className="mb-2 flex items-center justify-between gap-2">
+        <div className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+          LinkedIn Lead Discovery
+        </div>
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          className="h-6 gap-1 px-1.5 text-[10px]"
+          onClick={() => void copyJson()}
+          title="Copy complete JSON output"
+          data-linkedin-lead-copy-json="true"
+        >
+          {copied ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
+          {copied ? "Copied" : "Copy JSON"}
+        </Button>
       </div>
       <div className="text-xs font-semibold text-foreground">{block.title}</div>
       <ul className="mt-2 divide-y divide-border/50 rounded-md border border-border/60">

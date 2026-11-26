@@ -380,6 +380,7 @@ const executeLinkedInLeadDiscoveryNode = async (node, context) => {
     operation,
     resource: operation === "search_posts" ? "post" : "lead",
     queries: queryPlan.queries,
+    categoryIds: queryPlan.categoryIds || data.categoryIds,
     maxResults: data.maxResults || 25,
     publicationPeriod: data.publicationPeriod || "past-week",
     sortBy: data.sortBy || "recent",

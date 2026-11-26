@@ -24,6 +24,10 @@ const { buildActorInput } = require("./apify/inputMapper");
 const { runActorAndCollect } = require("./apify/runner");
 const { mapApifyItems } = require("./apify/mapResults");
 const {
+  filterBuyerRelevance,
+  shouldApplyBuyerFilter,
+} = require("./buyerRelevance");
+const {
   ACTOR_ID,
   ACTOR_URL,
   ACTOR_PRICING,
@@ -159,6 +163,7 @@ const search = async (spec = {}) => {
   );
   const plan = chunkQueries(queries, batchSize);
   const maxResults = Math.min(Math.max(Number(spec.maxResults) || 25, 1), 100);
+  const applyBuyerFilter = shouldApplyBuyerFilter(spec.operation);
 
   // Free mode: serialize batches and decrement shared maxTotalChargeUsd so
   // concurrent runs cannot collectively exceed the included allowance.
@@ -169,6 +174,12 @@ const search = async (spec = {}) => {
       : null;
   const minCharge =
     ACTOR_PRICING.events.actorStartUsd + ACTOR_PRICING.events.datasetItemUsd;
+
+  // Distribute per-batch maxItems so early queries cannot alone consume the
+  // global result budget (later keyword batches still execute).
+  const batchCount = Math.max(1, plan.batchCount || plan.batches.length || 1);
+  const basePerBatch = Math.max(3, Math.ceil(maxResults / batchCount));
+  let remainingItemBudget = maxResults;
 
   const batchRun = await runBatches({
     batches: plan.batches,
@@ -182,16 +193,31 @@ const search = async (spec = {}) => {
           "LINKEDIN_LEAD_APIFY_FREE_EXHAUSTED"
         );
       }
+      if (remainingItemBudget <= 0) {
+        return {
+          queryCount: batch.queries.length,
+          rows: [],
+          runId: null,
+          status: "SKIPPED_BUDGET",
+          partial: false,
+          skipped: true,
+        };
+      }
+      const batchMaxItems = Math.min(
+        maxResults,
+        Math.max(basePerBatch, remainingItemBudget)
+      );
       const mapped = buildActorInput({
         ...spec,
         queries: batch.queries,
         operation: spec.operation,
+        maxResults: batchMaxItems,
       });
       const batchCap =
         remainingChargeUsd != null ? remainingChargeUsd : gate.maxTotalChargeUsd;
       const collected = await runActorAndCollect(client, {
         input: mapped.input,
-        maxItems: maxResults,
+        maxItems: batchMaxItems,
         maxTotalChargeUsd: batchCap,
         signal: spec.signal,
         timeoutSecs: DEFAULT_RUN.timeoutSecs,
@@ -199,6 +225,11 @@ const search = async (spec = {}) => {
           ? `${spec.idempotencyKey}:${batch.batchIndex}`
           : undefined,
       });
+      const mappedRows = mapApifyItems(collected.items);
+      remainingItemBudget = Math.max(
+        0,
+        remainingItemBudget - mappedRows.length
+      );
       if (remainingChargeUsd != null) {
         const estimated =
           ACTOR_PRICING.events.actorStartUsd +
@@ -208,7 +239,7 @@ const search = async (spec = {}) => {
       }
       return {
         queryCount: batch.queries.length,
-        rows: mapApifyItems(collected.items),
+        rows: mappedRows,
         runId: collected.runId,
         status: collected.status,
         partial: collected.partial,
@@ -232,7 +263,15 @@ const search = async (spec = {}) => {
 
   const enriched = enrichMatches(rawRows, queries);
   const deduped = dedupeRows(enriched);
-  const limited = deduped.rows.slice(0, maxResults);
+  const filtered = filterBuyerRelevance(deduped.rows, {
+    sortBy: spec.sortBy,
+    operation: spec.operation,
+    categoryIds: spec.categoryIds,
+    maxResults,
+  });
+  const limited = applyBuyerFilter
+    ? filtered.rows
+    : deduped.rows.slice(0, maxResults);
   const collectedAt = new Date().toISOString();
   const items = normalizeLeadItems(limited, {
     provider: "apify",
@@ -261,13 +300,24 @@ const search = async (spec = {}) => {
       actorId: ACTOR_ID,
       actorUrl: ACTOR_URL,
       pricingModel: ACTOR_PRICING.model,
+      sortBy: spec.sortBy || "recent",
+      selectedKeywords: queries,
+      queriesExecuted: plan.totalQueries,
       coverage: {
         ...batchRun.coverage,
         totalQueries: plan.totalQueries,
         batchSize: plan.batchSize,
         batchCount: plan.batchCount,
+        perBatchItemBudget: basePerBatch,
       },
+      rawPostsRetrieved: rawRows.length,
       duplicateMerges: deduped.duplicateMerges,
+      relevance: applyBuyerFilter
+        ? {
+            ...filtered.diagnostics,
+            finalResultCount: items.length,
+          }
+        : { applied: false, finalResultCount: items.length },
       partialErrors: batchRun.failed,
       usageSnapshot: {
         refreshedAt: usage.refreshedAt,
@@ -277,7 +327,9 @@ const search = async (spec = {}) => {
       },
       message:
         items.length === 0
-          ? "Apify returned no matching posts for the selected queries."
+          ? applyBuyerFilter
+            ? "No buyer-intent opportunities matched after relevance filtering."
+            : "Apify returned no matching posts for the selected queries."
           : "Results from Apify LinkedIn post search scraper.",
     },
   };

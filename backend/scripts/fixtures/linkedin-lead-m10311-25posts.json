@@ -1,0 +1,265 @@
+{
+  "description": "M10.3.11 offline fixture — 25 labelled LinkedIn-style posts for buyer relevance regression. Labels: include|exclude.",
+  "labels": {
+    "include": ["Oryntic Labs", "Bhairava Group", "CareerByteCode"],
+    "excludePromotional": [
+      "Zenerom",
+      "SNV Everstrive",
+      "Parthnix",
+      "Tecklixtech",
+      "Linkplux"
+    ]
+  },
+  "posts": [
+    {
+      "label": "include",
+      "postId": "urn:li:activity:oryntic1",
+      "url": "https://www.linkedin.com/posts/oryntic-labs_looking-for-seo",
+      "content": "We are looking for an SEO agency to improve our organic rankings this quarter. Open to recommendations — please DM.",
+      "postedAt": "2026-11-25T10:00:00.000Z",
+      "author": { "name": "Oryntic Labs", "headline": "Product company", "url": "https://www.linkedin.com/company/oryntic" },
+      "engagement": { "likes": 12, "comments": 4, "shares": 1 },
+      "source": "post-search"
+    },
+    {
+      "label": "include",
+      "postId": "urn:li:activity:bhairava1",
+      "url": "https://www.linkedin.com/posts/bhairava-group_need-digital-marketing",
+      "content": "Bhairava Group needs a digital marketing partner for lead generation across India. Prefer agencies with B2B experience.",
+      "postedAt": "2026-11-24T09:00:00.000Z",
+      "author": { "name": "Bhairava Group", "headline": "Industrial group", "url": "https://www.linkedin.com/company/bhairava" },
+      "engagement": { "likes": 8, "comments": 3, "shares": 0 },
+      "source": "post-search"
+    },
+    {
+      "label": "include",
+      "postId": "urn:li:activity:careerbytecode1",
+      "url": "https://www.linkedin.com/posts/careerbytecode_outsourcing-content",
+      "content": "CareerByteCode is outsourcing LinkedIn content and personal branding support. Looking for a reliable content marketing freelancer or agency.",
+      "postedAt": "2026-11-23T14:30:00.000Z",
+      "author": { "name": "CareerByteCode", "headline": "EdTech", "url": "https://www.linkedin.com/company/careerbytecode" },
+      "engagement": { "likes": 6, "comments": 2, "shares": 0 },
+      "source": "post-search"
+    },
+    {
+      "label": "include",
+      "postId": "urn:li:activity:buyer-agency-outsource",
+      "url": "https://www.linkedin.com/posts/growthco_agency-outsourcing",
+      "content": "Our boutique agency is at capacity — seeking a white-label SEO partner we can outsource overflow projects to. Serious vendors only.",
+      "postedAt": "2026-11-22T11:00:00.000Z",
+      "author": { "name": "North Peak Agency", "headline": "Digital marketing agency", "url": "https://www.linkedin.com/company/northpeak" },
+      "engagement": { "likes": 15, "comments": 7, "shares": 2 },
+      "source": "post-search"
+    },
+    {
+      "label": "include",
+      "postId": "urn:li:activity:indirect-buyer",
+      "url": "https://www.linkedin.com/posts/founder-struggling-leads",
+      "content": "Struggling with LinkedIn lead generation after ads stopped converting. Evaluating external help for pipeline growth — open to suggestions.",
+      "postedAt": "2026-11-21T16:00:00.000Z",
+      "author": { "name": "Asha Mehta", "headline": "Founder at BrightCart", "url": "https://www.linkedin.com/in/ashamehta" },
+      "engagement": { "likes": 22, "comments": 9, "shares": 1 },
+      "source": "post-search"
+    },
+    {
+      "label": "include_borderline",
+      "postId": "urn:li:activity:borderline-recent",
+      "url": "https://www.linkedin.com/posts/ops-lead-marketing-support",
+      "content": "Our in-house marketing team is stretched. Exploring short-term digital marketing support for campaign execution next month.",
+      "postedAt": "2026-11-20T08:00:00.000Z",
+      "author": { "name": "Ravi Shah", "headline": "Ops Lead", "url": "https://www.linkedin.com/in/ravishah" },
+      "engagement": { "likes": 5, "comments": 1, "shares": 0 },
+      "source": "post-search"
+    },
+    {
+      "label": "include",
+      "postId": "urn:li:activity:rfp",
+      "url": "https://www.linkedin.com/posts/financeco-rfp",
+      "content": "Issuing an RFP for Google Ads and SEO services. Agencies with fintech case studies please recommend yourselves or peers.",
+      "postedAt": "2026-11-19T12:00:00.000Z",
+      "author": { "name": "LedgerWorks", "headline": "Fintech", "url": "https://www.linkedin.com/company/ledgerworks" },
+      "engagement": { "likes": 11, "comments": 5, "shares": 0 },
+      "source": "post-search"
+    },
+    {
+      "label": "exclude",
+      "postId": "urn:li:activity:zenerom1",
+      "url": "https://www.linkedin.com/posts/zenerom-promo",
+      "content": "Zenerom — we provide end-to-end digital marketing services. Book a free consultation today and grow your brand with our marketing solutions!",
+      "postedAt": "2026-11-25T09:00:00.000Z",
+      "author": { "name": "Zenerom", "headline": "Digital Marketing Agency", "url": "https://www.linkedin.com/company/zenerom" },
+      "engagement": { "likes": 40, "comments": 2, "shares": 6 },
+      "source": "post-search"
+    },
+    {
+      "label": "exclude",
+      "postId": "urn:li:activity:snv1",
+      "url": "https://www.linkedin.com/posts/snv-everstrive-promo",
+      "content": "SNV Everstrive specializes in LinkedIn lead generation. Hire our agency — contact us for packages. Link in comments.",
+      "postedAt": "2026-11-24T08:00:00.000Z",
+      "author": { "name": "SNV Everstrive", "headline": "Marketing Agency", "url": "https://www.linkedin.com/company/snv" },
+      "engagement": { "likes": 33, "comments": 1, "shares": 4 },
+      "source": "post-search"
+    },
+    {
+      "label": "exclude",
+      "postId": "urn:li:activity:parthnix1",
+      "url": "https://www.linkedin.com/posts/parthnix-promo",
+      "content": "Parthnix: our agency helps businesses grow with SEO and paid ads. Work with us — schedule a call now!",
+      "postedAt": "2026-11-23T07:00:00.000Z",
+      "author": { "name": "Parthnix", "headline": "Performance Agency", "url": "https://www.linkedin.com/company/parthnix" },
+      "engagement": { "likes": 28, "comments": 0, "shares": 3 },
+      "source": "post-search"
+    },
+    {
+      "label": "exclude",
+      "postId": "urn:li:activity:tecklix1",
+      "url": "https://www.linkedin.com/posts/tecklixtech-promo",
+      "content": "Tecklixtech case study: how we deliver 3x leads. Our portfolio and services we offer are ready — DM us to get started.",
+      "postedAt": "2026-11-22T06:00:00.000Z",
+      "author": { "name": "Tecklixtech", "headline": "Tech Marketing", "url": "https://www.linkedin.com/company/tecklix" },
+      "engagement": { "likes": 19, "comments": 1, "shares": 2 },
+      "source": "post-search"
+    },
+    {
+      "label": "exclude",
+      "postId": "urn:li:activity:linkplux1",
+      "url": "https://www.linkedin.com/posts/linkplux-promo",
+      "content": "Linkplux — we help brands scale LinkedIn outreach. Limited time offer on our packages. Book a free consultation!",
+      "postedAt": "2026-11-21T05:00:00.000Z",
+      "author": { "name": "Linkplux", "headline": "LinkedIn Agency", "url": "https://www.linkedin.com/company/linkplux" },
+      "engagement": { "likes": 50, "comments": 3, "shares": 8 },
+      "source": "post-search"
+    },
+    {
+      "label": "exclude",
+      "postId": "urn:li:activity:recruit1",
+      "url": "https://www.linkedin.com/posts/hiring-seo-manager",
+      "content": "We're hiring a full-time SEO Manager for our in-house team. Apply today — open role in Bangalore.",
+      "postedAt": "2026-11-20T04:00:00.000Z",
+      "author": { "name": "HireFast Corp", "headline": "HR", "url": "https://www.linkedin.com/company/hirefast" },
+      "engagement": { "likes": 14, "comments": 2, "shares": 1 },
+      "source": "post-search"
+    },
+    {
+      "label": "exclude",
+      "postId": "urn:li:activity:tips1",
+      "url": "https://www.linkedin.com/posts/seo-tips-thread",
+      "content": "Here are 7 tips to improve your SEO rankings in 2026. Ultimate guide for founders. Thread:",
+      "postedAt": "2026-11-19T03:00:00.000Z",
+      "author": { "name": "SEO Tips Daily", "headline": "Creator", "url": "https://www.linkedin.com/in/seotips" },
+      "engagement": { "likes": 120, "comments": 40, "shares": 30 },
+      "source": "post-search"
+    },
+    {
+      "label": "exclude",
+      "postId": "urn:li:activity:promo2",
+      "url": "https://www.linkedin.com/posts/agency-promo-generic",
+      "content": "Our marketing solutions help startups rank faster. Contact us today for a free audit. We specialize in growth.",
+      "postedAt": "2026-11-18T02:00:00.000Z",
+      "author": { "name": "Pulse Media Agency", "headline": "Agency", "url": "https://www.linkedin.com/company/pulse" },
+      "engagement": { "likes": 9, "comments": 0, "shares": 1 },
+      "source": "post-search"
+    },
+    {
+      "label": "include",
+      "postId": "urn:li:activity:weak-keyword-buyer",
+      "url": "https://www.linkedin.com/posts/no-exact-keyword",
+      "content": "Anyone know a good team for website ranking improvement and technical SEO? Need an expert before Q1 campaigns.",
+      "postedAt": "2026-11-17T15:00:00.000Z",
+      "author": { "name": "Priya Nair", "headline": "CMO", "url": "https://www.linkedin.com/in/priyanair" },
+      "engagement": { "likes": 7, "comments": 4, "shares": 0 },
+      "source": "post-search"
+    },
+    {
+      "label": "include",
+      "postId": "urn:li:activity:mixed-buyer-seller",
+      "url": "https://www.linkedin.com/posts/mixed-intent",
+      "content": "We run a small studio, but we're looking for an external PPC agency for overflow Google Ads accounts. Not selling — genuinely need a partner.",
+      "postedAt": "2026-11-16T13:00:00.000Z",
+      "author": { "name": "Studio Lane", "headline": "Creative studio", "url": "https://www.linkedin.com/company/studiolane" },
+      "engagement": { "likes": 10, "comments": 3, "shares": 0 },
+      "source": "post-search"
+    },
+    {
+      "label": "exclude",
+      "postId": "urn:li:activity:unrelated",
+      "url": "https://www.linkedin.com/posts/unrelated-ai-news",
+      "content": "Excited about the new AI chip announcement. My thoughts on semiconductor supply chains this week.",
+      "postedAt": "2026-11-15T12:00:00.000Z",
+      "author": { "name": "Tech Watcher", "headline": "Analyst", "url": "https://www.linkedin.com/in/techwatcher" },
+      "engagement": { "likes": 3, "comments": 0, "shares": 0 },
+      "source": "post-search"
+    },
+    {
+      "label": "exclude",
+      "postId": "urn:li:activity:promo3",
+      "url": "https://www.linkedin.com/posts/another-agency-ad",
+      "content": "Book a free consultation with our experts. We help businesses grow through LinkedIn ads. DM us for pricing.",
+      "postedAt": "2026-11-14T11:00:00.000Z",
+      "author": { "name": "AdRocket Agency", "headline": "Paid Media Agency", "url": "https://www.linkedin.com/company/adrocket" },
+      "engagement": { "likes": 18, "comments": 1, "shares": 2 },
+      "source": "post-search"
+    },
+    {
+      "label": "include",
+      "postId": "urn:li:activity:partner-seek",
+      "url": "https://www.linkedin.com/posts/partner-seek",
+      "content": "Seeking a referral partnership with SEO agencies who need white-label content production. Looking for partners, not clients.",
+      "postedAt": "2026-11-13T10:00:00.000Z",
+      "author": { "name": "WriteWell Co", "headline": "Content studio", "url": "https://www.linkedin.com/company/writewell" },
+      "engagement": { "likes": 4, "comments": 2, "shares": 0 },
+      "source": "post-search"
+    },
+    {
+      "label": "exclude",
+      "postId": "urn:li:activity:dup-promo",
+      "url": "https://www.linkedin.com/posts/dup-promo",
+      "content": "Our agency specializes in SEO. Hire us for rankings. Contact us now!",
+      "postedAt": "2026-11-12T09:00:00.000Z",
+      "author": { "name": "Rankify Pro", "headline": "SEO Agency", "url": "https://www.linkedin.com/company/rankify" },
+      "engagement": { "likes": 2, "comments": 0, "shares": 0 },
+      "source": "post-search"
+    },
+    {
+      "label": "include",
+      "postId": "urn:li:activity:suggest-agency",
+      "url": "https://www.linkedin.com/posts/suggest-agency",
+      "content": "Can anyone suggest a reputable LinkedIn marketing agency for ABM campaigns? Looking for recommendations.",
+      "postedAt": "2026-11-11T08:00:00.000Z",
+      "author": { "name": "Noah Kim", "headline": "Demand Gen Lead", "url": "https://www.linkedin.com/in/noahkim" },
+      "engagement": { "likes": 16, "comments": 11, "shares": 1 },
+      "source": "post-search"
+    },
+    {
+      "label": "exclude",
+      "postId": "urn:li:activity:job2",
+      "url": "https://www.linkedin.com/posts/job-opening-content",
+      "content": "Job opening: Content Marketing Specialist. Join our team — careers page updated. Apply now.",
+      "postedAt": "2026-11-10T07:00:00.000Z",
+      "author": { "name": "PeopleFirst HR", "headline": "Recruiting", "url": "https://www.linkedin.com/company/peoplefirst" },
+      "engagement": { "likes": 5, "comments": 0, "shares": 1 },
+      "source": "post-search"
+    },
+    {
+      "label": "include",
+      "postId": "urn:li:activity:dup-requirement-a",
+      "url": "https://www.linkedin.com/posts/dup-req-a",
+      "content": "Need SEO expert for ecommerce site migration. Prefer agency or senior freelancer.",
+      "postedAt": "2026-11-09T06:00:00.000Z",
+      "author": { "name": "ShopNova", "headline": "Ecommerce", "url": "https://www.linkedin.com/company/shopnova" },
+      "engagement": { "likes": 3, "comments": 1, "shares": 0 },
+      "source": "post-search"
+    },
+    {
+      "label": "include_duplicate",
+      "postId": "urn:li:activity:dup-requirement-a",
+      "url": "https://www.linkedin.com/posts/dup-req-a",
+      "content": "Need SEO expert for ecommerce site migration. Prefer agency or senior freelancer.",
+      "postedAt": "2026-11-09T06:00:00.000Z",
+      "author": { "name": "ShopNova", "headline": "Ecommerce", "url": "https://www.linkedin.com/company/shopnova" },
+      "engagement": { "likes": 3, "comments": 1, "shares": 0 },
+      "source": "post-search"
+    }
+  ]
+}

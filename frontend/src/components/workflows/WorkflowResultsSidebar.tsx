@@ -198,8 +198,12 @@ function StepDetails({
             </Button>
           )}
           <CopyButton
-            value={tab === "input" ? step.input : step.output}
-            label={tab}
+            value={
+              tab === "input"
+                ? step.input
+                : outputPresentation?.original ?? step.output
+            }
+            label={tab === "output" ? "output JSON" : tab}
           />
         </div>
       </div>
@@ -456,8 +460,14 @@ export function WorkflowResultsPanel({
                     Final result
                   </div>
                   <CopyButton
-                    value={finalRawJson ?? finalResultText}
-                    label="final result"
+                    value={
+                      // Always copy complete structured JSON (never Markdown preview).
+                      latestRun?.output ??
+                      finalPresentation?.original ??
+                      finalRawJson ??
+                      finalResultText
+                    }
+                    label="final result JSON"
                   />
                 </div>
                 {finalPresentation?.provider === "instagram" ||

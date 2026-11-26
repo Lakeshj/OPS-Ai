@@ -11,6 +11,7 @@ Changed layer only.
 | Area | Command |
 |------|---------|
 | One backend smoke | `cd backend && node scripts/smoke-workflow-<name>.js` |
+| LinkedIn Lead M10.3.11 buyer relevance (offline) | `cd backend && node scripts/smoke-workflow-linkedin-lead-m10311.js` (fixture; no live Apify) |
 | GSC MCP plugin | `cd plugins/gsc-mcp && npm test` (or `cd backend && npm run test:gsc-mcp`) |
 | GA4 MCP plugin | `cd backend && npm run test:ga4-mcp` |
 | Google Ads MCP plugin | `cd plugins/google-ads-mcp && npm test` |
@@ -38,7 +39,7 @@ Run the **affected family**, not everything.
 | Workflow Copilot context | M8.16 bridge: `node scripts/smoke-workflow-copilot-m816.js`; M8.16.1 local mock MCP + Copilot: `node scripts/smoke-workflow-ai-m8161.js`, `node scripts/smoke-workflow-copilot-m8161.js`; M8.16.2 Instagram MCP structural (no Meta): `node scripts/smoke-workflow-instagram-m8162.js` (+ affected 14B/14D smokes if plan path changed) |
 | Instagram / Meta Ads isolation | M8.17: `node scripts/smoke-workflow-isolation-m817.js` (do not touch GSC/GA4/AI/Copilot implementations) |
 | Facebook Page Native | M9.1: `node scripts/smoke-workflow-facebook-page-m91.js`; M9.1.1: `node scripts/smoke-workflow-facebook-page-m911.js` |
-| LinkedIn Lead Discovery Native | M10.1: `node scripts/smoke-workflow-linkedin-lead-m101.js`; M10.2: `node scripts/smoke-workflow-linkedin-lead-m102.js`; M10.3 Apify: `node scripts/smoke-workflow-linkedin-lead-m103.js`; M10.3.1 credential/native UI: `node scripts/smoke-workflow-linkedin-lead-m1031.js`; M10.3.3 feed DNS: `node scripts/smoke-workflow-linkedin-lead-m1033.js`; M10.3.4 Perigon: `node scripts/smoke-workflow-linkedin-lead-m1034.js`; M10.3.5 credential ENUM/HTTP: `node scripts/smoke-workflow-linkedin-lead-m1035.js`; M10.3.6 session isolation: `node scripts/smoke-workflow-linkedin-lead-m1036.js`; M10.3.7 credential delete/duplicate: `node scripts/smoke-workflow-linkedin-lead-m1037.js`; M10.3.8 cross-type names: `node scripts/smoke-workflow-linkedin-lead-m1038.js`; M10.3.9 Apify actor input: `node scripts/smoke-workflow-linkedin-lead-m1039.js` |
+| LinkedIn Lead Discovery Native | M10.1: `node scripts/smoke-workflow-linkedin-lead-m101.js`; M10.2: `node scripts/smoke-workflow-linkedin-lead-m102.js`; M10.3 Apify: `node scripts/smoke-workflow-linkedin-lead-m103.js`; M10.3.1 credential/native UI: `node scripts/smoke-workflow-linkedin-lead-m1031.js`; M10.3.3 feed DNS: `node scripts/smoke-workflow-linkedin-lead-m1033.js`; M10.3.4 Perigon: `node scripts/smoke-workflow-linkedin-lead-m1034.js`; M10.3.5 credential ENUM/HTTP: `node scripts/smoke-workflow-linkedin-lead-m1035.js`; M10.3.6 session isolation: `node scripts/smoke-workflow-linkedin-lead-m1036.js`; M10.3.7 credential delete/duplicate: `node scripts/smoke-workflow-linkedin-lead-m1037.js`; M10.3.8 cross-type names: `node scripts/smoke-workflow-linkedin-lead-m1038.js`; M10.3.9 Apify actor input: `node scripts/smoke-workflow-linkedin-lead-m1039.js`; M10.3.11 buyer relevance: `node scripts/smoke-workflow-linkedin-lead-m10311.js` |
 | Workflow engine core | targeted `smoke-workflow-engine.js` **only if** you changed scheduler/occurrences/edges — else Level 3 at milestone |
 
 If Copilot, connections, Wait, Loop, or credentials changed, include that family’s smoke.

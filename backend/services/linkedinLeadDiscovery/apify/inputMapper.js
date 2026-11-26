@@ -22,13 +22,23 @@ const postedLimitFacet = (publicationPeriod) => {
 const sortFacet = (sortBy) =>
   String(sortBy || "recent") === "relevant" ? "relevance" : "date";
 
-const buildSearchQuery = (queries) => {
-  const parts = (Array.isArray(queries) ? queries : [])
+const INTENTISH_RE =
+  /^(looking for|need(?: an?)?|seeking|hiring|recommend|suggest|outsourcing|require)/i;
+
+const buildSearchQuery = (queries, { preferIntentFirst = false } = {}) => {
+  let parts = (Array.isArray(queries) ? queries : [])
     .map((q) => String(q || "").trim())
     .filter(Boolean);
   if (!parts.length) return "";
+  if (preferIntentFirst && parts.length > 1) {
+    parts = [
+      ...parts.filter((q) => INTENTISH_RE.test(q)),
+      ...parts.filter((q) => !INTENTISH_RE.test(q)),
+    ];
+  }
   if (parts.length === 1) return parts[0];
   // Boolean OR keeps multi-keyword batches in one authorized Actor run.
+  // Actor-supported operators only — no unsupported LinkedIn search syntax.
   return parts.map((q) => (/\s/.test(q) ? `"${q}"` : q)).join(" OR ");
 };
 
@@ -105,7 +115,9 @@ const buildActorInput = (spec = {}) => {
       maxPosts: Math.min(Math.max(urls.length, 1), 100),
     };
   } else {
-    const search = buildSearchQuery(queries);
+    const preferIntentFirst =
+      String(spec.sortBy || "recent").toLowerCase() === "relevant";
+    const search = buildSearchQuery(queries, { preferIntentFirst });
     input = {
       mode: "post-search",
       search,
