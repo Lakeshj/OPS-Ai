@@ -192,7 +192,8 @@ const fixturePath = path.join(
     );
   });
 
-  await check("M10311-8 FE JSON copy wiring (not Markdown preview)", () => {
+  await check("M10311-8 FE copy wiring (not Markdown preview)", () => {
+    // M10.3.12: clipboard is human-readable "Copy Results"; not Markdown cards.
     const preview = fs.readFileSync(
       path.join(
         __dirname,
@@ -200,9 +201,9 @@ const fixturePath = path.join(
       ),
       "utf8"
     );
-    assert.match(preview, /Copy JSON/);
-    assert.match(preview, /buildCopyJson/);
-    assert.match(preview, /JSON\.stringify/);
+    assert.match(preview, /Copy Results/);
+    assert.match(preview, /formatLinkedInLeadHumanReadableCopy/);
+    assert.doesNotMatch(preview, /Copy JSON/);
     const sidebar = fs.readFileSync(
       path.join(
         __dirname,
@@ -210,8 +211,9 @@ const fixturePath = path.join(
       ),
       "utf8"
     );
-    assert.match(sidebar, /final result JSON|output JSON/);
-    assert.match(sidebar, /Always copy complete structured JSON/);
+    assert.match(sidebar, /formatLinkedInLeadHumanReadableCopy/);
+    assert.match(sidebar, /Never copy Markdown/);
+    assert.doesNotMatch(sidebar, /formatStepOutput\(latestRun\.output\)[\s\S]{0,200}clipboard/);
   });
 
   await check("M10311-9 Actor still scrapeforge; no cookie path", () => {

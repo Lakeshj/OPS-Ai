@@ -69,7 +69,7 @@ Redirect URI (register in the author’s Google Cloud OAuth client for CUSTOM_AP
 - **Production:** `https://opsai.socialchamps.com/api/google-oauth/callback`
 - **Local:** `http://localhost:5013/api/google-oauth/callback`
 
-Set `GOOGLE_OAUTH_REDIRECT_URI` on the backend, or leave it unset and set `CORS_ORIGIN=https://opsai.socialchamps.com` so production builds the live callback automatically. The credential modal shows the server redirect URL (read-only + copy).
+Set `GOOGLE_OAUTH_REDIRECT_URI` on the backend. On **production/testing** (`NODE_ENV`), a localhost redirect is overridden when `CORS_ORIGIN` includes the public https host. In **development**, localhost redirects are kept so Connect does not hang (callback must reach the same machine as the editor). Override with `GOOGLE_OAUTH_FORCE_PUBLIC_REDIRECT=1` only when intentionally tunneling local to a public callback. The credential modal shows the server redirect URL (read-only + copy).
 
 OAuth `state` is HMAC-signed, expiring, user/workspace/credential-bound, and **single-use**. Refresh uses the **same** OAuth app mode that created the credential.
 
@@ -136,7 +136,13 @@ Normalized send/get output: `{ id, threadId, labelIds }` plus safe headers when 
 
 ## Google Sheets (`googleSheets`)
 
-Get spreadsheet, read/append/update rows, clear range, create spreadsheet, add sheet. Header row maps columns to named fields. Writes: `USER_ENTERED` or `RAW`.
+Get spreadsheet, read/append/update rows, **append or update rows** (match on a header column), clear range, create spreadsheet, add sheet. Header row maps columns to named fields on read. Writes: `USER_ENTERED` or `RAW`.
+
+**Column mapping (generic):** optional `columnMappings` entries `{ header, path }` support dotted paths (`author.name`, `engagement.likes`). Arrays become comma-separated cell text. Formula-like leading characters are neutralized under `USER_ENTERED`. Empty incoming items do not create blank rows.
+
+**Append or Update:** set `matchColumn` to an existing header (e.g. `Source Post ID`). Matching keys update that row; new keys append below. Plain **Append rows** is unchanged.
+
+LinkedIn Lead Discovery already emits one WorkflowItem per post — wire Trigger → LinkedIn Lead Discovery → Google Sheets with column mapping. Do not concatenate `items` + `result` + `__callableReturnItems`.
 
 ## Security
 

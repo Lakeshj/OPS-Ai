@@ -9,6 +9,7 @@ import {
   LINKEDIN_LEAD_LIST_PREVIEW_ROWS,
   type LinkedInLeadReadableBlock,
 } from "@/modules/workflows/linkedinLeadOutputPresentation";
+import { formatLinkedInLeadHumanReadableCopy } from "@/modules/workflows/linkedinLeadCopyResults";
 import { resolveOutputPresentation } from "@/modules/workflows/outputPresentation";
 
 type Props = {
@@ -17,20 +18,6 @@ type Props = {
   className?: string;
   showTechnicalHint?: boolean;
 };
-
-function buildCopyJson(items: WorkflowItem[] | undefined, value: unknown) {
-  if (value != null && typeof value === "object") {
-    return JSON.stringify(value, null, 2);
-  }
-  if (Array.isArray(items) && items.length) {
-    return JSON.stringify(
-      items.map((row) => row?.json ?? row),
-      null,
-      2
-    );
-  }
-  return "[]";
-}
 
 export function LinkedInLeadOutputPreview({
   items,
@@ -51,9 +38,11 @@ export function LinkedInLeadOutputPreview({
       : rows;
   const hidden = Math.max(0, rows.length - LINKEDIN_LEAD_LIST_PREVIEW_ROWS);
 
-  const copyJson = async () => {
+  const copyResults = async () => {
     try {
-      await navigator.clipboard.writeText(buildCopyJson(items, value));
+      // Canonical collection — includes rows hidden behind Show more.
+      const text = formatLinkedInLeadHumanReadableCopy(value, items);
+      await navigator.clipboard.writeText(text);
       setCopied(true);
       window.setTimeout(() => setCopied(false), 1500);
     } catch {
@@ -78,12 +67,12 @@ export function LinkedInLeadOutputPreview({
           variant="ghost"
           size="sm"
           className="h-6 gap-1 px-1.5 text-[10px]"
-          onClick={() => void copyJson()}
-          title="Copy complete JSON output"
-          data-linkedin-lead-copy-json="true"
+          onClick={() => void copyResults()}
+          title="Copy all results as plain text"
+          data-linkedin-lead-copy-results="true"
         >
           {copied ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
-          {copied ? "Copied" : "Copy JSON"}
+          {copied ? "Copied" : "Copy Results"}
         </Button>
       </div>
       <div className="text-xs font-semibold text-foreground">{block.title}</div>
@@ -123,7 +112,8 @@ export function LinkedInLeadOutputPreview({
       ) : null}
       {showTechnicalHint ? (
         <p className="mt-2 text-[10px] text-muted-foreground">
-          Candidate opportunities only — not auto-qualified leads. Raw JSON remains available.
+          Candidate opportunities only — not auto-qualified leads. Raw JSON
+          remains available to downstream nodes.
         </p>
       ) : null}
     </div>

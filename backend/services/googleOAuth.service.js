@@ -1115,6 +1115,18 @@ const startGoogleOAuth = async (
   } catch {
     callbackOrigin = "";
   }
+  hooks.logger(
+    redactLog({
+      event: "oauth_start",
+      product,
+      oauthAppMode: app.mode,
+      redirectHost: callbackOrigin || null,
+      redirectIsLocalhost: /localhost|127\.0\.0\.1/i.test(app.redirectUri),
+      scopeCount: scopes.length,
+      hasCredentialId: Boolean(credentialId),
+      // Never log client id/secret, code, or state.
+    })
+  );
   return {
     url,
     state,
@@ -1175,10 +1187,15 @@ const finishGoogleOAuth = async (code, state) => {
       status: res.status,
       googleError: googleError || null,
       oauthAppMode: app.mode,
+      product: parsed.product || null,
     });
     if (res.status === 401 || googleError === "invalid_client") {
+      const productLabel =
+        GOOGLE_PRODUCTS[parsed.product]?.label || "Google";
       throw new AppError(
-        "Google rejected the platform login secret. Use the client secret from the same Google Cloud OAuth client as the client id, restart the backend, then connect Gmail again.",
+        app.mode === OAUTH_APP_MODE.CUSTOM_APP
+          ? `Google rejected the ${productLabel} Client ID/Secret. Use the secret from the same Google Cloud OAuth client as the Client ID, confirm the redirect URI is registered, then try Sign in with Google again.`
+          : "Google rejected the platform login secret. Use the client secret from the same Google Cloud OAuth client as the client id, restart the backend, then connect again.",
         401,
         "GOOGLE_OAUTH_CLIENT_REJECTED"
       );
@@ -1518,6 +1535,8 @@ const oauthCallbackHtml = ({ ok, credentialId, error }) => {
     ? "Google connected. You can close this window."
     : `Google connect failed: ${payload.error || "OAuth failed"}`;
   // Visible text is in HTML (not only JS) so Helmet CSP cannot leave a blank page.
+  // Always postMessage when opener exists; also try opener-less broadcast via
+  // storage for same-site edge cases (cross-origin localStorage is ignored).
   return `<!doctype html><html><head><meta charset="utf-8"><title>OpsAi Google OAuth</title></head><body>
 <p id="msg">${visible.replace(/</g, "&lt;")}</p>
 <script>
@@ -1525,16 +1544,28 @@ const oauthCallbackHtml = ({ ok, credentialId, error }) => {
   var payload = ${json};
   var origins = ${origins};
   var msg = document.getElementById("msg");
-  if (window.opener) {
+  var posted = false;
+  function postAll(target) {
+    if (!target) return;
     origins.forEach(function(origin){
-      try { window.opener.postMessage(payload, origin); } catch (e) {}
+      try { target.postMessage(payload, origin); posted = true; } catch (e) {}
     });
-  } else if (msg) {
+  }
+  postAll(window.opener);
+  // Some browsers keep opener but drop event.source identity after Google COOP.
+  try {
+    if (window.opener && window.opener !== window) {
+      origins.forEach(function(origin){
+        try { window.opener.postMessage(payload, origin); posted = true; } catch (e) {}
+      });
+    }
+  } catch (e) {}
+  if (!posted && msg) {
     msg.innerText = payload.ok
-      ? "Google connected. Return to OpsAi and refresh the connection list."
+      ? "Google connected. Return to OpsAi — if the editor still says Connecting, click Try again or refresh the connection list."
       : ("Google connect failed: " + (payload.error || ""));
   }
-  setTimeout(function(){ try { window.close(); } catch (e) {} }, 1200);
+  setTimeout(function(){ try { window.close(); } catch (e) {} }, 1500);
 })();
 </script>
 </body></html>`;

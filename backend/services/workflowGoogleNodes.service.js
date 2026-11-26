@@ -1081,6 +1081,20 @@ const runGmail = async (node, context, item) => {
   throw new Error(`Unsupported Gmail ${resource}/${operation}`);
 };
 
+/** 0-based column index → A1 column letters (0 → A, 25 → Z, 26 → AA). */
+const columnIndexToLetter = (index) => {
+  let n = Number(index);
+  if (!Number.isFinite(n) || n < 0) return "A";
+  let out = "";
+  n += 1;
+  while (n > 0) {
+    const rem = (n - 1) % 26;
+    out = String.fromCharCode(65 + rem) + out;
+    n = Math.floor((n - 1) / 26);
+  }
+  return out || "A";
+};
+
 const sheetsValuesUrl = (spreadsheetId, range) =>
   `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(spreadsheetId)}/values/${encodeURIComponent(range)}`;
 
@@ -1105,18 +1119,136 @@ const rowsFromMatrix = (values, hasHeaderRow) => {
   });
 };
 
-const itemsToMatrix = (items, hasHeaderRow, columnOrder) => {
-  const rows = items.map((it) => itemPayload(it) || {});
+/** Resolve nested paths (author.name) without importing the full node runtime. */
+const getPathValue = (source, path) => {
+  if (source == null || path == null || path === "") return undefined;
+  const text = String(path).trim();
+  if (!text) return undefined;
+  let cur = source;
+  for (const part of text.split(".")) {
+    if (cur == null || typeof cur !== "object") return undefined;
+    cur = cur[part];
+  }
+  return cur;
+};
+
+/**
+ * Generic column map entries: { header, path }.
+ * Path may be a top-level key or dotted path (author.name, engagement.likes).
+ */
+const parseColumnMappings = (raw) => {
+  if (!raw) return [];
+  let list = raw;
+  if (typeof raw === "string") {
+    try {
+      list = JSON.parse(raw);
+    } catch {
+      return [];
+    }
+  }
+  if (!Array.isArray(list)) return [];
+  const out = [];
+  for (const entry of list) {
+    if (!entry || typeof entry !== "object") continue;
+    const header = String(entry.header || entry.name || entry.key || "").trim();
+    const path = String(
+      entry.path || entry.value || entry.field || entry.header || entry.name || ""
+    ).trim();
+    if (!header || !path) continue;
+    out.push({ header, path });
+  }
+  return out;
+};
+
+/**
+ * Coerce values for Sheets cells: arrays → readable text, omit fabricating,
+ * keep long IDs as strings, neutralize formula injection for USER_ENTERED.
+ */
+const toSheetCell = (value, { valueInputMode = "USER_ENTERED" } = {}) => {
+  if (value == null) return "";
+  if (typeof value === "boolean") return value;
+  if (typeof value === "number") {
+    if (!Number.isFinite(value)) return "";
+    return value;
+  }
+  if (Array.isArray(value)) {
+    return value
+      .map((v) => {
+        if (v == null) return "";
+        if (typeof v === "object") return JSON.stringify(v);
+        return String(v);
+      })
+      .filter((s) => s !== "")
+      .join(", ");
+  }
+  if (typeof value === "object") {
+    // Nested objects without an explicit path are not auto-expanded.
+    return "";
+  }
+  let text = String(value);
+  // Preserve full text including newlines; neutralize formula-like prefixes.
+  if (
+    valueInputMode === "USER_ENTERED" &&
+    /^[=+\-@\t\r]/.test(text)
+  ) {
+    text = `'${text}`;
+  }
+  return text;
+};
+
+const resolveMappedRow = (payload, mappings, valueInputMode) => {
+  const row = {};
+  for (const { header, path } of mappings) {
+    const raw = getPathValue(payload, path);
+    row[header] = toSheetCell(raw, { valueInputMode });
+  }
+  return row;
+};
+
+const itemsToMatrix = (
+  items,
+  hasHeaderRow,
+  columnOrder,
+  { columnMappings = [], valueInputMode = "USER_ENTERED" } = {}
+) => {
+  const mappings = Array.isArray(columnMappings) ? columnMappings : [];
+  const rows = items
+    .map((it) => itemPayload(it) || {})
+    .filter((row) => row && typeof row === "object");
+
+  if (mappings.length) {
+    const headers = mappings.map((m) => m.header);
+    const matrix = [];
+    if (hasHeaderRow) matrix.push(headers);
+    for (const payload of rows) {
+      const mapped = resolveMappedRow(payload, mappings, valueInputMode);
+      matrix.push(headers.map((h) => (mapped[h] == null ? "" : mapped[h])));
+    }
+    return matrix;
+  }
+
   const keys = columnOrder?.length
     ? columnOrder
     : [...new Set(rows.flatMap((r) => Object.keys(r || {})))];
   const matrix = [];
   if (hasHeaderRow) matrix.push(keys);
   for (const row of rows) {
-    matrix.push(keys.map((k) => (row[k] == null ? "" : row[k])));
+    matrix.push(
+      keys.map((k) => toSheetCell(row[k], { valueInputMode }))
+    );
   }
   return matrix;
 };
+
+const isBlankWriteItem = (it) => {
+  const payload = itemPayload(it);
+  if (payload == null) return true;
+  if (typeof payload !== "object") return false;
+  return Object.keys(payload).length === 0;
+};
+
+const writableItems = (allItems) =>
+  (Array.isArray(allItems) ? allItems : []).filter((it) => !isBlankWriteItem(it));
 
 const runSheets = async (node, context, item, allItems) => {
   const data = node.data || {};
@@ -1200,7 +1332,38 @@ const runSheets = async (node, context, item, allItems) => {
     };
   }
 
-  const values = itemsToMatrix(allItems, false, parseList(data.columnOrder));
+  const columnMappings = parseColumnMappings(data.columnMappings);
+  const writeItems = writableItems(allItems);
+  const matrixOpts = {
+    columnMappings,
+    valueInputMode,
+  };
+
+  if (
+    (operation === "appendRows" ||
+      operation === "updateRows" ||
+      operation === "appendOrUpdateRows") &&
+    writeItems.length === 0
+  ) {
+    return {
+      items: [],
+      output: {
+        spreadsheetId,
+        range,
+        updatedRange: null,
+        skippedEmpty: true,
+        rowCount: 0,
+      },
+      resolved: { credentialId, valueInputMode, skippedEmpty: true },
+    };
+  }
+
+  const values = itemsToMatrix(
+    writeItems,
+    false,
+    parseList(data.columnOrder),
+    matrixOpts
+  );
 
   if (operation === "appendRows") {
     const res = await googleApiRequest({
@@ -1212,11 +1375,164 @@ const runSheets = async (node, context, item, allItems) => {
       body: { values },
     });
     return {
-      items: allItems.map((it) => ({ json: itemPayload(it) || {} })),
-      output: { spreadsheetId, range, updatedRange: res.body?.updates?.updatedRange || null },
+      items: writeItems.map((it) => ({ json: itemPayload(it) || {} })),
+      output: {
+        spreadsheetId,
+        range,
+        updatedRange: res.body?.updates?.updatedRange || null,
+        appended: writeItems.length,
+      },
       resolved: { credentialId, valueInputMode },
     };
   }
+
+  if (operation === "appendOrUpdateRows") {
+    const matchColumn = String(
+      expr(data.matchColumn || data.matchingColumn, context, item) || ""
+    ).trim();
+    if (!matchColumn) {
+      throw new Error(
+        "matchColumn is required for Append or Update (e.g. Source Post ID)"
+      );
+    }
+
+    const existingRes = await googleApiRequest({
+      credentialId,
+      workspaceId: context.workspaceId,
+      requiredType: "google_sheets",
+      url: `${sheetsValuesUrl(spreadsheetId, range)}?valueRenderOption=UNFORMATTED_VALUE`,
+      method: "GET",
+    });
+    const existingValues = Array.isArray(existingRes.body?.values)
+      ? existingRes.body.values
+      : [];
+
+    let headers = [];
+    let dataStartRow = 1; // 1-based sheet row of first data row
+    if (hasHeaderRow && existingValues.length) {
+      headers = (existingValues[0] || []).map((h, i) =>
+        String(h == null || h === "" ? `col${i + 1}` : h)
+      );
+      dataStartRow = 2;
+    } else if (columnMappings.length) {
+      headers = columnMappings.map((m) => m.header);
+    } else {
+      headers = parseList(data.columnOrder);
+      if (!headers.length) {
+        headers = [
+          ...new Set(
+            writeItems.flatMap((it) => Object.keys(itemPayload(it) || {}))
+          ),
+        ];
+      }
+    }
+
+    // Prefer sheet headers when present; align mappings to those headers.
+    const effectiveMappings = columnMappings.length
+      ? columnMappings
+      : headers.map((h) => ({ header: h, path: h }));
+
+    const matchIdx = headers.findIndex(
+      (h) => String(h).trim().toLowerCase() === matchColumn.toLowerCase()
+    );
+    if (matchIdx < 0) {
+      throw new Error(
+        `Matching column "${matchColumn}" was not found in the sheet header row. Add the header or choose Append rows.`
+      );
+    }
+
+    const matchPath =
+      effectiveMappings.find(
+        (m) => m.header.toLowerCase() === matchColumn.toLowerCase()
+      )?.path || matchColumn;
+
+    const existingIndexByKey = new Map();
+    for (let i = hasHeaderRow ? 1 : 0; i < existingValues.length; i += 1) {
+      const row = existingValues[i] || [];
+      const key = String(row[matchIdx] ?? "").trim();
+      if (!key) continue;
+      if (!existingIndexByKey.has(key)) {
+        existingIndexByKey.set(key, i);
+      }
+    }
+
+    const toAppend = [];
+    let updated = 0;
+    for (const it of writeItems) {
+      const payload = itemPayload(it) || {};
+      const matchRaw = getPathValue(payload, matchPath);
+      const matchKey = String(
+        matchRaw == null ? "" : toSheetCell(matchRaw, { valueInputMode: "RAW" })
+      ).trim();
+      const mapped = resolveMappedRow(payload, effectiveMappings, valueInputMode);
+      const rowValues = headers.map((h) =>
+        mapped[h] == null ? "" : mapped[h]
+      );
+
+      if (matchKey && existingIndexByKey.has(matchKey)) {
+        const sheetRowIndex = existingIndexByKey.get(matchKey); // 0-based in values[]
+        const absoluteRow = sheetRowIndex + 1; // 1-based A1
+        const existingRow = existingValues[sheetRowIndex] || [];
+        // Preserve manually maintained columns not present in columnMappings.
+        const mappedHeaderSet = new Set(
+          effectiveMappings.map((m) => m.header.toLowerCase())
+        );
+        const merged = headers.map((h, i) => {
+          if (mappedHeaderSet.has(String(h).toLowerCase())) {
+            return rowValues[i] == null ? "" : rowValues[i];
+          }
+          return existingRow[i] == null ? "" : existingRow[i];
+        });
+        const endCol = columnIndexToLetter(Math.max(headers.length, existingRow.length) - 1);
+        const updateRange = sheet
+          ? `${sheet}!A${absoluteRow}:${endCol}${absoluteRow}`
+          : `A${absoluteRow}:${endCol}${absoluteRow}`;
+        await googleApiRequest({
+          credentialId,
+          workspaceId: context.workspaceId,
+          requiredType: "google_sheets",
+          url: `${sheetsValuesUrl(spreadsheetId, updateRange)}?valueInputOption=${encodeURIComponent(valueInputMode)}`,
+          method: "PUT",
+          body: { values: [merged] },
+        });
+        updated += 1;
+      } else {
+        toAppend.push(rowValues);
+        if (matchKey) {
+          // Prevent duplicate appends within the same batch.
+          existingIndexByKey.set(matchKey, existingValues.length + toAppend.length - 1);
+        }
+      }
+    }
+
+    let updatedRange = null;
+    if (toAppend.length) {
+      const res = await googleApiRequest({
+        credentialId,
+        workspaceId: context.workspaceId,
+        requiredType: "google_sheets",
+        url: `${sheetsValuesUrl(spreadsheetId, range)}:append?valueInputOption=${encodeURIComponent(valueInputMode)}`,
+        method: "POST",
+        body: { values: toAppend },
+      });
+      updatedRange = res.body?.updates?.updatedRange || null;
+    }
+
+    return {
+      items: writeItems.map((it) => ({ json: itemPayload(it) || {} })),
+      output: {
+        spreadsheetId,
+        range,
+        updatedRange,
+        appended: toAppend.length,
+        updated,
+        matchColumn,
+        dataStartRow,
+      },
+      resolved: { credentialId, valueInputMode, matchColumn },
+    };
+  }
+
   if (operation === "updateRows") {
     const res = await googleApiRequest({
       credentialId,
@@ -1224,10 +1540,17 @@ const runSheets = async (node, context, item, allItems) => {
       requiredType: "google_sheets",
       url: `${sheetsValuesUrl(spreadsheetId, range)}?valueInputOption=${encodeURIComponent(valueInputMode)}`,
       method: "PUT",
-      body: { values: itemsToMatrix(allItems, false, parseList(data.columnOrder)) },
+      body: {
+        values: itemsToMatrix(
+          writeItems,
+          false,
+          parseList(data.columnOrder),
+          matrixOpts
+        ),
+      },
     });
     return {
-      items: allItems.map((it) => ({ json: itemPayload(it) || {} })),
+      items: writeItems.map((it) => ({ json: itemPayload(it) || {} })),
       output: { spreadsheetId, range, updatedCells: res.body?.updatedCells || null },
       resolved: { credentialId, valueInputMode },
     };
@@ -1308,6 +1631,11 @@ module.exports = {
   runGmail,
   runSheets,
   getBinaryPart,
+  itemsToMatrix,
+  toSheetCell,
+  parseColumnMappings,
+  getPathValue,
+  columnIndexToLetter,
   GSC_ROW_MAX,
   GA4_ROW_MAX,
   GMAIL_LIST_MAX,

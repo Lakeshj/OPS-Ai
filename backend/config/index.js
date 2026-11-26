@@ -33,14 +33,28 @@ const resolvePublicHttpsOrigin = () => {
 
 /**
  * Local keeps http://localhost:5013/... .
- * A copied localhost GOOGLE_OAUTH_REDIRECT_URI must not win on the live site
- * when CORS_ORIGIN already has the public https host.
+ * On a live/production host, a copied localhost GOOGLE_OAUTH_REDIRECT_URI must
+ * not win when CORS_ORIGIN already has the public https host.
+ *
+ * In development (NODE_ENV=development or unset), never force a public redirect
+ * — that sends the OAuth callback to production while the editor stays on
+ * localhost, so postMessage never reaches the opener and Connect hangs.
  */
 const resolveGoogleOAuthRedirectUri = () => {
   const configured = String(process.env.GOOGLE_OAUTH_REDIRECT_URI || "").trim();
   const localhost = !configured || /localhost|127\.0\.0\.1/i.test(configured);
   const publicOrigin = resolvePublicHttpsOrigin();
-  if (localhost && publicOrigin) {
+  const nodeEnv = String(process.env.NODE_ENV || "development").toLowerCase();
+  const isLiveRuntime =
+    nodeEnv === "production" || nodeEnv === "testing";
+  const forcePublic =
+    String(process.env.GOOGLE_OAUTH_FORCE_PUBLIC_REDIRECT || "")
+      .trim()
+      .toLowerCase() === "1" ||
+    String(process.env.GOOGLE_OAUTH_FORCE_PUBLIC_REDIRECT || "")
+      .trim()
+      .toLowerCase() === "true";
+  if (localhost && publicOrigin && (isLiveRuntime || forcePublic)) {
     return `${publicOrigin}/api/google-oauth/callback`;
   }
   return configured || "http://localhost:5013/api/google-oauth/callback";

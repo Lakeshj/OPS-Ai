@@ -3458,6 +3458,7 @@ export const NODE_PARAMETER_SCHEMAS: Record<WorkflowNodeType, ParamDescriptor[]>
           { name: "Get spreadsheet", value: "getSpreadsheet" },
           { name: "Read rows", value: "readRows" },
           { name: "Append rows", value: "appendRows" },
+          { name: "Append or update rows", value: "appendOrUpdateRows" },
           { name: "Update rows", value: "updateRows" },
           { name: "Clear range", value: "clearRange" },
           { name: "Create spreadsheet", value: "createSpreadsheet" },
@@ -3494,7 +3495,15 @@ export const NODE_PARAMETER_SCHEMAS: Record<WorkflowNodeType, ParamDescriptor[]>
         default: "A:Z",
         expression: true,
         displayOptions: {
-          show: { operation: ["readRows", "appendRows", "updateRows", "clearRange"] },
+          show: {
+            operation: [
+              "readRows",
+              "appendRows",
+              "appendOrUpdateRows",
+              "updateRows",
+              "clearRange",
+            ],
+          },
         },
       },
       {
@@ -3502,6 +3511,38 @@ export const NODE_PARAMETER_SCHEMAS: Record<WorkflowNodeType, ParamDescriptor[]>
         displayName: "Header row",
         type: "boolean",
         default: true,
+      },
+      {
+        name: "matchColumn",
+        displayName: "Matching column",
+        type: "string",
+        placeholder: "Source Post ID",
+        expression: true,
+        description:
+          "Header name used to find existing rows for Append or Update. New keys append; matching keys update in place.",
+        displayOptions: { show: { operation: ["appendOrUpdateRows"] } },
+      },
+      {
+        name: "columnMappings",
+        displayName: "Column mapping",
+        type: "fixedCollection",
+        default: [],
+        description:
+          "Map sheet headers to item fields or dotted paths (author.name, engagement.likes). Leave empty to use top-level keys.",
+        fields: [
+          { name: "header", displayName: "Sheet column", type: "string" },
+          {
+            name: "path",
+            displayName: "Item field path",
+            type: "string",
+            placeholder: "author.name",
+          },
+        ],
+        displayOptions: {
+          show: {
+            operation: ["appendRows", "appendOrUpdateRows", "updateRows"],
+          },
+        },
       },
       {
         name: "valueInputMode",
@@ -3512,7 +3553,11 @@ export const NODE_PARAMETER_SCHEMAS: Record<WorkflowNodeType, ParamDescriptor[]>
           { name: "USER_ENTERED", value: "USER_ENTERED" },
           { name: "RAW", value: "RAW" },
         ],
-        displayOptions: { show: { operation: ["appendRows", "updateRows"] } },
+        displayOptions: {
+          show: {
+            operation: ["appendRows", "appendOrUpdateRows", "updateRows"],
+          },
+        },
       },
     ],
 

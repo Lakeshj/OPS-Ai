@@ -27,7 +27,20 @@ import { MetaAdsOutputPreview } from "./MetaAdsOutputPreview";
 import { FacebookPageOutputPreview } from "./FacebookPageOutputPreview";
 import { LinkedInLeadOutputPreview } from "./LinkedInLeadOutputPreview";
 import { resolveOutputPresentation } from "@/modules/workflows/outputPresentation";
+import {
+  formatLinkedInLeadHumanReadableCopy,
+  shouldCopyLinkedInLeadHumanReadable,
+} from "@/modules/workflows/linkedinLeadCopyResults";
 import { prettyJson } from "@/modules/workflows/inspectorViewModel";
+
+/** Clipboard payload for Final/step Copy — LinkedIn leads use plain text. */
+function resolveCopyClipboardValue(value: unknown): string {
+  if (shouldCopyLinkedInLeadHumanReadable(value)) {
+    return formatLinkedInLeadHumanReadableCopy(value);
+  }
+  if (typeof value === "string") return value;
+  return JSON.stringify(value, null, 2);
+}
 
 export type WorkflowResultsPanelProps = {
   latestRun?: WorkflowRun | null;
@@ -58,12 +71,20 @@ type StepInput = {
 const isMultiline = (value: unknown) =>
   typeof value === "string" && (value.includes("\n") || value.length > 80);
 
-function CopyButton({ value, label }: { value: unknown; label: string }) {
+function CopyButton({
+  value,
+  label,
+  buttonLabel,
+}: {
+  value: unknown;
+  label: string;
+  /** Override visible button text (e.g. "Copy Results" for LinkedIn). */
+  buttonLabel?: string;
+}) {
   const [copied, setCopied] = useState(false);
 
   const copy = async () => {
-    const text =
-      typeof value === "string" ? value : JSON.stringify(value, null, 2);
+    const text = resolveCopyClipboardValue(value);
     try {
       await navigator.clipboard.writeText(text);
       setCopied(true);
@@ -83,7 +104,7 @@ function CopyButton({ value, label }: { value: unknown; label: string }) {
       title={`Copy ${label}`}
     >
       {copied ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
-      {copied ? "Copied" : "Copy"}
+      {copied ? "Copied" : buttonLabel || "Copy"}
     </Button>
   );
 }
@@ -203,7 +224,20 @@ function StepDetails({
                 ? step.input
                 : outputPresentation?.original ?? step.output
             }
-            label={tab === "output" ? "output JSON" : tab}
+            label={
+              tab === "output" &&
+              outputPresentation?.provider === "linkedin_lead_discovery"
+                ? "results"
+                : tab === "output"
+                  ? "output JSON"
+                  : tab
+            }
+            buttonLabel={
+              tab === "output" &&
+              outputPresentation?.provider === "linkedin_lead_discovery"
+                ? "Copy Results"
+                : undefined
+            }
           />
         </div>
       </div>
@@ -461,13 +495,25 @@ export function WorkflowResultsPanel({
                   </div>
                   <CopyButton
                     value={
-                      // Always copy complete structured JSON (never Markdown preview).
+                      // LinkedIn → human-readable results; others → structured JSON.
+                      // Never copy Markdown/summary preview text.
                       latestRun?.output ??
                       finalPresentation?.original ??
                       finalRawJson ??
                       finalResultText
                     }
-                    label="final result JSON"
+                    label={
+                      finalPresentation?.provider ===
+                      "linkedin_lead_discovery"
+                        ? "results"
+                        : "final result JSON"
+                    }
+                    buttonLabel={
+                      finalPresentation?.provider ===
+                      "linkedin_lead_discovery"
+                        ? "Copy Results"
+                        : undefined
+                    }
                   />
                 </div>
                 {finalPresentation?.provider === "instagram" ||
