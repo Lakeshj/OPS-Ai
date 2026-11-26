@@ -129,6 +129,83 @@ const pruneConsumedNonces = (now) => {
 
 const resetOauthNonceStore = () => consumedNonces.clear();
 
+/** Short-lived connection attempts for parent-window polling when postMessage/COOP fail. */
+const oauthAttempts = new Map();
+const OAUTH_ATTEMPT_TTL_MS = 10 * 60 * 1000;
+const MAX_OAUTH_ATTEMPTS = 2000;
+
+const pruneOauthAttempts = (now) => {
+  for (const [id, row] of oauthAttempts) {
+    if (Number(row?.exp) < now) oauthAttempts.delete(id);
+  }
+  while (oauthAttempts.size > MAX_OAUTH_ATTEMPTS) {
+    const first = oauthAttempts.keys().next().value;
+    if (first == null) break;
+    oauthAttempts.delete(first);
+  }
+};
+
+const createOauthAttempt = ({
+  workspaceId,
+  userId,
+  product,
+  credentialId,
+}) => {
+  const now = hooks.now();
+  pruneOauthAttempts(now);
+  const id = uuidv4();
+  oauthAttempts.set(id, {
+    id,
+    workspaceId: String(workspaceId || ""),
+    userId: String(userId || ""),
+    product: String(product || ""),
+    credentialId: credentialId || null,
+    status: "pending",
+    stage: "oauth_start",
+    error: null,
+    createdAt: now,
+    exp: now + OAUTH_ATTEMPT_TTL_MS,
+  });
+  return id;
+};
+
+const patchOauthAttempt = (attemptId, patch = {}) => {
+  const id = String(attemptId || "").trim();
+  if (!id) return null;
+  const row = oauthAttempts.get(id);
+  if (!row) return null;
+  const next = { ...row, ...patch };
+  oauthAttempts.set(id, next);
+  return next;
+};
+
+const getGoogleOAuthAttemptStatus = ({ attemptId, workspaceId, userId }) => {
+  const id = String(attemptId || "").trim();
+  const ws = String(workspaceId || "").trim();
+  const uid = String(userId || "").trim();
+  if (!id || !ws || !uid) {
+    throw new AppError("OAuth attempt is required", 400, "VALIDATION_ERROR");
+  }
+  pruneOauthAttempts(hooks.now());
+  const row = oauthAttempts.get(id);
+  if (!row) {
+    return { status: "unknown", attemptId: id, product: null, credentialId: null };
+  }
+  if (row.workspaceId !== ws || row.userId !== uid) {
+    throw new AppError("OAuth attempt not found", 404, "NOT_FOUND");
+  }
+  return {
+    status: row.status,
+    attemptId: row.id,
+    product: row.product,
+    credentialId: row.credentialId || null,
+    error: row.error || null,
+    stage: row.stage || null,
+  };
+};
+
+const resetOauthAttemptStore = () => oauthAttempts.clear();
+
 /** Mark signed-state nonce used. Replay of the same callback state is rejected. */
 const consumeOauthNonce = (parsed) => {
   const nonce = String(parsed?.nonce || "");
@@ -696,11 +773,15 @@ const saveCredentialSecret = async (credentialId, secret, configObj) => {
 const isGoogleAuthFailure = (err) => {
   const code = String(err?.code || "");
   const status = Number(err?.statusCode || err?.status || 0);
-  return (
-    code === "GOOGLE_UNAUTHORIZED" ||
-    code === "MCP_CREDENTIAL_UNAUTHORIZED" ||
-    status === 401
-  );
+  const msg = String(err?.message || "");
+  if (code === "GOOGLE_OAUTH_CLIENT_REJECTED" || code === "GOOGLE_OAUTH_INCOMPLETE") {
+    return false;
+  }
+  if (code === "GOOGLE_UNAUTHORIZED" || code === "MCP_CREDENTIAL_UNAUTHORIZED") {
+    return true;
+  }
+  // Raw 401 from Google token endpoints after invalid_grant — not every 400/403.
+  return status === 401 && /expired|revoked|invalid_grant|unauthor/i.test(msg);
 };
 
 /**
@@ -752,10 +833,19 @@ const expiryMs = (secret) => {
 
 const refreshAccessToken = async (secret, cfg = {}) => {
   if (!secret?.refreshToken) {
-    const err = sanitizeGoogleError(401, null);
+    const err = new Error(
+      "Google sign-in did not finish (no refresh token). Click Sign in with Google again."
+    );
+    err.code = "GOOGLE_OAUTH_INCOMPLETE";
+    err.statusCode = 400;
     throw err;
   }
   const app = resolveOAuthApp(secret, cfg);
+  hooks.logger({
+    event: "google_token_refresh_started",
+    oauthAppMode: app.mode,
+    stage: "google_token_refresh_started",
+  });
   const body = new URLSearchParams({
     client_id: app.clientId,
     client_secret: app.clientSecret,
@@ -775,16 +865,45 @@ const refreshAccessToken = async (secret, cfg = {}) => {
     oauthAppMode: app.mode,
   });
   if (!res.ok) {
-    const grantErr =
-      res.body &&
-      typeof res.body === "object" &&
-      /invalid_grant|revoked/i.test(String(res.body.error || res.body.error_description || ""));
-    if (grantErr || res.status === 400 || res.status === 401) {
+    const googleError =
+      res.body && typeof res.body === "object"
+        ? String(res.body.error || "")
+        : "";
+    const grantErr = /invalid_grant|revoked/i.test(
+      `${googleError} ${
+        res.body && typeof res.body === "object"
+          ? res.body.error_description || ""
+          : ""
+      }`
+    );
+    hooks.logger({
+      event: "google_token_refresh_failed",
+      status: res.status,
+      googleError: googleError || null,
+      oauthAppMode: app.mode,
+      stage: "google_token_refresh_failed",
+    });
+    if (googleError === "invalid_client") {
+      throw new AppError(
+        "Google rejected this connection's Client ID/Secret during token refresh. Update the Google Cloud OAuth client, then reconnect.",
+        400,
+        "GOOGLE_OAUTH_CLIENT_REJECTED"
+      );
+    }
+    if (grantErr) {
       throw sanitizeGoogleError(401, null);
+    }
+    if (res.status >= 500) {
+      throw sanitizeGoogleError(res.status, res.body);
     }
     throw sanitizeGoogleError(res.status, res.body);
   }
   const json = res.body && typeof res.body === "object" ? res.body : {};
+  hooks.logger({
+    event: "google_token_refresh_succeeded",
+    oauthAppMode: app.mode,
+    stage: "google_token_refresh_succeeded",
+  });
   return {
     ...secret,
     accessToken: json.access_token,
@@ -1075,6 +1194,12 @@ const startGoogleOAuth = async (
     throw new AppError("Not authenticated", 401, "UNAUTHORIZED");
   }
 
+  const attemptId = createOauthAttempt({
+    workspaceId,
+    userId: actorUserId,
+    product,
+    credentialId: credentialId || null,
+  });
   const state = signState({
     flow: "google",
     workspaceId,
@@ -1088,6 +1213,7 @@ const startGoogleOAuth = async (
     requestedScopes: scopes,
     exp: hooks.now() + 10 * 60 * 1000,
     nonce: crypto.randomBytes(8).toString("hex"),
+    attemptId,
   });
   const params = new URLSearchParams({
     client_id: app.clientId,
@@ -1124,7 +1250,8 @@ const startGoogleOAuth = async (
       redirectIsLocalhost: /localhost|127\.0\.0\.1/i.test(app.redirectUri),
       scopeCount: scopes.length,
       hasCredentialId: Boolean(credentialId),
-      // Never log client id/secret, code, or state.
+      attemptId,
+      stage: "oauth_start",
     })
   );
   return {
@@ -1134,6 +1261,7 @@ const startGoogleOAuth = async (
     redirectUri: app.redirectUri,
     oauthAppMode: app.mode,
     scopes,
+    attemptId,
     gmailPermissions: product === "google_gmail" ? permissionIds : undefined,
   };
 };
@@ -1141,6 +1269,15 @@ const startGoogleOAuth = async (
 const finishGoogleOAuth = async (code, state) => {
   const parsed = verifyState(state);
   consumeOauthNonce(parsed);
+  const attemptId = String(parsed.attemptId || "").trim() || null;
+  patchOauthAttempt(attemptId, { stage: "oauth_state_validated" });
+  hooks.logger({
+    event: "oauth_state_validated",
+    product: parsed.product || null,
+    attemptId,
+    stage: "oauth_state_validated",
+    hasCredentialId: Boolean(parsed.credentialId),
+  });
   if (!GOOGLE_PRODUCTS[parsed.product]) {
     throw new AppError("Unknown Google product", 400, "VALIDATION_ERROR");
   }
@@ -1167,6 +1304,14 @@ const finishGoogleOAuth = async (code, state) => {
     grant_type: "authorization_code",
     redirect_uri: app.redirectUri,
   }).toString();
+  patchOauthAttempt(attemptId, { stage: "oauth_exchange_started" });
+  hooks.logger({
+    event: "oauth_exchange_started",
+    product: parsed.product || null,
+    attemptId,
+    oauthAppMode: app.mode,
+    stage: "oauth_exchange_started",
+  });
   const res = await callTransport(TOKEN_URL, {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
@@ -1178,16 +1323,24 @@ const finishGoogleOAuth = async (code, state) => {
     status: res.status,
     ok: res.ok,
     oauthAppMode: app.mode,
+    attemptId,
   });
   if (!res.ok) {
     const googleError =
       res.body && typeof res.body === "object" ? String(res.body.error || "") : "";
     hooks.logger({
-      event: "oauth_code_exchange_rejected",
+      event: "oauth_exchange_failed",
       status: res.status,
       googleError: googleError || null,
       oauthAppMode: app.mode,
       product: parsed.product || null,
+      attemptId,
+      stage: "oauth_exchange_failed",
+    });
+    patchOauthAttempt(attemptId, {
+      status: "failed",
+      stage: "oauth_exchange_failed",
+      error: "Google rejected the authorization code exchange.",
     });
     if (res.status === 401 || googleError === "invalid_client") {
       const productLabel =
@@ -1202,6 +1355,16 @@ const finishGoogleOAuth = async (code, state) => {
     }
     throw sanitizeGoogleError(res.status, res.body, { product: parsed.product });
   }
+  hooks.logger({
+    event: "oauth_exchange_succeeded",
+    product: parsed.product || null,
+    attemptId,
+    oauthAppMode: app.mode,
+    stage: "oauth_exchange_succeeded",
+    hasAccessToken: Boolean(res.body && res.body.access_token),
+    hasRefreshToken: Boolean(res.body && res.body.refresh_token),
+  });
+  patchOauthAttempt(attemptId, { stage: "oauth_exchange_succeeded" });
   const json = res.body && typeof res.body === "object" ? res.body : {};
   const requestedScopes = Array.isArray(parsed.requestedScopes)
     ? parsed.requestedScopes.map((s) => String(s || "").trim()).filter(Boolean)
@@ -1357,6 +1520,26 @@ const finishGoogleOAuth = async (code, state) => {
         // Name refresh is best-effort.
       }
     }
+    hooks.logger({
+      event: "oauth_credential_persisted",
+      product: parsed.product,
+      attemptId,
+      stage: "oauth_credential_persisted",
+      updatedExisting: true,
+    });
+    patchOauthAttempt(attemptId, {
+      status: "succeeded",
+      credentialId: existing.id,
+      stage: "oauth_attempt_completed",
+      error: null,
+    });
+    hooks.logger({
+      event: "oauth_attempt_completed",
+      product: parsed.product,
+      attemptId,
+      stage: "oauth_attempt_completed",
+      status: "succeeded",
+    });
     return {
       credentialId: existing.id,
       workspaceId: parsed.workspaceId,
@@ -1400,6 +1583,26 @@ const finishGoogleOAuth = async (code, state) => {
       createdBy,
     ]
   );
+  hooks.logger({
+    event: "oauth_credential_persisted",
+    product: parsed.product,
+    attemptId,
+    stage: "oauth_credential_persisted",
+    updatedExisting: false,
+  });
+  patchOauthAttempt(attemptId, {
+    status: "succeeded",
+    credentialId: id,
+    stage: "oauth_attempt_completed",
+    error: null,
+  });
+  hooks.logger({
+    event: "oauth_attempt_completed",
+    product: parsed.product,
+    attemptId,
+    stage: "oauth_attempt_completed",
+    status: "succeeded",
+  });
   return { credentialId: id, workspaceId: parsed.workspaceId, product: parsed.product };
 };
 
@@ -1604,10 +1807,14 @@ module.exports = {
   getValidAccessToken,
   googleAuthorizedFetch,
   googleApiRequest,
+  logOauthStage: (fields) => hooks.logger(redactLog(fields || {})),
   startGoogleOAuth,
   finishGoogleOAuth,
   consumeOauthNonce,
   resetOauthNonceStore,
+  getGoogleOAuthAttemptStatus,
+  patchOauthAttempt,
+  resetOauthAttemptStore,
   sanitizeCallbackError,
   allowedFrontendOrigins,
   normalizeSelectedGmailPermissions,

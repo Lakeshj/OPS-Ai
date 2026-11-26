@@ -23,6 +23,19 @@ const nextConfig: NextConfig = {
    * Browser calls /api/auth/login → Next strips /api → backend /auth/login
    * Backend mounts all routes at / (no /api prefix).
    */
+  async headers() {
+    return [
+      {
+        source: "/:path*",
+        headers: [
+          {
+            key: "Cross-Origin-Opener-Policy",
+            value: "same-origin-allow-popups",
+          },
+        ],
+      },
+    ];
+  },
   async rewrites() {
     const backend = (
       process.env.BACKEND_INTERNAL_URL || "http://localhost:5013"

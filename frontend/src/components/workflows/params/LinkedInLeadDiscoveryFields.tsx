@@ -1024,10 +1024,23 @@ export function LinkedInLeadDiscoveryFields({
             })}
           </ul>
           <div>
-            <Label className="text-[11px]">Additional custom keywords</Label>
+            <div className="flex items-center justify-between gap-2">
+              <Label className="text-[11px]">
+                Additional include keywords ({(values.additionalKeywords || []).length})
+              </Label>
+              {(values.additionalKeywords || []).length ? (
+                <button
+                  type="button"
+                  className="text-[10px] text-muted-foreground underline-offset-2 hover:underline"
+                  onClick={() => patch({ additionalKeywords: [] })}
+                >
+                  Clear all
+                </button>
+              ) : null}
+            </div>
             <textarea
               className="mt-1 min-h-[64px] w-full rounded-md border border-input bg-background px-2 py-1.5 text-xs"
-              placeholder="One keyword per line"
+              placeholder="One keyword or phrase per line — extends the selected library"
               value={(values.additionalKeywords || []).join("\n")}
               onChange={(e) =>
                 patch({
@@ -1038,6 +1051,55 @@ export function LinkedInLeadDiscoveryFields({
                 })
               }
             />
+          </div>
+          <div>
+            <div className="flex items-center justify-between gap-2">
+              <Label className="text-[11px]">
+                Exclude keywords ({(values.excludeKeywords || []).length})
+              </Label>
+              {(values.excludeKeywords || []).length ? (
+                <button
+                  type="button"
+                  className="text-[10px] text-muted-foreground underline-offset-2 hover:underline"
+                  onClick={() => patch({ excludeKeywords: [] })}
+                >
+                  Clear all
+                </button>
+              ) : null}
+            </div>
+            <textarea
+              className="mt-1 min-h-[64px] w-full rounded-md border border-input bg-background px-2 py-1.5 text-xs"
+              placeholder="One keyword or phrase per line — matching posts are removed"
+              value={(values.excludeKeywords || []).join("\n")}
+              onChange={(e) =>
+                patch({
+                  excludeKeywords: e.target.value
+                    .split("\n")
+                    .map((s) => s.trim())
+                    .filter(Boolean),
+                })
+              }
+            />
+            <div className="mt-1 flex flex-wrap gap-3 text-[10px] text-muted-foreground">
+              <label className="flex items-center gap-1">
+                <input
+                  type="radio"
+                  name="excludeMatchMode"
+                  checked={(values.excludeMatchMode || "phrase") === "phrase"}
+                  onChange={() => patch({ excludeMatchMode: "phrase" })}
+                />
+                Phrase / whole word
+              </label>
+              <label className="flex items-center gap-1">
+                <input
+                  type="radio"
+                  name="excludeMatchMode"
+                  checked={values.excludeMatchMode === "contains"}
+                  onChange={() => patch({ excludeMatchMode: "contains" })}
+                />
+                Contains text
+              </label>
+            </div>
           </div>
         </div>
       ) : null}

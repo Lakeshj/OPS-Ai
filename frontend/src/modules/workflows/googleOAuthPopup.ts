@@ -18,21 +18,28 @@ type StartGoogleOAuthPopupResult =
   | { ok: true; credentialId: string }
   | { ok: false; error: string; popupBlocked?: boolean };
 
-/** Max wait for Google consent + callback postMessage (avoids endless Connecting…). */
 const OAUTH_POPUP_TIMEOUT_MS = 3 * 60 * 1000;
 
+const safePopupClosed = (popup: Window | null): boolean => {
+  if (!popup) return true;
+  try {
+    return Boolean(popup.closed);
+  } catch {
+    return false;
+  }
+};
+
 /**
- * Opens the Google account chooser popup and waits for the OpsAi OAuth callback.
+ * Opens the Google account chooser popup and waits for callback postMessage
+ * or authenticated attempt-status polling (COOP-safe).
  */
 export async function startGoogleOAuthPopup(
   args: StartGoogleOAuthPopupArgs
 ): Promise<StartGoogleOAuthPopupResult> {
   const started = await workflowCredentialsApi.startGoogleOAuth(args);
-  const { url, callbackOrigin } = started;
+  const { url, callbackOrigin, attemptId } = started;
   const redirectUri =
-    typeof (started as { redirectUri?: string }).redirectUri === "string"
-      ? String((started as { redirectUri?: string }).redirectUri)
-      : "";
+    typeof started.redirectUri === "string" ? started.redirectUri : "";
 
   const popup = window.open(
     url,
@@ -55,31 +62,29 @@ export async function startGoogleOAuthPopup(
 
   return await new Promise<StartGoogleOAuthPopupResult>((resolve) => {
     let settled = false;
+    let closedSeenAt = 0;
     const finish = (result: StartGoogleOAuthPopupResult) => {
       if (settled) return;
       settled = true;
       window.removeEventListener("message", onMsg);
       window.clearInterval(closeTimer);
+      window.clearInterval(pollTimer);
       window.clearTimeout(timeoutTimer);
       try {
         popup.close();
       } catch {
-        // ignore
+        // ignore — COOP may block close()
       }
       resolve(result);
     };
 
     const onMsg = (event: MessageEvent) => {
-      // Prefer exact popup source; if Google COOP broke source identity, still
-      // accept a well-formed message from an allowlisted callback/editor origin.
       let result = acceptGoogleOAuthPostMessage(event, {
         allowedOrigins,
         expectedSource: popup,
       });
       if (!result.handled && result.reason === "source") {
-        result = acceptGoogleOAuthPostMessage(event, {
-          allowedOrigins,
-        });
+        result = acceptGoogleOAuthPostMessage(event, { allowedOrigins });
       }
       if (!result.handled) return;
       if (result.accepted) {
@@ -94,11 +99,36 @@ export async function startGoogleOAuthPopup(
       }
     };
 
+    const pollAttempt = async () => {
+      if (!attemptId || settled) return;
+      try {
+        const status = await workflowCredentialsApi.getGoogleOAuthStatus({
+          workspaceId: args.workspaceId,
+          attemptId,
+        });
+        if (status.status === "succeeded" && status.credentialId) {
+          finish({ ok: true, credentialId: status.credentialId });
+          return;
+        }
+        if (status.status === "failed") {
+          finish({
+            ok: false,
+            error:
+              status.error ||
+              "Google connect failed. Check consent settings, then try again.",
+          });
+        }
+      } catch {
+        // Keep waiting — transient poll errors must not fail the connect.
+      }
+    };
+
     window.addEventListener("message", onMsg);
     const closeTimer = window.setInterval(() => {
-      if (!popup.closed) return;
-      // Popup closed without a message — often redirect_uri mismatch (Google
-      // error page) or opener lost after consent. Surface an actionable error.
+      if (!safePopupClosed(popup)) return;
+      if (!closedSeenAt) closedSeenAt = Date.now();
+      // Give the callback a few seconds after close (COOP often closes first).
+      if (Date.now() - closedSeenAt < 4000) return;
       const redirectHint = redirectUri
         ? ` Confirm this exact redirect URI is registered on your Google Cloud OAuth client: ${redirectUri}`
         : " Confirm the OAuth redirect URI shown in the connection modal is registered on your Google Cloud OAuth client.";
@@ -109,6 +139,11 @@ export async function startGoogleOAuthPopup(
           redirectHint,
       });
     }, 500);
+
+    const pollTimer = window.setInterval(() => {
+      void pollAttempt();
+    }, 1000);
+    void pollAttempt();
 
     const timeoutTimer = window.setTimeout(() => {
       finish({

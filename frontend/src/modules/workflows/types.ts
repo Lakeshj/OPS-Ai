@@ -550,6 +550,8 @@ export interface WorkflowNodeData {
   customKeywords?: string[];
   searchKeywords?: string[];
   additionalKeywords?: string[];
+  excludeKeywords?: string[];
+  excludeMatchMode?: "phrase" | "contains" | string;
   intentExpansion?: boolean;
   intentIds?: string[];
   keywordOverrides?: Record<string, string[]>;

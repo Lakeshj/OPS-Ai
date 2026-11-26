@@ -172,6 +172,14 @@ const buildSearchQueries = ({
     );
   }
 
+  const additionalCount = Array.isArray(additionalKeywords)
+    ? additionalKeywords.map(String).filter(Boolean).length
+    : additionalKeywords
+      ? String(additionalKeywords)
+          .split(/\n|,/)
+          .map((s) => s.trim())
+          .filter(Boolean).length
+      : 0;
   const originalQueries = uniquePreserveOrder(originals);
   const expandedQueries = uniquePreserveOrder(expanded.map((e) => e.query));
   // Prefer originals first, then expansions not already covered.
@@ -194,6 +202,7 @@ const buildSearchQueries = ({
     queryCount: queries.length,
     truncated,
     maxQueries: ceiling,
+    additionalKeywordCount: additionalCount,
   };
 };
 

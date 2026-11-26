@@ -768,6 +768,28 @@ const executeMcpTool = asyncHandler(async (req, res) => {
 const googleOAuthCallback = asyncHandler(async (req, res) => {
   const googleOAuth = require("../../services/googleOAuth.service");
   try {
+    googleOAuth.logOauthStage({
+      event: "oauth_callback_received",
+      stage: "oauth_callback_received",
+      hasCode: Boolean(req.query.code),
+      hasState: Boolean(req.query.state),
+      hasError: Boolean(req.query.error),
+      errorCode: req.query.error ? String(req.query.error).slice(0, 80) : null,
+    });
+  } catch {
+    // ignore
+  }
+  try {
+    if (!req.query.code && !req.query.state && !req.query.error) {
+      googleOAuth.applyOAuthPopupResponseHeaders(res);
+      res
+        .status(200)
+        .type("html")
+        .send(
+          "<!doctype html><title>OpsAi Google OAuth</title><p>Google OAuth callback is reachable. This is not a completed sign-in.</p>"
+        );
+      return;
+    }
     if (req.query.error) {
       const code = String(req.query.error || "");
       const reason = String(req.query.error_description || req.query.error || "")
@@ -799,13 +821,24 @@ const googleOAuthCallback = asyncHandler(async (req, res) => {
     );
   } catch (err) {
     try {
-      console.warn(
-        "[google-oauth] callback failed",
-        JSON.stringify({
-          code: err?.code || null,
-          message: String(err?.message || "OAuth failed").slice(0, 160),
-        })
-      );
+      googleOAuth.logOauthStage({
+        event: "oauth_attempt_completed",
+        stage: "oauth_attempt_completed",
+        status: "failed",
+        code: err?.code || null,
+      });
+      if (req.query.state) {
+        try {
+          const parsed = googleOAuth.verifyState(req.query.state);
+          googleOAuth.patchOauthAttempt(parsed.attemptId, {
+            status: "failed",
+            stage: "oauth_attempt_completed",
+            error: googleOAuth.sanitizeCallbackError(err),
+          });
+        } catch {
+          // State may already be invalid; parent poll will time out.
+        }
+      }
     } catch {
       // ignore
     }
@@ -817,6 +850,20 @@ const googleOAuthCallback = asyncHandler(async (req, res) => {
       })
     );
   }
+});
+
+const getGoogleOAuthStatus = asyncHandler(async (req, res) => {
+  const googleOAuth = require("../../services/googleOAuth.service");
+  const attemptId = String(req.query.attemptId || "").trim();
+  const workspaceId = String(req.query.workspaceId || "").trim();
+  const userId = String(req.user?.userId || req.user?.id || "").trim();
+  res.json(
+    await googleOAuth.getGoogleOAuthAttemptStatus({
+      attemptId,
+      workspaceId,
+      userId,
+    })
+  );
 });
 
 const listRuns = asyncHandler(async (req, res) => {
@@ -1294,6 +1341,7 @@ module.exports = {
   updateCredential,
   removeCredential,
   startGoogleOAuth,
+  getGoogleOAuthStatus,
   startMetaOAuth,
   metaOAuthCallback,
   startFacebookPageOAuth,

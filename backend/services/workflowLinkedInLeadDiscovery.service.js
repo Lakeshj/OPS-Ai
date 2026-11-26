@@ -401,17 +401,42 @@ const executeLinkedInLeadDiscoveryNode = async (node, context) => {
     operation,
     providerId,
     queryPlan,
+    excludeFilter: {
+      excludeKeywords: data.excludeKeywords,
+      excludeMatchMode: data.excludeMatchMode || "phrase",
+    },
   });
 };
 
-const wrapResult = (result, { operation, providerId, queryPlan, queries }) => {
+const wrapResult = (
+  result,
+  { operation, providerId, queryPlan, queries, excludeFilter } = {}
+) => {
   const rawItems = Array.isArray(result?.items) ? result.items : [];
-  const items = rawItems.map((row) =>
+  let items = rawItems.map((row) =>
     row && typeof row === "object" && row.json && typeof row.json === "object"
       ? row
       : { json: row }
   );
+  const isDiscovery =
+    operation === "discover_by_category" ||
+    operation === "discover_by_custom_keywords";
+  let excludedByKeyword = 0;
+  if (isDiscovery && excludeFilter) {
+    const { applyExcludeKeywords } = require("./linkedinLeadDiscovery/excludeKeywords");
+    const filtered = applyExcludeKeywords(items, excludeFilter);
+    excludedByKeyword = filtered.excludedCount;
+    items = filtered.items;
+  }
   const plan = queryPlan || null;
+  const providerMeta = {
+    ...(result?.providerMeta && typeof result.providerMeta === "object"
+      ? result.providerMeta
+      : {}),
+    ...(excludedByKeyword
+      ? { excludedByKeyword, excludeKeywords: excludeFilter?.excludeKeywords || [] }
+      : {}),
+  };
   return {
     items,
     output: {
@@ -422,9 +447,11 @@ const wrapResult = (result, { operation, providerId, queryPlan, queries }) => {
       queryCount: plan?.queryCount ?? (queries || []).length,
       originalKeywordCount: plan?.originalKeywords?.length ?? null,
       expandedKeywordCount: plan?.expandedKeywords?.length ?? null,
+      additionalKeywordCount: plan?.additionalKeywordCount ?? null,
       truncatedQueries: Boolean(plan?.truncated),
+      excludedByKeyword,
       paging: result?.paging || null,
-      providerMeta: result?.providerMeta || null,
+      providerMeta,
       coverage: result?.providerMeta?.coverage || null,
       candidateNote:
         "Results are candidate opportunities from public posts — not automatically qualified leads.",

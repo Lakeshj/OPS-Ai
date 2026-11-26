@@ -88,11 +88,13 @@ const parseSpreadsheetRef = (value) => {
   if (!raw || isExpressionValue(raw)) {
     return { spreadsheetId: raw, fromUrl: false };
   }
-  const urlMatch = raw.match(/\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/i);
+  const stripped = raw.split("#")[0].split("?")[0];
+  const urlMatch = stripped.match(/\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/i);
   if (urlMatch) {
     return { spreadsheetId: urlMatch[1], fromUrl: true };
   }
-  return { spreadsheetId: raw, fromUrl: false };
+  const idOnly = raw.replace(/[?#].*$/, "").trim();
+  return { spreadsheetId: idOnly, fromUrl: false };
 };
 
 const filterResourceOptions = (options, query) => {

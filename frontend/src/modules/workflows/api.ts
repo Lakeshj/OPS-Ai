@@ -470,8 +470,23 @@ export const workflowCredentialsApi = {
       redirectUri?: string;
       oauthAppMode?: string;
       scopes?: string[];
+      attemptId?: string;
       gmailPermissions?: string[];
     }>("/workflows/google-oauth/start", payload),
+
+  getGoogleOAuthStatus: (payload: { workspaceId: string; attemptId: string }) =>
+    apiClient.get<{
+      status: string;
+      attemptId: string;
+      product?: string | null;
+      credentialId?: string | null;
+      error?: string | null;
+      stage?: string | null;
+    }>(
+      `/workflows/google-oauth/status?workspaceId=${encodeURIComponent(
+        payload.workspaceId
+      )}&attemptId=${encodeURIComponent(payload.attemptId)}`
+    ),
 
   test: (credentialId: string) =>
     apiClient.post<{ ok: boolean; type: string; metaDisplayName?: string; reconnectSoon?: boolean }>(
