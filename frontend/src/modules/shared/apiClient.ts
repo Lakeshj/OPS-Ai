@@ -111,7 +111,9 @@ class ApiClient {
               code.startsWith("INSTAGRAM_") ||
               code.startsWith("FACEBOOK_") ||
               code === "UPSTREAM_ERROR" ||
-              code === "CREDENTIAL_IN_USE");
+              code === "CREDENTIAL_IN_USE" ||
+              code === "CREDENTIAL_NAME_EXISTS" ||
+              code === "DUPLICATE_ENTRY");
           if (opsAiSessionFailure && !providerAuthFailure) {
             unauthorizedHandler();
           }

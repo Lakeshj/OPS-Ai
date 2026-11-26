@@ -13,6 +13,9 @@ const {
 } = require("../../services/googleOAuth.service");
 const {
   allocateUniqueCredentialName,
+  assertCredentialNameAvailable,
+  duplicateCredentialNameError,
+  findCredentialNameConflict,
 } = require("../../services/credentialName.util");
 
 const HTTP_CREDENTIAL_TYPES = new Set([
@@ -21,6 +24,16 @@ const HTTP_CREDENTIAL_TYPES = new Set([
   "basic",
   "query_param",
   "oauth2",
+]);
+
+/** Exact-name types: reject duplicates instead of silent "(2)" rename. */
+const STRICT_CREDENTIAL_NAME_TYPES = new Set([
+  "apify",
+  "perigon",
+  "bearer",
+  "api_key_header",
+  "basic",
+  "query_param",
 ]);
 
 const GOOGLE_CREDENTIAL_TYPES = new Set([
@@ -372,21 +385,63 @@ const create = async ({ workspaceId, name, type, secret, config }, authUser) => 
   }
 
   const id = uuidv4();
-  const uniqueName = await allocateUniqueCredentialName(workspaceId, name);
-  await pool.execute(
-    `INSERT INTO workflow_credentials
-      (id, workspace_id, name, type, secret_json, config_json, created_by)
-     VALUES (?, ?, ?, ?, ?, ?, ?)`,
-    [
-      id,
-      workspaceId,
-      uniqueName,
-      type,
-      encryptSecret(secretPayload),
-      configJson,
-      authUser.id || authUser.userId,
-    ]
-  );
+  const desiredName = String(name || "").trim();
+  let uniqueName;
+  if (STRICT_CREDENTIAL_NAME_TYPES.has(type)) {
+    // Apify / Perigon / Bearer / HTTP keys: keep the typed name or fail clearly.
+    uniqueName = await assertCredentialNameAvailable(workspaceId, desiredName);
+  } else {
+    uniqueName = await allocateUniqueCredentialName(workspaceId, desiredName);
+  }
+
+  try {
+    await pool.execute(
+      `INSERT INTO workflow_credentials
+        (id, workspace_id, name, type, secret_json, config_json, created_by)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [
+        id,
+        workspaceId,
+        uniqueName,
+        type,
+        encryptSecret(secretPayload),
+        configJson,
+        authUser.id || authUser.userId,
+      ]
+    );
+  } catch (err) {
+    if (err && err.code === "ER_DUP_ENTRY") {
+      // Race: two creates allocated/asserted the same free name.
+      const conflict = await findCredentialNameConflict(
+        workspaceId,
+        uniqueName
+      );
+      if (STRICT_CREDENTIAL_NAME_TYPES.has(type) || conflict) {
+        throw duplicateCredentialNameError(uniqueName, conflict);
+      }
+      // OAuth / Google: retry once with a freshly allocated unique name.
+      uniqueName = await allocateUniqueCredentialName(
+        workspaceId,
+        `${desiredName || uniqueName}`
+      );
+      await pool.execute(
+        `INSERT INTO workflow_credentials
+          (id, workspace_id, name, type, secret_json, config_json, created_by)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        [
+          id,
+          workspaceId,
+          uniqueName,
+          type,
+          encryptSecret(secretPayload),
+          configJson,
+          authUser.id || authUser.userId,
+        ]
+      );
+    } else {
+      throw err;
+    }
+  }
 
   const [rows] = await pool.execute(
     `SELECT * FROM workflow_credentials WHERE id = ?`,
@@ -419,6 +474,11 @@ const update = async (credentialId, { name, secret, config }, authUser) => {
       name !== undefined ? String(name || "").trim() : String(row.name || "");
     if (!nextName) {
       throw new AppError("name cannot be empty", 400, "VALIDATION_ERROR");
+    }
+    if (STRICT_CREDENTIAL_NAME_TYPES.has(row.type)) {
+      await assertCredentialNameAvailable(row.workspace_id, nextName, {
+        excludeId: credentialId,
+      });
     }
     let nextSecret = { ...existingSecret };
     let nextConfig = { ...existingConfig };
@@ -501,17 +561,29 @@ const update = async (credentialId, { name, secret, config }, authUser) => {
     if (config && typeof config === "object" && config.sharingScope != null) {
       nextConfig.sharingScope = normalizeSharingScope(config.sharingScope);
     }
-    await pool.execute(
-      `UPDATE workflow_credentials
-       SET name = ?, secret_json = ?, config_json = ?
-       WHERE id = ?`,
-      [
-        nextName,
-        encryptSecret(nextSecret),
-        JSON.stringify(nextConfig),
-        credentialId,
-      ]
-    );
+    try {
+      await pool.execute(
+        `UPDATE workflow_credentials
+         SET name = ?, secret_json = ?, config_json = ?
+         WHERE id = ?`,
+        [
+          nextName,
+          encryptSecret(nextSecret),
+          JSON.stringify(nextConfig),
+          credentialId,
+        ]
+      );
+    } catch (err) {
+      if (err && err.code === "ER_DUP_ENTRY") {
+        const conflict = await findCredentialNameConflict(
+          row.workspace_id,
+          nextName,
+          { excludeId: credentialId }
+        );
+        throw duplicateCredentialNameError(nextName, conflict);
+      }
+      throw err;
+    }
     const [updated] = await pool.execute(
       `SELECT * FROM workflow_credentials WHERE id = ?`,
       [credentialId]

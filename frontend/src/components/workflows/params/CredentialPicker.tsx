@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -66,8 +66,11 @@ export function CredentialPicker({
   allowedTypes,
 }: Props) {
   const [credentials, setCredentials] = useState<WorkflowCredential[]>([]);
+  const [listLoaded, setListLoaded] = useState(false);
   const [adding, setAdding] = useState(false);
   const [saving, setSaving] = useState(false);
+  /** Guards double-click Save before React re-renders `saving`. */
+  const savingLockRef = useRef(false);
   const [name, setName] = useState("");
   const [googleModalOpen, setGoogleModalOpen] = useState(false);
   const [googleRedirectUri, setGoogleRedirectUri] = useState(() => {
@@ -155,11 +158,18 @@ export function CredentialPicker({
     if (!workspaceId) return;
     workflowCredentialsApi
       .list(workspaceId)
-      .then(setCredentials)
-      .catch(() => setCredentials([]));
+      .then((rows) => {
+        setCredentials(rows);
+        setListLoaded(true);
+      })
+      .catch(() => {
+        setCredentials([]);
+        setListLoaded(true);
+      });
   }, [workspaceId]);
 
   useEffect(() => {
+    setListLoaded(false);
     reload();
   }, [reload]);
 
@@ -171,6 +181,13 @@ export function CredentialPicker({
     }
     return true;
   });
+
+  // After delete / vault refresh: drop node refs that no longer exist in the DB.
+  useEffect(() => {
+    if (!listLoaded || !value) return;
+    if (credentials.some((c) => c.id === value)) return;
+    onChange("");
+  }, [listLoaded, credentials, value, onChange]);
 
   // Drop a Gmail selection that belongs to another workflow, or a failed stub.
   useEffect(() => {
@@ -303,6 +320,8 @@ export function CredentialPicker({
       });
       return;
     }
+    if (savingLockRef.current || saving) return;
+    savingLockRef.current = true;
     setSaving(true);
     try {
       const created = await workflowCredentialsApi.create({
@@ -311,17 +330,27 @@ export function CredentialPicker({
         type,
         secret,
       });
-      setCredentials((prev) => [...prev, created]);
       onChange(created.id);
       setAdding(false);
       setName("");
       setSecret({});
+      // Reload from DB so the picker matches vault state (no stale cache).
+      reload();
       toast.success("Connection saved");
     } catch (err) {
-      toast.error(
-        err instanceof Error ? err.message : "Could not save the connection"
-      );
+      const msg =
+        err instanceof ApiError
+          ? err.message
+          : err instanceof Error
+            ? err.message
+            : "Could not save the connection";
+      // After a race/duplicate, refresh so an existing connection appears.
+      if (/already exists|CREDENTIAL_NAME_EXISTS|DUPLICATE_ENTRY/i.test(msg)) {
+        reload();
+      }
+      toast.error(msg);
     } finally {
+      savingLockRef.current = false;
       setSaving(false);
     }
   };
@@ -411,6 +440,8 @@ export function CredentialPicker({
       toast.error("Connection name is required");
       return;
     }
+    if (savingLockRef.current || saving) return;
+    savingLockRef.current = true;
     setSaving(true);
     try {
       const fields = CREDENTIAL_TYPE_FIELDS[selected.type]?.fields || [];
@@ -430,10 +461,18 @@ export function CredentialPicker({
       reload();
       toast.success("Connection updated");
     } catch (err) {
-      toast.error(
-        err instanceof Error ? err.message : "Could not update connection"
-      );
+      const msg =
+        err instanceof ApiError
+          ? err.message
+          : err instanceof Error
+            ? err.message
+            : "Could not update connection";
+      if (/already exists|CREDENTIAL_NAME_EXISTS|DUPLICATE_ENTRY/i.test(msg)) {
+        reload();
+      }
+      toast.error(msg);
     } finally {
+      savingLockRef.current = false;
       setSaving(false);
     }
   };
